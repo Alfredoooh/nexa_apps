@@ -17,4 +17,36 @@
         android:textAllCaps="false"
         android:visibility="gone"/>
 
+    <LinearLayout
+        android:id="@+id/testPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#DD000000"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/testIdInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="ID do YouTube (ex: dQw4w9WgXcQ)"
+            android:textColorHint="#AAAAAA"
+            android:textColor="#FFFFFF"
+            android:inputType="text"
+            android:singleLine="true"
+            android:padding="10dp"/>
+
+        <Button
+            android:id="@+id/testPlayBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Testar"
+            android:textAllCaps="false"
+            android:layout_marginStart="8dp"/>
+
+    </LinearLayout>
+
 </FrameLayout>

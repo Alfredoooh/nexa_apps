@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -18,6 +19,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -28,6 +31,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var reloadBtn: Button
+    private lateinit var testIdInput: EditText
+    private lateinit var testPlayBtn: Button
+
+    private var testPlayer: MediaPlayer? = null
 
     private val appUrl = "https://vibelywebapp.onrender.com"
 
@@ -45,6 +52,8 @@ class MainActivity : AppCompatActivity() {
 
         webView = findViewById(R.id.webView)
         reloadBtn = findViewById(R.id.reloadBtn)
+        testIdInput = findViewById(R.id.testIdInput)
+        testPlayBtn = findViewById(R.id.testPlayBtn)
 
         ViewCompat.setOnApplyWindowInsetsListener(webView) { _, insets -> insets }
 
@@ -126,6 +135,17 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(appUrl)
         }
 
+        // ─── PAINEL DE TESTE: toca um ID via MediaPlayer nativo, sem passar pelo WebView ───
+        // Serve para isolar se o problema é mixed content no WebView ou algo no servidor.
+        testPlayBtn.setOnClickListener {
+            val id = testIdInput.text.toString().trim()
+            if (id.isEmpty()) {
+                Toast.makeText(this, "Escreve um ID do YouTube primeiro", Toast.LENGTH_SHORT).show()
+            } else {
+                testPlayNative(id)
+            }
+        }
+
         requestNotificationPermission()
         startPlaybackService()
 
@@ -133,6 +153,27 @@ class MainActivity : AppCompatActivity() {
             webView.restoreState(savedInstanceState)
         } else {
             webView.loadUrl(appUrl)
+        }
+    }
+
+    // Toca via MediaPlayer nativo do Android, direto do LocalServer, sem WebView.
+    private fun testPlayNative(videoId: String) {
+        Toast.makeText(this, "A testar $videoId…", Toast.LENGTH_SHORT).show()
+        testPlayer?.release()
+        testPlayer = MediaPlayer()
+        try {
+            testPlayer?.setDataSource("http://localhost:8080/audio?id=$videoId")
+            testPlayer?.setOnPreparedListener {
+                Toast.makeText(this, "✅ TOCOU! ($videoId) — não é mixed content", Toast.LENGTH_LONG).show()
+                it.start()
+            }
+            testPlayer?.setOnErrorListener { _, what, extra ->
+                Toast.makeText(this, "❌ Falhou nativo: what=$what extra=$extra", Toast.LENGTH_LONG).show()
+                true
+            }
+            testPlayer?.prepareAsync()
+        } catch (e: Exception) {
+            Toast.makeText(this, "❌ Exceção: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -193,6 +234,12 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         webView.saveState(outState)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        testPlayer?.release()
+        testPlayer = null
     }
 
     override fun onBackPressed() {
