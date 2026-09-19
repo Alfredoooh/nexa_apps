@@ -22,8 +22,6 @@ class MusicExtractor(private val context: Context) {
 
     private val tag = "VibelyExtract"
 
-    private val RENDER_URL = "https://vibelywebappserver.onrender.com"
-
     init {
         NewPipe.init(OkHttpDownloader())
     }
@@ -39,16 +37,11 @@ class MusicExtractor(private val context: Context) {
         .followRedirects(true)
         .build()
 
-    // O plano grátis do Render dorme e leva ~30-60s para acordar: precisa de timeout maior
-    private val renderHttp = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(70, TimeUnit.SECONDS)
-        .build()
-
-    // A chave separa quem está logado de quem não está, para não misturar as URLs
+    // Cache das URLs de áudio já validadas
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
-    private val cacheTtl = 90L * 60 * 1000
+    private val cacheTtl = 90L * 60 * 1000 // 90 min
 
+    // Diário de tudo que aconteceu na última extração (lido pelo /debug)
     private val debugLog = ArrayList<String>()
 
     private val pipedInstances = listOf(
@@ -72,16 +65,6 @@ class MusicExtractor(private val context: Context) {
         val origin: String
     )
 
-    // Acorda o servidor do Render em segundo plano (o plano grátis dorme após ~15 min parado)
-    fun wakeRender() {
-        try {
-            val req = Request.Builder().url("$RENDER_URL/health").build()
-            renderHttp.newCall(req).execute().use { note("Render acordado: HTTP ${it.code}") }
-        } catch (e: Exception) {
-            note("Render não respondeu ao acordar: ${e.message}")
-        }
-    }
-
     private fun note(msg: String) {
         Log.d(tag, msg)
         synchronized(debugLog) {
@@ -92,8 +75,6 @@ class MusicExtractor(private val context: Context) {
 
     fun debugReport(): String {
         val sb = StringBuilder()
-        sb.append("Render: $RENDER_URL\n")
-        sb.append("Sessão do YouTube: ${if (CookieHelper.isLoggedIn()) "logado" else "não logado"}\n")
         sb.append("--- últimos eventos ---\n")
         synchronized(debugLog) { debugLog.forEach { sb.append(it).append('\n') } }
         return sb.toString()
@@ -148,15 +129,13 @@ class MusicExtractor(private val context: Context) {
     @Synchronized
     fun getStreamSource(videoId: String): StreamSource? {
         val now = System.currentTimeMillis()
-        val cacheKey = videoId + if (CookieHelper.isLoggedIn()) ":auth" else ":anon"
-        urlCache[cacheKey]?.let { (src, time) ->
+        urlCache[videoId]?.let { (src, time) ->
             if (now - time < cacheTtl) return src
         }
 
         note("=== extraindo $videoId ===")
 
         val methods: List<Pair<String, () -> List<StreamSource>>> = listOf(
-            "Render(yt-dlp)" to { fromRender(videoId) },
             "NewPipe" to { fromNewPipe(videoId) },
             "InnerTube-ANDROID_VR" to { fromInnerTube(videoId, InnerClient.ANDROID_VR) },
             "InnerTube-ANDROID" to { fromInnerTube(videoId, InnerClient.ANDROID) },
@@ -177,7 +156,7 @@ class MusicExtractor(private val context: Context) {
             for (c in candidates) {
                 if (validate(c)) {
                     note("OK via ${c.origin} (${c.mime})")
-                    urlCache[cacheKey] = Pair(c, now)
+                    urlCache[videoId] = Pair(c, now)
                     return c
                 } else {
                     note("candidato de ${c.origin} recusado na validação")
@@ -191,14 +170,7 @@ class MusicExtractor(private val context: Context) {
 
     @Synchronized
     fun invalidate(videoId: String) {
-        urlCache.remove("$videoId:auth")
-        urlCache.remove("$videoId:anon")
-    }
-
-    // Apaga todas as URLs em cache (usado ao sair da conta)
-    @Synchronized
-    fun clearCache() {
-        urlCache.clear()
+        urlCache.remove(videoId)
     }
 
     // Testa a URL de verdade: pede 2 bytes. Se não devolver 200/206, descarta.
@@ -217,56 +189,7 @@ class MusicExtractor(private val context: Context) {
         }
     }
 
-    // Método 1: servidor no Render com yt-dlp. Só devolve o link; os bytes vêm direto do celular.
-    // Se o usuário estiver logado, manda a sessão dele em cada pedido (HTTPS) e o servidor
-    // usa só durante a extração, sem guardar.
-    private fun fromRender(videoId: String): List<StreamSource> {
-        val cookies = CookieHelper.exportNetscape()
-
-        val payload = JSONObject().apply {
-            put("id", videoId)
-            put("cookies", cookies)
-        }
-
-        val req = Request.Builder()
-            .url("$RENDER_URL/extract")
-            .post(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-            .build()
-
-        val text = renderHttp.newCall(req).execute().use { r ->
-            val body = r.body?.string() ?: ""
-            if (!r.isSuccessful) {
-                note("Render HTTP ${r.code}: ${body.take(300)}")
-                return emptyList()
-            }
-            body
-        }
-
-        val json = JSONObject(text)
-        val url = json.optString("url")
-        if (url.isEmpty()) return emptyList()
-
-        val headers = HashMap<String, String>()
-        val h = json.optJSONObject("headers")
-        if (h != null) {
-            for (k in h.keys()) {
-                if (k.equals("Accept-Encoding", true)) continue
-                headers[k] = h.optString(k)
-            }
-        }
-        if (!headers.containsKey("User-Agent")) headers["User-Agent"] = userAgent
-
-        return listOf(
-            StreamSource(
-                url = url,
-                mime = json.optString("mime", "audio/mp4"),
-                headers = headers,
-                origin = if (cookies.isNotEmpty()) "Render(yt-dlp+sessão)" else "Render(yt-dlp)"
-            )
-        )
-    }
-
-    // Método 2: NewPipeExtractor
+    // Método 1: NewPipeExtractor
     private fun fromNewPipe(videoId: String): List<StreamSource> {
         val info = StreamInfo.getInfo(youtube, "https://www.youtube.com/watch?v=$videoId")
         return info.audioStreams
@@ -286,7 +209,7 @@ class MusicExtractor(private val context: Context) {
             }
     }
 
-    // Métodos 3-5: InnerTube direto com clientes que devolvem URL sem cifra
+    // Métodos 2-4: InnerTube direto com clientes que devolvem URL sem cifra
     private enum class InnerClient(
         val clientName: String,
         val clientVersion: String,
@@ -376,7 +299,7 @@ class MusicExtractor(private val context: Context) {
             }
     }
 
-    // Método 6: Piped
+    // Método 5: Piped
     private fun fromPiped(videoId: String): List<StreamSource> {
         for (base in pipedInstances) {
             try {
@@ -410,7 +333,7 @@ class MusicExtractor(private val context: Context) {
         return emptyList()
     }
 
-    // Método 7: Invidious
+    // Método 6: Invidious
     private fun fromInvidious(videoId: String): List<StreamSource> {
         for (base in invidiousInstances) {
             try {

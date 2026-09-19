@@ -19,11 +19,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         .retryOnConnectionFailure(true)
         .build()
 
-    init {
-        // O plano grátis do Render dorme; acordar já na abertura evita esperar na 1ª música
-        Thread { extractor.wakeRender() }.start()
-    }
-
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         val params = session.parameters
