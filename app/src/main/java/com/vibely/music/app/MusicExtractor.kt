@@ -2,8 +2,6 @@ package com.vibely.music.app
 
 import android.content.Context
 import android.util.Log
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -24,6 +22,8 @@ class MusicExtractor(private val context: Context) {
 
     private val tag = "VibelyExtract"
 
+    private val RENDER_URL = "https://vibelywebappserver.onrender.com"
+
     init {
         NewPipe.init(OkHttpDownloader())
     }
@@ -39,16 +39,17 @@ class MusicExtractor(private val context: Context) {
         .followRedirects(true)
         .build()
 
-    // Cache das URLs de áudio já validadas
+    // O plano grátis do Render dorme e leva ~30-60s para acordar: precisa de timeout maior
+    private val renderHttp = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(70, TimeUnit.SECONDS)
+        .build()
+
+    // A chave separa quem está logado de quem não está, para não misturar as URLs
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
-    private val cacheTtl = 90L * 60 * 1000 // 90 min
+    private val cacheTtl = 90L * 60 * 1000
 
-    // Diário de tudo que aconteceu na última extração (lido pelo /debug)
     private val debugLog = ArrayList<String>()
-
-    // Estado do yt-dlp embutido
-    @Volatile private var ytdlpReady = false
-    @Volatile private var ytdlpInitError: String? = null
 
     private val pipedInstances = listOf(
         "https://pipedapi.kavin.rocks",
@@ -71,31 +72,13 @@ class MusicExtractor(private val context: Context) {
         val origin: String
     )
 
-    // Inicializa o Python/yt-dlp embutido. A primeira vez extrai arquivos (demora uns segundos)
-    @Synchronized
-    fun initYtDlp() {
-        if (ytdlpReady) return
+    // Acorda o servidor do Render em segundo plano (o plano grátis dorme após ~15 min parado)
+    fun wakeRender() {
         try {
-            YoutubeDL.getInstance().init(context.applicationContext)
-            ytdlpReady = true
-            ytdlpInitError = null
-            note("yt-dlp inicializado")
-        } catch (e: Throwable) {
-            ytdlpInitError = "${e.javaClass.simpleName}: ${e.message}"
-            note("yt-dlp NÃO inicializou: $ytdlpInitError")
-        }
-    }
-
-    // Atualiza o yt-dlp interno (o YouTube muda sempre; sem isso ele quebra com o tempo)
-    fun updateYtDlp() {
-        try {
-            val status = YoutubeDL.getInstance().updateYoutubeDL(
-                context.applicationContext,
-                YoutubeDL.UpdateChannel.STABLE
-            )
-            note("yt-dlp update: $status")
-        } catch (e: Throwable) {
-            note("yt-dlp update falhou: ${e.message}")
+            val req = Request.Builder().url("$RENDER_URL/health").build()
+            renderHttp.newCall(req).execute().use { note("Render acordado: HTTP ${it.code}") }
+        } catch (e: Exception) {
+            note("Render não respondeu ao acordar: ${e.message}")
         }
     }
 
@@ -109,8 +92,8 @@ class MusicExtractor(private val context: Context) {
 
     fun debugReport(): String {
         val sb = StringBuilder()
-        sb.append("yt-dlp pronto: $ytdlpReady\n")
-        if (ytdlpInitError != null) sb.append("yt-dlp erro de init: $ytdlpInitError\n")
+        sb.append("Render: $RENDER_URL\n")
+        sb.append("Sessão do YouTube: ${if (CookieHelper.isLoggedIn()) "logado" else "não logado"}\n")
         sb.append("--- últimos eventos ---\n")
         synchronized(debugLog) { debugLog.forEach { sb.append(it).append('\n') } }
         return sb.toString()
@@ -165,14 +148,15 @@ class MusicExtractor(private val context: Context) {
     @Synchronized
     fun getStreamSource(videoId: String): StreamSource? {
         val now = System.currentTimeMillis()
-        urlCache[videoId]?.let { (src, time) ->
+        val cacheKey = videoId + if (CookieHelper.isLoggedIn()) ":auth" else ":anon"
+        urlCache[cacheKey]?.let { (src, time) ->
             if (now - time < cacheTtl) return src
         }
 
         note("=== extraindo $videoId ===")
 
         val methods: List<Pair<String, () -> List<StreamSource>>> = listOf(
-            "yt-dlp" to { fromYtDlp(videoId) },
+            "Render(yt-dlp)" to { fromRender(videoId) },
             "NewPipe" to { fromNewPipe(videoId) },
             "InnerTube-ANDROID_VR" to { fromInnerTube(videoId, InnerClient.ANDROID_VR) },
             "InnerTube-ANDROID" to { fromInnerTube(videoId, InnerClient.ANDROID) },
@@ -193,7 +177,7 @@ class MusicExtractor(private val context: Context) {
             for (c in candidates) {
                 if (validate(c)) {
                     note("OK via ${c.origin} (${c.mime})")
-                    urlCache[videoId] = Pair(c, now)
+                    urlCache[cacheKey] = Pair(c, now)
                     return c
                 } else {
                     note("candidato de ${c.origin} recusado na validação")
@@ -207,7 +191,14 @@ class MusicExtractor(private val context: Context) {
 
     @Synchronized
     fun invalidate(videoId: String) {
-        urlCache.remove(videoId)
+        urlCache.remove("$videoId:auth")
+        urlCache.remove("$videoId:anon")
+    }
+
+    // Apaga todas as URLs em cache (usado ao sair da conta)
+    @Synchronized
+    fun clearCache() {
+        urlCache.clear()
     }
 
     // Testa a URL de verdade: pede 2 bytes. Se não devolver 200/206, descarta.
@@ -226,55 +217,53 @@ class MusicExtractor(private val context: Context) {
         }
     }
 
-    // Método 1: yt-dlp embutido. Pede só o melhor áudio e imprime a URL direta (-g)
-    private fun fromYtDlp(videoId: String): List<StreamSource> {
-        if (!ytdlpReady) initYtDlp()
-        if (!ytdlpReady) {
-            note("yt-dlp indisponível: $ytdlpInitError")
-            return emptyList()
+    // Método 1: servidor no Render com yt-dlp. Só devolve o link; os bytes vêm direto do celular.
+    // Se o usuário estiver logado, manda a sessão dele em cada pedido (HTTPS) e o servidor
+    // usa só durante a extração, sem guardar.
+    private fun fromRender(videoId: String): List<StreamSource> {
+        val cookies = CookieHelper.exportNetscape()
+
+        val payload = JSONObject().apply {
+            put("id", videoId)
+            put("cookies", cookies)
         }
 
-        val result = ArrayList<StreamSource>()
+        val req = Request.Builder()
+            .url("$RENDER_URL/extract")
+            .post(payload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            .build()
 
-        // Duas tentativas com clientes diferentes: o YouTube bloqueia uns e libera outros
-        val attempts = listOf(
-            "android_vr" to "youtube:player_client=android_vr",
-            "padrão" to null
-        )
+        val text = renderHttp.newCall(req).execute().use { r ->
+            val body = r.body?.string() ?: ""
+            if (!r.isSuccessful) {
+                note("Render HTTP ${r.code}: ${body.take(300)}")
+                return emptyList()
+            }
+            body
+        }
 
-        for ((label, extractorArgs) in attempts) {
-            try {
-                val request = YoutubeDLRequest("https://www.youtube.com/watch?v=$videoId")
-                request.addOption("-f", "bestaudio[ext=m4a]/bestaudio")
-                request.addOption("--no-playlist")
-                request.addOption("--no-warnings")
-                request.addOption("--socket-timeout", "15")
-                if (extractorArgs != null) request.addOption("--extractor-args", extractorArgs)
-                // -g imprime só a URL direta do stream, sem baixar nada
-                request.addOption("-g")
+        val json = JSONObject(text)
+        val url = json.optString("url")
+        if (url.isEmpty()) return emptyList()
 
-                val response = YoutubeDL.getInstance().execute(request)
-                val url = response.out.trim().lines().firstOrNull { it.startsWith("http") }
-
-                if (url != null) {
-                    note("yt-dlp ($label) devolveu URL")
-                    result.add(
-                        StreamSource(
-                            url = url,
-                            mime = if (url.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4",
-                            headers = mapOf("User-Agent" to userAgent),
-                            origin = "yt-dlp($label)"
-                        )
-                    )
-                    return result
-                } else {
-                    note("yt-dlp ($label) sem URL. stderr: ${response.err.take(300)}")
-                }
-            } catch (e: Throwable) {
-                note("yt-dlp ($label) erro: ${e.javaClass.simpleName}: ${e.message?.take(300)}")
+        val headers = HashMap<String, String>()
+        val h = json.optJSONObject("headers")
+        if (h != null) {
+            for (k in h.keys()) {
+                if (k.equals("Accept-Encoding", true)) continue
+                headers[k] = h.optString(k)
             }
         }
-        return result
+        if (!headers.containsKey("User-Agent")) headers["User-Agent"] = userAgent
+
+        return listOf(
+            StreamSource(
+                url = url,
+                mime = json.optString("mime", "audio/mp4"),
+                headers = headers,
+                origin = if (cookies.isNotEmpty()) "Render(yt-dlp+sessão)" else "Render(yt-dlp)"
+            )
+        )
     }
 
     // Método 2: NewPipeExtractor

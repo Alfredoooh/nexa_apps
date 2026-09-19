@@ -1,5 +1,6 @@
 package com.vibely.music.app
 
+import android.content.Intent
 import android.webkit.JavascriptInterface
 
 class AndroidBridge(private val activity: MainActivity) {
@@ -16,5 +17,21 @@ class AndroidBridge(private val activity: MainActivity) {
     @JavascriptInterface
     fun setStatusBarTheme(isLightBackground: Boolean) {
         activity.setStatusBarIcons(isLightBackground)
+    }
+
+    // Abre a tela de login do Google
+    @JavascriptInterface
+    fun openLogin() {
+        activity.runOnUiThread {
+            activity.startActivity(Intent(activity, LoginActivity::class.java))
+        }
+    }
+
+    @JavascriptInterface
+    fun isLoggedIn(): Boolean = CookieHelper.isLoggedIn()
+
+    @JavascriptInterface
+    fun logout() {
+        activity.runOnUiThread { CookieHelper.clear() }
     }
 }
