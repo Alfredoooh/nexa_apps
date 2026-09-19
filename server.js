@@ -1,24 +1,40 @@
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 
 const PORT = process.env.PORT || 10000;
 
-// Segredo simples para ninguém mais usar o seu servidor.
-// Defina AUTH_KEY nas variáveis de ambiente do Render.
-const AUTH_KEY = process.env.AUTH_KEY || '';
+// ─── Cache só de URLs (NUNCA de cookies) ─────────────────
+// A chave inclui um hash do cookie, para um usuário não receber
+// a URL gerada com a sessão de outro. O hash não permite recuperar o cookie.
+const cache = new Map();
+const CACHE_TTL = 90 * 60 * 1000;
 
-// Cookies do YouTube (opcional, mas é o que mais ajuda contra o bloqueio de bot).
-// Cole o conteúdo do cookies.txt na variável de ambiente YT_COOKIES.
-const fs = require('fs');
-const COOKIES_PATH = '/tmp/cookies.txt';
-if (process.env.YT_COOKIES) {
-  fs.writeFileSync(COOKIES_PATH, process.env.YT_COOKIES);
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of cache) if (now - v.time > CACHE_TTL) cache.delete(k);
+}, 10 * 60 * 1000).unref();
+
+// ─── Limite de pedidos por IP (protege o plano grátis contra abuso) ─
+const hits = new Map(); // ip -> { count, resetAt }
+const LIMIT = 40;            // pedidos
+const WINDOW = 60 * 1000;    // por minuto
+
+function rateLimited(ip) {
+  const now = Date.now();
+  let h = hits.get(ip);
+  if (!h || now > h.resetAt) { h = { count: 0, resetAt: now + WINDOW }; hits.set(ip, h); }
+  h.count++;
+  return h.count > LIMIT;
 }
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, h] of hits) if (now > h.resetAt) hits.delete(ip);
+}, WINDOW).unref();
 
-const cache = new Map(); // id -> { data, time }
-const CACHE_TTL = 90 * 60 * 1000; // 90 min (as URLs expiram em ~6h)
-
-// Tentativas em ordem: cada cliente do YouTube é bloqueado de um jeito diferente
 const ATTEMPTS = [
   ['--extractor-args', 'youtube:player_client=android_vr'],
   ['--extractor-args', 'youtube:player_client=tv_embedded'],
@@ -27,7 +43,25 @@ const ATTEMPTS = [
   []
 ];
 
-function runYtDlp(videoId, extra) {
+function cacheKey(videoId, cookies) {
+  const h = cookies ? crypto.createHash('sha256').update(cookies).digest('hex').slice(0, 12) : 'anon';
+  return videoId + ':' + h;
+}
+
+// Escreve os cookies num arquivo temporário SÓ durante a execução e apaga logo depois,
+// mesmo se o yt-dlp falhar.
+async function withCookieFile(cookies, fn) {
+  if (!cookies) return fn(null);
+  const file = path.join(os.tmpdir(), 'ck_' + crypto.randomBytes(8).toString('hex') + '.txt');
+  fs.writeFileSync(file, cookies, { mode: 0o600 });
+  try {
+    return await fn(file);
+  } finally {
+    try { fs.unlinkSync(file); } catch (_) {}
+  }
+}
+
+function runYtDlp(videoId, extra, cookieFile) {
   return new Promise((resolve, reject) => {
     const args = [
       `https://www.youtube.com/watch?v=${videoId}`,
@@ -35,46 +69,55 @@ function runYtDlp(videoId, extra) {
       '--no-playlist',
       '--no-warnings',
       '--socket-timeout', '15',
-      '-J', // devolve o JSON completo em vez de só a URL
+      '--no-cache-dir',   // o yt-dlp não guarda nada de sessão em disco
+      '-J',
       ...extra
     ];
-    if (fs.existsSync(COOKIES_PATH)) args.push('--cookies', COOKIES_PATH);
-    
+    if (cookieFile) args.push('--cookies', cookieFile);
+
     execFile('yt-dlp', args, { timeout: 40000, maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) return reject(new Error((stderr || err.message).toString().slice(0, 400)));
+      if (err) {
+        // Nunca devolve/loga nada que possa conter cookie: só o começo da mensagem de erro
+        const msg = (stderr || err.message).toString().replace(/\s+/g, ' ').slice(0, 250);
+        return reject(new Error(msg));
+      }
       try { resolve(JSON.parse(stdout)); }
       catch (e) { reject(new Error('JSON inválido do yt-dlp')); }
     });
   });
 }
 
-async function extract(videoId) {
-  const hit = cache.get(videoId);
+async function extract(videoId, cookies) {
+  const key = cacheKey(videoId, cookies);
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.time < CACHE_TTL) return hit.data;
-  
+
   const errors = [];
-  for (const extra of ATTEMPTS) {
-    try {
-      const info = await runYtDlp(videoId, extra);
-      const url = info.url || (info.requested_formats && info.requested_formats[0] && info.requested_formats[0].url);
-      if (!url) { errors.push('sem url'); continue; }
-      const data = {
-        url,
-        ext: info.ext || 'm4a',
-        mime: (info.ext === 'webm') ? 'audio/webm' : 'audio/mp4',
-        headers: info.http_headers || {},
-        title: info.title || '',
-        duration: info.duration || 0
-      };
-      cache.set(videoId, { data, time: Date.now() });
-      return data;
-    } catch (e) {
-      errors.push(e.message);
+  const data = await withCookieFile(cookies, async cookieFile => {
+    for (const extra of ATTEMPTS) {
+      try {
+        const info = await runYtDlp(videoId, extra, cookieFile);
+        const url = info.url || (info.requested_formats && info.requested_formats[0] && info.requested_formats[0].url);
+        if (!url) { errors.push('sem url'); continue; }
+        return {
+          url,
+          ext: info.ext || 'm4a',
+          mime: (info.ext === 'webm') ? 'audio/webm' : 'audio/mp4',
+          headers: info.http_headers || {},
+          title: info.title || '',
+          duration: info.duration || 0
+        };
+      } catch (e) {
+        errors.push(e.message);
+      }
     }
-  }
-  const err = new Error('todas as tentativas falharam');
-  err.details = errors;
-  throw err;
+    const err = new Error('todas as tentativas falharam');
+    err.details = errors;
+    throw err;
+  });
+
+  cache.set(key, { data, time: Date.now() });
+  return data;
 }
 
 function send(res, status, obj) {
@@ -82,28 +125,61 @@ function send(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+function readBody(req, limit = 200 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', c => {
+      size += c.length;
+      if (size > limit) { reject(new Error('corpo grande demais')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://${req.headers.host}`);
-  
-  if (u.pathname === '/') return send(res, 200, { ok: true, service: 'vibely-extractor' });
-  
-  // Usado pelo app para "acordar" o servidor do plano grátis
-  if (u.pathname === '/health') return send(res, 200, { ok: true });
-  
-  if (AUTH_KEY && u.searchParams.get('key') !== AUTH_KEY) {
-    return send(res, 401, { error: 'não autorizado' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    });
+    return res.end();
   }
-  
+
+  if (u.pathname === '/') return send(res, 200, { ok: true, service: 'vibely-extractor' });
+  if (u.pathname === '/health') return send(res, 200, { ok: true });
+
+  if (rateLimited(ip)) return send(res, 429, { error: 'muitos pedidos, tente em 1 minuto' });
+
+  // POST /extract  { "id": "...", "cookies": "formato Netscape (opcional)" }
+  // Os cookies chegam por pedido, vivem só num arquivo temporário durante a extração
+  // e são apagados em seguida. Nada é guardado, nada é registrado em log.
   if (u.pathname === '/extract') {
-    const id = u.searchParams.get('id');
-    if (!id || !/^[\w-]{6,20}$/.test(id)) return send(res, 400, { error: 'id inválido' });
     try {
-      const data = await extract(id);
+      let id = u.searchParams.get('id');
+      let cookies = '';
+
+      if (req.method === 'POST') {
+        const raw = await readBody(req);
+        const body = raw ? JSON.parse(raw) : {};
+        id = body.id || id;
+        cookies = typeof body.cookies === 'string' ? body.cookies : '';
+      }
+
+      if (!id || !/^[\w-]{6,20}$/.test(id)) return send(res, 400, { error: 'id inválido' });
+
+      const data = await extract(id, cookies);
       return send(res, 200, data);
     } catch (e) {
       return send(res, 502, { error: e.message, details: e.details || [] });
     }
   }
-  
+
   send(res, 404, { error: 'não encontrado' });
 }).listen(PORT, () => console.log('vibely-extractor na porta ' + PORT));
