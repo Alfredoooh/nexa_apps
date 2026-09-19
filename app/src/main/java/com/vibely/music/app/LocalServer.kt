@@ -98,19 +98,71 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
 
         val mime = upstream.header("Content-Type")?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
             ?: source.mime
-        val length = body.contentLength()
+        var length = body.contentLength()
         val status = if (upstream.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
         Log.d(tag, "Upstream OK via ${source.origin}: ${upstream.code} $mime length=$length")
 
-        val resp = if (length >= 0) {
-            newFixedLengthResponse(status, mime, body.byteStream(), length)
-        } else {
-            newChunkedResponse(status, mime, body.byteStream())
+        // O MediaPlayer/<audio> do Android costumam travar sem erro nem sucesso quando a resposta
+        // não tem Content-Length (chunked). Se o upstream não devolveu tamanho, descobrimos o
+        // tamanho total do ficheiro com um pedido HEAD-like antes de responder, e servimos como
+        // resposta de tamanho fixo — nunca chunked — para o player conseguir abrir o stream.
+        if (length < 0) {
+            Log.w(tag, "Upstream sem Content-Length, a descobrir tamanho total…")
+            body.close()
+            upstream.close()
+            val total = fetchTotalLength(source)
+            if (total == null || total <= 0) {
+                Log.e(tag, "Não foi possível determinar o tamanho do ficheiro")
+                return withCors(
+                    newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Stream sem tamanho conhecido")
+                )
+            }
+            // Reabre a ligação, agora sabendo o total, para poder responder com Content-Length correto
+            val reopened = openUpstream(videoId, rangeHeader) ?: return withCors(
+                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Falha ao reabrir stream")
+            )
+            val (source2, upstream2) = reopened
+            val body2 = upstream2.body ?: run {
+                upstream2.close()
+                return withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Sem corpo"))
+            }
+            val mime2 = upstream2.header("Content-Type")?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
+                ?: source2.mime
+            val status2 = if (upstream2.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
+            // Se veio Content-Range (ex: "bytes 0-999/123456"), o tamanho deste corpo é o range pedido,
+            // não o total — mas para servir de tamanho fixo usamos o length real do corpo desta resposta,
+            // caindo para o total já descoberto apenas se necessário.
+            val effectiveLength = body2.contentLength().takeIf { it >= 0 } ?: total
+            val resp2 = newFixedLengthResponse(status2, mime2, body2.byteStream(), effectiveLength)
+            resp2.addHeader("Accept-Ranges", "bytes")
+            upstream2.header("Content-Range")?.let { resp2.addHeader("Content-Range", it) }
+            if (status2 == Response.Status.OK) {
+                resp2.addHeader("Content-Range", "bytes 0-${total - 1}/$total")
+            }
+            return withCors(resp2)
         }
 
+        val resp = newFixedLengthResponse(status, mime, body.byteStream(), length)
         resp.addHeader("Accept-Ranges", "bytes")
         upstream.header("Content-Range")?.let { resp.addHeader("Content-Range", it) }
         return withCors(resp)
+    }
+
+    // Faz um pedido leve (1 byte) só para ler o Content-Range e descobrir o tamanho TOTAL do ficheiro
+    // remoto, quando o servidor de origem não devolveu Content-Length na resposta normal.
+    private fun fetchTotalLength(source: MusicExtractor.StreamSource): Long? {
+        return try {
+            val rb = Request.Builder().url(source.url).header("Range", "bytes=0-1")
+            source.headers.forEach { (k, v) -> rb.header(k, v) }
+            http.newCall(rb.build()).execute().use { r ->
+                val contentRange = r.header("Content-Range") // formato: bytes 0-1/123456
+                val total = contentRange?.substringAfterLast("/")?.toLongOrNull()
+                total ?: r.header("Content-Length")?.toLongOrNull()
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "fetchTotalLength falhou: ${e.message}")
+            null
+        }
     }
 
     private fun isGood(r: okhttp3.Response) = r.isSuccessful || r.code == 206
