@@ -81,10 +81,12 @@ class AndroidBridge(private val context: Context) {
     @JavascriptInterface
     fun isDownloaded(videoId: String): Boolean = downloads.isDownloaded(videoId)
 
+    // file:// é bloqueado pelo WebView (a página é https), por isso o download é servido
+    // pelo LocalServer em /downloaded, que suporta Range (seek) e volta a funcionar offline.
     @JavascriptInterface
     fun downloadedFileUrl(videoId: String): String {
         val file = downloads.fileFor(videoId)
-        return if (file.exists()) "file://${file.absolutePath}" else ""
+        return if (file.exists() && file.length() > 0) "http://localhost:8080/downloaded?id=$videoId" else ""
     }
 
     // ─── Bluetooth: dispositivos emparelhados reais ───
@@ -182,45 +184,63 @@ class AndroidBridge(private val context: Context) {
     }
 
     // ─── Músicas locais do aparelho ───
+    // Devolve título, artista, ÁLBUM e capa. O áudio e a capa são servidos pelo LocalServer
+    // (localhost:8080), porque o WebView (origem https) não consegue abrir content:// diretamente.
     @JavascriptInterface
     fun getLocalTracks(): String {
         val arr = JSONArray()
+        val media = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
             android.provider.MediaStore.Audio.Media._ID,
             android.provider.MediaStore.Audio.Media.TITLE,
             android.provider.MediaStore.Audio.Media.ARTIST,
+            android.provider.MediaStore.Audio.Media.ALBUM,
             android.provider.MediaStore.Audio.Media.DURATION
         )
-        val selection = "${android.provider.MediaStore.Audio.Media.IS_MUSIC} != 0"
+        val selection = "${android.provider.MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+            "${android.provider.MediaStore.Audio.Media.DURATION} > 0"
         try {
             context.contentResolver.query(
-                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection, selection, null,
-                "${android.provider.MediaStore.Audio.Media.TITLE} ASC"
+                media, projection, selection, null,
+                "${android.provider.MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media._ID)
                 val titleCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.TITLE)
                 val artistCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.ARTIST)
+                val albumCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.ALBUM)
                 val durCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DURATION)
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
-                    val uri = android.content.ContentUris.withAppendedId(
-                        android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
-                    )
+                    val artist = cursor.getString(artistCol)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "Artista desconhecido"
+                    val album = cursor.getString(albumCol)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: ""
                     arr.put(org.json.JSONObject().apply {
                         put("id", "local_$id")
-                        put("title", cursor.getString(titleCol) ?: "")
-                        put("artist", cursor.getString(artistCol) ?: "")
+                        put("title", cursor.getString(titleCol) ?: "Sem título")
+                        put("artist", artist)
+                        put("album", album)
                         put("duration", (cursor.getLong(durCol) / 1000))
-                        put("localUri", uri.toString())
+                        put("localUri", "http://localhost:8080/local?id=local_$id")
+                        put("thumbnail", "http://localhost:8080/cover?id=local_$id")
                         put("isLocal", true)
                     })
                 }
             }
         } catch (e: SecurityException) {
-            // permissão ainda não concedida: devolve lista vazia, o JS trata como "sem músicas locais"
+            Log.w("VibelyBridge", "getLocalTracks: sem permissão de áudio")
+        } catch (e: Exception) {
+            Log.e("VibelyBridge", "getLocalTracks falhou", e)
         }
         return arr.toString()
+    }
+
+    // O JS pergunta antes de listar: evita mostrar "nenhuma música" quando na verdade falta permissão.
+    @JavascriptInterface
+    fun hasLocalMusicPermission(): Boolean {
+        val perm = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+            android.Manifest.permission.READ_MEDIA_AUDIO
+        else android.Manifest.permission.READ_EXTERNAL_STORAGE
+        return androidx.core.content.ContextCompat.checkSelfPermission(context, perm) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     @JavascriptInterface

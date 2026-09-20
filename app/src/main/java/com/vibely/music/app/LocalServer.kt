@@ -7,7 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-class LocalServer(context: Context) : NanoHTTPD(8080) {
+class LocalServer(private val context: Context) : NanoHTTPD(8080) {
 
     private val tag = "VibelyServer"
     private val extractor = MusicExtractor(context)
@@ -58,6 +58,18 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                     val query = params["q"]?.firstOrNull() ?: "trending"
                     jsonResponse(extractor.searchShorts(query))
                 }
+                "/local" -> {
+                    val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
+                    serveLocalAudio(id, session.headers["range"])
+                }
+                "/downloaded" -> {
+                    val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
+                    serveDownloaded(id, session.headers["range"])
+                }
+                "/cover" -> {
+                    val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
+                    serveLocalCover(id)
+                }
                 "/lyrics" -> {
                     val title = params["title"]?.firstOrNull() ?: return badRequest("Missing title")
                     val artist = params["artist"]?.firstOrNull() ?: ""
@@ -76,6 +88,148 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         } catch (e: Exception) {
             Log.e(tag, "Erro em $uri", e)
             withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "application/json", """{"error":"${(e.message ?: "erro").replace("\"", "'")}"}"""))
+        }
+    }
+
+    // ─── Músicas locais: o WebView (origem https) não abre content:// diretamente,
+    // por isso o áudio do telemóvel é servido por aqui, com suporte a Range (seek). ───
+    private fun localUri(id: String): android.net.Uri? {
+        val numeric = id.removePrefix("local_").toLongOrNull() ?: return null
+        return android.content.ContentUris.withAppendedId(
+            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, numeric
+        )
+    }
+
+    private fun serveLocalAudio(id: String, rangeHeader: String?): Response {
+        val uri = localUri(id) ?: return withCors(newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain", "id inválido"))
+        return try {
+            val resolver = context.contentResolver
+            val mime = resolver.getType(uri)?.takeIf { it.startsWith("audio/") } ?: "audio/mpeg"
+            val total = resolver.openFileDescriptor(uri, "r")?.use { it.statSize } ?: -1L
+            if (total <= 0) return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Ficheiro não encontrado"))
+
+            var start = 0L
+            var end = total - 1
+            var partial = false
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                val parts = rangeHeader.removePrefix("bytes=").split("-")
+                start = parts.getOrNull(0)?.toLongOrNull() ?: 0L
+                end = parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: (total - 1)
+                end = minOf(end, total - 1)
+                if (start > end || start < 0) {
+                    val r = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, "text/plain", "")
+                    r.addHeader("Content-Range", "bytes */$total")
+                    return withCors(r)
+                }
+                partial = true
+            }
+
+            val length = end - start + 1
+            val input = resolver.openInputStream(uri) ?: return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Sem acesso"))
+            var skipped = 0L
+            while (skipped < start) {
+                val n = input.skip(start - skipped)
+                if (n <= 0) break
+                skipped += n
+            }
+            val limited = object : java.io.FilterInputStream(input) {
+                private var remaining = length
+                override fun read(): Int {
+                    if (remaining <= 0) return -1
+                    val b = super.read(); if (b >= 0) remaining--; return b
+                }
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (remaining <= 0) return -1
+                    val n = super.read(b, off, minOf(len.toLong(), remaining).toInt())
+                    if (n > 0) remaining -= n
+                    return n
+                }
+            }
+
+            val resp = newFixedLengthResponse(
+                if (partial) Response.Status.PARTIAL_CONTENT else Response.Status.OK, mime, limited, length
+            )
+            resp.addHeader("Accept-Ranges", "bytes")
+            if (partial) resp.addHeader("Content-Range", "bytes $start-$end/$total")
+            withCors(resp)
+        } catch (e: SecurityException) {
+            withCors(newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Sem permissão de áudio"))
+        } catch (e: Exception) {
+            Log.e(tag, "Erro a servir local $id", e)
+            withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Erro ao ler ficheiro"))
+        }
+    }
+
+    // Capa do álbum embutida no ficheiro (ID3/MediaStore). Devolve 404 se não tiver.
+    private fun serveLocalCover(id: String): Response {
+        val uri = localUri(id) ?: return withCors(newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain", "id inválido"))
+        return try {
+            val mmr = android.media.MediaMetadataRetriever()
+            mmr.setDataSource(context, uri)
+            val art = mmr.embeddedPicture
+            mmr.release()
+            if (art == null || art.isEmpty()) {
+                withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Sem capa"))
+            } else {
+                val r = newFixedLengthResponse(Response.Status.OK, "image/jpeg", java.io.ByteArrayInputStream(art), art.size.toLong())
+                r.addHeader("Cache-Control", "public, max-age=86400")
+                withCors(r)
+            }
+        } catch (e: Exception) {
+            withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Sem capa"))
+        }
+    }
+
+    // Áudio descarregado (guardado na pasta privada da app), servido com suporte a Range.
+    private fun serveDownloaded(id: String, rangeHeader: String?): Response {
+        val safeId = id.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+        val file = java.io.File(java.io.File(context.filesDir, "downloads"), "$safeId.audio")
+        if (!file.exists() || file.length() <= 0) {
+            return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Download não encontrado"))
+        }
+        return try {
+            val total = file.length()
+            var start = 0L
+            var end = total - 1
+            var partial = false
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                val parts = rangeHeader.removePrefix("bytes=").split("-")
+                start = parts.getOrNull(0)?.toLongOrNull() ?: 0L
+                end = parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: (total - 1)
+                end = minOf(end, total - 1)
+                if (start > end || start < 0) {
+                    val r = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, "text/plain", "")
+                    r.addHeader("Content-Range", "bytes */$total")
+                    return withCors(r)
+                }
+                partial = true
+            }
+            val length = end - start + 1
+            val raf = java.io.RandomAccessFile(file, "r")
+            raf.seek(start)
+            val stream = object : java.io.InputStream() {
+                private var remaining = length
+                override fun read(): Int {
+                    if (remaining <= 0) return -1
+                    val b = raf.read(); if (b >= 0) remaining--; return b
+                }
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    if (remaining <= 0) return -1
+                    val n = raf.read(b, off, minOf(len.toLong(), remaining).toInt())
+                    if (n > 0) remaining -= n
+                    return n
+                }
+                override fun close() { try { raf.close() } catch (_: Exception) {} }
+            }
+            val resp = newFixedLengthResponse(
+                if (partial) Response.Status.PARTIAL_CONTENT else Response.Status.OK, "audio/mp4", stream, length
+            )
+            resp.addHeader("Accept-Ranges", "bytes")
+            if (partial) resp.addHeader("Content-Range", "bytes $start-$end/$total")
+            withCors(resp)
+        } catch (e: Exception) {
+            Log.e(tag, "Erro a servir download $id", e)
+            withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Erro ao ler download"))
         }
     }
 

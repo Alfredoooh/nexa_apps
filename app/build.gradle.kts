@@ -55,6 +55,9 @@ dependencies {
     // yt-dlp (apenas para obter a URL do stream de áudio do YouTube). ffmpeg removido: não é usado.
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.2")
 
+    // Splash screen nativo (fundo azul fixo + símbolo, Android 6+ e 12+)
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Notificação nativa de media (MediaSession + estilo de notificação padrão do Android)
     implementation("androidx.media:media:1.7.0")
 
