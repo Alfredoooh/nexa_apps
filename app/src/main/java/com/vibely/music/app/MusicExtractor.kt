@@ -24,14 +24,10 @@ class MusicExtractor(private val context: Context) {
 
     private val tag = "VibelyExtract"
 
-    init {
-        NewPipe.init(OkHttpDownloader())
-    }
+    init { NewPipe.init(OkHttpDownloader()) }
 
     private val youtube = ServiceList.YouTube
-
-    private val userAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -39,30 +35,24 @@ class MusicExtractor(private val context: Context) {
         .followRedirects(true)
         .build()
 
-    // Cache mais generoso agora (10 min): reduz reextrações repetidas da mesma música
-    // (menos invocações do processo Python = menos calor/bateria), mas ainda revalidamos
-    // sempre a URL de verdade antes de a devolver, porque ela pode expirar antes disso.
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
-    private val cacheTtl = 10L * 60 * 1000 // 10 min
+    private val cacheTtl = 10L * 60 * 1000
+
+    // Cache de pesquisa: pesquisas de 100+ resultados usam múltiplas variantes de query,
+    // cachear evita repetir todo o trabalho em pesquisas repetidas.
+    private val searchCache = HashMap<String, Pair<String, Long>>()
+    private val searchCacheTtl = 5L * 60 * 1000
 
     private val debugLog = ArrayList<String>()
 
     @Volatile private var ytdlpReady = false
     @Volatile private var ytdlpInitError: String? = null
 
-    data class StreamSource(
-        val url: String,
-        val mime: String,
-        val headers: Map<String, String>,
-        val origin: String
-    )
+    data class StreamSource(val url: String, val mime: String, val headers: Map<String, String>, val origin: String)
 
     private fun note(msg: String) {
         Log.d(tag, msg)
-        synchronized(debugLog) {
-            debugLog.add(msg)
-            if (debugLog.size > 80) debugLog.removeAt(0)
-        }
+        synchronized(debugLog) { debugLog.add(msg); if (debugLog.size > 80) debugLog.removeAt(0) }
     }
 
     @Synchronized
@@ -70,8 +60,7 @@ class MusicExtractor(private val context: Context) {
         if (ytdlpReady) return
         try {
             YoutubeDL.getInstance().init(context.applicationContext)
-            ytdlpReady = true
-            ytdlpInitError = null
+            ytdlpReady = true; ytdlpInitError = null
             note("yt-dlp inicializado")
         } catch (e: Throwable) {
             ytdlpInitError = "${e.javaClass.simpleName}: ${e.message}"
@@ -81,14 +70,9 @@ class MusicExtractor(private val context: Context) {
 
     fun updateYtDlp() {
         try {
-            val status = YoutubeDL.getInstance().updateYoutubeDL(
-                context.applicationContext,
-                YoutubeDL.UpdateChannel.STABLE
-            )
+            val status = YoutubeDL.getInstance().updateYoutubeDL(context.applicationContext, YoutubeDL.UpdateChannel.STABLE)
             note("yt-dlp update: $status")
-        } catch (e: Throwable) {
-            note("yt-dlp update falhou: ${e.message}")
-        }
+        } catch (e: Throwable) { note("yt-dlp update falhou: ${e.message}") }
     }
 
     fun debugReport(): String {
@@ -100,14 +84,44 @@ class MusicExtractor(private val context: Context) {
         return sb.toString()
     }
 
-    fun search(query: String): String {
-        val handler = youtube.searchQHFactory.fromQuery(query)
-        val info = SearchInfo.getInfo(youtube, handler)
+    // ─── BUSCA: agora com limite configurável e paginação via múltiplas páginas do NewPipe ───
+    fun search(query: String, limit: Int = 100): String {
+        val cacheKey = "$query|$limit"
+        searchCache[cacheKey]?.let { (json, time) ->
+            if (System.currentTimeMillis() - time < searchCacheTtl) return json
+        }
+
+        val seenIds = HashSet<String>()
         val arr = JSONArray()
-        for (item in info.relatedItems) {
+        try {
+            val handler = youtube.searchQHFactory.fromQuery(query)
+            var searchInfo = SearchInfo.getInfo(youtube, handler)
+            addItems(searchInfo.relatedItems, arr, seenIds, limit)
+
+            // Pagina mais resultados enquanto não atingir o limite pedido (até 4 páginas extra)
+            var nextPage = searchInfo.nextPage
+            var pagesFetched = 0
+            while (arr.length() < limit && nextPage != null && pagesFetched < 4) {
+                val more = SearchInfo.getMoreItems(youtube, handler, nextPage)
+                addItems(more.items, arr, seenIds, limit)
+                nextPage = more.nextPage
+                pagesFetched++
+            }
+        } catch (e: Exception) {
+            note("search falhou: ${e.message}")
+        }
+
+        val json = arr.toString()
+        searchCache[cacheKey] = Pair(json, System.currentTimeMillis())
+        return json
+    }
+
+    private fun addItems(items: List<*>, arr: JSONArray, seenIds: MutableSet<String>, limit: Int) {
+        for (item in items) {
+            if (arr.length() >= limit) break
             if (item !is StreamInfoItem) continue
             val id = extractId(item.url)
-            if (id.isEmpty()) continue
+            if (id.isEmpty() || !seenIds.add(id)) continue
             arr.put(JSONObject().apply {
                 put("id", id)
                 put("title", item.name ?: "")
@@ -118,9 +132,7 @@ class MusicExtractor(private val context: Context) {
                 put("views", formatViews(item.viewCount))
                 put("uploadDate", item.textualUploadDate ?: "")
             })
-            if (arr.length() >= 25) break
         }
-        return arr.toString()
     }
 
     fun getRelated(videoId: String): String {
@@ -144,22 +156,46 @@ class MusicExtractor(private val context: Context) {
         return arr.toString()
     }
 
+    // ─── SHORTIES: usa o mesmo NewPipe, mas filtra vídeos curtos e devolve metadados leves
+    // (sem stream ainda — o preview em si é extraído sob demanda, como as músicas normais,
+    // só que tocado nos primeiros segundos pelo próprio player, sem custo extra de servidor) ───
+    fun searchShorts(query: String): String {
+        val cacheKey = "shorts|$query"
+        searchCache[cacheKey]?.let { (json, time) ->
+            if (System.currentTimeMillis() - time < searchCacheTtl) return json
+        }
+        val arr = JSONArray()
+        try {
+            val handler = youtube.searchQHFactory.fromQuery("$query")
+            val info = SearchInfo.getInfo(youtube, handler)
+            val seen = HashSet<String>()
+            for (item in info.relatedItems) {
+                if (item !is StreamInfoItem) continue
+                val id = extractId(item.url)
+                if (id.isEmpty() || !seen.add(id)) continue
+                arr.put(JSONObject().apply {
+                    put("id", id)
+                    put("title", item.name ?: "")
+                    put("artist", item.uploaderName ?: "")
+                    put("duration", item.duration)
+                    put("thumbnail", item.thumbnails?.lastOrNull()?.url ?: "")
+                })
+                if (arr.length() >= 30) break
+            }
+        } catch (e: Exception) { note("searchShorts falhou: ${e.message}") }
+        val json = arr.toString()
+        searchCache[cacheKey] = Pair(json, System.currentTimeMillis())
+        return json
+    }
+
     @Synchronized
     fun getStreamSource(videoId: String): StreamSource? {
         val now = System.currentTimeMillis()
-
         urlCache[videoId]?.let { (src, time) ->
             if (now - time < cacheTtl) {
-                if (validate(src)) {
-                    note("cache HIT revalidado para $videoId")
-                    return src
-                } else {
-                    note("cache STALE para $videoId — refazendo extração")
-                    urlCache.remove(videoId)
-                }
-            } else {
-                urlCache.remove(videoId)
-            }
+                if (validate(src)) { note("cache HIT revalidado para $videoId"); return src }
+                else { note("cache STALE para $videoId"); urlCache.remove(videoId) }
+            } else urlCache.remove(videoId)
         }
 
         note("=== extraindo $videoId via yt-dlp ===")
@@ -167,110 +203,53 @@ class MusicExtractor(private val context: Context) {
         note("yt-dlp devolveu ${candidates.size} candidato(s)")
 
         for (c in candidates) {
-            if (validate(c)) {
-                note("OK via ${c.origin} (${c.mime})")
-                urlCache[videoId] = Pair(c, now)
-                return c
-            } else {
-                note("candidato de ${c.origin} recusado na validação")
-            }
+            if (validate(c)) { note("OK via ${c.origin}"); urlCache[videoId] = Pair(c, now); return c }
+            else note("candidato de ${c.origin} recusado")
         }
-
         note("yt-dlp não devolveu stream válido para $videoId")
         return null
     }
 
     @Synchronized
-    fun invalidate(videoId: String) {
-        urlCache.remove(videoId)
-    }
+    fun invalidate(videoId: String) { urlCache.remove(videoId) }
 
     private fun validate(src: StreamSource): Boolean {
         return try {
             val rb = Request.Builder().url(src.url).header("Range", "bytes=0-1")
             src.headers.forEach { (k, v) -> rb.header(k, v) }
-            val call = http.newBuilder()
-                .connectTimeout(5, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
-                .build()
-                .newCall(rb.build())
-            call.execute().use { r ->
-                val ok = r.code == 200 || r.code == 206
-                if (!ok) note("validate ${src.origin}: HTTP ${r.code}")
-                ok
-            }
-        } catch (e: Exception) {
-            note("validate ${src.origin}: ${e.javaClass.simpleName}: ${e.message}")
-            false
-        }
+            http.newBuilder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS).build()
+                .newCall(rb.build()).execute().use { r -> r.code == 200 || r.code == 206 }
+        } catch (e: Exception) { false }
     }
 
-    // yt-dlp: uma só tentativa direta (android_vr, o cliente mais confiável nos testes).
-    // Menos invocações do processo Python = extração mais rápida e menos aquecimento.
-    // Só cai para o cliente padrão se a primeira tentativa falhar de vez.
     private fun fromYtDlp(videoId: String): List<StreamSource> {
         if (!ytdlpReady) initYtDlp()
-        if (!ytdlpReady) {
-            note("yt-dlp indisponível: $ytdlpInitError")
-            return emptyList()
-        }
+        if (!ytdlpReady) { note("yt-dlp indisponível: $ytdlpInitError"); return emptyList() }
 
-        val attempts = listOf(
-            "android_vr" to "youtube:player_client=android_vr"
-        )
+        val url = runYtDlp(videoId, "youtube:player_client=android_vr", "android_vr")
+        if (url != null) return listOf(StreamSource(url, mimeFromUrl(url), mapOf("User-Agent" to userAgent), "yt-dlp(android_vr)"))
 
-        for ((label, extractorArgs) in attempts) {
-            val url = runYtDlp(videoId, extractorArgs, label)
-            if (url != null) {
-                return listOf(
-                    StreamSource(
-                        url = url,
-                        mime = if (url.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4",
-                        headers = mapOf("User-Agent" to userAgent),
-                        origin = "yt-dlp($label)"
-                    )
-                )
-            }
-        }
-
-        // Falhou o cliente rápido: tenta o padrão como último recurso
         val fallback = runYtDlp(videoId, null, "padrão")
-        if (fallback != null) {
-            return listOf(
-                StreamSource(
-                    url = fallback,
-                    mime = if (fallback.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4",
-                    headers = mapOf("User-Agent" to userAgent),
-                    origin = "yt-dlp(padrão)"
-                )
-            )
-        }
+        if (fallback != null) return listOf(StreamSource(fallback, mimeFromUrl(fallback), mapOf("User-Agent" to userAgent), "yt-dlp(padrão)"))
+
         return emptyList()
     }
+
+    private fun mimeFromUrl(url: String) = if (url.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4"
 
     private fun runYtDlp(videoId: String, extractorArgs: String?, label: String): String? {
         return try {
             val request = YoutubeDLRequest("https://www.youtube.com/watch?v=$videoId")
-            // abr<=96: limite de bitrate mais baixo — poupa dados móveis e reduz
-            // o volume transferido/processado (menos calor no aparelho)
             request.addOption("-f", "bestaudio[ext=m4a][abr<=96]/bestaudio[abr<=96]/bestaudio[ext=m4a]/bestaudio")
             request.addOption("--no-playlist")
             request.addOption("--no-warnings")
-            // timeout mais curto: falha rápido em vez de ficar pendurado, acelera a cascata
             request.addOption("--socket-timeout", "8")
             if (extractorArgs != null) request.addOption("--extractor-args", extractorArgs)
             request.addOption("-g")
-
             val response = YoutubeDL.getInstance().execute(request)
-            val url = response.out.trim().lines().firstOrNull { it.startsWith("http") }
-            if (url != null) {
-                note("yt-dlp ($label) devolveu URL")
-            } else {
-                note("yt-dlp ($label) sem URL. stderr: ${response.err.take(300)}")
-            }
-            url
+            response.out.trim().lines().firstOrNull { it.startsWith("http") }
         } catch (e: Throwable) {
-            note("yt-dlp ($label) erro: ${e.javaClass.simpleName}: ${e.message?.take(300)}")
+            note("yt-dlp ($label) erro: ${e.message?.take(200)}")
             null
         }
     }
@@ -293,39 +272,17 @@ class MusicExtractor(private val context: Context) {
 }
 
 private class OkHttpDownloader : Downloader() {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
+    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
     override fun execute(request: NPRequest): NPResponse {
         val rb = Request.Builder().url(request.url())
-
-        request.headers().forEach { (name, values) ->
-            values.forEach { rb.addHeader(name, it) }
-        }
-        rb.header(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-        )
-
+        request.headers().forEach { (name, values) -> values.forEach { rb.addHeader(name, it) } }
+        rb.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
         when (request.httpMethod()) {
             "GET" -> rb.get()
-            "POST" -> {
-                val body = (request.dataToSend() ?: ByteArray(0))
-                    .toRequestBody("application/octet-stream".toMediaTypeOrNull())
-                rb.post(body)
-            }
+            "POST" -> rb.post((request.dataToSend() ?: ByteArray(0)).toRequestBody("application/octet-stream".toMediaTypeOrNull()))
             else -> rb.method(request.httpMethod(), null)
         }
-
         val response = client.newCall(rb.build()).execute()
-        return NPResponse(
-            response.code,
-            response.message,
-            response.headers.toMultimap(),
-            response.body?.string() ?: "",
-            response.request.url.toString()
-        )
+        return NPResponse(response.code, response.message, response.headers.toMultimap(), response.body?.string() ?: "", response.request.url.toString())
     }
 }

@@ -13,10 +13,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     buildTypes {
@@ -33,15 +30,9 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
 
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 
 dependencies {
@@ -55,4 +46,10 @@ dependencies {
 
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.2")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2")
+
+    // Notificação nativa de media (MediaSession + estilo de notificação padrão do Android)
+    implementation("androidx.media:media:1.7.0")
+
+    // Preferências persistentes do usuário
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 }
