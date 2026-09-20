@@ -37,9 +37,11 @@ class MusicExtractor(private val context: Context) {
         .followRedirects(true)
         .build()
 
-    // Cache das URLs de áudio já validadas
+    // Cache das URLs de áudio já validadas. Curto de propósito: URLs do googlevideo.com
+    // costumam expirar em poucos minutos, e uma URL cacheada mas já morta causa falhas
+    // de rede "silenciosas" no proxy (erro imediato, sem exceção clara).
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
-    private val cacheTtl = 90L * 60 * 1000 // 90 min
+    private val cacheTtl = 4L * 60 * 1000 // 4 min
 
     // Diário de tudo que aconteceu na última extração (lido pelo /debug)
     private val debugLog = ArrayList<String>()
@@ -129,8 +131,21 @@ class MusicExtractor(private val context: Context) {
     @Synchronized
     fun getStreamSource(videoId: String): StreamSource? {
         val now = System.currentTimeMillis()
+
+        // Mesmo vindo do cache, a URL é sempre revalidada de verdade antes de ser devolvida.
+        // Isto evita devolver uma URL "morta" que passou a validação há minutos mas já expirou.
         urlCache[videoId]?.let { (src, time) ->
-            if (now - time < cacheTtl) return src
+            if (now - time < cacheTtl) {
+                if (validate(src)) {
+                    note("cache HIT revalidado para $videoId via ${src.origin}")
+                    return src
+                } else {
+                    note("cache STALE para $videoId (${src.origin}) — refazendo extração")
+                    urlCache.remove(videoId)
+                }
+            } else {
+                urlCache.remove(videoId)
+            }
         }
 
         note("=== extraindo $videoId ===")
@@ -174,17 +189,24 @@ class MusicExtractor(private val context: Context) {
     }
 
     // Testa a URL de verdade: pede 2 bytes. Se não devolver 200/206, descarta.
+    // Timeout curto de propósito — se a URL está morta, queremos descobrir rápido e passar
+    // para o próximo método, não ficar pendurados.
     private fun validate(src: StreamSource): Boolean {
         return try {
             val rb = Request.Builder().url(src.url).header("Range", "bytes=0-1")
             src.headers.forEach { (k, v) -> rb.header(k, v) }
-            http.newCall(rb.build()).execute().use { r ->
+            val call = http.newBuilder()
+                .connectTimeout(6, TimeUnit.SECONDS)
+                .readTimeout(6, TimeUnit.SECONDS)
+                .build()
+                .newCall(rb.build())
+            call.execute().use { r ->
                 val ok = r.code == 200 || r.code == 206
                 if (!ok) note("validate ${src.origin}: HTTP ${r.code}")
                 ok
             }
         } catch (e: Exception) {
-            note("validate ${src.origin}: ${e.message}")
+            note("validate ${src.origin}: ${e.javaClass.simpleName}: ${e.message}")
             false
         }
     }
