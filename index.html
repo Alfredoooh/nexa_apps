@@ -1149,11 +1149,18 @@ function handleBack() {
   if (tabHistory.length) { switchTab(tabHistory.pop(), { fromBack: true }); return true; }
   return false;
 }
+// O Kotlin chama window.onNativeBack() no botão voltar. Como isso pode também disparar
+// um popstate do WebView, marcamos o instante para ignorar o popstate duplicado.
+let lastNativeBackAt = 0;
 window.addEventListener('popstate', () => {
+  if (Date.now() - lastNativeBackAt < 400) { history.pushState({ keep: 1 }, ''); return; }
   const consumed = handleBack();
   if (consumed) history.pushState({ keep: 1 }, '');
 });
-window.onNativeBack = function () { return handleBack(); };
+window.onNativeBack = function () {
+  lastNativeBackAt = Date.now();
+  return handleBack();
+};
 history.replaceState({ base: 1 }, '');
 history.pushState({ keep: 1 }, '');
 
@@ -2294,6 +2301,7 @@ function playLocal(track, queueIndex) {
   audio.pause(); audio.src = track.localUri; audio.load();
   audio.play().catch(() => toast('Não foi possível tocar este ficheiro local'));
   addRecent(track); renderRecents(); markPlaying();
+  updateMediaSession(track);
   applyAlbumColor(track);
   notifyNative(true);
 }
@@ -2312,8 +2320,10 @@ async function play(track, queueIndex) {
   $('mini-progress').style.width = '0%'; $('np-bar-fill').style.width = '0%';
   $('np-cur').textContent = '0:00'; $('np-tot').textContent = fmtTime(track.duration || 0);
   addRecent(track); bumpArtist(track); renderRecents(); markPlaying();
+  updateMediaSession(track);
   applyAlbumColor(track);
   resetLyricsView();
+  notifyNative(true);
   await startStream(track, token);
 }
 async function streamFor(id) {
@@ -2363,9 +2373,29 @@ async function autoContinue() {
   } catch (_) {}
   setPlayIcon('play'); setSpinning(false);
 }
+// Igual a autoContinue, mas para o botão "próxima" (ação explícita do utilizador):
+// não depende da definição "reprodução automática", porque ele pediu a próxima música.
+async function autoContinueForce() {
+  if (!currentTrack || !isApp || currentTrack.isLocal) { toast('Não há mais músicas na fila'); return; }
+  try {
+    const res = await fetch(BASE + '/related?id=' + encodeURIComponent(currentTrack.id));
+    const data = await res.json();
+    const seen = new Set([currentTrack.id]);
+    const extra = (Array.isArray(data) ? data : []).filter(x => x && x.id && !seen.has(x.id) && seen.add(x.id));
+    if (extra.length) {
+      currentQueue = [currentTrack].concat(extra);
+      currentQueueIndex = 1;
+      play(currentQueue[1], 1);
+      return;
+    }
+  } catch (_) {}
+  toast('Não há mais músicas na fila');
+}
 function nextTrack(auto) {
   if (!currentQueue.length) return;
   if (auto && repeatMode === 2) { audio.currentTime = 0; audio.play(); return; }
+  // Fila de 1 só música (ex.: "Tocar agora"): o próximo vem das relacionadas
+  if (currentQueue.length === 1 && !(auto && repeatMode === 1)) { autoContinueForce(); return; }
   if (shuffleOn && currentQueue.length > 1) {
     let n; do { n = Math.floor(Math.random() * currentQueue.length); } while (n === currentQueueIndex);
     currentQueueIndex = n;
@@ -2470,9 +2500,30 @@ bindSlider($('np-vol-bar'), pct => { audio.volume = pct; $('np-vol-fill').style.
 })();
 function prevTrackForce() {
   if (!currentQueue.length) return;
+  if (currentQueue.length === 1) { try { audio.currentTime = 0; audio.play(); } catch (_) {} return; }
   currentQueueIndex = (currentQueueIndex - 1 + currentQueue.length) % currentQueue.length;
   playAny(currentQueue[currentQueueIndex], currentQueueIndex);
 }
+
+// ═══════════════════════════════════════════════════════════
+//  COMANDOS VINDOS DA NOTIFICAÇÃO / FONES / ECRÃ BLOQUEADO
+//  O Kotlin (MainActivity) chama window.nativeMediaCommand('next') etc.
+//  Sem esta função, os botões da notificação não faziam nada.
+// ═══════════════════════════════════════════════════════════
+window.nativeMediaCommand = function (cmd) {
+  if (!cmd) return;
+  if (cmd === 'play') {
+    if (currentTrack) audio.play().catch(() => { if (!currentTrack.isLocal) retryOrFail(playToken); });
+    return;
+  }
+  if (cmd === 'pause') { audio.pause(); return; }
+  if (cmd === 'next') { nextTrack(false); return; }
+  if (cmd === 'prev') { prevTrackForce(); return; }
+  if (cmd.indexOf('seek:') === 0) {
+    const ms = parseInt(cmd.slice(5), 10);
+    if (!isNaN(ms)) { try { audio.currentTime = ms / 1000; } catch (_) {} }
+  }
+};
 
 function openNowPlaying() {
   if (!currentTrack || nowPlaying.classList.contains('open')) return;
@@ -2595,11 +2646,12 @@ function updateMediaSession(track) {
   navigator.mediaSession.metadata = new MediaMetadata({ title: track.title || '', artist: track.artist || '', artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : [] });
 }
 if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('play', () => audio.play());
-  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-  navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
-  navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(false));
-  navigator.mediaSession.setActionHandler('seekto', d => { if (d.seekTime != null) audio.currentTime = d.seekTime; });
+  const safeHandler = (name, fn) => { try { navigator.mediaSession.setActionHandler(name, fn); } catch (_) {} };
+  safeHandler('play', () => window.nativeMediaCommand('play'));
+  safeHandler('pause', () => window.nativeMediaCommand('pause'));
+  safeHandler('previoustrack', () => window.nativeMediaCommand('prev'));
+  safeHandler('nexttrack', () => window.nativeMediaCommand('next'));
+  safeHandler('seekto', d => { if (d.seekTime != null) { try { audio.currentTime = d.seekTime; } catch (_) {} } });
 }
 
 function fmtTime(s) { if (!s || isNaN(s)) return '0:00'; const m = Math.floor(s / 60), sec = Math.floor(s % 60); return m + ':' + String(sec).padStart(2, '0'); }
