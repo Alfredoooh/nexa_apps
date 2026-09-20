@@ -2,6 +2,8 @@ package com.vibely.music.app
 
 import android.content.Context
 import android.util.Log
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,6 +25,8 @@ class MusicExtractor(private val context: Context) {
     private val tag = "VibelyExtract"
 
     init {
+        // NewPipe só é usado para pesquisa (/search) e relacionados (/related).
+        // A extração de áudio para tocar é feita inteiramente pelo yt-dlp.
         NewPipe.init(OkHttpDownloader())
     }
 
@@ -39,26 +43,16 @@ class MusicExtractor(private val context: Context) {
 
     // Cache das URLs de áudio já validadas. Curto de propósito: URLs do googlevideo.com
     // costumam expirar em poucos minutos, e uma URL cacheada mas já morta causa falhas
-    // de rede "silenciosas" no proxy (erro imediato, sem exceção clara).
+    // de rede "silenciosas" no proxy.
     private val urlCache = HashMap<String, Pair<StreamSource, Long>>()
     private val cacheTtl = 4L * 60 * 1000 // 4 min
 
     // Diário de tudo que aconteceu na última extração (lido pelo /debug)
     private val debugLog = ArrayList<String>()
 
-    private val pipedInstances = listOf(
-        "https://pipedapi.kavin.rocks",
-        "https://pipedapi.adminforge.de",
-        "https://api.piped.private.coffee",
-        "https://pipedapi.reallyaweso.me",
-        "https://pipedapi.darkness.services"
-    )
-    private val invidiousInstances = listOf(
-        "https://inv.nadeko.net",
-        "https://yewtu.be",
-        "https://invidious.nerdvpn.de",
-        "https://invidious.privacyredirect.com"
-    )
+    // Estado do yt-dlp embutido
+    @Volatile private var ytdlpReady = false
+    @Volatile private var ytdlpInitError: String? = null
 
     data class StreamSource(
         val url: String,
@@ -75,14 +69,44 @@ class MusicExtractor(private val context: Context) {
         }
     }
 
+    // Inicializa o Python/yt-dlp embutido. A primeira vez extrai arquivos (demora uns segundos)
+    @Synchronized
+    fun initYtDlp() {
+        if (ytdlpReady) return
+        try {
+            YoutubeDL.getInstance().init(context.applicationContext)
+            ytdlpReady = true
+            ytdlpInitError = null
+            note("yt-dlp inicializado")
+        } catch (e: Throwable) {
+            ytdlpInitError = "${e.javaClass.simpleName}: ${e.message}"
+            note("yt-dlp NÃO inicializou: $ytdlpInitError")
+        }
+    }
+
+    // Atualiza o yt-dlp interno (o YouTube muda sempre; sem isso ele quebra com o tempo)
+    fun updateYtDlp() {
+        try {
+            val status = YoutubeDL.getInstance().updateYoutubeDL(
+                context.applicationContext,
+                YoutubeDL.UpdateChannel.STABLE
+            )
+            note("yt-dlp update: $status")
+        } catch (e: Throwable) {
+            note("yt-dlp update falhou: ${e.message}")
+        }
+    }
+
     fun debugReport(): String {
         val sb = StringBuilder()
+        sb.append("yt-dlp pronto: $ytdlpReady\n")
+        if (ytdlpInitError != null) sb.append("yt-dlp erro de init: $ytdlpInitError\n")
         sb.append("--- últimos eventos ---\n")
         synchronized(debugLog) { debugLog.forEach { sb.append(it).append('\n') } }
         return sb.toString()
     }
 
-    // ─── BUSCA ───────────────────────────────────────────────
+    // ─── BUSCA (NewPipe) ──────────────────────────────────────
     fun search(query: String): String {
         val handler = youtube.searchQHFactory.fromQuery(query)
         val info = SearchInfo.getInfo(youtube, handler)
@@ -127,20 +151,20 @@ class MusicExtractor(private val context: Context) {
         return arr.toString()
     }
 
-    // ─── STREAM: VÁRIOS MÉTODOS EM CASCATA ───────────────────
+    // ─── STREAM: yt-dlp, com cache curto e revalidação ────────
     @Synchronized
     fun getStreamSource(videoId: String): StreamSource? {
         val now = System.currentTimeMillis()
 
-        // Mesmo vindo do cache, a URL é sempre revalidada de verdade antes de ser devolvida.
-        // Isto evita devolver uma URL "morta" que passou a validação há minutos mas já expirou.
+        // Mesmo vindo do cache, a URL é sempre revalidada de verdade antes de ser devolvida,
+        // porque URLs do googlevideo.com costumam expirar em poucos minutos.
         urlCache[videoId]?.let { (src, time) ->
             if (now - time < cacheTtl) {
                 if (validate(src)) {
-                    note("cache HIT revalidado para $videoId via ${src.origin}")
+                    note("cache HIT revalidado para $videoId")
                     return src
                 } else {
-                    note("cache STALE para $videoId (${src.origin}) — refazendo extração")
+                    note("cache STALE para $videoId — refazendo extração")
                     urlCache.remove(videoId)
                 }
             } else {
@@ -148,38 +172,21 @@ class MusicExtractor(private val context: Context) {
             }
         }
 
-        note("=== extraindo $videoId ===")
+        note("=== extraindo $videoId via yt-dlp ===")
+        val candidates = fromYtDlp(videoId)
+        note("yt-dlp devolveu ${candidates.size} candidato(s)")
 
-        val methods: List<Pair<String, () -> List<StreamSource>>> = listOf(
-            "NewPipe" to { fromNewPipe(videoId) },
-            "InnerTube-ANDROID_VR" to { fromInnerTube(videoId, InnerClient.ANDROID_VR) },
-            "InnerTube-ANDROID" to { fromInnerTube(videoId, InnerClient.ANDROID) },
-            "InnerTube-IOS" to { fromInnerTube(videoId, InnerClient.IOS) },
-            "Piped" to { fromPiped(videoId) },
-            "Invidious" to { fromInvidious(videoId) }
-        )
-
-        for ((name, method) in methods) {
-            val candidates = try {
-                method()
-            } catch (e: Throwable) {
-                note("$name FALHOU: ${e.javaClass.simpleName}: ${e.message}")
-                emptyList()
-            }
-            note("$name devolveu ${candidates.size} candidato(s)")
-
-            for (c in candidates) {
-                if (validate(c)) {
-                    note("OK via ${c.origin} (${c.mime})")
-                    urlCache[videoId] = Pair(c, now)
-                    return c
-                } else {
-                    note("candidato de ${c.origin} recusado na validação")
-                }
+        for (c in candidates) {
+            if (validate(c)) {
+                note("OK via ${c.origin} (${c.mime})")
+                urlCache[videoId] = Pair(c, now)
+                return c
+            } else {
+                note("candidato de ${c.origin} recusado na validação")
             }
         }
 
-        note("NENHUM método funcionou para $videoId")
+        note("yt-dlp não devolveu stream válido para $videoId")
         return null
     }
 
@@ -189,8 +196,6 @@ class MusicExtractor(private val context: Context) {
     }
 
     // Testa a URL de verdade: pede 2 bytes. Se não devolver 200/206, descarta.
-    // Timeout curto de propósito — se a URL está morta, queremos descobrir rápido e passar
-    // para o próximo método, não ficar pendurados.
     private fun validate(src: StreamSource): Boolean {
         return try {
             val rb = Request.Builder().url(src.url).header("Range", "bytes=0-1")
@@ -211,191 +216,57 @@ class MusicExtractor(private val context: Context) {
         }
     }
 
-    // Método 1: NewPipeExtractor
-    private fun fromNewPipe(videoId: String): List<StreamSource> {
-        val info = StreamInfo.getInfo(youtube, "https://www.youtube.com/watch?v=$videoId")
-        return info.audioStreams
-            .filter { !it.content.isNullOrEmpty() && it.isUrl }
-            .sortedWith(
-                compareByDescending<org.schabi.newpipe.extractor.stream.AudioStream> {
-                    it.format?.suffix == "m4a"
-                }.thenByDescending { it.averageBitrate }
-            )
-            .map {
-                StreamSource(
-                    url = it.content,
-                    mime = mimeFor(it.format?.suffix),
-                    headers = mapOf("User-Agent" to userAgent),
-                    origin = "NewPipe"
-                )
-            }
-    }
-
-    // Métodos 2-4: InnerTube direto com clientes que devolvem URL sem cifra
-    private enum class InnerClient(
-        val clientName: String,
-        val clientVersion: String,
-        val clientId: String,
-        val userAgent: String,
-        val extra: Map<String, Any>
-    ) {
-        ANDROID_VR(
-            "ANDROID_VR", "1.60.19", "28",
-            "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
-            mapOf("deviceMake" to "Oculus", "deviceModel" to "Quest 3", "androidSdkVersion" to 32, "osName" to "Android", "osVersion" to "12L")
-        ),
-        ANDROID(
-            "ANDROID", "19.44.38", "3",
-            "com.google.android.youtube/19.44.38 (Linux; U; Android 14) gzip",
-            mapOf("androidSdkVersion" to 34, "osName" to "Android", "osVersion" to "14")
-        ),
-        IOS(
-            "IOS", "19.45.4", "5",
-            "com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X;)",
-            mapOf("deviceMake" to "Apple", "deviceModel" to "iPhone16,2", "osName" to "iPhone", "osVersion" to "18.1.0.22B83")
-        )
-    }
-
-    private fun fromInnerTube(videoId: String, client: InnerClient): List<StreamSource> {
-        val clientJson = JSONObject().apply {
-            put("clientName", client.clientName)
-            put("clientVersion", client.clientVersion)
-            put("hl", "pt")
-            put("gl", "BR")
-            client.extra.forEach { (k, v) -> put(k, v) }
-        }
-        val body = JSONObject().apply {
-            put("videoId", videoId)
-            put("contentCheckOk", true)
-            put("racyCheckOk", true)
-            put("context", JSONObject().put("client", clientJson))
-            put("playbackContext", JSONObject().put(
-                "contentPlaybackContext", JSONObject().put("html5Preference", "HTML5_PREF_WANTS")
-            ))
-        }
-
-        val req = Request.Builder()
-            .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
-            .header("User-Agent", client.userAgent)
-            .header("X-YouTube-Client-Name", client.clientId)
-            .header("X-YouTube-Client-Version", client.clientVersion)
-            .header("Origin", "https://www.youtube.com")
-            .post(body.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-            .build()
-
-        val text = http.newCall(req).execute().use { it.body?.string() ?: "" }
-        if (text.isEmpty()) return emptyList()
-
-        val json = JSONObject(text)
-        val status = json.optJSONObject("playabilityStatus")?.optString("status")
-        if (status != null && status != "OK") {
-            note("InnerTube ${client.clientName}: playabilityStatus=$status")
+    // yt-dlp embutido. Pede áudio de qualidade moderada (poupa dados) e imprime a URL direta (-g)
+    private fun fromYtDlp(videoId: String): List<StreamSource> {
+        if (!ytdlpReady) initYtDlp()
+        if (!ytdlpReady) {
+            note("yt-dlp indisponível: $ytdlpInitError")
             return emptyList()
         }
 
-        val formats = json.optJSONObject("streamingData")?.optJSONArray("adaptiveFormats")
-            ?: return emptyList()
+        val result = ArrayList<StreamSource>()
 
-        val list = ArrayList<Triple<String, String, Int>>()
-        for (i in 0 until formats.length()) {
-            val f = formats.getJSONObject(i)
-            val mime = f.optString("mimeType")
-            if (!mime.startsWith("audio/")) continue
-            val url = f.optString("url")
-            if (url.isEmpty()) continue
-            list.add(Triple(url, mime, f.optInt("bitrate")))
-        }
+        // Duas tentativas com clientes diferentes: o YouTube bloqueia uns e libera outros
+        val attempts = listOf(
+            "android_vr" to "youtube:player_client=android_vr",
+            "padrão" to null
+        )
 
-        return list
-            .sortedWith(
-                compareByDescending<Triple<String, String, Int>> { it.second.contains("mp4") }
-                    .thenByDescending { it.third }
-            )
-            .map {
-                StreamSource(
-                    url = it.first,
-                    mime = it.second.substringBefore(";"),
-                    headers = mapOf("User-Agent" to client.userAgent),
-                    origin = "InnerTube-${client.clientName}"
-                )
-            }
-    }
-
-    // Método 5: Piped
-    private fun fromPiped(videoId: String): List<StreamSource> {
-        for (base in pipedInstances) {
+        for ((label, extractorArgs) in attempts) {
             try {
-                val req = Request.Builder()
-                    .url("$base/streams/$videoId")
-                    .header("User-Agent", userAgent)
-                    .build()
-                val text = http.newCall(req).execute().use { if (it.isSuccessful) it.body?.string() else null }
-                    ?: continue
-                val streams = JSONObject(text).optJSONArray("audioStreams") ?: continue
+                val request = YoutubeDLRequest("https://www.youtube.com/watch?v=$videoId")
+                // abr<=128: limita o bitrate para poupar dados móveis do usuário,
+                // com fallback para o melhor disponível se não houver opção mais leve
+                request.addOption("-f", "bestaudio[ext=m4a][abr<=128]/bestaudio[abr<=128]/bestaudio[ext=m4a]/bestaudio")
+                request.addOption("--no-playlist")
+                request.addOption("--no-warnings")
+                request.addOption("--socket-timeout", "15")
+                if (extractorArgs != null) request.addOption("--extractor-args", extractorArgs)
+                // -g imprime só a URL direta do stream, sem baixar nada
+                request.addOption("-g")
 
-                val list = ArrayList<Triple<String, String, Int>>()
-                for (i in 0 until streams.length()) {
-                    val s = streams.getJSONObject(i)
-                    val url = s.optString("url")
-                    if (url.isEmpty()) continue
-                    list.add(Triple(url, s.optString("mimeType", "audio/mp4"), s.optInt("bitrate")))
-                }
-                if (list.isEmpty()) continue
+                val response = YoutubeDL.getInstance().execute(request)
+                val url = response.out.trim().lines().firstOrNull { it.startsWith("http") }
 
-                return list
-                    .sortedWith(
-                        compareByDescending<Triple<String, String, Int>> { it.second.contains("mp4") }
-                            .thenByDescending { it.third }
+                if (url != null) {
+                    note("yt-dlp ($label) devolveu URL")
+                    result.add(
+                        StreamSource(
+                            url = url,
+                            mime = if (url.contains("mime=audio%2Fwebm")) "audio/webm" else "audio/mp4",
+                            headers = mapOf("User-Agent" to userAgent),
+                            origin = "yt-dlp($label)"
+                        )
                     )
-                    .map { StreamSource(it.first, it.second, mapOf("User-Agent" to userAgent), "Piped($base)") }
-            } catch (e: Exception) {
-                note("Piped $base: ${e.message}")
+                    return result
+                } else {
+                    note("yt-dlp ($label) sem URL. stderr: ${response.err.take(300)}")
+                }
+            } catch (e: Throwable) {
+                note("yt-dlp ($label) erro: ${e.javaClass.simpleName}: ${e.message?.take(300)}")
             }
         }
-        return emptyList()
-    }
-
-    // Método 6: Invidious
-    private fun fromInvidious(videoId: String): List<StreamSource> {
-        for (base in invidiousInstances) {
-            try {
-                val req = Request.Builder()
-                    .url("$base/api/v1/videos/$videoId?fields=adaptiveFormats")
-                    .header("User-Agent", userAgent)
-                    .build()
-                val text = http.newCall(req).execute().use { if (it.isSuccessful) it.body?.string() else null }
-                    ?: continue
-                val formats = JSONObject(text).optJSONArray("adaptiveFormats") ?: continue
-
-                val list = ArrayList<Triple<String, String, Int>>()
-                for (i in 0 until formats.length()) {
-                    val f = formats.getJSONObject(i)
-                    val type = f.optString("type")
-                    if (!type.startsWith("audio/")) continue
-                    val url = f.optString("url")
-                    if (url.isEmpty()) continue
-                    list.add(Triple(url, type.substringBefore(";"), f.optString("bitrate").toIntOrNull() ?: 0))
-                }
-                if (list.isEmpty()) continue
-
-                return list
-                    .sortedWith(
-                        compareByDescending<Triple<String, String, Int>> { it.second.contains("mp4") }
-                            .thenByDescending { it.third }
-                    )
-                    .map { StreamSource(it.first, it.second, mapOf("User-Agent" to userAgent), "Invidious($base)") }
-            } catch (e: Exception) {
-                note("Invidious $base: ${e.message}")
-            }
-        }
-        return emptyList()
-    }
-
-    private fun mimeFor(suffix: String?): String = when (suffix) {
-        "m4a" -> "audio/mp4"
-        "webm" -> "audio/webm"
-        "opus" -> "audio/ogg"
-        else -> "audio/mp4"
+        return result
     }
 
     private fun extractId(url: String?): String {

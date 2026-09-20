@@ -19,6 +19,14 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         .retryOnConnectionFailure(true)
         .build()
 
+    init {
+        // Prepara o yt-dlp em segundo plano para a primeira música não esperar a extração dos binários
+        Thread {
+            extractor.initYtDlp()
+            extractor.updateYtDlp()
+        }.start()
+    }
+
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         val params = session.parameters
@@ -46,8 +54,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                     val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
                     jsonResponse(extractor.getRelated(id))
                 }
-                // Diagnóstico: abre http://localhost:8080/debug?id=VIDEO_ID e mostra em texto
-                // qual método de extração funcionou ou falhou, sem precisar de Logcat
                 "/debug" -> {
                     val id = params["id"]?.firstOrNull()
                     if (id != null) {
@@ -73,9 +79,8 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
     private fun proxyAudio(videoId: String, rangeHeader: String?): Response {
         var opened = openUpstream(videoId, rangeHeader)
 
-        // Falhou: descarta o cache, refaz a cascata inteira e tenta de novo
         if (opened == null || !isGood(opened.second)) {
-            Log.w(tag, "Upstream falhou (${opened?.second?.code}), refazendo a cascata")
+            Log.w(tag, "Upstream falhou (${opened?.second?.code}), refazendo a extração")
             opened?.second?.close()
             extractor.invalidate(videoId)
             opened = openUpstream(videoId, rangeHeader)
@@ -86,7 +91,7 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
             Log.e(tag, "Upstream falhou de vez: $code")
             opened?.second?.close()
             return withCors(
-                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Nenhum método de extração funcionou ($code)")
+                newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Extração falhou ($code)")
             )
         }
 
@@ -98,14 +103,12 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
 
         val mime = upstream.header("Content-Type")?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
             ?: source.mime
-        var length = body.contentLength()
+        val length = body.contentLength()
         val status = if (upstream.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
         Log.d(tag, "Upstream OK via ${source.origin}: ${upstream.code} $mime length=$length")
 
-        // O MediaPlayer/<audio> do Android costumam travar sem erro nem sucesso quando a resposta
-        // não tem Content-Length (chunked). Se o upstream não devolveu tamanho, descobrimos o
-        // tamanho total do ficheiro com um pedido HEAD-like antes de responder, e servimos como
-        // resposta de tamanho fixo — nunca chunked — para o player conseguir abrir o stream.
+        // O MediaPlayer/<audio> travam sem erro quando a resposta não tem Content-Length (chunked).
+        // Se o upstream não devolveu tamanho, descobrimos o tamanho total antes de responder.
         if (length < 0) {
             Log.w(tag, "Upstream sem Content-Length, a descobrir tamanho total…")
             body.close()
@@ -117,7 +120,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
                     newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Stream sem tamanho conhecido")
                 )
             }
-            // Reabre a ligação, agora sabendo o total, para poder responder com Content-Length correto
             val reopened = openUpstream(videoId, rangeHeader) ?: return withCors(
                 newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Falha ao reabrir stream")
             )
@@ -129,9 +131,6 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
             val mime2 = upstream2.header("Content-Type")?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
                 ?: source2.mime
             val status2 = if (upstream2.code == 206) Response.Status.PARTIAL_CONTENT else Response.Status.OK
-            // Se veio Content-Range (ex: "bytes 0-999/123456"), o tamanho deste corpo é o range pedido,
-            // não o total — mas para servir de tamanho fixo usamos o length real do corpo desta resposta,
-            // caindo para o total já descoberto apenas se necessário.
             val effectiveLength = body2.contentLength().takeIf { it >= 0 } ?: total
             val resp2 = newFixedLengthResponse(status2, mime2, body2.byteStream(), effectiveLength)
             resp2.addHeader("Accept-Ranges", "bytes")
@@ -148,14 +147,12 @@ class LocalServer(context: Context) : NanoHTTPD(8080) {
         return withCors(resp)
     }
 
-    // Faz um pedido leve (1 byte) só para ler o Content-Range e descobrir o tamanho TOTAL do ficheiro
-    // remoto, quando o servidor de origem não devolveu Content-Length na resposta normal.
     private fun fetchTotalLength(source: MusicExtractor.StreamSource): Long? {
         return try {
             val rb = Request.Builder().url(source.url).header("Range", "bytes=0-1")
             source.headers.forEach { (k, v) -> rb.header(k, v) }
             http.newCall(rb.build()).execute().use { r ->
-                val contentRange = r.header("Content-Range") // formato: bytes 0-1/123456
+                val contentRange = r.header("Content-Range")
                 val total = contentRange?.substringAfterLast("/")?.toLongOrNull()
                 total ?: r.header("Content-Length")?.toLongOrNull()
             }
