@@ -145,31 +145,38 @@ workflows:
           KEYSTORE_ABS_PATH="$CM_BUILD_DIR/app/vibely.jks"
 
           python3 << PYEOF
+          import re
+
           path = "app/build.gradle.kts"
           with open(path, "r") as f:
               content = f.read()
 
-          signing_block = '''
-              signingConfigs {
-                  create("release") {
-                      storeFile = file("$KEYSTORE_ABS_PATH")
-                      storePassword = "@jonas440243"
-                      keyAlias = "vibely"
-                      keyPassword = "@jonas440243"
+          if "signingConfigs" in content:
+              print("signingConfigs já presente, a saltar injeção.")
+          else:
+              signing_block = '''
+                  signingConfigs {
+                      create("release") {
+                          storeFile = file("$KEYSTORE_ABS_PATH")
+                          storePassword = "@jonas440243"
+                          keyAlias = "vibely"
+                          keyPassword = "@jonas440243"
+                      }
                   }
-              }
-          '''
+              '''
+              content = content.replace("android {", "android {" + signing_block, 1)
 
-          content = content.replace(
-              "android {",
-              "android {" + signing_block,
-              1
-          )
-
-          content = content.replace(
-              'release {\n            isMinifyEnabled = false',
-              'release {\n            signingConfig = signingConfigs.getByName("release")\n            isMinifyEnabled = false'
-          )
+              # Independente do valor de isMinifyEnabled (true ou false), insere
+              # signingConfig logo no início do bloco "release {" dentro de buildTypes.
+              # Isto evita quebrar silenciosamente se o build.gradle.kts mudar no futuro.
+              pattern = re.compile(r'(release\s*\{)')
+              content, count = pattern.subn(
+                  r'\1\n            signingConfig = signingConfigs.getByName("release")',
+                  content,
+                  count=1
+              )
+              if count == 0:
+                  raise SystemExit("ERRO: bloco 'release {' não encontrado em build.gradle.kts — assinatura NÃO aplicada.")
 
           with open(path, "w") as f:
               f.write(content)
@@ -177,6 +184,13 @@ workflows:
 
           echo "=== build.gradle.kts final ==="
           cat app/build.gradle.kts
+
+          echo "=== Verificação: signingConfig está mesmo presente? ==="
+          if ! grep -q 'signingConfig = signingConfigs.getByName("release")' app/build.gradle.kts; then
+            echo "ERRO CRÍTICO: signingConfig não foi injetado. Abortando build."
+            exit 1
+          fi
+          echo "OK: signingConfig confirmado no ficheiro."
 
       - name: Build APK/AAB assinados
         script: |
