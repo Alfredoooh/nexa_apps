@@ -1,576 +1,212 @@
 workflows:
-  android-release:
-    name: Android Release Build
+  vibely-android:
+    name: Vibely Android
     max_build_duration: 60
+    instance_type: mac_mini_m2
     environment:
-      flutter: stable
-      java: 17
       groups:
-        - codeme_keystore
+        - keystore_credentials
+      vars:
+        PACKAGE_NAME: "com.vibely.music.app"
+      java: 17
     scripts:
-      - name: Generate key.properties
+      - name: Gerar Gradle Wrapper
         script: |
-          cat > "${CM_BUILD_DIR}/android/key.properties" << EOF
-          storePassword=Test@Codeme2026
-          keyPassword=Test@Codeme2026
-          keyAlias=codeme-test
-          storeFile=codeme-release.jks
-          EOF
-          echo "✅ key.properties gerado"
+          set -e
+          cd $CM_BUILD_DIR
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.9
+          fi
+          chmod +x gradlew
 
-      - name: Install Pillow
-        script: pip3 install Pillow --quiet
-
-      - name: Process launcher icons + dual splash (light/dark)
+      - name: Restaurar keystore
         script: |
-          python3 << 'PYEOF'
-          import os
-          from PIL import Image, ImageDraw
-
-          CM      = os.environ["CM_BUILD_DIR"]
-          RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
-          # Fallback: se não existir splash dedicado, usa o launcher centralizado
-          SPLASH_FALLBACK = LAUNCHER
-
-          if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
-
-          DENSITIES = {
-              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
-              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
-          }
-          FG_SIZES = {
-              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
-              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
-          }
-
-          def fluent_rounded(img, size, ratio=0.22):
-              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
-              mask = Image.new("L", (size, size), 0)
-              ImageDraw.Draw(mask).rounded_rectangle(
-                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
-              out = Image.new("RGBA", (size, size), (0,0,0,0))
-              out.paste(img, (0, 0), mask)
-              return out
-
-          def save(img, path):
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              img.save(path, "PNG", optimize=True)
-              print(f"  -> {path}")
-
-          # ── Ícones do launcher ──────────────────────────────────────────
-          src = Image.open(LAUNCHER)
-          for d, sz in DENSITIES.items():
-              save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
-              save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
-          for d, fg in FG_SIZES.items():
-              icon_sz = int(fg * 0.66)
-              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
-              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
-              off     = (fg - icon_sz) // 2
-              canvas.paste(fg_img, (off, off), fg_img)
-              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
-
-          # ── Splash icon LIGHT ───────────────────────────────────────────
-          def make_splash(source_path, dest_path):
-              CANVAS, ICON = 288, 288
-              src_img = Image.open(source_path).convert("RGBA")
-              # Se a imagem for menor que o canvas, centraliza num fundo transparente
-              if src_img.size != (CANVAS, CANVAS):
-                  ICON = 160
-                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
-                  off    = (CANVAS - ICON) // 2
-                  canvas.paste(icon, (off, off), icon)
-                  canvas.save(dest_path, "PNG", optimize=True)
-              else:
-                  src_img.save(dest_path, "PNG", optimize=True)
-              print(f"  -> {dest_path}")
-
-          drawable_light = os.path.join(RES, "drawable")
-          drawable_dark  = os.path.join(RES, "drawable-night")
-          os.makedirs(drawable_light, exist_ok=True)
-          os.makedirs(drawable_dark,  exist_ok=True)
-
-          # Light splash
-          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
-          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
-          if light_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
-
-          # Dark splash
-          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
-          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
-          if dark_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
-
-          print("✅ Ícones e splash (light/dark) processados com sucesso!")
-          PYEOF
-
-      - name: Write launch_background XMLs (light + dark)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          # Light: fundo branco + splash_icon centrado
-          mkdir -p "${RES}/drawable"
-          cat > "${RES}/drawable/launch_background.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:drawable="@android:color/white" />
-              <item>
-                  <bitmap
-                      android:gravity="center"
-                      android:src="@drawable/splash_icon" />
-              </item>
-          </layer-list>
-          EOF
-          echo "✅ drawable/launch_background.xml (light) criado"
-
-          # Dark: fundo #0d0d0d + splash_icon centrado (vem de drawable-night)
-          mkdir -p "${RES}/drawable-night"
-          cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item>
-                  <color android:color="#0d0d0d" />
-              </item>
-              <item>
-                  <bitmap
-                      android:gravity="center"
-                      android:src="@drawable/splash_icon" />
-              </item>
-          </layer-list>
-          EOF
-          echo "✅ drawable-night/launch_background.xml (dark) criado"
-
-      - name: Write styles XMLs (light + dark)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          # values/styles.xml — tema claro (padrão)
-          mkdir -p "${RES}/values"
-          cat > "${RES}/values/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values/styles.xml (light) escrito"
-
-          # values-night/styles.xml — tema escuro
-          mkdir -p "${RES}/values-night"
-          cat > "${RES}/values-night/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values-night/styles.xml (dark) escrito"
-
-          # values-v27/styles.xml — claro, API 27+ (windowLightNavigationBar)
-          mkdir -p "${RES}/values-v27"
-          cat > "${RES}/values-v27/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values-v27/styles.xml (light v27) escrito"
-
-          # values-night-v27/styles.xml — escuro, API 27+
-          mkdir -p "${RES}/values-night-v27"
-          cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ values-night-v27/styles.xml (dark v27) escrito"
-
-      - name: Remove stale adaptive icon (anydpi-v26)
-        script: |
-          rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
-          echo "✅ mipmap-anydpi-v26 removido (se existia)"
-
-      - name: Get Flutter packages
-        script: |
-          cd "${CM_BUILD_DIR}"
-          flutter packages pub get
-
-      - name: Enable R8 + resource shrinking
-        script: |
-          GRADLE_FILE="${CM_BUILD_DIR}/android/app/build.gradle"
-          if ! grep -q "shrinkResources true" "$GRADLE_FILE"; then
-            sed -i 's/minifyEnabled false/minifyEnabled true/' "$GRADLE_FILE"
-            sed -i 's/shrinkResources false/shrinkResources true/' "$GRADLE_FILE"
-            echo "✅ R8 + shrinkResources ativados"
+          set -e
+          if [ -f "$CM_BUILD_DIR/app/vibely.jks" ]; then
+            echo "Keystore encontrado em app/vibely.jks."
           else
-            echo "✅ shrinkResources já configurado"
+            echo "ERRO: vibely.jks não encontrado em app/."
+            exit 1
           fi
 
-      - name: Build release APK (split per ABI)
+      - name: Gerar ícones do app a partir de ic_launcher.png
         script: |
-          cd "${CM_BUILD_DIR}"
-          flutter build apk --release --split-per-abi --obfuscate --split-debug-info=build/symbols
+          set -e
+          if [ ! -f ic_launcher.png ]; then
+            echo "ERRO: ic_launcher.png não encontrado na raiz do projeto."
+            exit 1
+          fi
 
-      - name: Build release AAB
+          mkdir -p /tmp/icon_tool
+          cd /tmp/icon_tool
+          npm init -y > /dev/null 2>&1
+          npm install sharp > /dev/null 2>&1
+
+          cat > gen_icons.js << 'SCRIPT'
+          const sharp = require('sharp');
+          const fs = require('fs');
+          const path = require('path');
+
+          const src = process.argv[2];
+          const outRoot = process.argv[3];
+
+          const densities = {
+            'mipmap-mdpi': 48,
+            'mipmap-hdpi': 72,
+            'mipmap-xhdpi': 96,
+            'mipmap-xxhdpi': 144,
+            'mipmap-xxxhdpi': 192,
+          };
+
+          const foregroundDensities = {
+            'mipmap-mdpi': 108,
+            'mipmap-hdpi': 162,
+            'mipmap-xhdpi': 216,
+            'mipmap-xxhdpi': 324,
+            'mipmap-xxxhdpi': 432,
+          };
+
+          (async () => {
+            for (const [dir, size] of Object.entries(densities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              await sharp(src).resize(size, size).png()
+                .toFile(path.join(outDir, 'ic_launcher.png'));
+              await sharp(src).resize(size, size).png()
+                .toFile(path.join(outDir, 'ic_launcher_round.png'));
+            }
+
+            for (const [dir, size] of Object.entries(foregroundDensities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              const padded = Math.round(size * 0.66);
+              await sharp(src).resize(padded, padded)
+                .extend({
+                  top: Math.round((size - padded) / 2),
+                  bottom: Math.round((size - padded) / 2),
+                  left: Math.round((size - padded) / 2),
+                  right: Math.round((size - padded) / 2),
+                  background: { r: 0, g: 0, b: 0, alpha: 0 }
+                })
+                .png()
+                .toFile(path.join(outDir, 'ic_launcher_foreground.png'));
+            }
+
+            console.log('Ícones gerados com sucesso.');
+          })();
+          SCRIPT
+
+          node gen_icons.js "$CM_BUILD_DIR/ic_launcher.png" "$CM_BUILD_DIR/app/src/main/res"
+
+      - name: Gerar splash screen a partir de splash_icon.png
         script: |
-          cd "${CM_BUILD_DIR}"
-          flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
+          set -e
+          if [ ! -f splash_icon.png ]; then
+            echo "ERRO: splash_icon.png não encontrado na raiz do projeto."
+            exit 1
+          fi
 
-    artifacts:
-      - build/app/outputs/apk/release/*.apk
-      - build/app/outputs/bundle/release/*.aab
-      - build/symbols/*
-    publishing:
-      email:
-        recipients:
-          - dev@example.com
-        notify:
-          success: true
-          failure: true
+          cd /tmp/icon_tool
 
-  android-debug:
-    name: Android Debug Build
-    max_build_duration: 30
-    environment:
-      flutter: stable
-      java: 17
-    scripts:
-      - name: Install Pillow
-        script: pip3 install Pillow --quiet
+          cat > gen_splash.js << 'SCRIPT'
+          const sharp = require('sharp');
+          const fs = require('fs');
+          const path = require('path');
 
-      - name: Process launcher icons + dual splash (light/dark)
+          const src = process.argv[2];
+          const outRoot = process.argv[3];
+
+          const densities = {
+            'drawable-mdpi': 200,
+            'drawable-hdpi': 300,
+            'drawable-xhdpi': 400,
+            'drawable-xxhdpi': 600,
+            'drawable-xxxhdpi': 800,
+          };
+
+          (async () => {
+            for (const [dir, size] of Object.entries(densities)) {
+              const outDir = path.join(outRoot, dir);
+              fs.mkdirSync(outDir, { recursive: true });
+              await sharp(src).resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png()
+                .toFile(path.join(outDir, 'splash_icon.png'));
+            }
+            console.log('Splash icon gerado com sucesso.');
+          })();
+          SCRIPT
+
+          node gen_splash.js "$CM_BUILD_DIR/splash_icon.png" "$CM_BUILD_DIR/app/src/main/res"
+
+      - name: Configurar assinatura no build.gradle.kts
         script: |
-          python3 << 'PYEOF'
-          import os
-          from PIL import Image, ImageDraw
+          set -e
+          cd $CM_BUILD_DIR
 
-          CM      = os.environ["CM_BUILD_DIR"]
-          RES     = os.path.join(CM, "android/app/src/main/res")
-          LAUNCHER        = os.path.join(CM, "ic_launcher.png")
-          SPLASH_LIGHT    = os.path.join(CM, "splash_icon_light.png")
-          SPLASH_DARK     = os.path.join(CM, "splash_icon_dark.png")
-          SPLASH_FALLBACK = LAUNCHER
+          KEYSTORE_ABS_PATH="$CM_BUILD_DIR/app/vibely.jks"
 
-          if not os.path.exists(LAUNCHER):
-              raise FileNotFoundError("ic_launcher.png não encontrado na raiz do repo!")
+          python3 << PYEOF
+          import re
 
-          DENSITIES = {
-              "mipmap-ldpi":36,"mipmap-mdpi":48,"mipmap-hdpi":72,
-              "mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192
-          }
-          FG_SIZES = {
-              "mipmap-mdpi":108,"mipmap-hdpi":162,"mipmap-xhdpi":216,
-              "mipmap-xxhdpi":324,"mipmap-xxxhdpi":432
-          }
+          path = "app/build.gradle.kts"
+          with open(path, "r") as f:
+              content = f.read()
 
-          def fluent_rounded(img, size, ratio=0.22):
-              img = img.convert("RGBA").resize((size, size), Image.LANCZOS)
-              mask = Image.new("L", (size, size), 0)
-              ImageDraw.Draw(mask).rounded_rectangle(
-                  [0, 0, size-1, size-1], radius=int(size*ratio), fill=255)
-              out = Image.new("RGBA", (size, size), (0,0,0,0))
-              out.paste(img, (0, 0), mask)
-              return out
+          if "signingConfigs" in content:
+              print("signingConfigs já presente, a saltar injeção.")
+          else:
+              signing_block = '''
+                  signingConfigs {
+                      create("release") {
+                          storeFile = file("$KEYSTORE_ABS_PATH")
+                          storePassword = "@jonas440243"
+                          keyAlias = "vibely"
+                          keyPassword = "@jonas440243"
+                      }
+                  }
+              '''
+              content = content.replace("android {", "android {" + signing_block, 1)
 
-          def save(img, path):
-              os.makedirs(os.path.dirname(path), exist_ok=True)
-              img.save(path, "PNG", optimize=True)
-              print(f"  -> {path}")
+              # Independente do valor de isMinifyEnabled (true ou false), insere
+              # signingConfig logo no início do bloco "release {" dentro de buildTypes.
+              # Isto evita quebrar silenciosamente se o build.gradle.kts mudar no futuro.
+              pattern = re.compile(r'(release\s*\{)')
+              content, count = pattern.subn(
+                  r'\1\n            signingConfig = signingConfigs.getByName("release")',
+                  content,
+                  count=1
+              )
+              if count == 0:
+                  raise SystemExit("ERRO: bloco 'release {' não encontrado em build.gradle.kts — assinatura NÃO aplicada.")
 
-          src = Image.open(LAUNCHER)
-          for d, sz in DENSITIES.items():
-              save(fluent_rounded(src, sz, 0.22), os.path.join(RES, d, "ic_launcher.png"))
-              save(fluent_rounded(src, sz, 0.50), os.path.join(RES, d, "ic_launcher_round.png"))
-          for d, fg in FG_SIZES.items():
-              icon_sz = int(fg * 0.66)
-              fg_img  = src.copy().convert("RGBA").resize((icon_sz, icon_sz), Image.LANCZOS)
-              canvas  = Image.new("RGBA", (fg, fg), (0,0,0,0))
-              off     = (fg - icon_sz) // 2
-              canvas.paste(fg_img, (off, off), fg_img)
-              save(canvas, os.path.join(RES, d, "ic_launcher_foreground.png"))
-
-          def make_splash(source_path, dest_path):
-              CANVAS, ICON = 288, 288
-              src_img = Image.open(source_path).convert("RGBA")
-              if src_img.size != (CANVAS, CANVAS):
-                  ICON = 160
-                  canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
-                  icon   = src_img.resize((ICON, ICON), Image.LANCZOS)
-                  off    = (CANVAS - ICON) // 2
-                  canvas.paste(icon, (off, off), icon)
-                  canvas.save(dest_path, "PNG", optimize=True)
-              else:
-                  src_img.save(dest_path, "PNG", optimize=True)
-              print(f"  -> {dest_path}")
-
-          drawable_light = os.path.join(RES, "drawable")
-          drawable_dark  = os.path.join(RES, "drawable-night")
-          os.makedirs(drawable_light, exist_ok=True)
-          os.makedirs(drawable_dark,  exist_ok=True)
-
-          light_src = SPLASH_LIGHT if os.path.exists(SPLASH_LIGHT) else SPLASH_FALLBACK
-          make_splash(light_src, os.path.join(drawable_light, "splash_icon.png"))
-          if light_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_light.png não encontrado — usando ic_launcher como fallback")
-
-          dark_src = SPLASH_DARK if os.path.exists(SPLASH_DARK) else SPLASH_FALLBACK
-          make_splash(dark_src, os.path.join(drawable_dark, "splash_icon.png"))
-          if dark_src == SPLASH_FALLBACK:
-              print("  ⚠️  splash_icon_dark.png não encontrado — usando ic_launcher como fallback")
-
-          print("✅ Ícones e splash (light/dark) processados com sucesso!")
+          with open(path, "w") as f:
+              f.write(content)
           PYEOF
 
-      - name: Write launch_background XMLs (light + dark)
+          echo "=== build.gradle.kts final ==="
+          cat app/build.gradle.kts
+
+          echo "=== Verificação: signingConfig está mesmo presente? ==="
+          if ! grep -q 'signingConfig = signingConfigs.getByName("release")' app/build.gradle.kts; then
+            echo "ERRO CRÍTICO: signingConfig não foi injetado. Abortando build."
+            exit 1
+          fi
+          echo "OK: signingConfig confirmado no ficheiro."
+
+      - name: Build APK/AAB assinados
         script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          mkdir -p "${RES}/drawable"
-          cat > "${RES}/drawable/launch_background.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item android:drawable="@android:color/white" />
-              <item>
-                  <bitmap
-                      android:gravity="center"
-                      android:src="@drawable/splash_icon" />
-              </item>
-          </layer-list>
-          EOF
-
-          mkdir -p "${RES}/drawable-night"
-          cat > "${RES}/drawable-night/launch_background.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-              <item>
-                  <color android:color="#0d0d0d" />
-              </item>
-              <item>
-                  <bitmap
-                      android:gravity="center"
-                      android:src="@drawable/splash_icon" />
-              </item>
-          </layer-list>
-          EOF
-          echo "✅ launch_background XMLs (light/dark) criados"
-
-      - name: Write styles XMLs (light + dark)
-        script: |
-          RES="${CM_BUILD_DIR}/android/app/src/main/res"
-
-          mkdir -p "${RES}/values"
-          cat > "${RES}/values/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-
-          mkdir -p "${RES}/values-night"
-          cat > "${RES}/values-night/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:windowFullscreen">false</item>
-                  <item name="android:windowContentOverlay">@null</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-                  <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
-              </style>
-          </resources>
-          EOF
-
-          mkdir -p "${RES}/values-v27"
-          cat > "${RES}/values-v27/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-                  <item name="android:windowBackground">@android:color/white</item>
-                  <item name="android:statusBarColor">@android:color/white</item>
-                  <item name="android:windowLightStatusBar">true</item>
-                  <item name="android:navigationBarColor">@android:color/white</item>
-                  <item name="android:windowLightNavigationBar">true</item>
-              </style>
-          </resources>
-          EOF
-
-          mkdir -p "${RES}/values-night-v27"
-          cat > "${RES}/values-night-v27/styles.xml" << 'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">@drawable/launch_background</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-              </style>
-              <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-                  <item name="android:windowBackground">#0d0d0d</item>
-                  <item name="android:statusBarColor">#0d0d0d</item>
-                  <item name="android:windowLightStatusBar">false</item>
-                  <item name="android:navigationBarColor">#0d0d0d</item>
-                  <item name="android:windowLightNavigationBar">false</item>
-              </style>
-          </resources>
-          EOF
-          echo "✅ Todos os styles.xml (light/dark/v27) escritos"
-
-      - name: Remove stale adaptive icon (anydpi-v26)
-        script: |
-          rm -rf "${CM_BUILD_DIR}/android/app/src/main/res/mipmap-anydpi-v26"
-          echo "✅ mipmap-anydpi-v26 removido (se existia)"
-
-      - name: Get Flutter packages
-        script: |
-          cd "${CM_BUILD_DIR}"
-          flutter packages pub get
-
-      - name: Build debug APK
-        script: |
-          cd "${CM_BUILD_DIR}"
-          flutter build apk --debug
+          set -e
+          cd $CM_BUILD_DIR
+          ./gradlew assembleRelease bundleRelease
 
     artifacts:
-      - build/app/outputs/apk/debug/*.apk
+      - app/build/outputs/**/*.apk
+      - app/build/outputs/**/*.aab
+      - app/build/outputs/mapping/**/mapping.txt
+
     publishing:
       email:
         recipients:
-          - dev@example.com
+          - seu-email@exemplo.com
         notify:
-          success: false
-          failure: true
-
-  web-release:
-    name: Web Release Build
-    max_build_duration: 30
-    environment:
-      flutter: stable
-    scripts:
-      - name: Get Flutter packages
-        script: |
-          cd "${CM_BUILD_DIR}"
-          flutter packages pub get
-
-      - name: Build web release
-        script: |
-          cd "${CM_BUILD_DIR}"
-          flutter build web --release
-
-    artifacts:
-      - build/web/**
-    publishing:
-      email:
-        recipients:
-          - dev@example.com
-        notify:
-          success: false
+          success: true
           failure: true
