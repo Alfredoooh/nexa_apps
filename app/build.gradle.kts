@@ -14,8 +14,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Só arm64-v8a: reduz bastante o peso dos binários nativos do yt-dlp/ffmpeg.
-        // A esmagadora maioria dos aparelhos com Android 7+ (minSdk 24) já é 64-bit.
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -23,7 +21,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -38,8 +37,6 @@ android {
         jvmTarget = "17"
     }
 
-    // Obrigatório para o youtubedl-android: os binários nativos (Python, ffmpeg)
-    // precisam ser extraídos no disco, senão o yt-dlp não consegue executá-los
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -56,7 +53,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.3")
 
-    // yt-dlp embutido (Python + yt-dlp + ffmpeg dentro do APK) — só para extração de áudio
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.2")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2")
 }
