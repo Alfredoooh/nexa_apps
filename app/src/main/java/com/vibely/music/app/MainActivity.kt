@@ -1,7 +1,11 @@
 package com.vibely.music.app
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -18,6 +22,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -30,7 +35,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var reloadBtn: Button
     private val appUrl = "https://vibelywebapp.onrender.com"
     private var loadFailed = false
+    private var receiverRegistered = false
 
+    // Recebe os comandos da notificação, dos fones e do ecrã bloqueado
+    // (enviados pelo PlaybackService) e entrega-os ao JavaScript do player.
+    private val mediaCommandReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val cmd = intent?.getStringExtra("cmd") ?: return
+            dispatchMediaCommand(cmd)
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -105,6 +121,26 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(appUrl)
         }
 
+        // Botão voltar: primeiro o JS tenta fechar o que estiver aberto (diálogo, sheet,
+        // menu, player, página, tab). Só se o JS disser que não há nada para fechar é que
+        // a app vai para segundo plano. Usa a API moderna (OnBackPressedCallback), porque
+        // onBackPressed() está obsoleto e não funciona com o gesto de voltar do Android 13+.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                webView.evaluateJavascript(
+                    "(function(){try{return window.onNativeBack ? window.onNativeBack() : false;}catch(e){return false;}})()"
+                ) { result ->
+                    val consumed = result == "true"
+                    if (!consumed) {
+                        // Nada para fechar: vai para o ecrã inicial em vez de matar o
+                        // processo, para a música continuar a tocar em segundo plano.
+                        moveTaskToBack(true)
+                    }
+                }
+            }
+        })
+
+        registerMediaReceiver()
         requestNotificationPermission()
         requestLocalMusicPermission()
         requestBluetoothPermission()
@@ -112,6 +148,27 @@ class MainActivity : AppCompatActivity() {
 
         if (savedInstanceState != null) webView.restoreState(savedInstanceState)
         else webView.loadUrl(appUrl)
+    }
+
+    // ─── Comandos da notificação → JavaScript ───
+    // Chama a função global window.nativeMediaCommand(cmd), definida no index.html.
+    // Se a página ainda estiver a carregar e a função não existir, não faz nada.
+    private fun dispatchMediaCommand(cmd: String) {
+        val safe = cmd.replace("\\", "\\\\").replace("'", "\\'")
+        val js = "(function(){try{if(window.nativeMediaCommand){window.nativeMediaCommand('$safe');}}catch(e){}})()"
+        runOnUiThread { webView.evaluateJavascript(js, null) }
+    }
+
+    private fun registerMediaReceiver() {
+        if (receiverRegistered) return
+        val filter = IntentFilter("com.vibely.music.app.MEDIA_COMMAND")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(mediaCommandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(mediaCommandReceiver, filter)
+        }
+        receiverRegistered = true
     }
 
     private fun requestNotificationPermission() {
@@ -170,8 +227,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // O WebView tem de continuar vivo com o ecrã bloqueado ou com a app em segundo plano,
+    // senão o JavaScript congela e o evento "ended" nunca dispara (a fila para de avançar).
+    // Por isso NÃO chamamos webView.onPause() aqui, e reforçamos com resumeTimers().
     override fun onPause() {
         super.onPause()
+        webView.resumeTimers()
+    }
+
+    override fun onResume() {
+        super.onResume()
         webView.onResume()
         webView.resumeTimers()
     }
@@ -181,7 +246,11 @@ class MainActivity : AppCompatActivity() {
         webView.saveState(outState)
     }
 
-    override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+    override fun onDestroy() {
+        if (receiverRegistered) {
+            try { unregisterReceiver(mediaCommandReceiver) } catch (_: Exception) {}
+            receiverRegistered = false
+        }
+        super.onDestroy()
     }
 }

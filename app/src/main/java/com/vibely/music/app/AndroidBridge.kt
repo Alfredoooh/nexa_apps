@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.util.Log
 import android.webkit.JavascriptInterface
 import androidx.core.content.FileProvider
 import org.json.JSONArray
@@ -61,6 +62,7 @@ class AndroidBridge(private val context: Context) {
                 if (streamUrl.isNotEmpty()) {
                     downloads.download(videoId, streamUrl, emptyMap()) { success ->
                         val intent = Intent("com.vibely.music.app.DOWNLOAD_RESULT").apply {
+                            setPackage(context.packageName)
                             putExtra("id", videoId)
                             putExtra("success", success)
                         }
@@ -68,7 +70,7 @@ class AndroidBridge(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                // silencioso: o JS já mostra o estado local otimista
+                Log.e("VibelyBridge", "downloadTrack falhou: ${e.message}")
             }
         }.start()
     }
@@ -167,13 +169,16 @@ class AndroidBridge(private val context: Context) {
     }
 
     // ─── Notificação nativa / MediaSession: chamado a cada mudança de faixa/estado ───
+    // Corre fora da thread do WebView (as chamadas @JavascriptInterface já vêm de uma
+    // thread própria), por isso é seguro falar diretamente com o serviço.
     @JavascriptInterface
     fun updateNowPlaying(title: String, artist: String, thumbnailUrl: String, isPlaying: Boolean, positionMs: Long, durationMs: Long) {
-        val intent = Intent(context, PlaybackService::class.java)
-        // Como o serviço já está ativo (arrancado no onCreate da Activity), falamos
-        // diretamente com a instância via companion object do MediaSession.
-        (context.applicationContext as? VibelyApp)
-        PlaybackServiceBridge.update(title, artist, thumbnailUrl, isPlaying, positionMs, durationMs)
+        val service = PlaybackServiceInstance.instance
+        if (service == null) {
+            Log.w("VibelyBridge", "updateNowPlaying: serviço ainda não está pronto")
+            return
+        }
+        service.updateNowPlaying(title, artist, thumbnailUrl, isPlaying, positionMs, durationMs)
     }
 
     // ─── Músicas locais do aparelho ───
@@ -225,12 +230,7 @@ class AndroidBridge(private val context: Context) {
 }
 
 // Ponte simples para falar com o PlaybackService já em execução sem precisar de bind complexo
-object PlaybackServiceBridge {
-    fun update(title: String, artist: String, thumbnailUrl: String, isPlaying: Boolean, position: Long, duration: Long) {
-        PlaybackServiceInstance.instance?.updateNowPlaying(title, artist, thumbnailUrl, isPlaying, position, duration)
-    }
-}
-
 object PlaybackServiceInstance {
+    @Volatile
     var instance: PlaybackService? = null
 }
