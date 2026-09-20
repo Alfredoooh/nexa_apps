@@ -11,9 +11,17 @@ android {
         applicationId = "com.vibely.music.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
-        ndk { abiFilters += listOf("arm64-v8a") }
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
+        }
     }
 
     buildTypes {
@@ -44,8 +52,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.3")
 
+    // yt-dlp (apenas para obter a URL do stream de áudio do YouTube). ffmpeg removido: não é usado.
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.2")
-    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.2")
 
     // Notificação nativa de media (MediaSession + estilo de notificação padrão do Android)
     implementation("androidx.media:media:1.7.0")
