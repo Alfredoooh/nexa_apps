@@ -30,6 +30,7 @@ class PlaybackService : Service() {
     private var server: LocalServer? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var eventNotifId = 1000
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -47,11 +48,9 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
+        createChannels()
         setupMediaSession()
 
-        // Regista esta instância para o AndroidBridge conseguir falar com o serviço
-        // (atualizar notificação/MediaSession a partir do WebView)
         PlaybackServiceInstance.instance = this
 
         val notification = buildNotification(null, null, false, null)
@@ -95,8 +94,6 @@ class PlaybackService : Service() {
             override fun onSeekTo(pos: Long) { sendCommandToWeb("seek:$pos") }
         })
 
-        // Estado inicial COMPLETO: sem as ações declaradas desde o início, o Android
-        // esconde/ignora os botões de próxima e anterior na notificação e no ecrã bloqueado.
         session.setPlaybackState(
             PlaybackStateCompat.Builder()
                 .setActions(ALL_ACTIONS)
@@ -107,9 +104,6 @@ class PlaybackService : Service() {
         mediaSession = session
     }
 
-    // Broadcast EXPLÍCITO (com setPackage): a partir do Android 8 os broadcasts implícitos
-    // não chegam a receivers registados em runtime de forma fiável, e a partir do 14
-    // é obrigatório declarar o pacote. Sem isto o comando perde-se.
     private fun sendCommandToWeb(cmd: String) {
         val intent = Intent("com.vibely.music.app.MEDIA_COMMAND").apply {
             setPackage(packageName)
@@ -139,7 +133,6 @@ class PlaybackService : Service() {
                 .build()
         )
 
-        // Publica logo a notificação com o que já temos (rápido), e depois refresca com a capa
         postNotification(title, artist, lastArt, isPlaying)
 
         if (thumbnailUrl.isNullOrEmpty()) {
@@ -155,7 +148,6 @@ class PlaybackService : Service() {
                     resp.body?.byteStream()?.let { BitmapFactory.decodeStream(it) }
                 }
             } catch (e: Exception) { null }
-            // Só aplica se ainda for a faixa atual (evita a capa antiga aparecer depois de trocar)
             if (bmp != null && thumbnailUrl == lastArtUrl) {
                 lastArt = bmp
                 val md = MediaMetadataCompat.Builder()
@@ -174,6 +166,27 @@ class PlaybackService : Service() {
         val notification = buildNotification(title, artist, isPlaying, art)
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID, notification)
+    }
+
+    // Notificação de evento (download concluído, etc): canal separado (IMPORTANCE_DEFAULT,
+    // com som), NÃO ongoing, id incremental para não sobrepor eventos anteriores.
+    fun postEventNotification(title: String, message: String) {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPending = PendingIntent.getActivity(
+            this, eventNotifId, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID_EVENTS)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(contentPending)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(false)
+            .build()
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(eventNotifId++, notification)
     }
 
     private fun buildNotification(title: String?, artist: String?, isPlaying: Boolean, art: Bitmap?): Notification {
@@ -198,10 +211,10 @@ class PlaybackService : Service() {
             mediaPendingIntent(PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID_PLAYBACK)
             .setContentTitle(title ?: "Vibely")
             .setContentText(artist ?: "Pronto para tocar")
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification)
             .setLargeIcon(art)
             .setContentIntent(contentPending)
             .setOngoing(isPlaying)
@@ -218,8 +231,6 @@ class PlaybackService : Service() {
             .build()
     }
 
-    // Os botões da notificação chamam este serviço diretamente (onStartCommand), sem passar
-    // pelo MediaButtonReceiver do manifesto: mais direto e sem depender de KeyEvents.
     private fun mediaPendingIntent(action: Long): PendingIntent {
         val name = when (action) {
             PlaybackStateCompat.ACTION_PLAY -> ACTION_PLAY
@@ -252,23 +263,28 @@ class PlaybackService : Service() {
         wakeLock?.let { if (it.isHeld) it.release() }
         wifiLock?.let { if (it.isHeld) it.release() }
 
-        // Remove o registo desta instância — evita o AndroidBridge falar com um serviço morto
         PlaybackServiceInstance.instance = null
 
         super.onDestroy()
     }
 
-    private fun createChannel() {
+    private fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(CHANNEL_ID, "Reprodução", NotificationManager.IMPORTANCE_LOW)
-            channel.setShowBadge(false)
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(channel)
+
+            val playback = NotificationChannel(CHANNEL_ID_PLAYBACK, "Reprodução", NotificationManager.IMPORTANCE_LOW)
+            playback.setShowBadge(false)
+            nm.createNotificationChannel(playback)
+
+            val events = NotificationChannel(CHANNEL_ID_EVENTS, "Eventos da app", NotificationManager.IMPORTANCE_DEFAULT)
+            events.description = "Downloads concluídos e outros avisos da Vibely"
+            nm.createNotificationChannel(events)
         }
     }
 
     companion object {
-        private const val CHANNEL_ID = "vibely_playback"
+        private const val CHANNEL_ID_PLAYBACK = "vibely_playback"
+        private const val CHANNEL_ID_EVENTS = "vibely_events"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_PLAY = "com.vibely.music.app.ACTION_PLAY"
         private const val ACTION_PAUSE = "com.vibely.music.app.ACTION_PAUSE"

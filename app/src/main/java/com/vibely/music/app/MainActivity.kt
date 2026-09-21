@@ -35,8 +35,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var reloadBtn: Button
     private val appUrl = "https://vibelywebapp.onrender.com"
+    private val offlineUrl = "file:///android_asset/index.html"
     private var loadFailed = false
     private var receiverRegistered = false
+    private var currentlyOffline = false
 
     // Recebe os comandos da notificação, dos fones e do ecrã bloqueado
     // (enviados pelo PlaybackService) e entrega-os ao JavaScript do player.
@@ -51,6 +53,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        MainActivityInstance.instance = this
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
@@ -67,6 +71,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowContentAccess = true
+            allowFileAccess = true
             builtInZoomControls = false
             displayZoomControls = false
             setSupportZoom(false)
@@ -100,10 +105,18 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
-                    loadFailed = true
-                    view.stopLoading()
-                    view.visibility = View.INVISIBLE
-                    reloadBtn.visibility = View.VISIBLE
+                    // Falhou a carregar o site online: cai para a versão offline
+                    // (só músicas/álbuns locais) em vez de mostrar o botão de erro,
+                    // exceto se a versão offline TAMBÉM já tiver falhado.
+                    if (!currentlyOffline) {
+                        currentlyOffline = true
+                        view.loadUrl(offlineUrl)
+                    } else {
+                        loadFailed = true
+                        view.stopLoading()
+                        view.visibility = View.INVISIBLE
+                        reloadBtn.visibility = View.VISIBLE
+                    }
                 }
             }
 
@@ -120,13 +133,12 @@ class MainActivity : AppCompatActivity() {
             reloadBtn.visibility = View.GONE
             webView.visibility = View.VISIBLE
             loadFailed = false
-            webView.loadUrl(appUrl)
+            loadBestAvailableUrl()
         }
 
         // Botão voltar: primeiro o JS tenta fechar o que estiver aberto (diálogo, sheet,
         // menu, player, página, tab). Só se o JS disser que não há nada para fechar é que
-        // a app vai para segundo plano. Usa a API moderna (OnBackPressedCallback), porque
-        // onBackPressed() está obsoleto e não funciona com o gesto de voltar do Android 13+.
+        // a app vai para segundo plano.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 webView.evaluateJavascript(
@@ -134,8 +146,6 @@ class MainActivity : AppCompatActivity() {
                 ) { result ->
                     val consumed = result == "true"
                     if (!consumed) {
-                        // Nada para fechar: vai para o ecrã inicial em vez de matar o
-                        // processo, para a música continuar a tocar em segundo plano.
                         moveTaskToBack(true)
                     }
                 }
@@ -149,12 +159,31 @@ class MainActivity : AppCompatActivity() {
         startPlaybackService()
 
         if (savedInstanceState != null) webView.restoreState(savedInstanceState)
-        else webView.loadUrl(appUrl)
+        else loadBestAvailableUrl()
+    }
+
+    // Decide, ao arrancar, se carrega a versão online ou já vai direto para a
+    // offline (assets/index.html) quando não há rede nenhuma.
+    private fun loadBestAvailableUrl() {
+        val bridge = AndroidBridge(this)
+        if (bridge.isOnline()) {
+            currentlyOffline = false
+            webView.loadUrl(appUrl)
+        } else {
+            currentlyOffline = true
+            webView.loadUrl(offlineUrl)
+        }
+    }
+
+    // URL atualmente carregada — usado pelo CameraActivity para abrir a mesma origem.
+    fun currentUrl(): String = if (currentlyOffline) offlineUrl else appUrl
+
+    // Chamado pela CameraActivity (via MainActivityInstance) para injetar JS na WebView principal.
+    fun evaluateInWebView(js: String) {
+        webView.evaluateJavascript(js, null)
     }
 
     // ─── Comandos da notificação → JavaScript ───
-    // Chama a função global window.nativeMediaCommand(cmd), definida no index.html.
-    // Se a página ainda estiver a carregar e a função não existir, não faz nada.
     private fun dispatchMediaCommand(cmd: String) {
         val safe = cmd.replace("\\", "\\\\").replace("'", "\\'")
         val js = "(function(){try{if(window.nativeMediaCommand){window.nativeMediaCommand('$safe');}}catch(e){}})()"
@@ -229,9 +258,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // O WebView tem de continuar vivo com o ecrã bloqueado ou com a app em segundo plano,
-    // senão o JavaScript congela e o evento "ended" nunca dispara (a fila para de avançar).
-    // Por isso NÃO chamamos webView.onPause() aqui, e reforçamos com resumeTimers().
     override fun onPause() {
         super.onPause()
         webView.resumeTimers()
@@ -252,6 +278,9 @@ class MainActivity : AppCompatActivity() {
         if (receiverRegistered) {
             try { unregisterReceiver(mediaCommandReceiver) } catch (_: Exception) {}
             receiverRegistered = false
+        }
+        if (MainActivityInstance.instance === this) {
+            MainActivityInstance.instance = null
         }
         super.onDestroy()
     }

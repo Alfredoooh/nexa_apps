@@ -63,4 +63,14 @@ dependencies {
 
     // Preferências persistentes do usuário
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Câmera (preview nativo, controlo de flash/tocha)
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
+
+    // Parsing de RSS de podcasts
+    implementation("org.xmlpull:xmlpull:1.1.3.1")
+    implementation("xpp3:xpp3:1.1.4c")
 }

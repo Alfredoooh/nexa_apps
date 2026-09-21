@@ -12,6 +12,7 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
     private val tag = "VibelyServer"
     private val extractor = MusicExtractor(context)
     private val lyricsProvider = LyricsProvider()
+    private val podcasts = PodcastProvider()
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -74,6 +75,15 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
                     val title = params["title"]?.firstOrNull() ?: return badRequest("Missing title")
                     val artist = params["artist"]?.firstOrNull() ?: ""
                     jsonResponse(lyricsProvider.fetch(title, artist))
+                }
+                "/podcasts/search" -> {
+                    val query = params["q"]?.firstOrNull() ?: return badRequest("Missing q")
+                    jsonResponse(podcasts.search(query))
+                }
+                "/podcasts/featured" -> jsonResponse(podcasts.featured())
+                "/podcasts/episodes" -> {
+                    val feedUrl = params["feedUrl"]?.firstOrNull() ?: return badRequest("Missing feedUrl")
+                    jsonResponse(podcasts.episodes(feedUrl))
                 }
                 "/debug" -> {
                     val id = params["id"]?.firstOrNull()

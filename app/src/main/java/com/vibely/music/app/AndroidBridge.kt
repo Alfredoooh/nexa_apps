@@ -2,6 +2,7 @@ package com.vibely.music.app
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -15,6 +16,7 @@ class AndroidBridge(private val context: Context) {
     private val prefs = PreferencesStore(context)
     private val downloads = DownloadManager(context)
     private val bluetooth = BluetoothManager(context)
+    private val podcasts = PodcastProvider()
 
     @JavascriptInterface
     fun isInsideApp(): Boolean = true
@@ -51,6 +53,50 @@ class AndroidBridge(private val context: Context) {
         return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
+    // true se há alguma ligação de dados ativa (wifi ou móvel) — usado para decidir
+    // se o WebView deve carregar a versão online ou cair para o assets/index.html offline.
+    @JavascriptInterface
+    fun isOnline(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    // ─── Volume do sistema (stream de música) ───
+    @JavascriptInterface
+    fun getVolume(): Int {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (max <= 0) return 0
+        return ((current.toFloat() / max) * 100).toInt()
+    }
+
+    // percent: 0-100
+    @JavascriptInterface
+    fun setVolume(percent: Int) {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val clamped = percent.coerceIn(0, 100)
+        val target = ((clamped / 100f) * max).toInt().coerceIn(0, max)
+        try {
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+        } catch (e: Exception) {
+            Log.e("VibelyBridge", "setVolume falhou: ${e.message}")
+        }
+    }
+
+    // ─── Câmera (só fotos) + flash ───
+    @JavascriptInterface
+    fun openCamera() {
+        val activity = context as? MainActivity ?: return
+        val intent = Intent(activity, CameraActivity::class.java)
+        intent.putExtra("appUrl", activity.currentUrl())
+        activity.startActivity(intent)
+    }
+
     // ─── Downloads persistentes reais (ficam guardados no armazenamento da app) ───
     @JavascriptInterface
     fun downloadTrack(videoId: String, title: String, quality: String) {
@@ -67,10 +113,15 @@ class AndroidBridge(private val context: Context) {
                             putExtra("success", success)
                         }
                         context.sendBroadcast(intent)
+                        notifyEvent(
+                            if (success) "Download concluído" else "Falha no download",
+                            if (success) "$title está pronto para ouvir offline. Verifica na app Vibely." else "Não foi possível descarregar $title."
+                        )
                     }
                 }
             } catch (e: Exception) {
                 Log.e("VibelyBridge", "downloadTrack falhou: ${e.message}")
+                notifyEvent("Falha no download", "Não foi possível descarregar $title.")
             }
         }.start()
     }
@@ -83,6 +134,8 @@ class AndroidBridge(private val context: Context) {
 
     // file:// é bloqueado pelo WebView (a página é https), por isso o download é servido
     // pelo LocalServer em /downloaded, que suporta Range (seek) e volta a funcionar offline.
+    // O ficheiro em si NUNCA sai da pasta privada da app por esta via — só /shareDownloadedFile
+    // (abaixo) expõe uma cópia temporária a outra app, e só quando o usuário pede explicitamente.
     @JavascriptInterface
     fun downloadedFileUrl(videoId: String): String {
         val file = downloads.fileFor(videoId)
@@ -152,6 +205,8 @@ class AndroidBridge(private val context: Context) {
     }
 
     // ─── Partilha de ficheiro descarregado (ex: enviar o áudio por WhatsApp) ───
+    // Esta é a ÚNICA via que expõe o áudio descarregado a outra app — sempre por
+    // pedido explícito do usuário (botão "Exibir no telemóvel"), nunca automático.
     @JavascriptInterface
     fun shareDownloadedFile(videoId: String, title: String) {
         val file = downloads.fileFor(videoId)
@@ -171,8 +226,6 @@ class AndroidBridge(private val context: Context) {
     }
 
     // ─── Notificação nativa / MediaSession: chamado a cada mudança de faixa/estado ───
-    // Corre fora da thread do WebView (as chamadas @JavascriptInterface já vêm de uma
-    // thread própria), por isso é seguro falar diretamente com o serviço.
     @JavascriptInterface
     fun updateNowPlaying(title: String, artist: String, thumbnailUrl: String, isPlaying: Boolean, positionMs: Long, durationMs: Long) {
         val service = PlaybackServiceInstance.instance
@@ -183,11 +236,55 @@ class AndroidBridge(private val context: Context) {
         service.updateNowPlaying(title, artist, thumbnailUrl, isPlaying, positionMs, durationMs)
     }
 
-    // ─── Músicas locais do aparelho ───
+    // ─── Notificações de eventos da app (download concluído, etc), canal separado
+    // do de reprodução — não é "ongoing", aparece e some como notificação normal.
+    @JavascriptInterface
+    fun notifyEvent(title: String, message: String) {
+        val service = PlaybackServiceInstance.instance
+        service?.postEventNotification(title, message)
+    }
+
+    // ─── Músicas locais do aparelho (com cache — ver getLocalTracksCached) ───
+    @JavascriptInterface
+    fun getLocalTracks(): String = scanLocalTracks()
+
+    // Usa cache gravado em DataStore; só volta a interrogar o MediaStore se:
+    // (a) nunca houve cache, ou (b) a contagem de faixas no MediaStore mudou.
+    // Isto resolve o "ficar sempre a recarregar" — o JS deve chamar sempre esta,
+    // não getLocalTracks(), exceto quando quiser forçar um scan (ex: pull-to-refresh).
+    @JavascriptInterface
+    fun getLocalTracksCached(): String {
+        val (cachedJson, cachedCount) = prefs.getLocalTracksCache()
+        val currentCount = countLocalTracks()
+
+        if (cachedJson != null && cachedCount != null && cachedCount == currentCount) {
+            return cachedJson
+        }
+        val fresh = scanLocalTracks()
+        prefs.setLocalTracksCache(fresh, currentCount)
+        return fresh
+    }
+
+    @JavascriptInterface
+    fun forceRescanLocalTracks(): String {
+        val fresh = scanLocalTracks()
+        prefs.setLocalTracksCache(fresh, countLocalTracks())
+        return fresh
+    }
+
+    private fun countLocalTracks(): Long {
+        return try {
+            val media = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            val selection = "${android.provider.MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+                "${android.provider.MediaStore.Audio.Media.DURATION} > 0"
+            context.contentResolver.query(media, arrayOf(android.provider.MediaStore.Audio.Media._ID), selection, null, null)
+                ?.use { it.count.toLong() } ?: 0L
+        } catch (e: Exception) { 0L }
+    }
+
     // Devolve título, artista, ÁLBUM e capa. O áudio e a capa são servidos pelo LocalServer
     // (localhost:8080), porque o WebView (origem https) não consegue abrir content:// diretamente.
-    @JavascriptInterface
-    fun getLocalTracks(): String {
+    private fun scanLocalTracks(): String {
         val arr = JSONArray()
         val media = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
@@ -226,9 +323,9 @@ class AndroidBridge(private val context: Context) {
                 }
             }
         } catch (e: SecurityException) {
-            Log.w("VibelyBridge", "getLocalTracks: sem permissão de áudio")
+            Log.w("VibelyBridge", "scanLocalTracks: sem permissão de áudio")
         } catch (e: Exception) {
-            Log.e("VibelyBridge", "getLocalTracks falhou", e)
+            Log.e("VibelyBridge", "scanLocalTracks falhou", e)
         }
         return arr.toString()
     }
@@ -247,10 +344,26 @@ class AndroidBridge(private val context: Context) {
     fun requestLocalMusicPermission() {
         (context as? MainActivity)?.requestLocalMusicPermission()
     }
+
+    // ─── Podcasts: iTunes Search API (descoberta) + RSS direto (episódios), sem token ───
+    @JavascriptInterface
+    fun searchPodcasts(query: String): String = podcasts.search(query)
+
+    @JavascriptInterface
+    fun featuredPodcasts(): String = podcasts.featured()
+
+    @JavascriptInterface
+    fun getPodcastEpisodes(feedUrl: String): String = podcasts.episodes(feedUrl)
 }
 
 // Ponte simples para falar com o PlaybackService já em execução sem precisar de bind complexo
 object PlaybackServiceInstance {
     @Volatile
     var instance: PlaybackService? = null
+}
+
+// Ponte simples para o CameraActivity conseguir devolver a foto à MainActivity
+object MainActivityInstance {
+    @Volatile
+    var instance: MainActivity? = null
 }
