@@ -13,6 +13,7 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
     private val extractor = MusicExtractor(context)
     private val lyricsProvider = LyricsProvider()
     private val podcasts = PodcastProvider()
+    private val prefs = PreferencesStore(context)
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -71,6 +72,15 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
                     val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
                     serveLocalCover(id)
                 }
+                "/customcover" -> {
+                    val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
+                    serveCustomCover(id)
+                }
+                "/deviceimage" -> {
+                    val id = params["id"]?.firstOrNull() ?: return badRequest("Missing id")
+                    val thumb = params["thumb"]?.firstOrNull() == "1"
+                    serveDeviceImage(id, thumb)
+                }
                 "/lyrics" -> {
                     val title = params["title"]?.firstOrNull() ?: return badRequest("Missing title")
                     val artist = params["artist"]?.firstOrNull() ?: ""
@@ -87,10 +97,7 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
                 }
                 "/debug" -> {
                     val id = params["id"]?.firstOrNull()
-                    if (id != null) {
-                        extractor.invalidate(id)
-                        extractor.getStreamSource(id)
-                    }
+                    if (id != null) { extractor.invalidate(id); extractor.getStreamSource(id) }
                     withCors(newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", extractor.debugReport()))
                 }
                 else -> withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found"))
@@ -101,8 +108,6 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
         }
     }
 
-    // ─── Músicas locais: o WebView (origem https) não abre content:// diretamente,
-    // por isso o áudio do telemóvel é servido por aqui, com suporte a Range (seek). ───
     private fun localUri(id: String): android.net.Uri? {
         val numeric = id.removePrefix("local_").toLongOrNull() ?: return null
         return android.content.ContentUris.withAppendedId(
@@ -170,7 +175,7 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
         }
     }
 
-    // Capa do álbum embutida no ficheiro (ID3/MediaStore). Devolve 404 se não tiver.
+    // Capa embutida no ficheiro (ID3/MediaStore). Só usada quando não há capa customizada.
     private fun serveLocalCover(id: String): Response {
         val uri = localUri(id) ?: return withCors(newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain", "id inválido"))
         return try {
@@ -190,7 +195,58 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
         }
     }
 
-    // Áudio descarregado (guardado na pasta privada da app), servido com suporte a Range.
+    // Capa customizada: lê o content:// URI que o usuário escolheu (galeria/picker) e guardou em PreferencesStore.
+    private fun serveCustomCover(id: String): Response {
+        val covers = prefs.getCustomCovers()
+        val uriString = covers.optString(id, "")
+        if (uriString.isEmpty()) return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Sem capa customizada"))
+        return try {
+            val uri = android.net.Uri.parse(uriString)
+            val resolver = context.contentResolver
+            val mime = resolver.getType(uri) ?: "image/jpeg"
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Imagem indisponível"))
+            val r = newFixedLengthResponse(Response.Status.OK, mime, java.io.ByteArrayInputStream(bytes), bytes.size.toLong())
+            r.addHeader("Cache-Control", "no-cache")
+            withCors(r)
+        } catch (e: SecurityException) {
+            withCors(newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Sem permissão"))
+        } catch (e: Exception) {
+            Log.e(tag, "Erro a servir capa customizada $id", e)
+            withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Erro"))
+        }
+    }
+
+    // Imagens da galeria do dispositivo, para o grid do modal "Escolher capa". thumb=1 devolve
+    // uma miniatura reduzida (mais rápido para a grelha); sem thumb devolve a imagem completa.
+    private fun serveDeviceImage(id: String, thumb: Boolean): Response {
+        val numeric = id.toLongOrNull() ?: return withCors(newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain", "id inválido"))
+        val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, numeric)
+        return try {
+            val resolver = context.contentResolver
+            val bytes: ByteArray
+            val mime: String
+            if (thumb && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val bmp = resolver.loadThumbnail(uri, android.util.Size(300, 300), null)
+                val stream = java.io.ByteArrayOutputStream()
+                bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, stream)
+                bytes = stream.toByteArray(); mime = "image/jpeg"
+            } else {
+                bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: return withCors(newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Imagem indisponível"))
+                mime = resolver.getType(uri) ?: "image/jpeg"
+            }
+            val r = newFixedLengthResponse(Response.Status.OK, mime, java.io.ByteArrayInputStream(bytes), bytes.size.toLong())
+            r.addHeader("Cache-Control", "public, max-age=3600")
+            withCors(r)
+        } catch (e: SecurityException) {
+            withCors(newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "Sem permissão de imagens"))
+        } catch (e: Exception) {
+            Log.e(tag, "Erro a servir imagem $id", e)
+            withCors(newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Erro"))
+        }
+    }
+
     private fun serveDownloaded(id: String, rangeHeader: String?): Response {
         val safeId = id.filter { it.isLetterOrDigit() || it == '_' || it == '-' }
         val file = java.io.File(java.io.File(context.filesDir, "downloads"), "$safeId.audio")
@@ -245,13 +301,11 @@ class LocalServer(private val context: Context) : NanoHTTPD(8080) {
 
     private fun proxyAudio(videoId: String, rangeHeader: String?): Response {
         var opened = openUpstream(videoId, rangeHeader)
-
         if (opened == null || !isGood(opened.second)) {
             opened?.second?.close()
             extractor.invalidate(videoId)
             opened = openUpstream(videoId, rangeHeader)
         }
-
         if (opened == null || !isGood(opened.second)) {
             val code = opened?.second?.code ?: 0
             opened?.second?.close()

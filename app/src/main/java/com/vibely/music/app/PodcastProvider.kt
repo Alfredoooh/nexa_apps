@@ -10,8 +10,6 @@ import org.xmlpull.v1.XmlPullParserFactory
 import java.io.StringReader
 import java.util.concurrent.TimeUnit
 
-// Podcasts 100% sem token: descoberta via iTunes Search API (pública, gratuita,
-// sem chave) e episódios via leitura direta do feed RSS de cada podcast.
 class PodcastProvider {
 
     private val tag = "VibelyPodcasts"
@@ -25,7 +23,6 @@ class PodcastProvider {
     private val episodesCache = HashMap<String, Pair<String, Long>>()
     private val cacheTtl = 15L * 60 * 1000
 
-    // ─── Descoberta: iTunes Search API (sem token) ───
     fun search(query: String, limit: Int = 30): String {
         val cacheKey = "search|$query|$limit"
         searchCache[cacheKey]?.let { (json, time) ->
@@ -60,11 +57,8 @@ class PodcastProvider {
         return json
     }
 
-    // Aproximação de "populares": a iTunes Search API não tem endpoint de
-    // trending público sem token, por isso usa-se um termo genérico.
     fun featured(): String = search("podcast", 30)
 
-    // ─── Episódios: lê o RSS do podcast diretamente (sem token) ───
     fun episodes(feedUrl: String, limit: Int = 50): String {
         val cacheKey = "ep|$feedUrl|$limit"
         episodesCache[cacheKey]?.let { (json, time) ->
@@ -143,7 +137,6 @@ class PodcastProvider {
     private fun safeNextText(parser: XmlPullParser): String =
         try { parser.nextText().trim() } catch (e: Exception) { "" }
 
-    // Duração pode vir como "1234" (segundos) ou "01:23:45" (hh:mm:ss)
     private fun parseDurationToSeconds(raw: String): Int {
         if (raw.isBlank()) return 0
         if (raw.all { it.isDigit() }) return raw.toIntOrNull() ?: 0

@@ -10,6 +10,8 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import androidx.core.content.FileProvider
 import org.json.JSONArray
+import org.json.JSONObject
+import java.text.Normalizer
 
 class AndroidBridge(private val context: Context) {
 
@@ -21,17 +23,17 @@ class AndroidBridge(private val context: Context) {
     @JavascriptInterface
     fun isInsideApp(): Boolean = true
 
-    // ─── Estado da barra de status (chamado da app quando o tema muda) ───
+    // ─── Estado da barra de status ───
     @JavascriptInterface
     fun setStatusBarTheme(lightIcons: Boolean) {
         (context as? MainActivity)?.setStatusBarIcons(lightIcons)
     }
 
-    // ─── Preferências persistentes (sobrevivem a limpeza de cache do WebView) ───
+    // ─── Preferências persistentes ───
     @JavascriptInterface
     fun getPreferences(): String {
         val map = prefs.getAll()
-        val json = org.json.JSONObject()
+        val json = JSONObject()
         map.forEach { (k, v) -> json.put(k, v) }
         return json.toString()
     }
@@ -53,8 +55,6 @@ class AndroidBridge(private val context: Context) {
         return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
-    // true se há alguma ligação de dados ativa (wifi ou móvel) — usado para decidir
-    // se o WebView deve carregar a versão online ou cair para o assets/index.html offline.
     @JavascriptInterface
     fun isOnline(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -74,7 +74,6 @@ class AndroidBridge(private val context: Context) {
         return ((current.toFloat() / max) * 100).toInt()
     }
 
-    // percent: 0-100
     @JavascriptInterface
     fun setVolume(percent: Int) {
         val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -88,7 +87,7 @@ class AndroidBridge(private val context: Context) {
         }
     }
 
-    // ─── Câmera (só fotos) + flash ───
+    // ─── Câmera (só fotos) + flash, com navegação nativa (ver CameraActivity) ───
     @JavascriptInterface
     fun openCamera() {
         val activity = context as? MainActivity ?: return
@@ -97,14 +96,14 @@ class AndroidBridge(private val context: Context) {
         activity.startActivity(intent)
     }
 
-    // ─── Downloads persistentes reais (ficam guardados no armazenamento da app) ───
+    // ─── Downloads persistentes reais ───
     @JavascriptInterface
     fun downloadTrack(videoId: String, title: String, quality: String) {
         Thread {
             try {
                 val server = "http://localhost:8080"
                 val streamRes = java.net.URL("$server/stream?id=$videoId&quality=$quality").readText()
-                val streamUrl = org.json.JSONObject(streamRes).optString("streamUrl")
+                val streamUrl = JSONObject(streamRes).optString("streamUrl")
                 if (streamUrl.isNotEmpty()) {
                     downloads.download(videoId, streamUrl, emptyMap()) { success ->
                         val intent = Intent("com.vibely.music.app.DOWNLOAD_RESULT").apply {
@@ -132,17 +131,13 @@ class AndroidBridge(private val context: Context) {
     @JavascriptInterface
     fun isDownloaded(videoId: String): Boolean = downloads.isDownloaded(videoId)
 
-    // file:// é bloqueado pelo WebView (a página é https), por isso o download é servido
-    // pelo LocalServer em /downloaded, que suporta Range (seek) e volta a funcionar offline.
-    // O ficheiro em si NUNCA sai da pasta privada da app por esta via — só /shareDownloadedFile
-    // (abaixo) expõe uma cópia temporária a outra app, e só quando o usuário pede explicitamente.
     @JavascriptInterface
     fun downloadedFileUrl(videoId: String): String {
         val file = downloads.fileFor(videoId)
         return if (file.exists() && file.length() > 0) "http://localhost:8080/downloaded?id=$videoId" else ""
     }
 
-    // ─── Bluetooth: dispositivos emparelhados reais ───
+    // ─── Bluetooth ───
     @JavascriptInterface
     fun scanDevices(): String = bluetooth.listPairedDevices()
 
@@ -150,7 +145,7 @@ class AndroidBridge(private val context: Context) {
     fun connectDevice(deviceId: String): Boolean = bluetooth.connect(deviceId)
 
     @JavascriptInterface
-    fun disconnectDevice(deviceId: String): Boolean = true // gerido pelo sistema Android
+    fun disconnectDevice(deviceId: String): Boolean = true
 
     @JavascriptInterface
     fun openBluetoothSettings() {
@@ -159,7 +154,7 @@ class AndroidBridge(private val context: Context) {
         context.startActivity(intent)
     }
 
-    // ─── Partilha nativa (usa o share sheet real do Android) ───
+    // ─── Partilha nativa ───
     @JavascriptInterface
     fun shareTo(app: String, title: String, artist: String, url: String) {
         val text = "$title • $artist\n$url"
@@ -169,7 +164,6 @@ class AndroidBridge(private val context: Context) {
             putExtra(Intent.EXTRA_SUBJECT, title)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-
         val targetPackage = when (app) {
             "whatsapp" -> "com.whatsapp"
             "telegram" -> "org.telegram.messenger"
@@ -178,20 +172,11 @@ class AndroidBridge(private val context: Context) {
             "x" -> "com.twitter.android"
             else -> null
         }
-
         if (targetPackage != null) {
             intent.setPackage(targetPackage)
-            try {
-                context.startActivity(intent)
-                return
-            } catch (e: Exception) {
-                intent.setPackage(null) // app não instalada: cai para o chooser genérico
-            }
+            try { context.startActivity(intent); return } catch (e: Exception) { intent.setPackage(null) }
         }
-
-        val chooser = Intent.createChooser(intent, "Partilhar via").apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val chooser = Intent.createChooser(intent, "Partilhar via").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
         context.startActivity(chooser)
     }
 
@@ -204,9 +189,6 @@ class AndroidBridge(private val context: Context) {
         } catch (e: Exception) { }
     }
 
-    // ─── Partilha de ficheiro descarregado (ex: enviar o áudio por WhatsApp) ───
-    // Esta é a ÚNICA via que expõe o áudio descarregado a outra app — sempre por
-    // pedido explícito do usuário (botão "Exibir no telemóvel"), nunca automático.
     @JavascriptInterface
     fun shareDownloadedFile(videoId: String, title: String) {
         val file = downloads.fileFor(videoId)
@@ -219,47 +201,31 @@ class AndroidBridge(private val context: Context) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
-        val chooser = Intent.createChooser(intent, "Enviar áudio").apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val chooser = Intent.createChooser(intent, "Enviar áudio").apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
         context.startActivity(chooser)
     }
 
-    // ─── Notificação nativa / MediaSession: chamado a cada mudança de faixa/estado ───
+    // ─── Notificação nativa / MediaSession ───
     @JavascriptInterface
     fun updateNowPlaying(title: String, artist: String, thumbnailUrl: String, isPlaying: Boolean, positionMs: Long, durationMs: Long) {
-        val service = PlaybackServiceInstance.instance
-        if (service == null) {
-            Log.w("VibelyBridge", "updateNowPlaying: serviço ainda não está pronto")
-            return
-        }
+        val service = PlaybackServiceInstance.instance ?: return
         service.updateNowPlaying(title, artist, thumbnailUrl, isPlaying, positionMs, durationMs)
     }
 
-    // ─── Notificações de eventos da app (download concluído, etc), canal separado
-    // do de reprodução — não é "ongoing", aparece e some como notificação normal.
     @JavascriptInterface
     fun notifyEvent(title: String, message: String) {
-        val service = PlaybackServiceInstance.instance
-        service?.postEventNotification(title, message)
+        PlaybackServiceInstance.instance?.postEventNotification(title, message)
     }
 
-    // ─── Músicas locais do aparelho (com cache — ver getLocalTracksCached) ───
+    // ─── Músicas locais, com cache (evita "ficar sempre a recarregar") ───
     @JavascriptInterface
     fun getLocalTracks(): String = scanLocalTracks()
 
-    // Usa cache gravado em DataStore; só volta a interrogar o MediaStore se:
-    // (a) nunca houve cache, ou (b) a contagem de faixas no MediaStore mudou.
-    // Isto resolve o "ficar sempre a recarregar" — o JS deve chamar sempre esta,
-    // não getLocalTracks(), exceto quando quiser forçar um scan (ex: pull-to-refresh).
     @JavascriptInterface
     fun getLocalTracksCached(): String {
         val (cachedJson, cachedCount) = prefs.getLocalTracksCache()
         val currentCount = countLocalTracks()
-
-        if (cachedJson != null && cachedCount != null && cachedCount == currentCount) {
-            return cachedJson
-        }
+        if (cachedJson != null && cachedCount != null && cachedCount == currentCount) return cachedJson
         val fresh = scanLocalTracks()
         prefs.setLocalTracksCache(fresh, currentCount)
         return fresh
@@ -282,8 +248,14 @@ class AndroidBridge(private val context: Context) {
         } catch (e: Exception) { 0L }
     }
 
-    // Devolve título, artista, ÁLBUM e capa. O áudio e a capa são servidos pelo LocalServer
-    // (localhost:8080), porque o WebView (origem https) não consegue abrir content:// diretamente.
+    // Normaliza um nome de álbum para agrupamento: minúsculas, sem espaços extra, sem acentos.
+    // Resolve o problema de "vários álbuns duplicados" causado por pequenas variações no MediaStore.
+    private fun normalizeAlbumKey(raw: String): String {
+        val trimmed = raw.trim().lowercase(java.util.Locale.ROOT)
+        val noAccents = Normalizer.normalize(trimmed, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        return noAccents.replace(Regex("\\s+"), " ").trim()
+    }
+
     private fun scanLocalTracks(): String {
         val arr = JSONArray()
         val media = android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -296,6 +268,7 @@ class AndroidBridge(private val context: Context) {
         )
         val selection = "${android.provider.MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
             "${android.provider.MediaStore.Audio.Media.DURATION} > 0"
+        val customCovers = prefs.getCustomCovers()
         try {
             context.contentResolver.query(
                 media, projection, selection, null,
@@ -308,16 +281,19 @@ class AndroidBridge(private val context: Context) {
                 val durCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Audio.Media.DURATION)
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
+                    val trackId = "local_$id"
                     val artist = cursor.getString(artistCol)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "Artista desconhecido"
                     val album = cursor.getString(albumCol)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: ""
-                    arr.put(org.json.JSONObject().apply {
-                        put("id", "local_$id")
+                    val hasCustomCover = customCovers.has(trackId)
+                    arr.put(JSONObject().apply {
+                        put("id", trackId)
                         put("title", cursor.getString(titleCol) ?: "Sem título")
                         put("artist", artist)
                         put("album", album)
+                        put("albumKey", normalizeAlbumKey(if (album.isNotBlank()) album else artist))
                         put("duration", (cursor.getLong(durCol) / 1000))
-                        put("localUri", "http://localhost:8080/local?id=local_$id")
-                        put("thumbnail", "http://localhost:8080/cover?id=local_$id")
+                        put("localUri", "http://localhost:8080/local?id=$trackId")
+                        put("thumbnail", if (hasCustomCover) "http://localhost:8080/customcover?id=$trackId&t=${System.currentTimeMillis()}" else "http://localhost:8080/cover?id=$trackId")
                         put("isLocal", true)
                     })
                 }
@@ -330,7 +306,6 @@ class AndroidBridge(private val context: Context) {
         return arr.toString()
     }
 
-    // O JS pergunta antes de listar: evita mostrar "nenhuma música" quando na verdade falta permissão.
     @JavascriptInterface
     fun hasLocalMusicPermission(): Boolean {
         val perm = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
@@ -345,6 +320,70 @@ class AndroidBridge(private val context: Context) {
         (context as? MainActivity)?.requestLocalMusicPermission()
     }
 
+    // ─── Galeria de imagens do dispositivo (para escolher capa de faixa local) ───
+    @JavascriptInterface
+    fun hasImagesPermission(): Boolean {
+        val perm = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU)
+            android.Manifest.permission.READ_MEDIA_IMAGES
+        else android.Manifest.permission.READ_EXTERNAL_STORAGE
+        return androidx.core.content.ContextCompat.checkSelfPermission(context, perm) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    @JavascriptInterface
+    fun requestImagesPermission() {
+        (context as? MainActivity)?.requestImagesPermission()
+    }
+
+    // Lista as imagens do dispositivo (mais recentes primeiro) para o grid do modal "Escolher capa".
+    @JavascriptInterface
+    fun listDeviceImages(limit: Int): String {
+        val arr = JSONArray()
+        val media = android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(android.provider.MediaStore.Images.Media._ID, android.provider.MediaStore.Images.Media.DATE_ADDED)
+        try {
+            context.contentResolver.query(
+                media, projection, null, null,
+                "${android.provider.MediaStore.Images.Media.DATE_ADDED} DESC LIMIT ${limit.coerceIn(1, 300)}"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    arr.put(JSONObject().apply {
+                        put("id", id.toString())
+                        put("thumbUrl", "http://localhost:8080/deviceimage?id=$id&thumb=1")
+                        put("fullUrl", "http://localhost:8080/deviceimage?id=$id")
+                    })
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.w("VibelyBridge", "listDeviceImages: sem permissão")
+        } catch (e: Exception) {
+            Log.e("VibelyBridge", "listDeviceImages falhou", e)
+        }
+        return arr.toString()
+    }
+
+    // Abre o picker nativo do sistema (botão "Dispositivo" no modal). O resultado volta
+    // via MainActivity.onActivityResult -> window.onNativeImagePicked(uri) no WebView.
+    @JavascriptInterface
+    fun openSystemImagePicker() {
+        (context as? MainActivity)?.openSystemImagePicker()
+    }
+
+    // Define a imagem escolhida (content:// URI, tanto do grid como do picker do sistema)
+    // como capa de uma faixa local. Guardada só localmente, como pedido.
+    @JavascriptInterface
+    fun setTrackCover(trackId: String, imageContentUri: String): Boolean {
+        return try {
+            prefs.setCustomCover(trackId, imageContentUri)
+            true
+        } catch (e: Exception) {
+            Log.e("VibelyBridge", "setTrackCover falhou: ${e.message}")
+            false
+        }
+    }
+
     // ─── Podcasts: iTunes Search API (descoberta) + RSS direto (episódios), sem token ───
     @JavascriptInterface
     fun searchPodcasts(query: String): String = podcasts.search(query)
@@ -356,13 +395,11 @@ class AndroidBridge(private val context: Context) {
     fun getPodcastEpisodes(feedUrl: String): String = podcasts.episodes(feedUrl)
 }
 
-// Ponte simples para falar com o PlaybackService já em execução sem precisar de bind complexo
 object PlaybackServiceInstance {
     @Volatile
     var instance: PlaybackService? = null
 }
 
-// Ponte simples para o CameraActivity conseguir devolver a foto à MainActivity
 object MainActivityInstance {
     @Volatile
     var instance: MainActivity? = null

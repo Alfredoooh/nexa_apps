@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -37,7 +36,6 @@ class PlaybackService : Service() {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    // Último estado conhecido, para reconstruir a notificação quando a capa termina de descarregar
     private var lastTitle: String? = null
     private var lastArtist: String? = null
     private var lastPlaying: Boolean = false
@@ -62,14 +60,11 @@ class PlaybackService : Service() {
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "vibely:playback").apply {
-            setReferenceCounted(false)
-            acquire()
+            setReferenceCounted(false); acquire()
         }
-
         val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "vibely:wifi").apply {
-            setReferenceCounted(false)
-            acquire()
+            setReferenceCounted(false); acquire()
         }
 
         Thread {
@@ -93,12 +88,8 @@ class PlaybackService : Service() {
             override fun onStop() { sendCommandToWeb("pause") }
             override fun onSeekTo(pos: Long) { sendCommandToWeb("seek:$pos") }
         })
-
         session.setPlaybackState(
-            PlaybackStateCompat.Builder()
-                .setActions(ALL_ACTIONS)
-                .setState(PlaybackStateCompat.STATE_PAUSED, 0L, 1f)
-                .build()
+            PlaybackStateCompat.Builder().setActions(ALL_ACTIONS).setState(PlaybackStateCompat.STATE_PAUSED, 0L, 1f).build()
         )
         session.isActive = true
         mediaSession = session
@@ -106,17 +97,13 @@ class PlaybackService : Service() {
 
     private fun sendCommandToWeb(cmd: String) {
         val intent = Intent("com.vibely.music.app.MEDIA_COMMAND").apply {
-            setPackage(packageName)
-            putExtra("cmd", cmd)
+            setPackage(packageName); putExtra("cmd", cmd)
         }
         sendBroadcast(intent)
     }
 
     fun updateNowPlaying(title: String, artist: String, thumbnailUrl: String?, isPlaying: Boolean, position: Long, duration: Long) {
-        lastTitle = title
-        lastArtist = artist
-        lastPlaying = isPlaying
-
+        lastTitle = title; lastArtist = artist; lastPlaying = isPlaying
         val safeDuration = if (duration > 0) duration else -1L
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -127,25 +114,19 @@ class PlaybackService : Service() {
 
         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         mediaSession?.setPlaybackState(
-            PlaybackStateCompat.Builder()
-                .setActions(ALL_ACTIONS)
-                .setState(state, position.coerceAtLeast(0L), if (isPlaying) 1f else 0f)
-                .build()
+            PlaybackStateCompat.Builder().setActions(ALL_ACTIONS)
+                .setState(state, position.coerceAtLeast(0L), if (isPlaying) 1f else 0f).build()
         )
 
         postNotification(title, artist, lastArt, isPlaying)
 
-        if (thumbnailUrl.isNullOrEmpty()) {
-            lastArt = null
-            lastArtUrl = null
-            return
-        }
+        if (thumbnailUrl.isNullOrEmpty()) { lastArt = null; lastArtUrl = null; return }
         if (thumbnailUrl == lastArtUrl && lastArt != null) return
         lastArtUrl = thumbnailUrl
         Thread {
             val bmp = try {
                 http.newCall(Request.Builder().url(thumbnailUrl).build()).execute().use { resp ->
-                    resp.body?.byteStream()?.let { BitmapFactory.decodeStream(it) }
+                    resp.body?.byteStream()?.let { android.graphics.BitmapFactory.decodeStream(it) }
                 }
             } catch (e: Exception) { null }
             if (bmp != null && thumbnailUrl == lastArtUrl) {
@@ -168,8 +149,6 @@ class PlaybackService : Service() {
         nm.notify(NOTIFICATION_ID, notification)
     }
 
-    // Notificação de evento (download concluído, etc): canal separado (IMPORTANCE_DEFAULT,
-    // com som), NÃO ongoing, id incremental para não sobrepor eventos anteriores.
     fun postEventNotification(title: String, message: String) {
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -178,12 +157,9 @@ class PlaybackService : Service() {
             this, eventNotifId, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID_EVENTS)
-            .setContentTitle(title)
-            .setContentText(message)
+            .setContentTitle(title).setContentText(message)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(contentPending)
-            .setAutoCancel(true)
-            .setOnlyAlertOnce(false)
+            .setContentIntent(contentPending).setAutoCancel(true).setOnlyAlertOnce(false)
             .build()
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(eventNotifId++, notification)
@@ -193,40 +169,22 @@ class PlaybackService : Service() {
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val contentPending = PendingIntent.getActivity(
-            this, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val contentPending = PendingIntent.getActivity(this, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val playPauseAction = NotificationCompat.Action(
             if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
             if (isPlaying) "Pausar" else "Tocar",
             mediaPendingIntent(if (isPlaying) PlaybackStateCompat.ACTION_PAUSE else PlaybackStateCompat.ACTION_PLAY)
         )
-        val prevAction = NotificationCompat.Action(
-            android.R.drawable.ic_media_previous, "Anterior",
-            mediaPendingIntent(PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
-        )
-        val nextAction = NotificationCompat.Action(
-            android.R.drawable.ic_media_next, "Próxima",
-            mediaPendingIntent(PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
-        )
+        val prevAction = NotificationCompat.Action(android.R.drawable.ic_media_previous, "Anterior", mediaPendingIntent(PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
+        val nextAction = NotificationCompat.Action(android.R.drawable.ic_media_next, "Próxima", mediaPendingIntent(PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
 
         return NotificationCompat.Builder(this, CHANNEL_ID_PLAYBACK)
-            .setContentTitle(title ?: "Vibely")
-            .setContentText(artist ?: "Pronto para tocar")
-            .setSmallIcon(R.drawable.ic_notification)
-            .setLargeIcon(art)
-            .setContentIntent(contentPending)
-            .setOngoing(isPlaying)
-            .setOnlyAlertOnce(true)
-            .addAction(prevAction)
-            .addAction(playPauseAction)
-            .addAction(nextAction)
-            .setStyle(
-                MediaStyle()
-                    .setMediaSession(mediaSession?.sessionToken)
-                    .setShowActionsInCompactView(0, 1, 2)
-            )
+            .setContentTitle(title ?: "Vibely").setContentText(artist ?: "Pronto para tocar")
+            .setSmallIcon(R.drawable.ic_notification).setLargeIcon(art)
+            .setContentIntent(contentPending).setOngoing(isPlaying).setOnlyAlertOnce(true)
+            .addAction(prevAction).addAction(playPauseAction).addAction(nextAction)
+            .setStyle(MediaStyle().setMediaSession(mediaSession?.sessionToken).setShowActionsInCompactView(0, 1, 2))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
     }
@@ -240,9 +198,7 @@ class PlaybackService : Service() {
             else -> ACTION_PLAY
         }
         val intent = Intent(this, PlaybackService::class.java).apply { this.action = name }
-        return PendingIntent.getService(
-            this, action.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        return PendingIntent.getService(this, action.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -256,26 +212,20 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
-        server?.stop()
-        server = null
-        mediaSession?.release()
-        mediaSession = null
+        server?.stop(); server = null
+        mediaSession?.release(); mediaSession = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wifiLock?.let { if (it.isHeld) it.release() }
-
         PlaybackServiceInstance.instance = null
-
         super.onDestroy()
     }
 
     private fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
             val playback = NotificationChannel(CHANNEL_ID_PLAYBACK, "Reprodução", NotificationManager.IMPORTANCE_LOW)
             playback.setShowBadge(false)
             nm.createNotificationChannel(playback)
-
             val events = NotificationChannel(CHANNEL_ID_EVENTS, "Eventos da app", NotificationManager.IMPORTANCE_DEFAULT)
             events.description = "Downloads concluídos e outros avisos da Vibely"
             nm.createNotificationChannel(events)
@@ -290,13 +240,10 @@ class PlaybackService : Service() {
         private const val ACTION_PAUSE = "com.vibely.music.app.ACTION_PAUSE"
         private const val ACTION_NEXT = "com.vibely.music.app.ACTION_NEXT"
         private const val ACTION_PREV = "com.vibely.music.app.ACTION_PREV"
-
         private const val ALL_ACTIONS =
-            PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+            PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_PLAY_PAUSE or
                 PlaybackStateCompat.ACTION_SKIP_TO_NEXT or PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                 PlaybackStateCompat.ACTION_SEEK_TO or PlaybackStateCompat.ACTION_STOP
-
         var mediaSession: MediaSessionCompat? = null
     }
 }

@@ -4,7 +4,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -15,21 +17,16 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-// Activity nativa de câmera: só fotos (sem vídeo). O preview em si é 100% nativo
-// (CameraX + PreviewView). A "aparência" do ecrã com a câmera aberta (botões,
-// overlay, moldura) é desenhada por um WebView transparente sobreposto ao
-// preview, carregando a mesma app web em modo câmera (?camera no fim da URL).
-//
-// Fluxo:
-//  1. O JS chama Android.openCamera() (ver AndroidBridge.kt)
-//  2. Esta Activity abre, arranca o preview nativo da câmera
-//  3. O WebView transparente por cima desenha só a UI da câmera
-//  4. Ao tirar foto, grava o ficheiro e devolve o caminho para a MainActivity
-//     via window.onNativePhotoCaptured(uri) no WebView principal
+// Câmera nativa (só fotos). O preview é 100% nativo (CameraX). A aparência do ecrã
+// (botões, moldura, respeito pela safe area/appbar) é um WebView transparente por cima,
+// carregando a mesma app em modo câmera. Usa navegação nativa: botão/gesto de voltar do
+// sistema fecha a Activity normalmente (OnBackPressedCallback), tal como qualquer outro
+// ecrã nativo do Android — sem depender do histórico do WebView.
 class CameraActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
@@ -43,6 +40,10 @@ class CameraActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Edge-to-edge igual ao MainActivity, para a UI desenhada pelo WebView por cima
+        // respeitar a mesma safe area/altura de appbar usada no resto da app.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         root = FrameLayout(this)
         setContentView(root)
@@ -65,9 +66,15 @@ class CameraActivity : AppCompatActivity() {
         }
         root.addView(overlayWeb)
 
-        val appUrl = intent.getStringExtra("appUrl") ?: "https://vibelywebapp.onrender.com"
+        val appUrl = intent.getStringExtra("appUrl") ?: "file:///android_asset/app/index.html"
         val separator = if (appUrl.contains("?")) "&" else "?"
         overlayWeb.loadUrl("$appUrl${separator}camera=1")
+
+        // Navegação nativa: o botão/gesto de voltar do sistema fecha esta Activity
+        // diretamente (como qualquer ecrã nativo), sem passar pelo JS.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() { finish() }
+        })
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
@@ -160,7 +167,6 @@ class CameraActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    // Ponte JS exposta só ao overlay transparente desta Activity
     inner class CameraBridge {
         @android.webkit.JavascriptInterface
         fun isInsideApp(): Boolean = true

@@ -10,8 +10,6 @@ import kotlinx.coroutines.runBlocking
 
 private val Context.dataStore by preferencesDataStore(name = "vibely_prefs")
 
-// Guarda as preferências do usuário (tema, idioma, qualidade, etc) de forma persistente
-// e nativa, em vez de depender só do localStorage do WebView (que pode ser limpo pelo sistema).
 class PreferencesStore(private val context: Context) {
 
     private val keyTheme = stringPreferencesKey("theme")
@@ -21,11 +19,12 @@ class PreferencesStore(private val context: Context) {
     private val keyWifiOnly = stringPreferencesKey("wifi_only")
     private val keySaveData = stringPreferencesKey("save_data")
 
-    // Cache da biblioteca local: guarda o JSON já montado e a contagem de faixas
-    // vista da última vez, para não voltar a interrogar o MediaStore sempre que
-    // o JS pede as músicas locais — só refaz quando o número de faixas muda.
     private val keyLocalTracksJson = stringPreferencesKey("local_tracks_json")
     private val keyLocalTracksCount = longPreferencesKey("local_tracks_count")
+
+    // Capas locais escolhidas pelo usuário: mapa "local_<id>" -> content:// URI da imagem escolhida.
+    // Guardado como um único JSON (chave -> uri) para não multiplicar chaves no DataStore.
+    private val keyCustomCovers = stringPreferencesKey("custom_covers_json")
 
     fun getAll(): Map<String, String> = runBlocking {
         val prefs = context.dataStore.data.first()
@@ -52,7 +51,6 @@ class PreferencesStore(private val context: Context) {
         }
     }
 
-    // Devolve o cache (json, contagemGuardada) — ambos nulos se nunca foi gravado.
     fun getLocalTracksCache(): Pair<String?, Long?> = runBlocking {
         val prefs = context.dataStore.data.first()
         Pair(prefs[keyLocalTracksJson], prefs[keyLocalTracksCount])
@@ -72,7 +70,21 @@ class PreferencesStore(private val context: Context) {
         }
     }
 
-    // Deteta o idioma do sistema Android e mapeia para um dos suportados pela app
+    fun getCustomCovers(): org.json.JSONObject = runBlocking {
+        val prefs = context.dataStore.data.first()
+        val raw = prefs[keyCustomCovers]
+        if (raw.isNullOrEmpty()) org.json.JSONObject() else try { org.json.JSONObject(raw) } catch (e: Exception) { org.json.JSONObject() }
+    }
+
+    fun setCustomCover(trackId: String, contentUri: String) = runBlocking {
+        context.dataStore.edit { prefs ->
+            val current = prefs[keyCustomCovers]
+            val obj = if (current.isNullOrEmpty()) org.json.JSONObject() else try { org.json.JSONObject(current) } catch (e: Exception) { org.json.JSONObject() }
+            obj.put(trackId, contentUri)
+            prefs[keyCustomCovers] = obj.toString()
+        }
+    }
+
     private fun detectSystemLanguage(): String {
         val sysLang = java.util.Locale.getDefault().language
         return when (sysLang) {
@@ -83,7 +95,6 @@ class PreferencesStore(private val context: Context) {
         }
     }
 
-    // true se o sistema estiver em modo escuro (usado quando a preferência é "system")
     fun isSystemDarkMode(): Boolean {
         val mode = context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK
