@@ -1,0 +1,78 @@
+name: Nexa Android Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android Release APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      PACKAGE_NAME: "com.codeme.app"
+      GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=codeme-test
+          storeFile=codeme-release.jks
+          EOF
+          echo "✅ key.properties gerado"
+
+      - name: Decodificar keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/codeme-release.jks
+          echo "✅ keystore decodificado"
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      - name: Garantir AndroidX habilitado
+        run: |
+          GRADLE_PROPS="android/gradle.properties"
+          if ! grep -q "android.useAndroidX=true" "$GRADLE_PROPS"; then
+            echo "android.useAndroidX=true" >> "$GRADLE_PROPS"
+          fi
+          if ! grep -q "android.enableJetifier=true" "$GRADLE_PROPS"; then
+            echo "android.enableJetifier=true" >> "$GRADLE_PROPS"
+          fi
+          echo "✅ gradle.properties verificado"
+          cat "$GRADLE_PROPS"
+
+      - name: Build APKs divididos por arquitetura (release, com shrink)
+        run: flutter build apk --release --split-per-abi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apks
+          path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Notificar por email (sucesso/falha)
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "Build ${{ job.status }} — Nexa Android Release"
+          to: seu_email@exemplo.com
+          from: GitHub Actions
+          body: "Build finalizado com status: ${{ job.status }}"
