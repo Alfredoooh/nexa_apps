@@ -1,0 +1,172 @@
+name: orbit-android-debug (via nexa_apps)
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [orbit-build]
+
+jobs:
+  build:
+    name: Build Orbit Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      PACKAGE_NAME: "com.orbit.app"
+      ORBIT_KEYSTORE_BASE64: ${{ secrets.ORBIT_KEYSTORE_BASE64 }}
+      ORBIT_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_KEYSTORE_PASSWORD }}
+      ORBIT_KEY_ALIAS: ${{ secrets.ORBIT_KEY_ALIAS }}
+      ORBIT_KEY_PASSWORD: ${{ secrets.ORBIT_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout código do EISA-S.A
+        uses: actions/checkout@v4
+        with:
+          repository: Alfredoooh/EISA-S.A
+          ref: apk2
+          token: ${{ secrets.EISA_REPO_TOKEN }}
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configure Android SDK
+        run: |
+          set -euo pipefail
+          PROJECT_DIR="$GITHUB_WORKSPACE/orbit"
+          if [ ! -d "$PROJECT_DIR/app" ]; then PROJECT_DIR="$GITHUB_WORKSPACE"; fi
+          if [ -d "$PROJECT_DIR/app/src/main" ]; then
+            APP_MODULE_DIR="$PROJECT_DIR/app"
+          else
+            echo "ERROR: No Android module was found below $PROJECT_DIR."
+            exit 1
+          fi
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$PROJECT_DIR/local.properties"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "APP_MODULE_DIR=$APP_MODULE_DIR" >> "$GITHUB_ENV"
+
+      - name: Stop Gradle and clear generated-JAR cache
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          ./gradlew --stop || true
+          GRADLE_CACHE="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          rm -rf "$GRADLE_CACHE/caches/jars-9"
+
+      - name: Verify Gradle Wrapper
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if [ ! -s "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "ERROR: gradle/wrapper/gradle-wrapper.jar is missing."
+            exit 1
+          fi
+          chmod +x ./gradlew
+          ./gradlew --version
+
+      - name: Create or load local signing keystore
+        run: |
+          set -euo pipefail
+          b64_oneline() { openssl base64 -A -in "$1"; }
+
+          SIGNING_DIR="$GITHUB_WORKSPACE/orbit-local-signing-material"
+          mkdir -p "$SIGNING_DIR"
+          chmod 700 "$SIGNING_DIR"
+          KEYSTORE_PATH="$SIGNING_DIR/orbit-local.keystore"
+          INFO_PATH="$SIGNING_DIR/SIGNING-INFO.txt"
+          KEY_ALIAS="${ORBIT_KEY_ALIAS:-orbit-local}"
+          GENERATED=false
+
+          if [ -n "${ORBIT_KEYSTORE_BASE64:-}" ]; then
+            if [ -z "${ORBIT_KEYSTORE_PASSWORD:-}" ]; then
+              echo "ERROR: ORBIT_KEYSTORE_BASE64 is set, but ORBIT_KEYSTORE_PASSWORD is missing."
+              exit 1
+            fi
+            printf '%s' "$ORBIT_KEYSTORE_BASE64" | openssl base64 -A -d > "$KEYSTORE_PATH"
+            STORE_PASSWORD="$ORBIT_KEYSTORE_PASSWORD"
+            KEY_PASSWORD="${ORBIT_KEY_PASSWORD:-$STORE_PASSWORD}"
+
+            if [ ! -s "$KEYSTORE_PATH" ]; then
+              echo "ERROR: The decoded keystore is empty."
+              exit 1
+            fi
+            if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+              echo "ERROR: Could not open the keystore or find alias '$KEY_ALIAS'."
+              exit 1
+            fi
+            KEYSTORE_TYPE="$(keytool -list -keystore "$KEYSTORE_PATH" -storepass "$STORE_PASSWORD" 2>&1 | sed -n 's/^Keystore type: //p' | head -n 1)"
+            KEYSTORE_TYPE="${KEYSTORE_TYPE:-PKCS12}"
+          else
+            STORE_PASSWORD="$(openssl rand -hex 24)"
+            KEY_PASSWORD="$STORE_PASSWORD"
+            KEYSTORE_TYPE="PKCS12"
+            keytool -genkeypair -noprompt -v \
+              -keystore "$KEYSTORE_PATH" -storetype "$KEYSTORE_TYPE" \
+              -storepass "$STORE_PASSWORD" -keypass "$KEY_PASSWORD" \
+              -alias "$KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 10000 \
+              -dname "CN=Orbit Local, OU=Development, O=Orbit, L=Luanda, ST=Luanda, C=AO"
+            cat > "$INFO_PATH" <<EOF
+          Orbit local/testing signing key
+          Keystore: orbit-local.keystore | Type: $KEYSTORE_TYPE | Alias: $KEY_ALIAS
+          Password: $STORE_PASSWORD
+          EOF
+            chmod 600 "$INFO_PATH"
+            b64_oneline "$KEYSTORE_PATH" > "$SIGNING_DIR/orbit-local.keystore.base64.txt"
+            chmod 600 "$SIGNING_DIR/orbit-local.keystore.base64.txt"
+            GENERATED=true
+          fi
+
+          chmod 600 "$KEYSTORE_PATH"
+          {
+            echo "APP_KEYSTORE_PATH=$KEYSTORE_PATH"
+            echo "APP_KEYSTORE_TYPE=$KEYSTORE_TYPE"
+            echo "APP_KEY_ALIAS=$KEY_ALIAS"
+            echo "APP_KEYSTORE_PASSWORD=$STORE_PASSWORD"
+            echo "APP_KEY_PASSWORD=$KEY_PASSWORD"
+            echo "SIGNING_GENERATED=$GENERATED"
+          } >> "$GITHUB_ENV"
+
+      - name: Build Orbit Debug APK
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if [ ! -s "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "ERROR: Gradle Wrapper JAR is missing."
+            exit 1
+          fi
+          ./gradlew clean assembleDebug --stacktrace --no-daemon
+
+      - name: Sign APK with local keystore
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          APK_DIR="$APP_MODULE_DIR/build/outputs/apk/debug"
+          APK="$(find "$APK_DIR" -maxdepth 1 -type f -name '*-debug.apk' ! -name 'orbit-local-signed.apk' -print -quit)"
+          if [ -z "$APK" ] || [ ! -s "$APK" ]; then
+            echo "ERROR: The Debug APK was not found in $APK_DIR."
+            exit 1
+          fi
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          SIGNED_APK="$APK_DIR/orbit-local-signed.apk"
+          "$APKSIGNER" sign \
+            --ks "$APP_KEYSTORE_PATH" --ks-type "$APP_KEYSTORE_TYPE" \
+            --ks-key-alias "$APP_KEY_ALIAS" \
+            --ks-pass env:APP_KEYSTORE_PASSWORD --key-pass env:APP_KEY_PASSWORD \
+            --out "$SIGNED_APK" "$APK"
+          "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbit-debug-apk
+          path: "**/build/outputs/apk/debug/orbit-local-signed.apk"
+
+      - name: Upload signing material (only when generated)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orbit-signing-material
+          path: orbit-local-signing-material/*
