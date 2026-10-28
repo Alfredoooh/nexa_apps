@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+# Small Gradle bootstrapper for this ZIP. Uses the pinned Gradle release.
+set -eu
+VERSION="8.13"
+GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
+DIST_DIR="$GRADLE_USER_HOME/wrapper/dists/looply-gradle-$VERSION"
+GRADLE_BIN="$DIST_DIR/gradle-$VERSION/bin/gradle"
+if [ ! -x "$GRADLE_BIN" ]; then
+  mkdir -p "$DIST_DIR"
+  ZIP="$DIST_DIR/gradle-$VERSION-bin.zip"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --retry 2 "https://services.gradle.org/distributions/gradle-$VERSION-bin.zip" -o "$ZIP"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$ZIP" "https://services.gradle.org/distributions/gradle-$VERSION-bin.zip"
+  elif command -v gradle >/dev/null 2>&1 && [ "$(gradle --version 2>/dev/null | awk '/^Gradle / {print $2; exit}')" = "$VERSION" ]; then
+    exec gradle "$@"
+  else
+    echo "Erro: instala Gradle $VERSION ou disponibiliza curl/wget para o descarregar." >&2
+    exit 1
+  fi
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q -o "$ZIP" -d "$DIST_DIR"
+  else
+    echo "Erro: o comando unzip é necessário para preparar o Gradle." >&2
+    exit 1
+  fi
+  rm -f "$ZIP"
+fi
+exec "$GRADLE_BIN" "$@"
