@@ -35,7 +35,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
+          # Cache removido temporariamente: um Gradle 8.13 cacheado de uma run
+          # anterior pode estar sendo restaurado por cima do wrapper editado.
+          # cache: gradle
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -75,13 +77,31 @@ jobs:
             's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.6-bin.zip#' \
             "$WRAPPER"
 
+          sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
+
           echo "Gradle Wrapper configuration:"
-          grep '^distributionUrl=' "$WRAPPER"
+          cat "$WRAPPER"
 
           if ! grep -q 'gradle-8.14.6-bin.zip' "$WRAPPER"; then
             echo "ERROR: Gradle wrapper update failed - distributionUrl not updated."
             exit 1
           fi
+
+      - name: Debug Gradle Wrapper resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "=== Conteudo do wrapper no momento da build ==="
+          cat "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+
+          echo "=== Gradle que o wrapper realmente resolve ==="
+          cd "$PROJECT_DIR/android"
+          chmod +x ./gradlew
+          ./gradlew --version
+
+          echo "=== Caches de Gradle existentes no runner ==="
+          find "$HOME/.gradle/wrapper/dists" -maxdepth 1 -type d 2>/dev/null || echo "Nenhum cache de wrapper encontrado."
 
       - name: Display build environment
         run: |
