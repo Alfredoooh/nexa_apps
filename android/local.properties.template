@@ -1,9 +1,0 @@
-# Este ficheiro é gerado automaticamente pelo Flutter.
-# Não commites no Git.
-# Edita o caminho abaixo para o teu SDK do Flutter e Android.
-
-sdk.dir=/home/SEU_USUARIO/Android/Sdk
-flutter.sdk=/home/SEU_USUARIO/flutter
-
-flutter.versionCode=1
-flutter.versionName=1.0.0
