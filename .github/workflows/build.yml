@@ -35,9 +35,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          # Cache removido temporariamente: um Gradle 8.13 cacheado de uma run
-          # anterior pode estar sendo restaurado por cima do wrapper editado.
-          # cache: gradle
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -67,41 +64,42 @@ jobs:
           set -euo pipefail
 
           WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+          GRADLEW="$PROJECT_DIR/android/gradlew"
+          TARGET_VERSION="8.14.6"
 
           if [[ ! -f "$WRAPPER" ]]; then
             echo "ERROR: Gradle wrapper properties not found."
             exit 1
           fi
 
-          sed -i \
-            's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.6-bin.zip#' \
-            "$WRAPPER"
-
-          sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
-
-          echo "Gradle Wrapper configuration:"
-          cat "$WRAPPER"
-
-          if ! grep -q 'gradle-8.14.6-bin.zip' "$WRAPPER"; then
-            echo "ERROR: Gradle wrapper update failed - distributionUrl not updated."
+          if [[ ! -f "$GRADLEW" ]]; then
+            echo "ERROR: gradlew script not found."
             exit 1
           fi
 
-      - name: Debug Gradle Wrapper resolution
-        shell: bash
-        run: |
-          set -euo pipefail
+          sed -i \
+            "s#^distributionUrl=.*#distributionUrl=https\\\\://services.gradle.org/distributions/gradle-${TARGET_VERSION}-bin.zip#" \
+            "$WRAPPER"
+          sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
 
-          echo "=== Conteudo do wrapper no momento da build ==="
-          cat "$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+          # Este projeto usa um gradlew bootstrapper customizado com a versao
+          # hardcoded em VERSION="..." (nao le o gradle-wrapper.properties).
+          sed -i "s#^VERSION=\"8.13\"#VERSION=\"${TARGET_VERSION}\"#" "$GRADLEW"
 
-          echo "=== Gradle que o wrapper realmente resolve ==="
-          cd "$PROJECT_DIR/android"
-          chmod +x ./gradlew
-          ./gradlew --version
+          echo "=== gradle-wrapper.properties ==="
+          cat "$WRAPPER"
+          echo "=== gradlew VERSION ==="
+          grep '^VERSION=' "$GRADLEW"
 
-          echo "=== Caches de Gradle existentes no runner ==="
-          find "$HOME/.gradle/wrapper/dists" -maxdepth 1 -type d 2>/dev/null || echo "Nenhum cache de wrapper encontrado."
+          if ! grep -q "gradle-${TARGET_VERSION}-bin.zip" "$WRAPPER"; then
+            echo "ERROR: distributionUrl not updated."
+            exit 1
+          fi
+
+          if ! grep -q "VERSION=\"${TARGET_VERSION}\"" "$GRADLEW"; then
+            echo "ERROR: gradlew VERSION not updated."
+            exit 1
+          fi
 
       - name: Display build environment
         run: |
