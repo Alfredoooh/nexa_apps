@@ -1,0 +1,90 @@
+workflows:
+  looply-android-build:
+    name: Looply Android Build
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      java: 17
+      vars:
+        PROJECT_DIR: "."
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+          source: true
+        - pattern: 'master'
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: Detect Flutter project directory
+        script: |
+          set -euo pipefail
+
+          if [ -f "pubspec.yaml" ]; then
+            echo "PROJECT_DIR=." >> $CM_ENV
+          elif [ -f "looply/pubspec.yaml" ]; then
+            echo "PROJECT_DIR=looply" >> $CM_ENV
+          else
+            echo "ERROR: pubspec.yaml not found."
+            exit 1
+          fi
+
+      - name: Update Gradle Wrapper
+        script: |
+          set -euo pipefail
+
+          WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+
+          if [ ! -f "$WRAPPER" ]; then
+            echo "ERROR: Gradle wrapper properties not found."
+            exit 1
+          fi
+
+          sed -i '' \
+            's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.6-bin.zip#' \
+            "$WRAPPER"
+
+          echo "Gradle Wrapper configuration:"
+          grep '^distributionUrl=' "$WRAPPER"
+
+      - name: Display build environment
+        script: |
+          flutter --version
+          java -version
+
+      - name: Get Flutter dependencies
+        script: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Build Looply APK
+        script: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
+
+          flutter build apk --release
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: Looply APK was not generated."
+            exit 1
+          fi
+
+          echo "APK successfully generated."
+          ls -lh "$APK"
+
+    artifacts:
+      - "$PROJECT_DIR/build/app/outputs/flutter-apk/*.apk"
+
+    publishing:
+      email:
+        recipients: []
