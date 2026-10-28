@@ -1,87 +1,99 @@
-name: Nexa Android Release
+name: Looply Android Build
 
 on:
   push:
     branches:
       - main
+      - master
+
+  pull_request:
+    branches:
+      - main
+      - master
+
   workflow_dispatch:
-    inputs:
-      target_branch:
-        description: 'Branch a buildar'
-        required: false
-        default: 'apk'
-  repository_dispatch:
-    types: [build-apk]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: looply-android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Android Release APKs
+    name: Build Looply APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    env:
-      PACKAGE_NAME: "com.codeme.app"
-      GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.client_payload.branch || github.event.inputs.target_branch || 'apk' }}
+      - name: Checkout repository
+        uses: actions/checkout@v7
 
-      - name: Instalar Flutter
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Generate key.properties
+      - name: Detect Flutter project directory
+        shell: bash
         run: |
-          cat > android/key.properties << EOF
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=codeme-test
-          storeFile=codeme-release.jks
-          EOF
-          echo "✅ key.properties gerado"
+          set -euo pipefail
 
-      - name: Decodificar keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/codeme-release.jks
-          echo "✅ keystore decodificado"
+          if [[ -f "pubspec.yaml" ]]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+            echo "Flutter project found at repository root."
 
-      - name: Instalar dependências
-        run: flutter pub get
+          elif [[ -f "looply/pubspec.yaml" ]]; then
+            echo "PROJECT_DIR=looply" >> "$GITHUB_ENV"
+            echo "Flutter project found in looply/."
 
-      - name: Garantir AndroidX habilitado
-        run: |
-          GRADLE_PROPS="android/gradle.properties"
-          if ! grep -q "android.useAndroidX=true" "$GRADLE_PROPS"; then
-            echo "android.useAndroidX=true" >> "$GRADLE_PROPS"
+          else
+            echo "ERROR: pubspec.yaml not found."
+            echo "Expected pubspec.yaml at the root or inside looply/."
+            exit 1
           fi
-          if ! grep -q "android.enableJetifier=true" "$GRADLE_PROPS"; then
-            echo "android.enableJetifier=true" >> "$GRADLE_PROPS"
+
+      - name: Display Flutter version
+        run: |
+          flutter --version
+          java -version
+
+      - name: Get Flutter dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          flutter pub get
+
+      - name: Build Android APK
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+
+          flutter build apk --release
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [[ ! -s "$APK" ]]; then
+            echo "ERROR: Looply APK was not generated."
+            exit 1
           fi
-          echo "✅ gradle.properties verificado"
-          cat "$GRADLE_PROPS"
 
-      - name: Build APKs divididos por arquitetura (release, com shrink)
-        run: flutter build apk --release --split-per-abi
+          echo "APK successfully generated."
+          ls -lh "$APK"
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload Looply APK
+        uses: actions/upload-artifact@v7
         with:
-          name: release-apks
-          path: build/app/outputs/flutter-apk/*.apk
-
-      - name: Notificar por email (sucesso/falha)
-        if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Build ${{ job.status }} — Nexa Android Release"
-          to: seu_email@exemplo.com
-          from: GitHub Actions
-          body: "Build finalizado com status: ${{ job.status }}"
+          name: looply-android-apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
