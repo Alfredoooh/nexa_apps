@@ -78,6 +78,11 @@ jobs:
           echo "Gradle Wrapper configuration:"
           grep '^distributionUrl=' "$WRAPPER"
 
+          if ! grep -q 'gradle-8.14.6-bin.zip' "$WRAPPER"; then
+            echo "ERROR: Gradle wrapper update failed - distributionUrl not updated."
+            exit 1
+          fi
+
       - name: Display build environment
         run: |
           flutter --version
