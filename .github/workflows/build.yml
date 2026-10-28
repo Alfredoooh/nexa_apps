@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: looply-android-${{ github.ref }}
@@ -136,11 +136,57 @@ jobs:
           echo "APKs successfully generated:"
           ls -lh "${APKS[@]}"
 
-      - name: Upload Looply APKs
-        uses: actions/upload-artifact@v7
+      - name: Rename APKs with run number
+        id: rename
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK_DIR="$PROJECT_DIR/build/app/outputs/flutter-apk"
+          OUT_DIR="$PROJECT_DIR/build/app/outputs/flutter-apk/release-assets"
+          mkdir -p "$OUT_DIR"
+
+          for apk in "$APK_DIR"/app-*-release.apk; do
+            name="$(basename "$apk")"
+            arch="$(echo "$name" | sed -E 's/^app-(.*)-release\.apk$/\1/')"
+            new_name="looply-${arch}-build${{ github.run_number }}.apk"
+            cp "$apk" "$OUT_DIR/$new_name"
+          done
+
+          echo "asset_dir=$OUT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Assets prontos para release:"
+          ls -lh "$OUT_DIR"
+
+      - name: Publish release with APK assets
+        id: release
+        uses: softprops/action-gh-release@v2
         with:
-          name: looply-android-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-*-release.apk
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
+          tag_name: latest-build
+          name: "Looply build #${{ github.run_number }}"
+          body: |
+            Build automático do commit ${{ github.sha }} (branch `${{ github.ref_name }}`).
+
+            Escolhe o APK pela arquitetura do teu telemóvel:
+            - `arm64-v8a` — cobre praticamente todos os Android modernos (recomendado).
+            - `armeabi-v7a` — para aparelhos antigos de 32-bit.
+            - `x86_64` — só para emuladores/Chromebooks Intel, não instala em celular normal.
+          files: ${{ steps.rename.outputs.asset_dir }}/*.apk
+          fail_on_unmatched_files: true
+          make_latest: true
+
+      - name: Write download links to summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "## APKs disponíveis para download" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Arquitetura | Link direto |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          for apk in "${{ steps.rename.outputs.asset_dir }}"/*.apk; do
+            name="$(basename "$apk")"
+            url="https://github.com/${{ github.repository }}/releases/download/latest-build/${name}"
+            echo "| $name | [Baixar]($url) |" >> "$GITHUB_STEP_SUMMARY"
+            echo "$name -> $url"
+          done
