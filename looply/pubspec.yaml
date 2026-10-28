@@ -12,6 +12,7 @@ dependencies:
   material_symbols_icons: ^4.2815.0
   flutter_inappwebview: any
   cupertino_icons: ^1.0.8
+  animations: any
 
 dev_dependencies:
   flutter_test:
