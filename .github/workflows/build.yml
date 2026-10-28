@@ -50,31 +50,50 @@ jobs:
 
           if [[ -f "pubspec.yaml" ]]; then
             echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-            echo "Flutter project found at repository root."
 
           elif [[ -f "looply/pubspec.yaml" ]]; then
             echo "PROJECT_DIR=looply" >> "$GITHUB_ENV"
-            echo "Flutter project found in looply/."
 
           else
             echo "ERROR: pubspec.yaml not found."
-            echo "Expected pubspec.yaml at the root or inside looply/."
             exit 1
           fi
 
-      - name: Display Flutter version
+      - name: Update Gradle Wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
+
+          if [[ ! -f "$WRAPPER" ]]; then
+            echo "ERROR: Gradle wrapper properties not found."
+            exit 1
+          fi
+
+          sed -i \
+            's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.14.6-bin.zip#' \
+            "$WRAPPER"
+
+          echo "Gradle Wrapper configuration:"
+          grep '^distributionUrl=' "$WRAPPER"
+
+      - name: Display build environment
         run: |
           flutter --version
           java -version
 
       - name: Get Flutter dependencies
         run: |
+          set -euo pipefail
           cd "$PROJECT_DIR"
           flutter pub get
 
-      - name: Build Android APK
+      - name: Build Looply APK
+        shell: bash
         run: |
           set -euo pipefail
+
           cd "$PROJECT_DIR"
 
           flutter build apk --release
