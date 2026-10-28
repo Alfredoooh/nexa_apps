@@ -119,23 +119,28 @@ jobs:
 
           cd "$PROJECT_DIR"
 
-          flutter build apk --release
+          flutter build apk --release \
+            --split-per-abi \
+            --obfuscate \
+            --split-debug-info=build/debug-info
 
-          APK="build/app/outputs/flutter-apk/app-release.apk"
+          APK_DIR="build/app/outputs/flutter-apk"
+          shopt -s nullglob
+          APKS=("$APK_DIR"/app-*-release.apk)
 
-          if [[ ! -s "$APK" ]]; then
-            echo "ERROR: Looply APK was not generated."
+          if [[ ${#APKS[@]} -eq 0 ]]; then
+            echo "ERROR: No Looply APKs were generated."
             exit 1
           fi
 
-          echo "APK successfully generated."
-          ls -lh "$APK"
+          echo "APKs successfully generated:"
+          ls -lh "${APKS[@]}"
 
-      - name: Upload Looply APK
+      - name: Upload Looply APKs
         uses: actions/upload-artifact@v7
         with:
           name: looply-android-apk
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-*-release.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
