@@ -1,83 +1,143 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:animations/animations.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Edge-to-edge real: deixa status bar e navigation bar transparentes,
+  // sem o Android pintar um overlay escuro por cima.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const LooplyApp());
 }
 
-const Color looplyBg = Color(0xFF0B0D11);
-const Color looplyPanel = Color(0xFF151920);
-const Color looplyPanel2 = Color(0xFF1B2028);
-const Color looplyText = Color(0xFFF4F7FA);
-const Color looplyMuted = Color(0xFF9AA4B2);
+const Color looplyBgDark = Color(0xFF0B0D11);
+const Color looplyPanelDark = Color(0xFF151920);
+const Color looplyPanel2Dark = Color(0xFF1B2028);
+const Color looplyBottomBarDark = Color(0xFF0D0F14);
+
+const Color looplyBgLight = Color(0xFFF5F7FA);
+const Color looplyPanelLight = Color(0xFFFFFFFF);
+const Color looplyPanel2Light = Color(0xFFE9EDF2);
+const Color looplyBottomBarLight = Color(0xFFFFFFFF);
+
+const Color looplyTextDark = Color(0xFFF4F7FA);
+const Color looplyMutedDark = Color(0xFF9AA4B2);
+const Color looplyTextLight = Color(0xFF14181F);
+const Color looplyMutedLight = Color(0xFF5C6572);
+
 const Color looplyBlue = Color(0xFF05C8F2);
 const Color looplyOrange = Color(0xFFFF7A20);
-const Color looplyBottomBar = Color(0xFF0D0F14);
+
+/// Controlador de tema global, real: muda o MaterialApp inteiro ao vivo.
+class ThemeController extends ValueNotifier<ThemeMode> {
+  ThemeController() : super(ThemeMode.dark);
+
+  void setMode(ThemeMode mode) => value = mode;
+
+  void toggle() {
+    value = value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+  }
+}
+
+final ThemeController themeController = ThemeController();
 
 class LooplyApp extends StatelessWidget {
   const LooplyApp({super.key});
 
-  @override
-  Widget build(BuildContext context) {
+  ThemeData _buildTheme(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
     final colorScheme = ColorScheme.fromSeed(
       seedColor: looplyBlue,
-      brightness: Brightness.dark,
-      surface: looplyPanel,
+      brightness: brightness,
+      surface: panel,
     );
-    return MaterialApp(
-      title: 'Looply',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: looplyBg,
-        splashFactory: NoSplash.splashFactory,
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: looplyBg,
-          foregroundColor: looplyText,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: bg,
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      appBarTheme: AppBarTheme(
+        backgroundColor: bg,
+        foregroundColor: text,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        // Garante que a status bar herde o estilo certo por trás de cada AppBar.
+        systemOverlayStyle: isDark
+            ? SystemUiOverlayStyle.light.copyWith(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+                systemNavigationBarColor: looplyBottomBarDark,
+                systemNavigationBarIconBrightness: Brightness.light,
+              )
+            : SystemUiOverlayStyle.dark.copyWith(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+                systemNavigationBarColor: looplyBottomBarLight,
+                systemNavigationBarIconBrightness: Brightness.dark,
+              ),
+      ),
+      textTheme: TextTheme(
+        headlineSmall: TextStyle(color: text, fontWeight: FontWeight.w800),
+        titleLarge: TextStyle(color: text, fontWeight: FontWeight.w800),
+        titleMedium: TextStyle(color: text, fontWeight: FontWeight.w700),
+        bodyLarge: TextStyle(color: text),
+        bodyMedium: TextStyle(color: text),
+        bodySmall: TextStyle(color: muted),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: panel,
+        hintStyle: TextStyle(color: muted),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide.none,
         ),
-        textTheme: const TextTheme(
-          headlineSmall: TextStyle(color: looplyText, fontWeight: FontWeight.w800),
-          titleLarge: TextStyle(color: looplyText, fontWeight: FontWeight.w800),
-          titleMedium: TextStyle(color: looplyText, fontWeight: FontWeight.w700),
-          bodyLarge: TextStyle(color: looplyText),
-          bodyMedium: TextStyle(color: looplyText),
-          bodySmall: TextStyle(color: looplyMuted),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide.none,
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: looplyPanel,
-          hintStyle: const TextStyle(color: looplyMuted),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(28),
-            borderSide: BorderSide.none,
-          ),
-        ),
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: NoSwipeBackCupertinoPageTransitionsBuilder(),
-            TargetPlatform.iOS: NoSwipeBackCupertinoPageTransitionsBuilder(),
-          },
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28),
+          borderSide: BorderSide.none,
         ),
       ),
-      home: const LooplyShell(),
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: NoSwipeBackCupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: NoSwipeBackCupertinoPageTransitionsBuilder(),
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: 'Looply',
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          home: const LooplyShell(),
+        );
+      },
     );
   }
 }
@@ -104,8 +164,8 @@ class NoSwipeBackCupertinoPageTransitionsBuilder extends PageTransitionsBuilder 
   }
 }
 
-/// Rota customizada equivalente ao CupertinoPageRoute, mas que bloqueia
-/// o PopGestureDetector (sem slide to go back), usada nas navegações manuais.
+/// Rota customizada equivalente ao CupertinoPageRoute, sem swipe-to-go-back,
+/// usada para navegações manuais (Navigator.push direto).
 class NoSwipeCupertinoPageRoute<T> extends PageRoute<T> {
   NoSwipeCupertinoPageRoute({
     required this.builder,
@@ -197,21 +257,28 @@ class _LooplyShellState extends State<LooplyShell> {
       const ProfileScreen(),
     ];
 
+    // Scaffold raiz único: body + bottomNavigationBar no mesmo nível,
+    // garantindo que o bottom bar fique ancorado ao fundo real da tela.
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         bottom: false,
         child: IndexedStack(index: _selectedTab, children: pages),
       ),
-      bottomNavigationBar: LooplyBottomBar(
-        selectedIndex: _selectedTab,
-        onSelect: (index) => setState(() => _selectedTab = index),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: LooplyBottomBar(
+          selectedIndex: _selectedTab,
+          onSelect: (index) => setState(() => _selectedTab = index),
+        ),
       ),
     );
   }
 }
 
-/// Bottom bar customizado: sem feedback de splash/ripple ao trocar de tab,
-/// com indicador "pill" no item selecionado, cor quase igual ao fundo do app.
+/// Bottom bar customizado: altura FIXA (corrige o bug de colapso/flutuação),
+/// sem splash/ripple ao trocar de tab, indicador "pill" no item selecionado,
+/// cor adaptada ao tema ativo.
 class LooplyBottomBar extends StatelessWidget {
   const LooplyBottomBar({
     super.key,
@@ -222,6 +289,8 @@ class LooplyBottomBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
+  static const double _barHeight = 64;
+
   static const _items = [
     (icon: Symbols.home_rounded, label: 'Início'),
     (icon: Symbols.sports_esports_rounded, label: 'Jogos'),
@@ -231,11 +300,16 @@ class LooplyBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final barColor = isDark ? looplyBottomBarDark : looplyBottomBarLight;
+    final borderColor = isDark ? const Color(0xFF13161B) : const Color(0xFFE4E8EE);
+    final mutedColor = isDark ? looplyMutedDark : looplyMutedLight;
+
     return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 10, top: 10),
-      decoration: const BoxDecoration(
-        color: looplyBottomBar,
-        border: Border(top: BorderSide(color: Color(0xFF13161B), width: 1)),
+      height: _barHeight,
+      decoration: BoxDecoration(
+        color: barColor,
+        border: Border(top: BorderSide(color: borderColor, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -261,7 +335,7 @@ class LooplyBottomBar extends StatelessWidget {
                       Icon(
                         item.icon,
                         fill: selected ? 1 : 0,
-                        color: selected ? looplyBlue : looplyMuted,
+                        color: selected ? looplyBlue : mutedColor,
                         size: 23,
                       ),
                       AnimatedSize(
@@ -329,7 +403,7 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Aba "Jogos" (antiga "Explorar"), com o jogo listado.
+/// Aba "Jogos", com o jogo listado.
 class GamesScreen extends StatelessWidget {
   const GamesScreen({super.key});
 
@@ -392,14 +466,19 @@ class LooplySearchBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
     return OpenContainer(
       transitionType: ContainerTransitionType.fadeThrough,
       transitionDuration: const Duration(milliseconds: 400),
       closedElevation: 0,
       openElevation: 0,
-      closedColor: looplyPanel,
-      openColor: looplyBg,
-      middleColor: looplyPanel,
+      closedColor: panel,
+      openColor: bg,
+      middleColor: panel,
       closedShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(28),
       ),
@@ -411,21 +490,21 @@ class LooplySearchBox extends StatelessWidget {
             height: 48,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: looplyPanel,
+              color: panel,
               borderRadius: BorderRadius.circular(28),
             ),
             child: Row(
               children: [
-                const Icon(Symbols.search_rounded, color: looplyMuted, size: 21),
+                Icon(Symbols.search_rounded, color: muted, size: 21),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Text(
                     'Pesquisar jogos',
-                    style: TextStyle(color: looplyMuted, fontSize: 14),
+                    style: TextStyle(color: muted, fontSize: 14),
                   ),
                 ),
                 if (showFilterIcon)
-                  const Icon(Symbols.tune_rounded, color: looplyMuted, size: 19),
+                  Icon(Symbols.tune_rounded, color: muted, size: 19),
               ],
             ),
           ),
@@ -470,8 +549,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
     return Scaffold(
-      backgroundColor: looplyBg,
+      backgroundColor: bg,
       appBar: AppBar(
         toolbarHeight: 68,
         leading: IconButton(
@@ -482,22 +567,22 @@ class _SearchScreenState extends State<SearchScreen> {
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: looplyPanel,
+            color: panel,
             borderRadius: BorderRadius.circular(28),
           ),
           child: Row(
             children: [
-              const Icon(Symbols.search_rounded, color: looplyMuted, size: 21),
+              Icon(Symbols.search_rounded, color: muted, size: 21),
               const SizedBox(width: 10),
               Expanded(
                 child: TextField(
                   controller: _controller,
                   focusNode: _focusNode,
                   textInputAction: TextInputAction.search,
-                  style: const TextStyle(color: looplyText, fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: text, fontSize: 14),
+                  decoration: InputDecoration(
                     hintText: 'Pesquisar jogos',
-                    hintStyle: TextStyle(color: looplyMuted, fontSize: 14),
+                    hintStyle: TextStyle(color: muted, fontSize: 14),
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
@@ -511,7 +596,7 @@ class _SearchScreenState extends State<SearchScreen> {
       body: Center(
         child: Text(
           'Resultados para "${_controller.text}"',
-          style: const TextStyle(color: looplyMuted),
+          style: TextStyle(color: muted),
         ),
       ),
     );
@@ -525,20 +610,26 @@ class GameCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
     return OpenContainer(
       transitionType: ContainerTransitionType.fadeThrough,
       transitionDuration: const Duration(milliseconds: 420),
       closedElevation: 0,
       openElevation: 0,
-      closedColor: looplyPanel,
-      openColor: looplyBg,
-      middleColor: looplyPanel,
+      closedColor: panel,
+      openColor: bg,
+      middleColor: panel,
       closedShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(24),
       ),
       closedBuilder: (context, openContainer) {
         return Material(
-          color: looplyPanel,
+          color: panel,
           borderRadius: BorderRadius.circular(24),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -575,13 +666,13 @@ class GameCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                      Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: text)),
                       const SizedBox(height: 5),
                       Row(
                         children: [
                           const Icon(Symbols.circle_rounded, fill: 1, size: 5, color: Color(0xFF50D890)),
                           const SizedBox(width: 4),
-                          const Text('Online', style: TextStyle(fontSize: 10, color: looplyMuted)),
+                          Text('Online', style: TextStyle(fontSize: 10, color: muted)),
                         ],
                       ),
                     ],
@@ -624,8 +715,7 @@ class GameArtPainter extends CustomPainter {
   bool shouldRepaint(covariant GameArtPainter oldDelegate) => oldDelegate.game.index != game.index;
 }
 
-/// Tela do jogo: corre o InAppWebView diretamente (sem exibir HTML cru),
-/// com indicador de carregamento nativo.
+/// Tela do jogo: corre o InAppWebView diretamente, com loading nativo.
 class GameWebViewScreen extends StatefulWidget {
   const GameWebViewScreen({super.key, required this.game, required this.onClose});
   final LooplyGame game;
@@ -640,8 +730,11 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+
     return Scaffold(
-      backgroundColor: looplyBg,
+      backgroundColor: bg,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Symbols.arrow_back_rounded),
@@ -675,25 +768,29 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
   }
 }
 
-/// Aba de Perfil: capa com gradiente + avatar sobreposto (estilo da imagem),
-/// com as cores do app, e popup menu no topo (Settings, Theme, Idioma).
+/// Aba de Perfil: capa com gradiente + avatar sobreposto, popup menu
+/// no topo com Settings, Theme (real) e Idioma.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   void _openMenu(BuildContext context, Offset position) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, 0),
-      color: looplyPanel,
+      color: panel,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      items: const [
+      items: [
         PopupMenuItem(
           value: 'settings',
           child: Row(
             children: [
-              Icon(Symbols.settings_rounded, color: looplyText, size: 19),
-              SizedBox(width: 10),
-              Text('Settings', style: TextStyle(color: looplyText)),
+              Icon(Symbols.settings_rounded, color: text, size: 19),
+              const SizedBox(width: 10),
+              Text('Settings', style: TextStyle(color: text)),
             ],
           ),
         ),
@@ -701,9 +798,9 @@ class ProfileScreen extends StatelessWidget {
           value: 'theme',
           child: Row(
             children: [
-              Icon(Symbols.dark_mode_rounded, color: looplyText, size: 19),
-              SizedBox(width: 10),
-              Text('Theme', style: TextStyle(color: looplyText)),
+              Icon(Symbols.dark_mode_rounded, color: text, size: 19),
+              const SizedBox(width: 10),
+              Text('Theme', style: TextStyle(color: text)),
             ],
           ),
         ),
@@ -711,20 +808,97 @@ class ProfileScreen extends StatelessWidget {
           value: 'idiom',
           child: Row(
             children: [
-              Icon(Symbols.language_rounded, color: looplyText, size: 19),
-              SizedBox(width: 10),
-              Text('Idioma', style: TextStyle(color: looplyText)),
+              Icon(Symbols.language_rounded, color: text, size: 19),
+              const SizedBox(width: 10),
+              Text('Idioma', style: TextStyle(color: text)),
             ],
           ),
         ),
       ],
+    ).then((value) {
+      if (value == 'theme') {
+        _showThemeSheet(context);
+      }
+      // 'settings' e 'idiom' ainda sem tela própria — me diz o que deve abrir em cada um.
+    });
+  }
+
+  void _showThemeSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: themeController,
+          builder: (context, mode, _) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                      child: Row(
+                        children: [
+                          Text('Tema', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.light,
+                      groupValue: mode,
+                      activeColor: looplyBlue,
+                      title: Text('Claro', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.dark,
+                      groupValue: mode,
+                      activeColor: looplyBlue,
+                      title: Text('Escuro', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.system,
+                      groupValue: mode,
+                      activeColor: looplyBlue,
+                      title: Text('Automático (sistema)', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final panel2 = isDark ? looplyPanel2Dark : looplyPanel2Light;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
     return Scaffold(
-      backgroundColor: looplyBg,
+      backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -738,7 +912,7 @@ class ProfileScreen extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [looplyBlue, Color(0xFF6A5BD6), looplyPanel],
+                      colors: [looplyBlue, Color(0xFF6A5BD6), looplyPanelDark],
                     ),
                   ),
                 ),
@@ -766,10 +940,10 @@ class ProfileScreen extends StatelessWidget {
                     height: 94,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: looplyBg, width: 4),
-                      color: looplyPanel2,
+                      border: Border.all(color: bg, width: 4),
+                      color: panel2,
                     ),
-                    child: const Icon(Symbols.person_rounded, color: looplyMuted, size: 42),
+                    child: Icon(Symbols.person_rounded, color: muted, size: 42),
                   ),
                 ),
               ],
@@ -780,10 +954,10 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Utilizador', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: looplyText)),
-                  SizedBox(height: 4),
-                  Text('@utilizador', style: TextStyle(fontSize: 13, color: looplyMuted)),
+                children: [
+                  Text('Utilizador', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: text)),
+                  const SizedBox(height: 4),
+                  Text('@utilizador', style: TextStyle(fontSize: 13, color: muted)),
                 ],
               ),
             ),
