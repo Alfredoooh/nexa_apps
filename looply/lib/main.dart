@@ -2156,7 +2156,6 @@ class SettingsScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       showDragHandle: false,
       isScrollControlled: true,
@@ -2196,7 +2195,6 @@ class SettingsScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       showDragHandle: false,
       useSafeArea: true,
@@ -2227,7 +2225,6 @@ class SettingsScreen extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
       elevation: 0,
       showDragHandle: false,
       builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
