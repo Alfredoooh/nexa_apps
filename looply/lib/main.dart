@@ -84,6 +84,7 @@ const Set<String> adBlockDomains = {
 };
 
 bool isAdBlockedUrl(String url) {
+  if (!adBlockEnabled.value) return false;
   try {
     final host = Uri.parse(url).host.toLowerCase();
     if (host.isEmpty) return false;
@@ -117,6 +118,10 @@ class SearchEngineController extends ValueNotifier<SearchEngine> {
 
 final SearchEngineController activeSearchEngine = SearchEngineController();
 
+// Settings-backed runtime switches.
+final ValueNotifier<bool> adBlockEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> navigationAcceleratorEnabled = ValueNotifier<bool>(true);
+
 class QuickSite {
   const QuickSite({required this.name, required this.domain, required this.url});
   final String name;
@@ -143,6 +148,7 @@ class NavAccelerator {
   static const int _maxCacheEntries = 25;
 
   Future<void> preconnect(String url) async {
+    if (!navigationAcceleratorEnabled.value) return;
     try {
       final uri = Uri.parse(url);
       if (uri.host.isEmpty) return;
@@ -153,6 +159,7 @@ class NavAccelerator {
   }
 
   void cachePage(String url, String html) {
+    if (!navigationAcceleratorEnabled.value) return;
     if (_pageCache.containsKey(url)) {
       _cacheOrder.remove(url);
     } else if (_cacheOrder.length >= _maxCacheEntries) {
@@ -162,7 +169,7 @@ class NavAccelerator {
     _cacheOrder.add(url);
   }
 
-  String? getCachedPage(String url) => _pageCache[url];
+  String? getCachedPage(String url) => navigationAcceleratorEnabled.value ? _pageCache[url] : null;
 }
 
 enum ActivityKind { site, game }
@@ -222,12 +229,23 @@ class BrowserTab {
 class TabsController extends ChangeNotifier {
   final List<BrowserTab> _tabs = [];
   int _counter = 0;
+  String? _activeTabId;
   List<BrowserTab> get tabs => List.unmodifiable(_tabs);
   int get count => _tabs.length;
+  String? get activeTabId => _activeTabId;
+
+  void activate(String id) {
+    if (!_tabs.any((tab) => tab.id == id)) return;
+    _activeTabId = id;
+    final tab = _tabs.firstWhere((tab) => tab.id == id);
+    tab.touch();
+    notifyListeners();
+  }
 
   BrowserTab createBrowserTab(String url) {
     final tab = BrowserTab(id: 'tab_${_counter++}', kind: TabKind.browser, url: url);
     _tabs.insert(0, tab);
+    _activeTabId = tab.id;
     notifyListeners();
     return tab;
   }
@@ -273,6 +291,11 @@ class TabsController extends ChangeNotifier {
 
   void closeTab(String id) {
     _tabs.removeWhere((tab) => tab.id == id);
+    if (_activeTabId == id) {
+      _activeTabId = _tabs.where((tab) => tab.kind == TabKind.browser).isNotEmpty
+          ? _tabs.firstWhere((tab) => tab.kind == TabKind.browser).id
+          : null;
+    }
     notifyListeners();
   }
 
@@ -424,6 +447,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   bool _morphing = false;
   final GlobalKey _repaintKey = GlobalKey();
   final GlobalKey _rootKey = GlobalKey();
+  final GlobalKey _browserViewportKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
   final List<String> _screenKeys = const ['home_screen', 'games_screen', 'activity_screen'];
@@ -433,6 +457,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   OverlayEntry? _morphEntry;
   Uint8List? _lastScreenSnapshot;
   Rect? _lastScreenRect;
+  String? _preferredReturnTabId;
 
   @override
   void initState() {
@@ -456,9 +481,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
   void _handleShellTabRequest() {
-    final requested = ShellTabRequest.instance.requestedIndex;
-    ShellTabRequest.instance.requestedIndex = null;
-    if (requested == null || !mounted) return;
+    if (!mounted) return;
+    final request = ShellTabRequest.instance;
+    if (request.tabsRequested) {
+      request.tabsRequested = false;
+      request.requestedIndex = null;
+      _preferredReturnTabId = tabsController.activeTabId;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openTabsGrid();
+      });
+      return;
+    }
+    final requested = request.requestedIndex;
+    request.requestedIndex = null;
+    if (requested == null) return;
     setState(() => _selectedTab = requested.clamp(0, 2).toInt());
   }
 
@@ -485,6 +522,33 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
   }
 
+  void _prepareSnapshotOverlay({required Uint8List bitmap, required Rect from, required bool opening}) {
+    _morphEntry?.remove();
+    _morphEntry = null;
+    _morphController.stop();
+    _morphController.value = 0;
+    _morphEntry = OverlayEntry(
+      builder: (overlayContext) => Positioned.fill(
+        child: IgnorePointer(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (!opening) Positioned.fill(child: ColoredBox(color: pageBg(context))),
+              Positioned.fromRect(
+                rect: from,
+                child: ClipRRect(
+                  borderRadius: opening ? BorderRadius.zero : BorderRadius.circular(18),
+                  child: Image.memory(bitmap, fit: BoxFit.cover, gaplessPlayback: true),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
+  }
+
   Future<void> _animateSnapshot({required Uint8List bitmap, required Rect from, required Rect to, required bool opening}) async {
     if (!mounted) return;
     _morphEntry?.remove();
@@ -505,6 +569,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               return Stack(
                 fit: StackFit.expand,
                 children: [
+                  if (!opening)
+                    Positioned.fill(
+                      child: ColoredBox(color: pageBg(context)),
+                    ),
                   Positioned.fromRect(
                     rect: rect,
                     child: Material(
@@ -549,6 +617,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
     _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
     _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
+    _prepareSnapshotOverlay(bitmap: bitmap, from: sourceRect, opening: true);
     setState(() {
       _showingTabsGrid = true;
       _morphing = true;
@@ -560,32 +629,51 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
   Future<void> _closeTabsGrid({BrowserTab? openTab}) async {
     if (_morphing || !_showingTabsGrid) return;
-    final tab = openTab ?? tabsController.getAppScreen(_screenKeys[_selectedTab]);
-    final sourceKey = tab == null ? null : (_previewKeys[tab.id] ?? _cardKeys[tab.id]);
+
+    final preferredReturnTab = tabsController.getTab(_preferredReturnTabId ?? '');
+    final targetTab = openTab ?? preferredReturnTab ?? tabsController.getAppScreen(_screenKeys[_selectedTab]);
+    _preferredReturnTabId = null;
+    final sourceKey = targetTab == null
+        ? null
+        : targetTab.kind == TabKind.browser
+            ? (_previewKeys[targetTab.id] ?? _cardKeys[targetTab.id])
+            : (_cardKeys[targetTab.id] ?? _previewKeys[targetTab.id]);
     final sourceRect = sourceKey == null ? null : _rectInOverlay(sourceKey);
-    Uint8List? bitmap = tab?.thumbnail ?? _lastScreenSnapshot;
-    if (bitmap == null && sourceKey != null) bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
+    Uint8List? bitmap = targetTab?.thumbnail;
+    if (bitmap == null && targetTab?.kind == TabKind.appScreen) bitmap = _lastScreenSnapshot;
+    if (bitmap == null && sourceKey != null) {
+      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
+    }
     if (!mounted) return;
 
-    if (openTab != null && openTab.kind == TabKind.browser) {
-      setState(() {
-        _showingTabsGrid = false;
-        _morphing = bitmap != null && sourceRect != null;
-      });
-      Navigator.of(context).push(_instantBrowserRoute(openTab));
+    if (targetTab != null && targetTab.kind == TabKind.browser) {
+      final revealWebView = ValueNotifier<bool>(false);
+      tabsController.activate(targetTab.id);
+      if (bitmap != null && sourceRect != null) {
+        _prepareSnapshotOverlay(bitmap: bitmap, from: sourceRect, opening: false);
+      }
+      _showingTabsGrid = false;
+      setState(() => _morphing = bitmap != null && sourceRect != null);
+      Navigator.of(context).push(_instantBrowserRoute(targetTab, revealWebView: revealWebView));
       await WidgetsBinding.instance.endOfFrame;
-      final destination = _overlayBounds();
+      final destination = _rectInOverlay(_browserViewportKey);
       if (bitmap != null && sourceRect != null && destination != null) {
         await _animateSnapshot(bitmap: bitmap, from: sourceRect, to: destination, opening: false);
       } else if (mounted) {
         setState(() => _morphing = false);
       }
+      // Create the real WebView only after the shared-element animation has
+      // reached the viewport. This prevents the selected page flashing behind it.
+      revealWebView.value = true;
       return;
     }
 
-    if (openTab != null && openTab.kind == TabKind.appScreen) {
-      final index = _screenKeys.indexOf(openTab.url);
+    if (targetTab != null && targetTab.kind == TabKind.appScreen) {
+      final index = _screenKeys.indexOf(targetTab.url);
       if (index >= 0) _selectedTab = index;
+    }
+    if (bitmap != null && sourceRect != null) {
+      _prepareSnapshotOverlay(bitmap: bitmap, from: sourceRect, opening: false);
     }
     setState(() {
       _showingTabsGrid = false;
@@ -600,11 +688,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
   }
 
-  PageRoute<void> _instantBrowserRoute(BrowserTab tab) {
+  PageRoute<void> _instantBrowserRoute(BrowserTab tab, {ValueNotifier<bool>? revealWebView}) {
     return PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: const Duration(milliseconds: 180),
-      pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(tabId: tab.id, initialUrl: tab.url),
+      pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
+        tabId: tab.id,
+        initialUrl: tab.url,
+        viewportKey: _browserViewportKey,
+        revealWebView: revealWebView,
+      ),
     );
   }
 
@@ -636,17 +729,23 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               ),
             ),
             if (_showingTabsGrid)
-              TabsGridScreen(
-                previewKeys: _previewKeys,
-                cardKeys: _cardKeys,
-                onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
-                onClose: () => _closeTabsGrid(),
-                onNewTab: () {
-                  final tab = tabsController.createBrowserTab('https://www.google.com');
-                  _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-                  _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-                  _closeTabsGrid(openTab: tab);
+              PopScope<void>(
+                canPop: false,
+                onPopInvokedWithResult: (didPop, result) {
+                  if (!didPop) _closeTabsGrid();
                 },
+                child: TabsGridScreen(
+                  previewKeys: _previewKeys,
+                  cardKeys: _cardKeys,
+                  onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
+                  onClose: () => _closeTabsGrid(),
+                  onNewTab: () {
+                    final tab = tabsController.createBrowserTab('https://www.google.com');
+                    _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
+                    _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
+                    _closeTabsGrid(openTab: tab);
+                  },
+                ),
               ),
           ],
         ),
@@ -860,76 +959,25 @@ class TabGridCard extends StatelessWidget {
   }
 }
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  void _openSettings() {
-    _scaffoldKey.currentState?.closeDrawer();
-    Future<void>.delayed(const Duration(milliseconds: 180), () {
-      if (mounted) Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-    });
-  }
-
-  void _closeDrawer() => _scaffoldKey.currentState?.closeDrawer();
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
     return Scaffold(
-      key: _scaffoldKey,
       backgroundColor: pageBg(context),
-      drawer: Drawer(
-        backgroundColor: pageBg(context),
-        width: MediaQuery.of(context).size.width * .82,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 22, 16, 20),
-                child: Row(children: [
-                  Container(width: 42, height: 42, decoration: BoxDecoration(color: accentColor(context).withOpacity(.14), borderRadius: BorderRadius.circular(14)), child: Icon(Symbols.public_rounded, color: accentColor(context), size: 24)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text('Looply', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w800))),
-                ]),
-              ),
-              Divider(height: 1, color: lineColor(context)),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                leading: Container(width: 44, height: 44, decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor(context).withOpacity(.15)), child: Icon(Symbols.person_rounded, color: accentColor(context), size: 23)),
-                title: Text('Utilizador', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
-                subtitle: Text('Configurações e preferências', style: TextStyle(color: muted, fontSize: 12)),
-                trailing: Icon(Symbols.chevron_right_rounded, color: muted),
-                onTap: _openSettings,
-              ),
-              const SizedBox(height: 8),
-              Divider(height: 1, color: lineColor(context)),
-              ListTile(leading: Icon(Symbols.home_rounded, color: muted), title: Text('Início', style: TextStyle(color: text)), onTap: _closeDrawer),
-              ListTile(leading: Icon(Symbols.sports_esports_rounded, color: muted), title: Text('Jogos', style: TextStyle(color: text)), onTap: () { _closeDrawer(); _goToShellTab(1); }),
-              ListTile(leading: Icon(Symbols.history_rounded, color: muted), title: Text('Atividade', style: TextStyle(color: text)), onTap: () { _closeDrawer(); _goToShellTab(2); }),
-              const Spacer(),
-              Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 18), child: Text('Looply Browser', style: TextStyle(color: muted, fontSize: 12))),
-            ],
-          ),
-        ),
-      ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 2, 12, 28),
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
           children: [
-            // The search control is the first item at the top; its menu icon
-            // replaces the magnifying glass and opens the real navigation drawer.
             const LooplyBigSearchBox(),
             const SizedBox(height: 25),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('Sites rápidos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: text))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text('Sites rápidos', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: text)),
+            ),
             const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -937,28 +985,127 @@ class _HomeScreenState extends State<HomeScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: quickSites.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 10, mainAxisSpacing: 16, childAspectRatio: 1.08),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.08,
+                ),
                 itemBuilder: (context, index) => RepaintBoundary(child: QuickSiteTile(site: quickSites[index])),
               ),
             ),
+            const SizedBox(height: 8),
+            Text('Navegação simples, rápida e privada.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
           ],
         ),
       ),
     );
   }
+}
 
-  void _goToShellTab(int index) {
-    // The drawer is hosted by the Home page in the shell. The surrounding
-    // IndexedStack remains intact; this event is handled through a notification.
-    ShellTabRequest.instance.request(index);
-  }
+void _showLooplyDrawer(BuildContext context) {
+  final bg = pageBg(context);
+  final text = mainText(context);
+  final muted = mutedText(context);
+  final accent = accentColor(context);
+
+  showGeneralDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: 'Fechar menu',
+    barrierColor: Colors.black.withOpacity(.48),
+    transitionDuration: const Duration(milliseconds: 270),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(dialogContext).pop(),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FractionallySizedBox(
+                widthFactor: .82,
+                heightFactor: 1,
+                child: Material(
+                  color: bg,
+                  elevation: 18,
+                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                  child: SafeArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 24, 16, 20),
+                          child: Row(children: [
+                            Container(width: 44, height: 44, decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(14)), child: Icon(Symbols.public_rounded, color: accent, size: 25)),
+                            const SizedBox(width: 13),
+                            Expanded(child: Text('Looply', style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w800))),
+                            IconButton(tooltip: 'Fechar menu', icon: Icon(Symbols.close_rounded, color: muted), onPressed: () => Navigator.of(dialogContext).pop()),
+                          ]),
+                        ),
+                        Divider(height: 1, color: lineColor(context)),
+                        const SizedBox(height: 10),
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+                          leading: Container(width: 44, height: 44, decoration: BoxDecoration(shape: BoxShape.circle, color: accent.withOpacity(.15)), child: Icon(Symbols.person_rounded, color: accent, size: 24)),
+                          title: Text('Utilizador', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
+                          subtitle: Text('Configurações e preferências', style: TextStyle(color: muted, fontSize: 12)),
+                          trailing: Icon(Symbols.chevron_right_rounded, color: muted),
+                          onTap: () {
+                            Navigator.of(dialogContext).pop();
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (context.mounted) Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Divider(height: 1, color: lineColor(context)),
+                        ListTile(leading: Icon(Symbols.home_rounded, color: muted), title: Text('Início', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(0); }),
+                        ListTile(leading: Icon(Symbols.sports_esports_rounded, color: muted), title: Text('Jogos', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(1); }),
+                        ListTile(leading: Icon(Symbols.history_rounded, color: muted), title: Text('Atividade', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(2); }),
+                        const Spacer(),
+                        Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 18), child: Text('Looply Browser', style: TextStyle(color: muted, fontSize: 12))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final slide = Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      return SlideTransition(position: slide, child: child);
+    },
+  );
 }
 
 class ShellTabRequest extends ChangeNotifier {
   ShellTabRequest._();
   static final ShellTabRequest instance = ShellTabRequest._();
   int? requestedIndex;
-  void request(int index) { requestedIndex = index; notifyListeners(); }
+  bool tabsRequested = false;
+
+  void request(int index) {
+    requestedIndex = index;
+    tabsRequested = false;
+    notifyListeners();
+  }
+
+  void requestTabs() {
+    requestedIndex = null;
+    tabsRequested = true;
+    notifyListeners();
+  }
 }
 
 class LooplyBigSearchBox extends StatelessWidget {
@@ -975,7 +1122,7 @@ class LooplyBigSearchBox extends StatelessWidget {
           tooltip: 'Abrir menu',
           style: IconButton.styleFrom(foregroundColor: muted, fixedSize: const Size(46, 46)),
           icon: const Icon(Symbols.menu_rounded, size: 23),
-          onPressed: () => _openHomeDrawer(context),
+          onPressed: () => _showLooplyDrawer(context),
         ),
         Expanded(
           child: Semantics(
@@ -993,10 +1140,6 @@ class LooplyBigSearchBox extends StatelessWidget {
     );
   }
 
-  void _openHomeDrawer(BuildContext context) {
-    final state = context.findAncestorStateOfType<_HomeScreenState>();
-    state?._scaffoldKey.currentState?.openDrawer();
-  }
 }
 
 class QuickSiteTile extends StatelessWidget {
@@ -1031,54 +1174,228 @@ class QuickSiteTile extends StatelessWidget {
 
 void openNewTab(BuildContext context, String url, {String? title}) {
   final tab = tabsController.createBrowserTab(url);
+  tabsController.activate(tab.id);
   activityController.log(ActivityKind.site, title ?? url, url);
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => BrowserScreen(tabId: tab.id, initialUrl: url)));
 }
 
 class GamesScreen extends StatelessWidget {
   const GamesScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final games = looplyGames;
     return Scaffold(
       backgroundColor: pageBg(context),
-      appBar: AppBar(toolbarHeight: 64, title: const Text('Jogos')),
-      body: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 28), children: [
-        GridView.builder(
-          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: looplyGames.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 14, childAspectRatio: .82),
-          itemBuilder: (context, index) => RepaintBoundary(child: GameCard(game: looplyGames[index])),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.only(top: 8, bottom: 28),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+              child: Row(children: [
+                Expanded(child: Text('Jogos', style: TextStyle(color: text, fontSize: 28, fontWeight: FontWeight.w800))),
+                IconButton(tooltip: 'Pesquisar jogos', icon: Icon(Symbols.search_rounded, color: text), onPressed: () => showSearch<void>(context: context, delegate: _GameSearchDelegate(games))),
+              ]),
+            ),
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: const [
+                  _GameCategoryChip(label: 'Para si', selected: true),
+                  _GameCategoryChip(label: 'Em destaque'),
+                  _GameCategoryChip(label: 'Ação'),
+                  _GameCategoryChip(label: 'Jogos web'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+              child: Row(children: [
+                Expanded(child: Text('Recomendado para si', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w800))),
+                Icon(Symbols.arrow_forward_rounded, color: muted),
+              ]),
+            ),
+            ...games.map((game) => _RecommendedGameRow(game: game)),
+            const SizedBox(height: 26),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+              child: Text('Em destaque', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w800)),
+            ),
+            if (games.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _FeaturedGameCard(game: games.first),
+              ),
+          ],
         ),
-      ]),
+      ),
     );
   }
 }
 
-class GameCard extends StatelessWidget {
-  const GameCard({super.key, required this.game});
+class _GameCategoryChip extends StatelessWidget {
+  const _GameCategoryChip({required this.label, this.selected = false});
+  final String label;
+  final bool selected;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? accentColor(context).withOpacity(.18) : pillColor(context),
+            borderRadius: BorderRadius.circular(24),
+            border: selected ? Border.all(color: accentColor(context).withOpacity(.6)) : null,
+          ),
+          child: Text(label, style: TextStyle(color: selected ? accentColor(context) : mainText(context), fontSize: 13, fontWeight: FontWeight.w700)),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecommendedGameRow extends StatelessWidget {
+  const _RecommendedGameRow({required this.game});
   final LooplyGame game;
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    return Material(
-      color: panelColor(context), borderRadius: BorderRadius.circular(20), clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: game.url == null ? null : () {
-          activityController.log(ActivityKind.game, game.title, game.url!);
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
-        },
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: SizedBox(width: double.infinity, child: Stack(fit: StackFit.expand, children: [
-            CustomPaint(painter: GameArtPainter(game: game)),
-            Positioned(top: 9, left: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: const Color(0xCC0B0D11), borderRadius: BorderRadius.circular(9)), child: Text(game.category.toUpperCase(), style: const TextStyle(fontSize: 8, letterSpacing: .5, color: Colors.white, fontWeight: FontWeight.w800)))),
-            const Positioned(right: 9, bottom: 9, child: Icon(Symbols.play_circle_rounded, fill: 1, color: Colors.white, size: 29)),
-          ]))),
-          Padding(padding: const EdgeInsets.fromLTRB(11, 10, 11, 11), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: text)),
+    return InkWell(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 7, 18, 12),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: SizedBox(width: 88, height: 88, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 32)))),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w700)),
             const SizedBox(height: 5),
-            Row(children: [const Icon(Symbols.circle_rounded, fill: 1, size: 5, color: Color(0xFF50D890)), const SizedBox(width: 4), Text('Disponível', style: TextStyle(fontSize: 10, color: muted))]),
+            Text(game.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 13, height: 1.3)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 7, runSpacing: 5, children: [
+              _GameMetaPill(label: game.category),
+              const _GameMetaPill(label: 'Jogo web'),
+            ]),
+          ]))),
+          const SizedBox(width: 4),
+          Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
+        ]),
+      ),
+    );
+  }
+}
+
+class _GameMetaPill extends StatelessWidget {
+  const _GameMetaPill({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(8)),
+    child: Text(label, style: TextStyle(color: mutedText(context), fontSize: 11, fontWeight: FontWeight.w600)),
+  );
+}
+
+class _FeaturedGameCard extends StatelessWidget {
+  const _FeaturedGameCard({required this.game});
+  final LooplyGame game;
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    return Material(
+      color: const Color(0xFF20202A),
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(height: 154, width: double.infinity, child: CustomPaint(painter: GameArtPainter(game: game), child: Stack(children: [
+            Positioned(right: -12, top: -20, child: Container(width: 135, height: 135, decoration: const BoxDecoration(color: Color(0x55FFFFFF), shape: BoxShape.circle))),
+            Positioned(left: 16, bottom: 15, child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7), decoration: BoxDecoration(color: const Color(0xDD14151B), borderRadius: BorderRadius.circular(18)), child: const Text('JOGO EM DESTAQUE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: .4)))),
+          ]))),
+          Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 16), child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(game.title, style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Abra os detalhes e comece a jogar.', style: TextStyle(color: mutedText(context), fontSize: 12)),
+            ])),
+            Icon(Symbols.arrow_forward_rounded, color: text),
           ])),
         ]),
+      ),
+    );
+  }
+}
+
+class _GameSearchDelegate extends SearchDelegate<void> {
+  _GameSearchDelegate(this.games);
+  final List<LooplyGame> games;
+  @override
+  List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Symbols.close_rounded), onPressed: () => query = '')];
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: () => close(context, null));
+  @override
+  Widget buildResults(BuildContext context) => _buildMatches(context);
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildMatches(context);
+  Widget _buildMatches(BuildContext context) {
+    final matches = games.where((game) => game.title.toLowerCase().contains(query.toLowerCase())).toList();
+    return ListView(children: matches.map((game) => ListTile(
+      leading: SizedBox(width: 44, height: 44, child: CustomPaint(painter: GameArtPainter(game: game))),
+      title: Text(game.title),
+      subtitle: Text(game.category),
+      onTap: () { close(context, null); Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))); },
+    )).toList());
+  }
+}
+
+class GameDetailsScreen extends StatelessWidget {
+  const GameDetailsScreen({super.key, required this.game});
+  final LooplyGame game;
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final bg = pageBg(context);
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(title: const Text('Detalhes do jogo')),
+      body: ListView(padding: const EdgeInsets.fromLTRB(18, 10, 18, 28), children: [
+        ClipRRect(borderRadius: BorderRadius.circular(24), child: SizedBox(height: 220, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 70))))),
+        const SizedBox(height: 20),
+        Text(game.title, style: TextStyle(color: text, fontSize: 25, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, children: [_GameMetaPill(label: game.category), const _GameMetaPill(label: 'Jogo web')]),
+        const SizedBox(height: 22),
+        Text('Sobre este jogo', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Text(game.description, style: TextStyle(color: muted, fontSize: 15, height: 1.5)),
+        const SizedBox(height: 16),
+        Text('O jogo é aberto dentro do Looply através do navegador integrado.', style: TextStyle(color: muted, fontSize: 13, height: 1.4)),
+      ]),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.fromLTRB(18, 12, 18, 12 + MediaQuery.of(context).padding.bottom),
+        decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: lineColor(context)))),
+        child: SizedBox(height: 52, child: FilledButton.icon(
+          onPressed: game.url == null ? null : () {
+            activityController.log(ActivityKind.game, game.title, game.url!);
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
+          },
+          icon: const Icon(Symbols.play_arrow_rounded),
+          label: const Text('Jogar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        )),
       ),
     );
   }
@@ -1116,12 +1433,17 @@ class GameWebViewScreen extends StatefulWidget {
 
 class _GameWebViewScreenState extends State<GameWebViewScreen> {
   bool _isLoading = true;
+  bool _renderProcessCrashed = false;
+  String? _loadError;
   InAppWebViewController? _webController;
+  Key _webViewKey = UniqueKey();
+
   @override
   void dispose() {
     _webController?.dispose();
     super.dispose();
   }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1130,28 +1452,50 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
       value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: () => Navigator.of(context).pop()), title: Text(widget.game.title)),
+        appBar: AppBar(title: Text(widget.game.title)),
         body: Stack(children: [
-          InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri(widget.game.url!)),
-            initialSettings: InAppWebViewSettings(javaScriptEnabled: true, mediaPlaybackRequiresUserGesture: false, transparentBackground: true, cacheMode: CacheMode.LOAD_DEFAULT, hardwareAcceleration: true),
-            shouldInterceptRequest: (controller, request) async {
-              final url = request.url.toString();
-              if (isAdBlockedUrl(url)) return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
-              if (url == widget.game.url && (request.method == null || request.method == 'GET')) {
-                try {
-                  final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
-                  if (response.statusCode == 200) return WebResourceResponse(contentType: 'text/html', contentEncoding: 'utf-8', data: response.bodyBytes);
-                } catch (_) {}
-              }
-              return null;
-            },
-            onWebViewCreated: (controller) => _webController = controller,
-            onLoadStart: (_, __) { if (mounted) setState(() => _isLoading = true); },
-            onLoadStop: (_, __) { if (mounted) setState(() => _isLoading = false); },
-            onReceivedError: (_, __, ___) { if (mounted) setState(() => _isLoading = false); },
-          ),
-          if (_isLoading) Container(color: bg, child: Center(child: CircularProgressIndicator(color: accentColor(context)))),
+          if (!_renderProcessCrashed)
+            InAppWebView(
+              key: _webViewKey,
+              initialUrlRequest: URLRequest(url: WebUri(widget.game.url!)),
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true, domStorageEnabled: true, databaseEnabled: true,
+                mediaPlaybackRequiresUserGesture: false, transparentBackground: true, underPageBackgroundColor: bg,
+                cacheMode: CacheMode.LOAD_DEFAULT, hardwareAcceleration: true,
+                useOnRenderProcessGone: true, safeBrowsingEnabled: true, useShouldInterceptRequest: true,
+                mixedContentMode: MixedContentMode.MIXED_CONTENT_NEVER_ALLOW,
+              ),
+              shouldInterceptRequest: (controller, request) async {
+                final url = request.url.toString();
+                if (isAdBlockedUrl(url)) return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
+                if (url == widget.game.url && (request.method == null || request.method == 'GET')) {
+                  try {
+                    final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
+                    if (response.statusCode == 200) return WebResourceResponse(contentType: 'text/html', contentEncoding: 'utf-8', data: response.bodyBytes);
+                  } catch (_) {}
+                }
+                return null;
+              },
+              onWebViewCreated: (controller) => _webController = controller,
+              onLoadStart: (_, __) { if (mounted) setState(() { _isLoading = true; _loadError = null; }); },
+              onLoadStop: (_, __) { if (mounted) setState(() => _isLoading = false); },
+              onReceivedError: (controller, request, error) {
+                if (request.isForMainFrame == true && mounted) setState(() { _isLoading = false; _loadError = error.description; });
+              },
+              onRenderProcessGone: (controller, detail) {
+                if (!mounted) return;
+                setState(() { _renderProcessCrashed = true; _isLoading = false; _loadError = 'O motor de navegação foi reiniciado.'; });
+              },
+            ),
+          if (_isLoading && !_renderProcessCrashed) Container(color: bg.withOpacity(.92), child: Center(child: CircularProgressIndicator(color: accentColor(context)))),
+          if (_renderProcessCrashed || _loadError != null)
+            Positioned.fill(child: ColoredBox(color: bg, child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Icon(_renderProcessCrashed ? Symbols.refresh_rounded : Symbols.wifi_off_rounded, size: 42, color: mutedText(context)),
+              const SizedBox(height: 12),
+              Text(_loadError ?? 'Não foi possível abrir o jogo.', textAlign: TextAlign.center, style: TextStyle(color: mainText(context))),
+              const SizedBox(height: 16),
+              FilledButton(onPressed: () { setState(() { _renderProcessCrashed = false; _loadError = null; _isLoading = true; _webController = null; _webViewKey = UniqueKey(); }); }, child: const Text('Tentar novamente')),
+            ]))))),
         ]),
       ),
     );
@@ -1218,6 +1562,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final url = _looksLikeUrl(value) ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     NavAccelerator.instance.preconnect(url);
     final tab = tabsController.createBrowserTab(url);
+    tabsController.activate(tab.id);
     activityController.log(ActivityKind.site, value, url);
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => BrowserScreen(tabId: tab.id, initialUrl: url)));
   }
@@ -1294,9 +1639,11 @@ class _SearchScreenState extends State<SearchScreen> {
 }
 
 class BrowserScreen extends StatefulWidget {
-  const BrowserScreen({super.key, required this.tabId, required this.initialUrl});
+  const BrowserScreen({super.key, required this.tabId, required this.initialUrl, this.viewportKey, this.revealWebView});
   final String tabId;
   final String initialUrl;
+  final GlobalKey? viewportKey;
+  final ValueListenable<bool>? revealWebView;
   @override
   State<BrowserScreen> createState() => _BrowserScreenState();
 }
@@ -1310,6 +1657,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
   String _currentTitle = '';
   bool _canGoBack = false;
   bool _canGoForward = false;
+  bool _renderProcessCrashed = false;
+  String? _loadError;
+  Key _webViewKey = UniqueKey();
   bool _addressBarVisible = true;
   int _lastScrollY = 0;
   Timer? _scrollDebounce;
@@ -1318,9 +1668,20 @@ class _BrowserScreenState extends State<BrowserScreen> {
   void initState() {
     super.initState();
     _currentUrl = widget.initialUrl;
+    tabsController.activate(widget.tabId);
     _pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: looplyPrimary),
-      onRefresh: () async { await _controller?.reload(); },
+      onRefresh: () async {
+        try {
+          if (_controller != null) {
+            await _controller!.reload();
+          } else {
+            _pullToRefreshController?.endRefreshing();
+          }
+        } catch (_) {
+          _pullToRefreshController?.endRefreshing();
+        }
+      },
     );
   }
 
@@ -1347,9 +1708,14 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   Future<bool> _handleBack() async {
-    if (_canGoBack) {
-      await _controller?.goBack();
-      return false;
+    final controller = _controller;
+    if (_canGoBack && controller != null && !_renderProcessCrashed) {
+      try {
+        await controller.goBack();
+        return false;
+      } catch (_) {
+        // Fall through to route navigation when the native renderer is gone.
+      }
     }
     _updateTabState();
     return true;
@@ -1385,54 +1751,16 @@ class _BrowserScreenState extends State<BrowserScreen> {
             ),
             if (_isLoading) SizedBox(height: 2, child: LinearProgressIndicator(value: _progress == 0 ? null : _progress, color: accentColor(context), backgroundColor: muted.withOpacity(.15))),
             Expanded(
-              child: InAppWebView(
-                initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
-                pullToRefreshController: _pullToRefreshController,
-                initialSettings: InAppWebViewSettings(javaScriptEnabled: true, mediaPlaybackRequiresUserGesture: false, transparentBackground: true, cacheMode: CacheMode.LOAD_DEFAULT, hardwareAcceleration: true),
-                shouldOverrideUrlLoading: (controller, action) async {
-                  final uri = action.request.url;
-                  if (uri == null) return NavigationActionPolicy.ALLOW;
-                  final scheme = uri.scheme.toLowerCase();
-                  return {'http', 'https', 'about', 'data', 'blob'}.contains(scheme) ? NavigationActionPolicy.ALLOW : NavigationActionPolicy.CANCEL;
-                },
-                shouldInterceptRequest: (controller, request) async {
-                  if (isAdBlockedUrl(request.url.toString())) return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
-                  return null;
-                },
-                onWebViewCreated: (controller) => _controller = controller,
-                onProgressChanged: (controller, progress) { if (mounted) setState(() => _progress = progress / 100); },
-                onLoadStart: (controller, url) {
-                  if (!mounted) return;
-                  setState(() { _isLoading = true; if (url != null) _currentUrl = url.toString(); });
-                },
-                onTitleChanged: (controller, title) {
-                  _currentTitle = title ?? '';
-                  _updateTabState();
-                  if (mounted) setState(() {});
-                },
-                onLoadStop: (controller, url) async {
-                  _pullToRefreshController?.endRefreshing();
-                  final back = await controller.canGoBack();
-                  final forward = await controller.canGoForward();
-                  Uint8List? screenshot;
-                  try { screenshot = await controller.takeScreenshot(); } catch (_) {}
-                  String? html;
-                  try { html = await controller.getHtml(); } catch (_) {}
-                  if (html != null) NavAccelerator.instance.cachePage(_currentUrl, html);
-                  if (!mounted) return;
-                  setState(() {
-                    _isLoading = false;
-                    _canGoBack = back;
-                    _canGoForward = forward;
-                    if (url != null) _currentUrl = url.toString();
-                  });
-                  _updateTabState(screenshot: screenshot);
-                },
-                onReceivedError: (controller, request, error) {
-                  _pullToRefreshController?.endRefreshing();
-                  if (mounted) setState(() => _isLoading = false);
-                },
-                onScrollChanged: (controller, x, y) => _onScrollChanged(y),
+              child: KeyedSubtree(
+                key: widget.viewportKey,
+                child: widget.revealWebView == null
+                    ? _buildBrowserWebView(context)
+                    : ValueListenableBuilder<bool>(
+                        valueListenable: widget.revealWebView!,
+                        builder: (context, revealed, _) => revealed
+                            ? _buildBrowserWebView(context)
+                            : ColoredBox(color: bg),
+                      ),
               ),
             ),
             _BrowserBottomBar(
@@ -1441,12 +1769,149 @@ class _BrowserScreenState extends State<BrowserScreen> {
               onBack: () => _controller?.goBack(),
               onForward: () => _controller?.goForward(),
               onMenu: () => _showPageMenu(context),
-              onTabs: () { _updateTabState(); Navigator.of(context).popUntil((route) => route.isFirst); },
-              onHome: () { _updateTabState(); Navigator.of(context).popUntil((route) => route.isFirst); },
+              onTabs: () { _updateTabState(); ShellTabRequest.instance.requestTabs(); },
+              onHome: () { _updateTabState(); ShellTabRequest.instance.request(0); Navigator.of(context).popUntil((route) => route.isFirst); },
             ),
           ]),
         ),
       ),
+    );
+  }
+
+  Widget _buildBrowserWebView(BuildContext context) {
+    final bg = pageBg(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (!_renderProcessCrashed)
+          InAppWebView(
+            key: _webViewKey,
+            initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+            pullToRefreshController: _pullToRefreshController,
+            initialSettings: InAppWebViewSettings(
+              javaScriptEnabled: true,
+              domStorageEnabled: true,
+              databaseEnabled: true,
+              mediaPlaybackRequiresUserGesture: false,
+              transparentBackground: true,
+              underPageBackgroundColor: bg,
+              cacheMode: CacheMode.LOAD_DEFAULT,
+              hardwareAcceleration: true,
+              useOnRenderProcessGone: true,
+              safeBrowsingEnabled: true,
+              useShouldInterceptRequest: true,
+              mixedContentMode: MixedContentMode.MIXED_CONTENT_NEVER_ALLOW,
+              javaScriptCanOpenWindowsAutomatically: false,
+              supportMultipleWindows: false,
+              useShouldOverrideUrlLoading: true,
+            ),
+            shouldOverrideUrlLoading: (controller, action) async {
+              final uri = action.request.url;
+              if (uri == null) return NavigationActionPolicy.ALLOW;
+              final scheme = uri.scheme.toLowerCase();
+              return {'http', 'https', 'about', 'data', 'blob'}.contains(scheme)
+                  ? NavigationActionPolicy.ALLOW
+                  : NavigationActionPolicy.CANCEL;
+            },
+            shouldInterceptRequest: (controller, request) async {
+              if (isAdBlockedUrl(request.url.toString())) {
+                return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
+              }
+              return null;
+            },
+            onWebViewCreated: (controller) => _controller = controller,
+            onProgressChanged: (controller, progress) {
+              if (mounted) setState(() => _progress = progress / 100);
+            },
+            onLoadStart: (controller, url) {
+              if (!mounted) return;
+              setState(() {
+                _isLoading = true;
+                _loadError = null;
+                if (url != null) _currentUrl = url.toString();
+              });
+            },
+            onTitleChanged: (controller, title) {
+              if (!mounted) return;
+              _currentTitle = title ?? '';
+              _updateTabState();
+              setState(() {});
+            },
+            onLoadStop: (controller, url) async {
+              _pullToRefreshController?.endRefreshing();
+              bool back = false;
+              bool forward = false;
+              Uint8List? screenshot;
+              String? html;
+              try {
+                back = await controller.canGoBack();
+                forward = await controller.canGoForward();
+                screenshot = await controller.takeScreenshot();
+                if (navigationAcceleratorEnabled.value) html = await controller.getHtml();
+              } catch (_) {}
+              if (html != null && navigationAcceleratorEnabled.value) {
+                NavAccelerator.instance.cachePage(url?.toString() ?? _currentUrl, html);
+              }
+              if (!mounted) return;
+              setState(() {
+                _isLoading = false;
+                _loadError = null;
+                _canGoBack = back;
+                _canGoForward = forward;
+                if (url != null) _currentUrl = url.toString();
+              });
+              _updateTabState(screenshot: screenshot);
+            },
+            onReceivedError: (controller, request, error) {
+              _pullToRefreshController?.endRefreshing();
+              if (request.isForMainFrame == true && mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _loadError = error.description;
+                });
+              }
+            },
+            onRenderProcessGone: (controller, detail) {
+              _pullToRefreshController?.endRefreshing();
+              if (!mounted) return;
+              setState(() {
+                _renderProcessCrashed = true;
+                _isLoading = false;
+                _loadError = 'O motor da página foi reiniciado.';
+              });
+            },
+            onScrollChanged: (controller, x, y) => _onScrollChanged(y),
+          ),
+        if (_renderProcessCrashed || _loadError != null)
+          Positioned.fill(
+            child: ColoredBox(
+              color: bg,
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(_renderProcessCrashed ? Symbols.refresh_rounded : Symbols.wifi_off_rounded, size: 42, color: mutedText(context)),
+                    const SizedBox(height: 12),
+                    Text(_loadError ?? 'Não foi possível carregar esta página.', textAlign: TextAlign.center, style: TextStyle(color: mainText(context))),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _renderProcessCrashed = false;
+                          _loadError = null;
+                          _isLoading = true;
+                          _controller = null;
+                          _webViewKey = UniqueKey();
+                        });
+                      },
+                      child: const Text('Tentar novamente'),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1590,22 +2055,70 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final muted = mutedText(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Theme.of(context).brightness == Brightness.dark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.dark),
+      value: Theme.of(context).brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: pageBg(context),
         appBar: AppBar(toolbarHeight: 64, title: const Text('Configurações')),
-        body: ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 24), children: [
-          Padding(padding: const EdgeInsets.fromLTRB(4, 4, 4, 10), child: Text('Geral', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted))),
-          _SettingsTile(icon: Symbols.dark_mode_rounded, label: 'Tema', onTap: () => _showThemeSheet(context), trailing: _themeLabel(themeController.value)),
-          const SizedBox(height: 9),
-          ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (context, engine, _) => _SettingsTile(icon: Symbols.travel_explore_rounded, label: 'Motor de pesquisa', trailing: engine.name, onTap: () => _showEnginePicker(context))),
-          const SizedBox(height: 9),
-          const _SettingsTile(icon: Symbols.language_rounded, label: 'Idioma', trailing: 'Português'),
-          const SizedBox(height: 9),
-          const _SettingsTile(icon: Symbols.shield_rounded, label: 'Bloqueador de anúncios', trailing: 'Ativo'),
-          const SizedBox(height: 9),
-          const _SettingsTile(icon: Symbols.speed_rounded, label: 'Acelerador de navegação', trailing: 'Ativo'),
-        ]),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            Padding(padding: const EdgeInsets.fromLTRB(4, 4, 4, 10), child: Text('Geral', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted))),
+            _SettingsTile(
+              icon: Symbols.dark_mode_rounded,
+              label: 'Tema',
+              trailing: ValueListenableBuilder<ThemeMode>(valueListenable: themeController, builder: (_, mode, __) => Text(_themeLabel(mode), style: TextStyle(color: mutedText(context), fontSize: 12))),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
+              onTap: () => _showThemeSheet(context),
+            ),
+            const SizedBox(height: 2),
+            ValueListenableBuilder<SearchEngine>(
+              valueListenable: activeSearchEngine,
+              builder: (context, engine, _) => _SettingsTile(
+                icon: Symbols.travel_explore_rounded,
+                label: 'Motor de pesquisa',
+                trailing: Text(engine.name, style: TextStyle(color: mutedText(context), fontSize: 12)),
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => _showEnginePicker(context),
+              ),
+            ),
+            const SizedBox(height: 2),
+            _SettingsTile(
+              icon: Symbols.language_rounded,
+              label: 'Idioma',
+              trailing: Text('Português', style: TextStyle(color: muted, fontSize: 12)),
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _showLanguageInfo(context),
+            ),
+            const SizedBox(height: 2),
+            ValueListenableBuilder<bool>(
+              valueListenable: adBlockEnabled,
+              builder: (context, enabled, _) => _SettingsTile(
+                icon: Symbols.shield_rounded,
+                label: 'Bloqueador de anúncios',
+                subtitle: enabled ? 'Ativado' : 'Desativado',
+                trailing: M3ExpressiveSwitch(value: enabled, onChanged: (value) => adBlockEnabled.value = value),
+                showChevron: false,
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
+              ),
+            ),
+            const SizedBox(height: 2),
+            ValueListenableBuilder<bool>(
+              valueListenable: navigationAcceleratorEnabled,
+              builder: (context, enabled, _) => _SettingsTile(
+                icon: Symbols.speed_rounded,
+                label: 'Acelerador de navegação',
+                subtitle: enabled ? 'Pré-ligação e cache ativos' : 'Pré-ligação e cache desativados',
+                trailing: M3ExpressiveSwitch(value: enabled, onChanged: (value) => navigationAcceleratorEnabled.value = value),
+                showChevron: false,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(24)),
+                onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1613,63 +2126,152 @@ class SettingsScreen extends StatelessWidget {
   String _themeLabel(ThemeMode mode) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => 'Escuro', _ => 'Automático' };
 
   void _showThemeSheet(BuildContext context) {
-    final text = mainText(context);
     showModalBottomSheet<void>(
-      context: context, backgroundColor: panelColor(context), showDragHandle: true,
+      context: context,
+      backgroundColor: panelColor(context),
+      showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
         valueListenable: themeController,
-        builder: (context, mode, _) => SafeArea(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
-          RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: mode, activeColor: accentColor(context), title: Text('Claro', style: TextStyle(color: text)), onChanged: (v) { if (v != null) themeController.setMode(v); }),
-          RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: mode, activeColor: accentColor(context), title: Text('Escuro', style: TextStyle(color: text)), onChanged: (v) { if (v != null) themeController.setMode(v); }),
-          RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: mode, activeColor: accentColor(context), title: Text('Automático (sistema)', style: TextStyle(color: text)), onChanged: (v) { if (v != null) themeController.setMode(v); }),
-        ]))),
+        builder: (context, mode, _) {
+          final text = mainText(context);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+              RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: mode, activeColor: accentColor(context), title: Text('Claro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+              RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: mode, activeColor: accentColor(context), title: Text('Escuro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+              RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: mode, activeColor: accentColor(context), title: Text('Automático (sistema)', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+            ]),
+          );
+        },
       ),
     );
   }
 
   void _showEnginePicker(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
     showModalBottomSheet<void>(
-      context: context, backgroundColor: panelColor(context), showDragHandle: true,
+      context: context, backgroundColor: panelColor(context), showDragHandle: true, useSafeArea: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (sheetContext) => SafeArea(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+      builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800)))),
         ...searchEngines.map((engine) => ListTile(
-          leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: muted, size: 18), placeholder: (_, __) => const SizedBox.shrink())),
-          title: Text(engine.name, style: TextStyle(color: text)),
+          leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedText(context), size: 18), placeholder: (_, __, ___) => const SizedBox.shrink())),
+          title: Text(engine.name, style: TextStyle(color: mainText(context))),
           trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentColor(context), fill: 1) : const SizedBox.shrink()),
           onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },
         )),
-      ]))),
+      ])),
+    );
+  }
+
+  void _showLanguageInfo(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context, backgroundColor: panelColor(context), showDragHandle: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (sheetContext) => Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 24), child: Text('O idioma disponível nesta versão é Português.', style: TextStyle(color: mainText(context), fontSize: 14))),
     );
   }
 }
 
 class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({required this.icon, required this.label, this.onTap, this.trailing});
+  const _SettingsTile({required this.icon, required this.label, this.onTap, this.trailing, this.subtitle, this.borderRadius, this.showChevron = true});
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
-  final String? trailing;
+  final Widget? trailing;
+  final String? subtitle;
+  final BorderRadius? borderRadius;
+  final bool showChevron;
+
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
+    final radius = borderRadius ?? BorderRadius.circular(10);
     return Material(
-      color: panelColor(context), borderRadius: BorderRadius.circular(16),
+      color: panelColor(context),
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16), onTap: onTap,
-        child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11), child: Row(children: [
-          Container(width: 38, height: 38, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(icon, color: accentColor(context), size: 19)),
-          const SizedBox(width: 12),
-          Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600))),
-          if (trailing != null) Text(trailing!, style: TextStyle(color: muted, fontSize: 12)),
-          const SizedBox(width: 6),
-          Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
-        ])),
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(icon, color: accentColor(context), size: 19)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600)),
+              if (subtitle != null) ...[const SizedBox(height: 3), Text(subtitle!, style: TextStyle(color: muted, fontSize: 11))],
+            ])),
+            if (trailing != null) trailing!,
+            if (showChevron) Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class M3ExpressiveSwitch extends StatelessWidget {
+  const M3ExpressiveSwitch({super.key, required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = accentColor(context);
+    final outline = isDark ? const Color(0xFF938F99) : const Color(0xFF79747E);
+    final offThumb = outline;
+    final onThumb = isDark ? const Color(0xFF111318) : Colors.white;
+    return Semantics(
+      label: 'Ativar ou desativar opção',
+      toggled: value,
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(!value),
+        child: SizedBox(
+          width: 52,
+          height: 40,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: const Cubic(0.2, 0, 0, 1),
+              width: 52,
+              height: 32,
+              decoration: BoxDecoration(
+                color: value ? accent : Colors.transparent,
+                border: Border.all(color: value ? accent : outline, width: 2),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Stack(clipBehavior: Clip.none, children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 350),
+                  curve: const Cubic(0.34, 1.4, 0.4, 1),
+                  left: value ? 22 : 2,
+                  top: value ? 2 : 6,
+                  width: value ? 24 : 16,
+                  height: value ? 24 : 16,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: const Cubic(0.2, 0, 0, 1),
+                    decoration: BoxDecoration(color: value ? onThumb : offThumb, shape: BoxShape.circle),
+                    child: AnimatedOpacity(
+                      opacity: value ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(Symbols.check_rounded, color: accent, size: 15),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        ),
       ),
     );
   }
