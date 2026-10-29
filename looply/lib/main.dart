@@ -483,7 +483,7 @@ class _LooplyShellState extends State<LooplyShell> {
         child: IndexedStack(index: _selectedTab, children: pages),
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedTab,
+        selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
         onDestinationSelected: (index) {
           // index 2 é o botão "Abas" — não navega, só abre o container.
           if (index == 2) {
@@ -495,7 +495,6 @@ class _LooplyShellState extends State<LooplyShell> {
         },
         height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
         destinations: [
           const NavigationDestination(
             icon: Icon(Symbols.home_rounded),
@@ -508,8 +507,6 @@ class _LooplyShellState extends State<LooplyShell> {
             label: 'Jogos',
           ),
           NavigationDestination(
-            // Ícone desenhado: retângulo com o número de abas dentro,
-            // igual à referência (quadrado com "2" dentro).
             icon: _TabsCountIcon(count: tabsController.count),
             selectedIcon: _TabsCountIcon(count: tabsController.count),
             label: 'Abas',
