@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -2158,7 +2159,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
         Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800)))),
         ...searchEngines.map((engine) => ListTile(
-          leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedText(context), size: 18), placeholder: (_, __, ___) => const SizedBox.shrink())),
+          leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedText(context), size: 18), placeholder: (_, __) => const SizedBox.shrink())),
           title: Text(engine.name, style: TextStyle(color: mainText(context))),
           trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentColor(context), fill: 1) : const SizedBox.shrink()),
           onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },
