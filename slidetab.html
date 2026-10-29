@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tabs M3 Expressive</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f2f2f5;
+    --text: #1a1a1a;
+    --text-dim: #6b6b70;
+    --primary: #5c8fd6;
+    --on-primary: #ffffff;
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f10;
+      --surface: #1c1c1f;
+      --text: #f0f0f0;
+      --text-dim: #9a9a9f;
+      --primary: #7aa6e0;
+      --on-primary: #0f0f10;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* ===== Tab bar M3 Expressive (primary, pill indicator) ===== */
+  .tabbar {
+    position: relative;
+    display: flex;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 4px;
+    width: 280px;
+  }
+
+  .tab-indicator {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    height: calc(100% - 8px);
+    width: calc(50% - 4px);
+    background: var(--primary);
+    border-radius: 999px;
+    transition: transform 0.45s cubic-bezier(0.34, 1.4, 0.4, 1);
+  }
+
+  .tabbar.right .tab-indicator {
+    transform: translateX(100%);
+  }
+
+  .tab-btn {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    border: none;
+    background: none;
+    padding: 12px 0;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.3s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .tab-btn.active {
+    color: var(--on-primary);
+  }
+
+  /* ===== Conteúdo deslizante ===== */
+  .content-wrap {
+    width: 280px;
+    height: 160px;
+    overflow: hidden;
+    border-radius: 24px;
+    background: var(--surface);
+    position: relative;
+  }
+
+  .content-track {
+    display: flex;
+    width: 200%;
+    height: 100%;
+    transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.4, 1);
+  }
+
+  .content-wrap.right .content-track {
+    transform: translateX(-50%);
+  }
+
+  .panel {
+    width: 50%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+  <div class="tabbar" id="tabbar">
+    <div class="tab-indicator"></div>
+    <button class="tab-btn active" data-tab="0">Tab 1</button>
+    <button class="tab-btn" data-tab="1">Tab 2</button>
+  </div>
+
+  <div class="content-wrap" id="contentWrap">
+    <div class="content-track">
+      <div class="panel">Conteúdo do Tab 1</div>
+      <div class="panel">Conteúdo do Tab 2</div>
+    </div>
+  </div>
+
+  <script>
+    const tabbar = document.getElementById('tabbar');
+    const contentWrap = document.getElementById('contentWrap');
+    const tabBtns = document.querySelectorAll('.tab-btn');
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const index = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        if (index === '1') {
+          tabbar.classList.add('right');
+          contentWrap.classList.add('right');
+        } else {
+          tabbar.classList.remove('right');
+          contentWrap.classList.remove('right');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Switch M3 Expressive</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1a1a1a;
+    --track-off: transparent;
+    --track-off-outline: #79747e;
+    --track-on: #5c8fd6;
+    --thumb-off: #79747e;
+    --thumb-on: #ffffff;
+    --icon-on: #5c8fd6;
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f0f10;
+      --text: #f0f0f0;
+      --track-off: transparent;
+      --track-off-outline: #938f99;
+      --track-on: #7aa6e0;
+      --thumb-off: #938f99;
+      --thumb-on: #0f0f10;
+      --icon-on: #7aa6e0;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* ===== Switch M3 Expressive ===== */
+  .m3-switch {
+    position: relative;
+    width: 52px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--track-off);
+    border: 2px solid var(--track-off-outline);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    transition:
+      background-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+      border-color 0.25s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .m3-switch.on {
+    background: var(--track-on);
+    border-color: var(--track-on);
+  }
+
+  /* thumb: pequeno e sem ícone quando OFF, grande com ícone quando ON */
+  .m3-thumb {
+    position: absolute;
+    left: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: var(--thumb-off);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      left 0.35s cubic-bezier(0.34, 1.4, 0.4, 1),
+      width 0.35s cubic-bezier(0.34, 1.4, 0.4, 1),
+      height 0.35s cubic-bezier(0.34, 1.4, 0.4, 1),
+      background-color 0.25s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .m3-switch.on .m3-thumb {
+    left: 24px;
+    width: 24px;
+    height: 24px;
+    background: var(--thumb-on);
+  }
+
+  /* leve crescimento extra ao pressionar, como no Android (state layer / press) */
+  .m3-switch:active .m3-thumb {
+    width: 28px;
+    height: 28px;
+  }
+
+  .m3-switch.on:active .m3-thumb {
+    left: 20px;
+  }
+
+  .m3-switch:not(.on):active .m3-thumb {
+    left: 2px;
+  }
+
+  .check-icon {
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.4, 0.4, 1);
+  }
+
+  .m3-switch.on .check-icon {
+    opacity: 1;
+    transform: scale(1);
+  }
+</style>
+</head>
+<body>
+
+  <button class="m3-switch" id="mySwitch" role="switch" aria-checked="false">
+    <span class="m3-thumb">
+      <svg class="check-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M4 12.6L9 17.6L20 6.6" stroke="var(--icon-on)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </span>
+  </button>
+
+  <script>
+    const sw = document.getElementById('mySwitch');
+    sw.addEventListener('click', () => {
+      const isOn = sw.classList.toggle('on');
+      sw.setAttribute('aria-checked', isOn);
+    });
+  </script>
+
+</body>
+</html>

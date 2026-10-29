@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bottom Bar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0" />
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --text: #1a1a1a;
+    --text-dim: #6b6b70;
+    --primary: #5c8fd6;
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214;
+      --text: #f0f0f0;
+      --text-dim: #9a9a9f;
+      --primary: #7aa6e0;
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  .material-symbols-rounded {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .app {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* ===== Bottom Bar ===== */
+  .bottombar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 80px;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    width: 64px;
+    padding: 6px 0;
+  }
+
+  .nav-item.active {
+    color: var(--text);
+  }
+
+  /* Pill no padrão M3 Expressive: 32dp altura, largura 64dp, totalmente arredondada */
+  .nav-item .icon-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 32px;
+    border-radius: 999px;
+    background: transparent;
+    transition:
+      background-color 0.35s cubic-bezier(0.2, 0, 0, 1),
+      transform 0.45s cubic-bezier(0.34, 1.5, 0.64, 1);
+    transform: scale(0.85);
+  }
+
+  .nav-item.active .icon-pill {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    transform: scale(1);
+  }
+
+  /* ícone: nunca engrossa, só alterna FILL */
+  .nav-item .material-symbols-rounded {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  .nav-item.active .material-symbols-rounded {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* Ícone "Abas": quadrado com número — outline por padrão, preenchido quando ativo */
+  .tabs-icon {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--text-dim);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    transition:
+      background-color 0.3s cubic-bezier(0.2, 0, 0, 1),
+      border-color 0.3s cubic-bezier(0.2, 0, 0, 1),
+      color 0.3s cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .nav-item.active .tabs-icon {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .nav-item span:last-child {
+    transition: font-weight 0.2s ease;
+  }
+
+  .nav-item.active span:last-child {
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <nav class="bottombar">
+    <button class="nav-item active" data-screen="inicio">
+      <span class="icon-pill"><span class="material-symbols-rounded">home</span></span>
+      <span>Início</span>
+    </button>
+    <button class="nav-item" data-screen="descobrir">
+      <span class="icon-pill"><span class="material-symbols-rounded">explore</span></span>
+      <span>Descobrir</span>
+    </button>
+    <button class="nav-item" data-screen="abas">
+      <span class="icon-pill"><span class="tabs-icon">1</span></span>
+      <span>Abas</span>
+    </button>
+    <button class="nav-item" data-screen="perfil">
+      <span class="icon-pill"><span class="material-symbols-rounded">person</span></span>
+      <span>Perfil</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+  const navItems = document.querySelectorAll('.nav-item');
+
+  navItems.forEach(btn => {
+    btn.addEventListener('click', () => {
+      navItems.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
