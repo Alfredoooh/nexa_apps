@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:animations/animations.dart';
@@ -11,7 +14,6 @@ void main() {
   runApp(const LooplyApp());
 }
 
-// Branco puro no light. Quase-preto (~10% mais claro que preto puro) no dark.
 const Color looplyBgDark = Color(0xFF1A1A1A);
 const Color looplyBgLight = Color(0xFFFFFFFF);
 
@@ -28,14 +30,57 @@ const Color looplyMutedLight = Color(0xFF5C6572);
 const Color looplyBlue = Color(0xFF05C8F2);
 const Color looplyOrange = Color(0xFFFF7A20);
 
-/// Controlador de tema global, real: muda o MaterialApp inteiro ao vivo.
 class ThemeController extends ValueNotifier<ThemeMode> {
   ThemeController() : super(ThemeMode.light);
-
   void setMode(ThemeMode mode) => value = mode;
 }
 
 final ThemeController themeController = ThemeController();
+
+/// Motor de pesquisa: nome, domínio (pro favicon) e template de URL.
+class SearchEngine {
+  const SearchEngine({required this.name, required this.domain, required this.urlTemplate});
+  final String name;
+  final String domain;
+  final String urlTemplate; // use {q} como placeholder da query
+
+  String buildUrl(String query) => urlTemplate.replaceAll('{q}', Uri.encodeQueryComponent(query));
+  String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+}
+
+const List<SearchEngine> searchEngines = [
+  SearchEngine(name: 'Google', domain: 'google.com', urlTemplate: 'https://www.google.com/search?q={q}'),
+  SearchEngine(name: 'Bing', domain: 'bing.com', urlTemplate: 'https://www.bing.com/search?q={q}'),
+  SearchEngine(name: 'DuckDuckGo', domain: 'duckduckgo.com', urlTemplate: 'https://duckduckgo.com/?q={q}'),
+  SearchEngine(name: 'Yahoo', domain: 'yahoo.com', urlTemplate: 'https://search.yahoo.com/search?p={q}'),
+  SearchEngine(name: 'Brave', domain: 'search.brave.com', urlTemplate: 'https://search.brave.com/search?q={q}'),
+  SearchEngine(name: 'Ecosia', domain: 'ecosia.org', urlTemplate: 'https://www.ecosia.org/search?q={q}'),
+];
+
+/// Controlador global do motor de pesquisa ativo.
+class SearchEngineController extends ValueNotifier<SearchEngine> {
+  SearchEngineController() : super(searchEngines.first);
+}
+
+final SearchEngineController activeSearchEngine = SearchEngineController();
+
+/// Site rápido: nome, domínio real (pro favicon) e URL de destino.
+class QuickSite {
+  const QuickSite({required this.name, required this.domain, required this.url});
+  final String name;
+  final String domain;
+  final String url;
+  String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=128';
+}
+
+const List<QuickSite> quickSites = [
+  QuickSite(name: 'Google', domain: 'google.com', url: 'https://www.google.com'),
+  QuickSite(name: 'YouTube', domain: 'youtube.com', url: 'https://www.youtube.com'),
+  QuickSite(name: 'Facebook', domain: 'facebook.com', url: 'https://www.facebook.com'),
+  QuickSite(name: 'Instagram', domain: 'instagram.com', url: 'https://www.instagram.com'),
+  QuickSite(name: 'X', domain: 'x.com', url: 'https://www.x.com'),
+  QuickSite(name: 'Wikipedia', domain: 'wikipedia.org', url: 'https://www.wikipedia.org'),
+];
 
 class LooplyApp extends StatelessWidget {
   const LooplyApp({super.key});
@@ -232,8 +277,6 @@ class _LooplyShellState extends State<LooplyShell> {
         bottom: false,
         child: IndexedStack(index: _selectedTab, children: pages),
       ),
-      // NavigationBar NATIVO do Material 3: já traz o "pill" selecionado
-      // de fábrica, sem precisar reinventar nada.
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),
@@ -266,7 +309,7 @@ class _LooplyShellState extends State<LooplyShell> {
   }
 }
 
-/// Home: SEM o grid de jogos, só a search box no AppBar.
+/// Home: search box com favicon do motor ativo + lista de sites rápidos.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -275,15 +318,97 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 68,
-        title: const LooplySearchBox(showFilterIcon: true),
+        title: const LooplySearchBox(),
         titleSpacing: 16,
       ),
-      body: const SizedBox.shrink(),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+        children: [
+          Text(
+            'Sites rápidos',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).brightness == Brightness.dark ? looplyTextDark : looplyTextLight,
+            ),
+          ),
+          const SizedBox(height: 14),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: quickSites.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.78,
+            ),
+            itemBuilder: (context, index) {
+              final site = quickSites[index];
+              return QuickSiteTile(site: site);
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Aba "Jogos": aqui sim fica o grid com o jogo.
+class QuickSiteTile extends StatelessWidget {
+  const QuickSiteTile({super.key, required this.site});
+  final QuickSite site;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 260),
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return BrowserScreen(initialUrl: site.url);
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: panel,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Image.network(
+              site.faviconUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => Icon(Symbols.public_rounded, color: text, size: 20),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            site.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: text),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class GamesScreen extends StatelessWidget {
   const GamesScreen({super.key});
 
@@ -334,13 +459,11 @@ class EmptyTabScreen extends StatelessWidget {
   }
 }
 
+/// Search box da Home: favicon do motor ativo (clicável -> popup de motores),
+/// sem ícone de filtro. Ao tocar no campo de texto, abre a tela de pesquisa
+/// via Container Transform, com o input no MESMO tamanho/posição visual.
 class LooplySearchBox extends StatelessWidget {
-  const LooplySearchBox({
-    super.key,
-    this.showFilterIcon = false,
-  });
-
-  final bool showFilterIcon;
+  const LooplySearchBox({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -349,53 +472,129 @@ class LooplySearchBox extends StatelessWidget {
     final bg = isDark ? looplyBgDark : looplyBgLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
 
-    return OpenContainer(
-      transitionType: ContainerTransitionType.fadeThrough,
-      // Mais curto = mais fluido, menos sensação de atraso.
-      transitionDuration: const Duration(milliseconds: 260),
-      closedElevation: 0,
-      openElevation: 0,
-      closedColor: panel,
-      openColor: bg,
-      middleColor: panel,
-      closedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
+    return ValueListenableBuilder<SearchEngine>(
+      valueListenable: activeSearchEngine,
+      builder: (context, engine, _) {
+        return OpenContainer(
+          transitionType: ContainerTransitionType.fadeThrough,
+          transitionDuration: const Duration(milliseconds: 260),
+          closedElevation: 0,
+          openElevation: 0,
+          closedColor: panel,
+          openColor: bg,
+          middleColor: panel,
+          closedShape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          closedBuilder: (context, openContainer) {
+            return Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: panel,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showEnginePicker(context),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Image.network(
+                        engine.faviconUrl,
+                        width: 20,
+                        height: 20,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) => Icon(Symbols.public_rounded, color: muted, size: 20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: openContainer,
+                      child: Text(
+                        'Pesquisar ou digitar o endereço',
+                        style: TextStyle(color: muted, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          openBuilder: (context, closeContainer) {
+            return SearchScreen(onClose: closeContainer);
+          },
+        );
+      },
+    );
+  }
+
+  void _showEnginePicker(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      closedBuilder: (context, openContainer) {
-        return InkWell(
-          onTap: openContainer,
-          borderRadius: BorderRadius.circular(28),
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: panel,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Row(
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Symbols.search_rounded, color: muted, size: 21),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Pesquisar jogos',
-                    style: TextStyle(color: muted, fontSize: 14),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                  child: Row(
+                    children: [
+                      Text('Motor de pesquisa', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
+                    ],
                   ),
                 ),
-                if (showFilterIcon)
-                  Icon(Symbols.tune_rounded, color: muted, size: 19),
+                ...searchEngines.map((engine) {
+                  return ListTile(
+                    leading: Image.network(
+                      engine.faviconUrl,
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(Symbols.public_rounded, color: muted, size: 24),
+                    ),
+                    title: Text(engine.name, style: TextStyle(color: text)),
+                    trailing: ValueListenableBuilder<SearchEngine>(
+                      valueListenable: activeSearchEngine,
+                      builder: (context, active, _) {
+                        return active.name == engine.name
+                            ? const Icon(Symbols.check_circle_rounded, color: looplyBlue, fill: 1)
+                            : const SizedBox.shrink();
+                      },
+                    ),
+                    onTap: () {
+                      activeSearchEngine.value = engine;
+                      Navigator.of(sheetContext).pop();
+                    },
+                  );
+                }),
               ],
             ),
           ),
         );
       },
-      openBuilder: (context, closeContainer) {
-        return SearchScreen(onClose: closeContainer);
-      },
     );
   }
 }
 
+/// Tela de pesquisa: input no MESMO tamanho/estilo da Home, sugestões
+/// automáticas via endpoint público do Google Suggest (sem API key).
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, required this.onClose});
 
@@ -408,6 +607,9 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
+  Timer? _debounce;
+  List<String> _suggestions = [];
+  bool _loadingSuggestions = false;
 
   @override
   void initState() {
@@ -417,13 +619,85 @@ class _SearchScreenState extends State<SearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
+    _controller.addListener(_onQueryChanged);
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _controller.removeListener(_onQueryChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged() {
+    final query = _controller.text.trim();
+    _debounce?.cancel();
+    if (query.isEmpty) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 220), () {
+      _fetchSuggestions(query);
+    });
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    setState(() => _loadingSuggestions = true);
+    try {
+      // Endpoint público do Google Suggest, usado por browsers open-source
+      // (ex: Firefox), sem necessidade de API key.
+      final uri = Uri.parse(
+        'https://suggestqueries.google.com/complete/search?client=firefox&q=${Uri.encodeQueryComponent(query)}',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        final list = (decoded.length > 1 ? decoded[1] as List<dynamic> : <dynamic>[])
+            .map((item) => item.toString())
+            .toList();
+        if (mounted) {
+          setState(() {
+            _suggestions = list;
+            _loadingSuggestions = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _loadingSuggestions = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingSuggestions = false);
+    }
+  }
+
+  void _submitSearch(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    final engine = activeSearchEngine.value;
+    final url = _looksLikeUrl(trimmed) ? _normalizeUrl(trimmed) : engine.buildUrl(trimmed);
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return BrowserScreen(initialUrl: url);
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+
+  bool _looksLikeUrl(String text) {
+    final hasSpace = text.contains(' ');
+    final hasDot = text.contains('.');
+    return !hasSpace && hasDot;
+  }
+
+  String _normalizeUrl(String text) {
+    if (text.startsWith('http://') || text.startsWith('https://')) return text;
+    return 'https://$text';
   }
 
   @override
@@ -442,41 +716,168 @@ class _SearchScreenState extends State<SearchScreen> {
           icon: const Icon(Symbols.arrow_back_rounded),
           onPressed: widget.onClose,
         ),
+        titleSpacing: 0,
+        title: ValueListenableBuilder<SearchEngine>(
+          valueListenable: activeSearchEngine,
+          builder: (context, engine, _) {
+            // Mesmo tamanho/estilo visual da search box da Home (altura 48,
+            // raio 28, favicon à esquerda), agora com TextField editável.
+            return Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: panel,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Image.network(
+                      engine.faviconUrl,
+                      width: 20,
+                      height: 20,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(Symbols.public_rounded, color: muted, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      textInputAction: TextInputAction.search,
+                      style: TextStyle(color: text, fontSize: 14),
+                      onSubmitted: _submitSearch,
+                      decoration: InputDecoration(
+                        hintText: 'Pesquisar ou digitar o endereço',
+                        hintStyle: TextStyle(color: muted, fontSize: 14),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  if (_controller.text.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => _controller.clear(),
+                      child: Icon(Symbols.close_rounded, color: muted, size: 18),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+      body: _suggestions.isEmpty
+          ? const SizedBox.shrink()
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final suggestion = _suggestions[index];
+                return ListTile(
+                  leading: Icon(Symbols.search_rounded, color: muted, size: 20),
+                  title: Text(suggestion, style: TextStyle(color: text, fontSize: 14)),
+                  onTap: () {
+                    _controller.text = suggestion;
+                    _submitSearch(suggestion);
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+/// Tela de navegação (browser) com InAppWebView — usada tanto para sites
+/// rápidos quanto para resultados de pesquisa.
+class BrowserScreen extends StatefulWidget {
+  const BrowserScreen({super.key, required this.initialUrl});
+  final String initialUrl;
+
+  @override
+  State<BrowserScreen> createState() => _BrowserScreenState();
+}
+
+class _BrowserScreenState extends State<BrowserScreen> {
+  bool _isLoading = true;
+  InAppWebViewController? _controller;
+  String _currentUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = widget.initialUrl;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        toolbarHeight: 68,
+        leading: IconButton(
+          icon: const Icon(Symbols.arrow_back_rounded),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        titleSpacing: 0,
         title: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: panel,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
           ),
-          child: Row(
-            children: [
-              Icon(Symbols.search_rounded, color: muted, size: 21),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  textInputAction: TextInputAction.search,
-                  style: TextStyle(color: text, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Pesquisar jogos',
-                    hintStyle: TextStyle(color: muted, fontSize: 14),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-            ],
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _currentUrl,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: text, fontSize: 12),
           ),
         ),
       ),
-      body: Center(
-        child: Text(
-          'Resultados para "${_controller.text}"',
-          style: TextStyle(color: muted),
-        ),
+      body: Stack(
+        children: [
+          InAppWebView(
+            initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+            initialSettings: InAppWebViewSettings(
+              javaScriptEnabled: true,
+              mediaPlaybackRequiresUserGesture: false,
+              transparentBackground: true,
+            ),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+            },
+            onLoadStart: (controller, url) {
+              setState(() {
+                _isLoading = true;
+                if (url != null) _currentUrl = url.toString();
+              });
+            },
+            onLoadStop: (controller, url) {
+              setState(() {
+                _isLoading = false;
+                if (url != null) _currentUrl = url.toString();
+              });
+            },
+          ),
+          if (_isLoading)
+            SizedBox(
+              height: 2,
+              child: LinearProgressIndicator(
+                color: looplyBlue,
+                backgroundColor: muted.withOpacity(0.2),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -593,10 +994,6 @@ class GameArtPainter extends CustomPainter {
   bool shouldRepaint(covariant GameArtPainter oldDelegate) => oldDelegate.game.index != game.index;
 }
 
-/// Tela do jogo: busca o HTML manualmente e carrega via loadData com
-/// mimeType text/html — isso FORÇA o WebView a renderizar a página em vez
-/// de exibir o código-fonte cru (o que acontecia porque o GitHub Raw serve
-/// esse .html como text/plain, não text/html).
 class GameWebViewScreen extends StatefulWidget {
   const GameWebViewScreen({super.key, required this.game, required this.onClose});
   final LooplyGame game;
@@ -608,7 +1005,6 @@ class GameWebViewScreen extends StatefulWidget {
 
 class _GameWebViewScreenState extends State<GameWebViewScreen> {
   bool _isLoading = true;
-  InAppWebViewController? _controller;
 
   @override
   Widget build(BuildContext context) {
@@ -627,30 +1023,20 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
       body: Stack(
         children: [
           InAppWebView(
-            // Carrega a URL diretamente; o GitHub Raw serve .html como
-            // text/plain por padrão, então forçamos o content-type certo
-            // via navigationAction abaixo caso o preview venha como texto.
             initialUrlRequest: URLRequest(url: WebUri(widget.game.url!)),
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
               mediaPlaybackRequiresUserGesture: false,
               transparentBackground: true,
-              useShouldOverrideUrlLoading: false,
             ),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-            },
             onLoadStart: (controller, url) {
               setState(() => _isLoading = true);
             },
             onLoadStop: (controller, url) async {
-              // Se o GitHub Raw entregou como text/plain, o navegador mostra
-              // o HTML cru. Detectamos isso e re-renderizamos forçando o
-              // mimeType correto via loadData.
-              final html = await controller.evaluateJavascript(
+              final probe = await controller.evaluateJavascript(
                 source: "document.body ? document.body.innerText.substring(0, 15) : ''",
               );
-              if (html != null && html.toString().trim().startsWith('<!')) {
+              if (probe != null && probe.toString().trim().startsWith('<!')) {
                 final rawHtml = await controller.evaluateJavascript(
                   source: "document.body.innerText",
                 );
@@ -680,9 +1066,6 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
   }
 }
 
-/// Aba de Perfil: capa REDUZIDA, cor sólida (branco/quase-preto) como fundo
-/// de capa, status bar transparente de verdade (conteúdo sobe atrás dela),
-/// botão de popup num container circular.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -808,14 +1191,11 @@ class ProfileScreen extends StatelessWidget {
     final panel2 = isDark ? looplyPanel2Dark : looplyPanel2Light;
     final text = isDark ? looplyTextDark : looplyTextLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
-    // Cor da "capa", estilo fundo de conversa: branco puro / quase-preto.
     final coverColor = isDark ? looplyBgDark : looplyBgLight;
 
     return Scaffold(
       backgroundColor: bg,
       extendBodyBehindAppBar: true,
-      // AnnotatedRegion garante status bar transparente nesta tela
-      // específica, com ícones adaptados ao tema.
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
             ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent)
@@ -826,8 +1206,6 @@ class ProfileScreen extends StatelessWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Capa reduzida (130 em vez de 210), cor sólida,
-                  // e vai por trás da status bar (sem SafeArea aqui).
                   Container(
                     height: 130,
                     width: double.infinity,
