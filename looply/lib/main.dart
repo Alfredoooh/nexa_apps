@@ -20,6 +20,8 @@ void main() {
 // CORES / TEMA
 // ============================================================
 
+const Color looplyPrimary = Color(0xFF5B4FE5);
+
 const Color looplyBgDark = Color(0xFF1A1A1A);
 const Color looplyBgLight = Color(0xFFFFFFFF);
 
@@ -33,7 +35,6 @@ const Color looplyMutedDark = Color(0xFF9AA4B2);
 const Color looplyTextLight = Color(0xFF14181F);
 const Color looplyMutedLight = Color(0xFF5C6572);
 
-const Color looplyBlue = Color(0xFF05C8F2);
 const Color looplyOrange = Color(0xFFFF7A20);
 
 class ThemeController extends ValueNotifier<ThemeMode> {
@@ -44,145 +45,43 @@ class ThemeController extends ValueNotifier<ThemeMode> {
 final ThemeController themeController = ThemeController();
 
 // ============================================================
-// AD BLOCK — lista curada de domínios de ads/tracking conhecidos.
-// Bloqueados via shouldInterceptRequest no InAppWebView.
+// AD BLOCK
 // ============================================================
 
 const Set<String> adBlockDomains = {
-  'doubleclick.net',
-  'googlesyndication.com',
-  'googleadservices.com',
-  'google-analytics.com',
-  'googletagmanager.com',
-  'googletagservices.com',
-  'adservice.google.com',
-  'adsystem.com',
-  'amazon-adsystem.com',
-  'facebook.net',
-  'connect.facebook.net',
-  'fbcdn.net',
-  'ads.facebook.com',
-  'taboola.com',
-  'outbrain.com',
-  'criteo.com',
-  'criteo.net',
-  'adroll.com',
-  'adnxs.com',
-  'rubiconproject.com',
-  'pubmatic.com',
-  'openx.net',
-  'casalemedia.com',
-  'smartadserver.com',
-  'advertising.com',
-  'adform.net',
-  'adtech.com',
-  'media.net',
-  'yieldmo.com',
-  'bidswitch.net',
-  'contextweb.com',
-  'exoclick.com',
-  'popads.net',
-  'propellerads.com',
-  'revcontent.com',
-  'mgid.com',
-  'zedo.com',
-  'adblade.com',
-  'adcolony.com',
-  'applovin.com',
-  'chartboost.com',
-  'unityads.unity3d.com',
-  'vungle.com',
-  'inmobi.com',
-  'mopub.com',
-  'scorecardresearch.com',
-  'quantserve.com',
-  'hotjar.com',
-  'mixpanel.com',
-  'segment.io',
-  'segment.com',
-  'amplitude.com',
-  'crazyegg.com',
-  'optimizely.com',
-  'newrelic.com',
-  'nr-data.net',
-  'bugsnag.com',
-  'sentry.io',
-  'intercom.io',
-  'drift.com',
-  'onesignal.com',
-  'pushwoosh.com',
-  'branch.io',
-  'adjust.com',
-  'appsflyer.com',
-  'kochava.com',
-  'tapjoy.com',
-  'ironsrc.com',
-  'smaato.net',
-  'sharethrough.com',
-  'teads.tv',
-  'triplelift.com',
-  'spotxchange.com',
-  'adsrvr.org',
-  'turn.com',
-  'mathtag.com',
-  'bluekai.com',
-  'krxd.net',
-  'demdex.net',
-  'everesttech.net',
-  'serving-sys.com',
-  'atdmt.com',
-  'adbrite.com',
-  'adtechus.com',
-  'burstnet.com',
-  'chitika.com',
-  'clicksor.com',
-  'infolinks.com',
-  'kontera.com',
-  'lijit.com',
-  'media6degrees.com',
-  'pointroll.com',
-  'quantcast.com',
-  'rlcdn.com',
-  'simpli.fi',
-  'tribalfusion.com',
-  'tremorhub.com',
-  'undertone.com',
-  'yieldlab.net',
-  'zergnet.com',
-  'popcash.net',
-  'adsterra.com',
-  'propellerclick.com',
-  'clickadu.com',
-  'galaksion.com',
-  'adspyglass.com',
-  'hilltopads.net',
-  'juicyads.com',
-  'trafficjunky.com',
-  'exosrv.com',
-  'syndicatedsearch.goog',
-  'moatads.com',
-  'adsafeprotected.com',
-  'doubleverify.com',
-  'ensighten.com',
-  'tynt.com',
-  'addthis.com',
-  'sharethis.com',
-  'disqus.com',
-  'gemius.pl',
-  'histats.com',
-  'statcounter.com',
-  'clicky.com',
-  'getclicky.com',
-  'woopra.com',
-  'kissmetrics.com',
-  'heap.io',
-  'fullstory.com',
-  'luckyorange.com',
-  'mouseflow.com',
-  'smartlook.com',
-  'clarity.ms',
-  'yandex.ru/ads',
-  'vk.com/ads',
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+  'google-analytics.com', 'googletagmanager.com', 'googletagservices.com',
+  'adservice.google.com', 'adsystem.com', 'amazon-adsystem.com',
+  'facebook.net', 'connect.facebook.net', 'fbcdn.net', 'ads.facebook.com',
+  'taboola.com', 'outbrain.com', 'criteo.com', 'criteo.net', 'adroll.com',
+  'adnxs.com', 'rubiconproject.com', 'pubmatic.com', 'openx.net',
+  'casalemedia.com', 'smartadserver.com', 'advertising.com', 'adform.net',
+  'adtech.com', 'media.net', 'yieldmo.com', 'bidswitch.net',
+  'contextweb.com', 'exoclick.com', 'popads.net', 'propellerads.com',
+  'revcontent.com', 'mgid.com', 'zedo.com', 'adblade.com', 'adcolony.com',
+  'applovin.com', 'chartboost.com', 'unityads.unity3d.com', 'vungle.com',
+  'inmobi.com', 'mopub.com', 'scorecardresearch.com', 'quantserve.com',
+  'hotjar.com', 'mixpanel.com', 'segment.io', 'segment.com',
+  'amplitude.com', 'crazyegg.com', 'optimizely.com', 'newrelic.com',
+  'nr-data.net', 'bugsnag.com', 'sentry.io', 'intercom.io', 'drift.com',
+  'onesignal.com', 'pushwoosh.com', 'branch.io', 'adjust.com',
+  'appsflyer.com', 'kochava.com', 'tapjoy.com', 'ironsrc.com',
+  'smaato.net', 'sharethrough.com', 'teads.tv', 'triplelift.com',
+  'spotxchange.com', 'adsrvr.org', 'turn.com', 'mathtag.com', 'bluekai.com',
+  'krxd.net', 'demdex.net', 'everesttech.net', 'serving-sys.com',
+  'atdmt.com', 'adbrite.com', 'adtechus.com', 'burstnet.com', 'chitika.com',
+  'clicksor.com', 'infolinks.com', 'kontera.com', 'lijit.com',
+  'media6degrees.com', 'pointroll.com', 'quantcast.com', 'rlcdn.com',
+  'simpli.fi', 'tribalfusion.com', 'tremorhub.com', 'undertone.com',
+  'yieldlab.net', 'zergnet.com', 'popcash.net', 'adsterra.com',
+  'propellerclick.com', 'clickadu.com', 'galaksion.com', 'adspyglass.com',
+  'hilltopads.net', 'juicyads.com', 'trafficjunky.com', 'exosrv.com',
+  'moatads.com', 'adsafeprotected.com', 'doubleverify.com',
+  'ensighten.com', 'tynt.com', 'addthis.com', 'sharethis.com',
+  'disqus.com', 'gemius.pl', 'histats.com', 'statcounter.com',
+  'clicky.com', 'getclicky.com', 'woopra.com', 'kissmetrics.com',
+  'heap.io', 'fullstory.com', 'luckyorange.com', 'mouseflow.com',
+  'smartlook.com', 'clarity.ms',
 };
 
 bool isAdBlockedUrl(String url) {
@@ -190,9 +89,7 @@ bool isAdBlockedUrl(String url) {
     final host = Uri.parse(url).host.toLowerCase();
     if (host.isEmpty) return false;
     for (final domain in adBlockDomains) {
-      if (host == domain || host.endsWith('.$domain')) {
-        return true;
-      }
+      if (host == domain || host.endsWith('.$domain')) return true;
     }
     return false;
   } catch (_) {
@@ -247,7 +144,7 @@ const List<QuickSite> quickSites = [
 ];
 
 // ============================================================
-// ACELERADOR DE NAVEGAÇÃO: preconnect + cache de páginas visitadas
+// ACELERADOR DE NAVEGAÇÃO
 // ============================================================
 
 class NavAccelerator {
@@ -255,26 +152,20 @@ class NavAccelerator {
   static final NavAccelerator instance = NavAccelerator._();
 
   final Set<String> _preconnected = {};
-  final Map<String, String> _pageCache = {}; // url -> html (cache leve em memória, LRU simples)
+  final Map<String, String> _pageCache = {};
   final List<String> _cacheOrder = [];
   static const int _maxCacheEntries = 25;
 
-  /// Resolve DNS/TLS do domínio antecipadamente (ex: ao tocar/segurar num
-  /// card), para que a navegação real seja quase instantânea.
   Future<void> preconnect(String url) async {
     try {
       final uri = Uri.parse(url);
       final origin = '${uri.scheme}://${uri.host}';
       if (_preconnected.contains(origin)) return;
       _preconnected.add(origin);
-      // HEAD request leve só para forçar resolução DNS + handshake TLS
-      // e aquecer a conexão antes da navegação visível no WebView.
       unawaited(
         http.head(Uri.parse(origin)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 0)),
       );
-    } catch (_) {
-      // Ignora erros de preconnect silenciosamente — é só uma otimização.
-    }
+    } catch (_) {}
   }
 
   void cachePage(String url, String html) {
@@ -292,7 +183,7 @@ class NavAccelerator {
 }
 
 // ============================================================
-// TABS CONTROLLER — estado persistente das abas do navegador
+// TABS CONTROLLER
 // ============================================================
 
 class BrowserTab {
@@ -300,19 +191,17 @@ class BrowserTab {
     required this.id,
     required this.url,
     this.title,
-    this.faviconUrl,
     DateTime? lastActivity,
   }) : lastActivity = lastActivity ?? DateTime.now();
 
   final String id;
   String url;
   String? title;
-  String? faviconUrl;
+  bool canGoBack = false;
+  bool canGoForward = false;
   DateTime lastActivity;
 
-  void touch() {
-    lastActivity = DateTime.now();
-  }
+  void touch() => lastActivity = DateTime.now();
 }
 
 class TabsController extends ChangeNotifier {
@@ -324,22 +213,20 @@ class TabsController extends ChangeNotifier {
 
   BrowserTab createTab(String url) {
     final tab = BrowserTab(id: 'tab_${_counter++}', url: url);
-    _tabs.add(tab);
+    _tabs.insert(0, tab);
     notifyListeners();
     return tab;
   }
 
-  void updateTab(String id, {String? url, String? title, String? faviconUrl}) {
+  void updateTab(String id, {String? url, String? title, bool? canGoBack, bool? canGoForward}) {
     final index = _tabs.indexWhere((t) => t.id == id);
     if (index == -1) return;
     final tab = _tabs[index];
     if (url != null) tab.url = url;
     if (title != null) tab.title = title;
-    if (faviconUrl != null) tab.faviconUrl = faviconUrl;
+    if (canGoBack != null) tab.canGoBack = canGoBack;
+    if (canGoForward != null) tab.canGoForward = canGoForward;
     tab.touch();
-    // Mais recentemente ativa sobe para o topo da lista.
-    _tabs.removeAt(index);
-    _tabs.insert(0, tab);
     notifyListeners();
   }
 
@@ -374,7 +261,7 @@ class LooplyApp extends StatelessWidget {
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
 
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: looplyBlue,
+      seedColor: looplyPrimary,
       brightness: brightness,
       surface: panel,
     );
@@ -387,8 +274,6 @@ class LooplyApp extends StatelessWidget {
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.transparent,
       splashColor: Colors.transparent,
-      // Desativa animações de página desnecessárias no modo "reduced motion"
-      // de testes, mas mantém tudo fluido por padrão.
       appBarTheme: AppBarTheme(
         backgroundColor: bg,
         foregroundColor: text,
@@ -412,7 +297,7 @@ class LooplyApp extends StatelessWidget {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: bg,
-        indicatorColor: looplyBlue.withOpacity(0.16),
+        indicatorColor: looplyPrimary.withOpacity(0.16),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -420,13 +305,13 @@ class LooplyApp extends StatelessWidget {
           return TextStyle(
             fontSize: 11,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            color: selected ? looplyBlue : muted,
+            color: selected ? looplyPrimary : muted,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
-            color: selected ? looplyBlue : muted,
+            color: selected ? looplyPrimary : muted,
             fill: selected ? 1 : 0,
           );
         }),
@@ -443,18 +328,9 @@ class LooplyApp extends StatelessWidget {
         filled: true,
         fillColor: panel,
         hintStyle: TextStyle(color: muted),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide.none,
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
@@ -541,6 +417,11 @@ const List<LooplyGame> looplyGames = [
 
 // ============================================================
 // SHELL PRINCIPAL
+//
+// A tab "Abas" NÃO é um destino de navegação normal: é um botão que
+// aciona o OpenContainer envolvendo a página atualmente visível,
+// fazendo-a encolher em Container Transform até virar um card na
+// grade de abas (igual Chrome/Safari).
 // ============================================================
 
 class LooplyShell extends StatefulWidget {
@@ -552,6 +433,10 @@ class LooplyShell extends StatefulWidget {
 
 class _LooplyShellState extends State<LooplyShell> {
   int _selectedTab = 0;
+
+  // Cada página do shell expõe um callback para abrir seu próprio
+  // OpenContainer "de fora" (a partir do botão Abas no NavigationBar).
+  final List<VoidCallback?> _openTabsCallbacks = [null, null, null];
 
   @override
   void initState() {
@@ -569,13 +454,26 @@ class _LooplyShellState extends State<LooplyShell> {
     if (mounted) setState(() {});
   }
 
+  void _handleTabsButtonTap() {
+    final callback = _openTabsCallbacks[_selectedTab];
+    callback?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      const HomeScreen(),
-      const GamesScreen(),
-      const TabsScreen(),
-      const ProfileScreen(),
+      ShellPageToTab(
+        registerOpenCallback: (cb) => _openTabsCallbacks[0] = cb,
+        child: const HomeScreen(),
+      ),
+      ShellPageToTab(
+        registerOpenCallback: (cb) => _openTabsCallbacks[1] = cb,
+        child: const GamesScreen(),
+      ),
+      ShellPageToTab(
+        registerOpenCallback: (cb) => _openTabsCallbacks[2] = cb,
+        child: const ProfileScreen(),
+      ),
     ];
 
     return Scaffold(
@@ -586,9 +484,18 @@ class _LooplyShellState extends State<LooplyShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
-        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        onDestinationSelected: (index) {
+          // index 2 é o botão "Abas" — não navega, só abre o container.
+          if (index == 2) {
+            _handleTabsButtonTap();
+            return;
+          }
+          // Reindexar: 0=Início, 1=Jogos, 3=Perfil viram 0,1,2 no IndexedStack.
+          setState(() => _selectedTab = index < 2 ? index : index - 1);
+        },
         height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
         destinations: [
           const NavigationDestination(
             icon: Icon(Symbols.home_rounded),
@@ -601,8 +508,10 @@ class _LooplyShellState extends State<LooplyShell> {
             label: 'Jogos',
           ),
           NavigationDestination(
-            icon: _TabsIcon(count: tabsController.count),
-            selectedIcon: _TabsIcon(count: tabsController.count, selected: true),
+            // Ícone desenhado: retângulo com o número de abas dentro,
+            // igual à referência (quadrado com "2" dentro).
+            icon: _TabsCountIcon(count: tabsController.count),
+            selectedIcon: _TabsCountIcon(count: tabsController.count),
             label: 'Abas',
           ),
           const NavigationDestination(
@@ -616,41 +525,80 @@ class _LooplyShellState extends State<LooplyShell> {
   }
 }
 
-/// Ícone da aba "Abas" com badge mostrando o número de abas abertas.
-class _TabsIcon extends StatelessWidget {
-  const _TabsIcon({required this.count, this.selected = false});
+/// Ícone "abas": quadrado com cantos arredondados e o número de abas
+/// desenhado dentro — igual à referência (não é um ícone + badge).
+class _TabsCountIcon extends StatelessWidget {
+  const _TabsCountIcon({required this.count});
   final int count;
-  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(Symbols.tab_rounded, fill: selected ? 1 : 0),
-        if (count > 0)
-          Positioned(
-            right: -6,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              constraints: const BoxConstraints(minWidth: 15),
-              decoration: BoxDecoration(
-                color: looplyBlue,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '$count',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-      ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = isDark ? looplyTextDark : looplyTextLight;
+
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border.all(color: color, width: 1.6),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+      ),
+    );
+  }
+}
+
+/// Envolve uma página do shell num OpenContainer que, quando acionado
+/// externamente (pelo botão "Abas"), faz essa página encolher e virar
+/// um novo card na grade de abas.
+class ShellPageToTab extends StatefulWidget {
+  const ShellPageToTab({
+    super.key,
+    required this.child,
+    required this.registerOpenCallback,
+  });
+
+  final Widget child;
+  final ValueChanged<VoidCallback> registerOpenCallback;
+
+  @override
+  State<ShellPageToTab> createState() => _ShellPageToTabState();
+}
+
+class _ShellPageToTabState extends State<ShellPageToTab> {
+  VoidCallback? _openContainerFn;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+
+    return OpenContainer(
+      transitionType: ContainerTransitionType.fadeThrough,
+      transitionDuration: const Duration(milliseconds: 280),
+      closedElevation: 0,
+      openElevation: 0,
+      closedColor: bg,
+      openColor: bg,
+      middleColor: bg,
+      closedShape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      tappable: false, // só abre via callback externo, nunca por toque direto
+      closedBuilder: (context, openContainer) {
+        _openContainerFn = openContainer;
+        // Registra o callback assim que o container está pronto, uma
+        // única vez por frame, sem causar rebuild em loop.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.registerOpenCallback(() => _openContainerFn?.call());
+        });
+        return widget.child;
+      },
+      openBuilder: (context, closeContainer) {
+        return TabsScreen(onClose: closeContainer);
+      },
     );
   }
 }
@@ -714,39 +662,28 @@ class QuickSiteTile extends StatelessWidget {
     final text = isDark ? looplyTextDark : looplyTextLight;
 
     return GestureDetector(
-      // Preconnect ao pressionar — a conexão já começa antes do tap soltar.
       onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          _openNewTab(context, site.url);
-        },
+        onTap: () => openNewTab(context, site.url),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 52,
+              height: 52,
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: BoxDecoration(color: panel, shape: BoxShape.circle),
               child: CachedNetworkImage(
                 imageUrl: site.faviconUrl,
                 fit: BoxFit.contain,
-                fadeInDuration: const Duration(milliseconds: 120),
-                errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: text, size: 20),
+                fadeInDuration: const Duration(milliseconds: 100),
+                errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: text, size: 22),
                 placeholder: (context, url) => const SizedBox.shrink(),
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              site.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 10, color: text),
-            ),
+            Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: text)),
           ],
         ),
       ),
@@ -754,18 +691,10 @@ class QuickSiteTile extends StatelessWidget {
   }
 }
 
-void _openNewTab(BuildContext context, String url) {
+void openNewTab(BuildContext context, String url) {
   final tab = tabsController.createTab(url);
   Navigator.of(context).push(
-    PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return BrowserScreen(tabId: tab.id, initialUrl: url);
-      },
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-    ),
+    MaterialPageRoute(builder: (context) => BrowserScreen(tabId: tab.id, initialUrl: url)),
   );
 }
 
@@ -779,10 +708,7 @@ class GamesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 68,
-        title: const Text('Jogos'),
-      ),
+      appBar: AppBar(toolbarHeight: 68, title: const Text('Jogos')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
         children: [
@@ -827,9 +753,7 @@ class GameCard extends StatelessWidget {
       closedColor: panel,
       openColor: bg,
       middleColor: panel,
-      closedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       closedBuilder: (context, openContainer) {
         return Material(
           color: panel,
@@ -929,6 +853,13 @@ class GameWebViewScreen extends StatefulWidget {
 
 class _GameWebViewScreenState extends State<GameWebViewScreen> {
   bool _isLoading = true;
+  InAppWebViewController? _webController;
+
+  @override
+  void dispose() {
+    _webController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -938,10 +869,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: widget.onClose,
-        ),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: widget.onClose),
         title: Text(widget.game.title),
       ),
       body: Stack(
@@ -953,6 +881,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
               mediaPlaybackRequiresUserGesture: false,
               transparentBackground: true,
               cacheMode: CacheMode.LOAD_DEFAULT,
+              hardwareAcceleration: true,
             ),
             shouldInterceptRequest: (controller, request) async {
               if (isAdBlockedUrl(request.url.toString())) {
@@ -960,17 +889,14 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
               }
               return null;
             },
-            onLoadStart: (controller, url) {
-              setState(() => _isLoading = true);
-            },
+            onWebViewCreated: (controller) => _webController = controller,
+            onLoadStart: (controller, url) => setState(() => _isLoading = true),
             onLoadStop: (controller, url) async {
               final probe = await controller.evaluateJavascript(
                 source: "document.body ? document.body.innerText.substring(0, 15) : ''",
               );
               if (probe != null && probe.toString().trim().startsWith('<!')) {
-                final rawHtml = await controller.evaluateJavascript(
-                  source: "document.body.innerText",
-                );
+                final rawHtml = await controller.evaluateJavascript(source: "document.body.innerText");
                 if (rawHtml != null) {
                   await controller.loadData(
                     data: rawHtml.toString(),
@@ -985,12 +911,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
             },
           ),
           if (_isLoading)
-            Container(
-              color: bg,
-              child: const Center(
-                child: CircularProgressIndicator(color: looplyBlue),
-              ),
-            ),
+            Container(color: bg, child: const Center(child: CircularProgressIndicator(color: looplyPrimary))),
         ],
       ),
     );
@@ -1008,67 +929,45 @@ class LooplySearchBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final panel = isDark ? looplyPanelDark : looplyPanelLight;
-    final bg = isDark ? looplyBgDark : looplyBgLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
 
     return ValueListenableBuilder<SearchEngine>(
       valueListenable: activeSearchEngine,
       builder: (context, engine, _) {
-        return OpenContainer(
-          transitionType: ContainerTransitionType.fadeThrough,
-          transitionDuration: const Duration(milliseconds: 240),
-          closedElevation: 0,
-          openElevation: 0,
-          closedColor: panel,
-          openColor: bg,
-          middleColor: panel,
-          closedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+        return Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(28)),
+          child: Row(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _showEnginePicker(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: CachedNetworkImage(
+                    imageUrl: engine.faviconUrl,
+                    width: 26,
+                    height: 26,
+                    fit: BoxFit.contain,
+                    fadeInDuration: const Duration(milliseconds: 100),
+                    errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 26),
+                    placeholder: (context, url) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const SearchScreen()),
+                  ),
+                  child: Text('Pesquisar ou digitar o endereço', style: TextStyle(color: muted, fontSize: 14)),
+                ),
+              ),
+            ],
           ),
-          closedBuilder: (context, openContainer) {
-            return Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _showEnginePicker(context),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: CachedNetworkImage(
-                        imageUrl: engine.faviconUrl,
-                        width: 20,
-                        height: 20,
-                        fit: BoxFit.contain,
-                        fadeInDuration: const Duration(milliseconds: 120),
-                        errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 20),
-                        placeholder: (context, url) => const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: openContainer,
-                      child: Text(
-                        'Pesquisar ou digitar o endereço',
-                        style: TextStyle(color: muted, fontSize: 14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-          openBuilder: (context, closeContainer) {
-            return SearchScreen(onClose: closeContainer);
-          },
         );
       },
     );
@@ -1083,9 +982,7 @@ class LooplySearchBox extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (sheetContext) {
         return SafeArea(
           child: Padding(
@@ -1095,28 +992,28 @@ class LooplySearchBox extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-                  child: Row(
-                    children: [
-                      Text('Motor de pesquisa', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
-                    ],
-                  ),
+                  child: Row(children: [Text('Motor de pesquisa', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))]),
                 ),
                 ...searchEngines.map((engine) {
                   return ListTile(
-                    leading: CachedNetworkImage(
-                      imageUrl: engine.faviconUrl,
-                      width: 24,
-                      height: 24,
-                      fit: BoxFit.contain,
-                      errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 24),
-                      placeholder: (context, url) => const SizedBox.shrink(),
+                    leading: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? looplyPanel2Dark : looplyPanel2Light),
+                      padding: const EdgeInsets.all(6),
+                      child: CachedNetworkImage(
+                        imageUrl: engine.faviconUrl,
+                        fit: BoxFit.contain,
+                        errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 18),
+                        placeholder: (context, url) => const SizedBox.shrink(),
+                      ),
                     ),
                     title: Text(engine.name, style: TextStyle(color: text)),
                     trailing: ValueListenableBuilder<SearchEngine>(
                       valueListenable: activeSearchEngine,
                       builder: (context, active, _) {
                         return active.name == engine.name
-                            ? const Icon(Symbols.check_circle_rounded, color: looplyBlue, fill: 1)
+                            ? const Icon(Symbols.check_circle_rounded, color: looplyPrimary, fill: 1)
                             : const SizedBox.shrink();
                       },
                     ),
@@ -1136,9 +1033,7 @@ class LooplySearchBox extends StatelessWidget {
 }
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, required this.onClose});
-
-  final VoidCallback onClose;
+  const SearchScreen({super.key});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -1155,9 +1050,7 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _controller = TextEditingController();
     _focusNode = FocusNode();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
     _controller.addListener(_onQueryChanged);
   }
 
@@ -1177,27 +1070,19 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() => _suggestions = []);
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 200), () {
-      _fetchSuggestions(query);
-    });
+    _debounce = Timer(const Duration(milliseconds: 200), () => _fetchSuggestions(query));
   }
 
   Future<void> _fetchSuggestions(String query) async {
     try {
-      final uri = Uri.parse(
-        'https://suggestqueries.google.com/complete/search?client=firefox&q=${Uri.encodeQueryComponent(query)}',
-      );
+      final uri = Uri.parse('https://suggestqueries.google.com/complete/search?client=firefox&q=${Uri.encodeQueryComponent(query)}');
       final response = await http.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
-        final list = (decoded.length > 1 ? decoded[1] as List<dynamic> : <dynamic>[])
-            .map((item) => item.toString())
-            .toList();
+        final list = (decoded.length > 1 ? decoded[1] as List<dynamic> : <dynamic>[]).map((item) => item.toString()).toList();
         if (mounted) setState(() => _suggestions = list);
       }
-    } catch (_) {
-      // Falha silenciosa — sugestões são um extra, não algo crítico.
-    }
+    } catch (_) {}
   }
 
   void _submitSearch(String query) {
@@ -1208,28 +1093,12 @@ class _SearchScreenState extends State<SearchScreen> {
     NavAccelerator.instance.preconnect(url);
     final tab = tabsController.createTab(url);
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 240),
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return BrowserScreen(tabId: tab.id, initialUrl: url);
-        },
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-      ),
+      MaterialPageRoute(builder: (context) => BrowserScreen(tabId: tab.id, initialUrl: url)),
     );
   }
 
-  bool _looksLikeUrl(String text) {
-    final hasSpace = text.contains(' ');
-    final hasDot = text.contains('.');
-    return !hasSpace && hasDot;
-  }
-
-  String _normalizeUrl(String text) {
-    if (text.startsWith('http://') || text.startsWith('https://')) return text;
-    return 'https://$text';
-  }
+  bool _looksLikeUrl(String text) => !text.contains(' ') && text.contains('.');
+  String _normalizeUrl(String text) => (text.startsWith('http://') || text.startsWith('https://')) ? text : 'https://$text';
 
   @override
   Widget build(BuildContext context) {
@@ -1243,10 +1112,7 @@ class _SearchScreenState extends State<SearchScreen> {
       backgroundColor: bg,
       appBar: AppBar(
         toolbarHeight: 68,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: widget.onClose,
-        ),
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: () => Navigator.of(context).pop()),
         titleSpacing: 0,
         title: ValueListenableBuilder<SearchEngine>(
           valueListenable: activeSearchEngine,
@@ -1254,20 +1120,17 @@ class _SearchScreenState extends State<SearchScreen> {
             return Container(
               height: 48,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: panel,
-                borderRadius: BorderRadius.circular(28),
-              ),
+              decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(28)),
               child: Row(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.all(2),
                     child: CachedNetworkImage(
                       imageUrl: engine.faviconUrl,
-                      width: 20,
-                      height: 20,
+                      width: 26,
+                      height: 26,
                       fit: BoxFit.contain,
-                      errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 20),
+                      errorWidget: (context, url, error) => Icon(Symbols.public_rounded, color: muted, size: 26),
                       placeholder: (context, url) => const SizedBox.shrink(),
                     ),
                   ),
@@ -1289,10 +1152,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
                   if (_controller.text.isNotEmpty)
-                    GestureDetector(
-                      onTap: () => _controller.clear(),
-                      child: Icon(Symbols.close_rounded, color: muted, size: 18),
-                    ),
+                    GestureDetector(onTap: () => _controller.clear(), child: Icon(Symbols.close_rounded, color: muted, size: 18)),
                 ],
               ),
             );
@@ -1321,7 +1181,9 @@ class _SearchScreenState extends State<SearchScreen> {
 }
 
 // ============================================================
-// BROWSER SCREEN (navegação com ad-block + cache)
+// BROWSER SCREEN — UMA ÚNICA barra de endereço no topo
+// (favicon + título/URL + reload), e UMA barra inferior fixa com só
+// os 5 ícones de navegação (sem favicon/título nela).
 // ============================================================
 
 class BrowserScreen extends StatefulWidget {
@@ -1333,16 +1195,38 @@ class BrowserScreen extends StatefulWidget {
   State<BrowserScreen> createState() => _BrowserScreenState();
 }
 
-class _BrowserScreenState extends State<BrowserScreen> {
-  bool _isLoading = true;
+class _BrowserScreenState extends State<BrowserScreen> with TickerProviderStateMixin {
   InAppWebViewController? _controller;
+  PullToRefreshController? _pullToRefreshController;
+  bool _isLoading = true;
+  double _progress = 0;
   String _currentUrl = '';
   String _currentTitle = '';
+  bool _canGoBack = false;
+  bool _canGoForward = false;
+
+  late final AnimationController _addressBarAnim;
+  double _lastScrollY = 0;
 
   @override
   void initState() {
     super.initState();
     _currentUrl = widget.initialUrl;
+    _addressBarAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 200), value: 1);
+
+    _pullToRefreshController = PullToRefreshController(
+      settings: PullToRefreshSettings(color: looplyPrimary),
+      onRefresh: () async {
+        await _controller?.reload();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _addressBarAnim.dispose();
+    _controller?.dispose();
+    super.dispose();
   }
 
   void _updateTabState() {
@@ -1350,8 +1234,220 @@ class _BrowserScreenState extends State<BrowserScreen> {
       widget.tabId,
       url: _currentUrl,
       title: _currentTitle.isNotEmpty ? _currentTitle : _currentUrl,
+      canGoBack: _canGoBack,
+      canGoForward: _canGoForward,
     );
   }
+
+  void _onScrollChanged(int y) {
+    final dy = y - _lastScrollY;
+    if (dy > 6 && _addressBarAnim.value > 0) {
+      _addressBarAnim.animateTo(0, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    } else if (dy < -6 && _addressBarAnim.value < 1) {
+      _addressBarAnim.animateTo(1, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    }
+    _lastScrollY = y.toDouble();
+  }
+
+  Future<bool> _handleBackGesture() async {
+    if (_canGoBack) {
+      await _controller?.goBack();
+      return false;
+    }
+    _updateTabState();
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handleBackGesture();
+        if (shouldPop && mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        backgroundColor: bg,
+        body: AnnotatedRegion<SystemUiOverlayStyle>(
+          value: isDark
+              ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
+              : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
+          child: Column(
+            children: [
+              // ÚNICA barra de endereço: favicon + título/url + reload.
+              // Esconde ao deslizar para baixo na página, reaparece ao
+              // deslizar para cima — sem deixar nenhum espaço vazio.
+              SizeTransition(
+                sizeFactor: _addressBarAnim,
+                axisAlignment: -1,
+                child: FadeTransition(
+                  opacity: _addressBarAnim,
+                  child: _AddressBar(
+                    title: _currentTitle.isNotEmpty ? _currentTitle : _currentUrl,
+                    url: _currentUrl,
+                    isLoading: _isLoading,
+                    onReload: () => _controller?.reload(),
+                  ),
+                ),
+              ),
+              if (_isLoading)
+                SizedBox(
+                  height: 2,
+                  child: LinearProgressIndicator(value: _progress, color: looplyPrimary, backgroundColor: muted.withOpacity(0.15)),
+                ),
+              Expanded(
+                child: InAppWebView(
+                  initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+                  pullToRefreshController: _pullToRefreshController,
+                  initialSettings: InAppWebViewSettings(
+                    javaScriptEnabled: true,
+                    mediaPlaybackRequiresUserGesture: false,
+                    transparentBackground: true,
+                    cacheMode: CacheMode.LOAD_CACHE_ELSE_NETWORK,
+                    hardwareAcceleration: true,
+                  ),
+                  shouldOverrideUrlLoading: (controller, action) async {
+                    final uri = action.request.url;
+                    if (uri == null) return NavigationActionPolicy.ALLOW;
+                    final scheme = uri.scheme.toLowerCase();
+                    if (scheme == 'http' || scheme == 'https' || scheme == 'about' || scheme == 'data') {
+                      return NavigationActionPolicy.ALLOW;
+                    }
+                    return NavigationActionPolicy.CANCEL;
+                  },
+                  shouldInterceptRequest: (controller, request) async {
+                    if (isAdBlockedUrl(request.url.toString())) {
+                      return WebResourceResponse(contentType: '', data: Uint8List(0));
+                    }
+                    return null;
+                  },
+                  onWebViewCreated: (controller) => _controller = controller,
+                  onProgressChanged: (controller, progress) => setState(() => _progress = progress / 100),
+                  onLoadStart: (controller, url) {
+                    setState(() {
+                      _isLoading = true;
+                      if (url != null) _currentUrl = url.toString();
+                    });
+                  },
+                  onTitleChanged: (controller, title) {
+                    _currentTitle = title ?? '';
+                    _updateTabState();
+                    if (mounted) setState(() {});
+                  },
+                  onLoadStop: (controller, url) async {
+                    _pullToRefreshController?.endRefreshing();
+                    final back = await controller.canGoBack();
+                    final forward = await controller.canGoForward();
+                    setState(() {
+                      _isLoading = false;
+                      _canGoBack = back;
+                      _canGoForward = forward;
+                      if (url != null) _currentUrl = url.toString();
+                    });
+                    _updateTabState();
+                    final html = await controller.getHtml();
+                    if (html != null) NavAccelerator.instance.cachePage(_currentUrl, html);
+                  },
+                  onReceivedError: (controller, request, error) {
+                    _pullToRefreshController?.endRefreshing();
+                    if (mounted) setState(() => _isLoading = false);
+                  },
+                  onScrollChanged: (controller, x, y) => _onScrollChanged(y),
+                ),
+              ),
+              // ÚNICA barra inferior: FIXA, só os 5 ícones de navegação,
+              // sem favicon/título — igual à referência.
+              _BrowserBottomBar(
+                canGoBack: _canGoBack,
+                canGoForward: _canGoForward,
+                onBack: () => _controller?.goBack(),
+                onForward: () => _controller?.goForward(),
+                onMenu: () => _showPageMenu(context),
+                onTabs: () {
+                  _updateTabState();
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                onHome: () {
+                  _updateTabState();
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPageMenu(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: panel,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(Symbols.refresh_rounded, color: text),
+                  title: Text('Atualizar página', style: TextStyle(color: text)),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    _controller?.reload();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Symbols.tab_rounded, color: text),
+                  title: Text('Nova aba', style: TextStyle(color: text)),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    openNewTab(context, 'https://www.google.com');
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Symbols.close_rounded, color: text),
+                  title: Text('Fechar aba', style: TextStyle(color: text)),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    tabsController.closeTab(widget.tabId);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Barra de endereço única: favicon + título + botão reload (lado
+/// direito do título, estilo "pill" igual à Imagem 1).
+class _AddressBar extends StatelessWidget {
+  const _AddressBar({
+    required this.title,
+    required this.url,
+    required this.isLoading,
+    required this.onReload,
+  });
+
+  final String title;
+  final String url;
+  final bool isLoading;
+  final VoidCallback onReload;
 
   @override
   Widget build(BuildContext context) {
@@ -1360,102 +1456,123 @@ class _BrowserScreenState extends State<BrowserScreen> {
     final panel = isDark ? looplyPanelDark : looplyPanelLight;
     final text = isDark ? looplyTextDark : looplyTextLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
+    final host = Uri.tryParse(url)?.host ?? '';
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        toolbarHeight: 68,
-        leading: IconButton(
-          icon: const Icon(Symbols.arrow_back_rounded),
-          onPressed: () {
-            _updateTabState();
-            Navigator.of(context).pop();
-          },
-        ),
-        titleSpacing: 0,
-        title: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: panel,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _currentUrl,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: text, fontSize: 12),
-          ),
-        ),
-      ),
-      body: Stack(
-        children: [
-          InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              mediaPlaybackRequiresUserGesture: false,
-              transparentBackground: true,
-              // Cache agressivo: usa cache local quando disponível, só vai
-              // à rede se não existir — acelera a 2ª visita à mesma página.
-              cacheMode: CacheMode.LOAD_CACHE_ELSE_NETWORK,
+    return Container(
+      padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 8, 12, 8),
+      color: bg,
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(24)),
+        child: Row(
+          children: [
+            CachedNetworkImage(
+              imageUrl: 'https://www.google.com/s2/favicons?domain=$host&sz=64',
+              width: 20,
+              height: 20,
+              fit: BoxFit.contain,
+              errorWidget: (context, u, e) => Icon(Symbols.public_rounded, color: muted, size: 20),
+              placeholder: (context, u) => const SizedBox.shrink(),
             ),
-            // Ad-block real via interceptação de requisições: qualquer
-            // domínio na lista curada é bloqueado antes mesmo de carregar.
-            shouldInterceptRequest: (controller, request) async {
-              if (isAdBlockedUrl(request.url.toString())) {
-                return WebResourceResponse(contentType: '', data: Uint8List(0));
-              }
-              return null;
-            },
-            onWebViewCreated: (controller) {
-              _controller = controller;
-            },
-            onLoadStart: (controller, url) {
-              setState(() {
-                _isLoading = true;
-                if (url != null) _currentUrl = url.toString();
-              });
-            },
-            onTitleChanged: (controller, title) {
-              _currentTitle = title ?? '';
-              _updateTabState();
-            },
-            onLoadStop: (controller, url) async {
-              setState(() {
-                _isLoading = false;
-                if (url != null) _currentUrl = url.toString();
-              });
-              _updateTabState();
-              // Guarda uma cópia leve do HTML no cache em memória próprio,
-              // útil para reabrir rapidamente a partir da grade de abas.
-              final html = await controller.getHtml();
-              if (html != null) {
-                NavAccelerator.instance.cachePage(_currentUrl, html);
-              }
-            },
-          ),
-          if (_isLoading)
-            SizedBox(
-              height: 2,
-              child: LinearProgressIndicator(
-                color: looplyBlue,
-                backgroundColor: muted.withOpacity(0.2),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title.isEmpty ? host : title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
-        ],
+            GestureDetector(
+              onTap: onReload,
+              child: isLoading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: looplyPrimary))
+                  : Icon(Symbols.refresh_rounded, color: muted, size: 20),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+/// Barra inferior única e fixa: voltar / avançar / menu / abas / home.
+class _BrowserBottomBar extends StatelessWidget {
+  const _BrowserBottomBar({
+    required this.canGoBack,
+    required this.canGoForward,
+    required this.onBack,
+    required this.onForward,
+    required this.onMenu,
+    required this.onTabs,
+    required this.onHome,
+  });
+
+  final bool canGoBack;
+  final bool canGoForward;
+  final VoidCallback onBack;
+  final VoidCallback onForward;
+  final VoidCallback onMenu;
+  final VoidCallback onTabs;
+  final VoidCallback onHome;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? looplyBgDark : looplyBgLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+    final borderColor = isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE4E8EE);
+
+    return AnimatedBuilder(
+      animation: tabsController,
+      builder: (context, _) {
+        return Container(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+          decoration: BoxDecoration(color: bg, border: Border(top: BorderSide(color: borderColor, width: 1))),
+          child: SizedBox(
+            height: 52,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: Icon(Symbols.arrow_back_rounded, color: canGoBack ? text : muted.withOpacity(0.4)),
+                  onPressed: canGoBack ? onBack : null,
+                ),
+                IconButton(
+                  icon: Icon(Symbols.arrow_forward_rounded, color: canGoForward ? text : muted.withOpacity(0.4)),
+                  onPressed: canGoForward ? onForward : null,
+                ),
+                IconButton(icon: Icon(Symbols.menu_rounded, color: text), onPressed: onMenu),
+                IconButton(
+                  icon: Container(
+                    width: 22,
+                    height: 22,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(border: Border.all(color: text, width: 1.5), borderRadius: BorderRadius.circular(5)),
+                    child: Text('${tabsController.count}', style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)),
+                  ),
+                  onPressed: onTabs,
+                ),
+                IconButton(icon: Icon(Symbols.home_rounded, color: text), onPressed: onHome),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 // ============================================================
-// TELA DE ABAS — grade de cards, Container Transform de volta ao browser
+// TELA DE ABAS — grade com os sites abertos no browser; cada card
+// usa Container Transform de volta ao BrowserScreen daquela aba.
 // ============================================================
 
 class TabsScreen extends StatefulWidget {
-  const TabsScreen({super.key});
+  const TabsScreen({super.key, required this.onClose});
+  final VoidCallback onClose;
 
   @override
   State<TabsScreen> createState() => _TabsScreenState();
@@ -1485,17 +1602,14 @@ class _TabsScreenState extends State<TabsScreen> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 68,
+        leading: IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: widget.onClose),
         title: Text('Abas (${tabs.length})'),
         actions: [
-          if (tabs.isNotEmpty)
-            IconButton(
-              icon: const Icon(Symbols.add_rounded),
-              onPressed: () => _openNewTab(context, 'https://www.google.com'),
-            ),
+          IconButton(icon: const Icon(Symbols.add_rounded), onPressed: () => openNewTab(context, 'https://www.google.com')),
         ],
       ),
       body: tabs.isEmpty
-          ? _EmptyTabsState(onNewTab: () => _openNewTab(context, 'https://www.google.com'))
+          ? _EmptyTabsState(onNewTab: () => openNewTab(context, 'https://www.google.com'))
           : GridView.builder(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               itemCount: tabs.length,
@@ -1532,20 +1646,13 @@ class _EmptyTabsState extends StatelessWidget {
           const SizedBox(height: 12),
           Text('Nenhuma aba aberta', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: onNewTab,
-            icon: const Icon(Symbols.add_rounded),
-            label: const Text('Nova aba'),
-          ),
+          FilledButton.icon(onPressed: onNewTab, icon: const Icon(Symbols.add_rounded), label: const Text('Nova aba')),
         ],
       ),
     );
   }
 }
 
-/// Card de uma aba: ao tocar, EXPANDE em Container Transform até virar a
-/// tela cheia do browser (continuando a mesma sessão de navegação daquela
-/// aba, não uma nova). Ao voltar, ENCOLHE de volta para este card.
 class TabCard extends StatelessWidget {
   const TabCard({super.key, required this.tab});
   final BrowserTab tab;
@@ -1566,9 +1673,7 @@ class TabCard extends StatelessWidget {
       closedColor: panel,
       openColor: bg,
       middleColor: panel,
-      closedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       closedBuilder: (context, openContainer) {
         return Material(
           color: panel,
@@ -1593,17 +1698,9 @@ class TabCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          tab.title ?? tab.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: text, fontWeight: FontWeight.w600),
-                        ),
+                        child: Text(tab.title ?? tab.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: text, fontWeight: FontWeight.w600)),
                       ),
-                      GestureDetector(
-                        onTap: () => tabsController.closeTab(tab.id),
-                        child: Icon(Symbols.close_rounded, size: 15, color: muted),
-                      ),
+                      GestureDetector(onTap: () => tabsController.closeTab(tab.id), child: Icon(Symbols.close_rounded, size: 15, color: muted)),
                     ],
                   ),
                 ),
@@ -1611,13 +1708,8 @@ class TabCard extends StatelessWidget {
                   child: Container(
                     width: double.infinity,
                     margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Icon(Symbols.public_rounded, size: 32, color: muted.withOpacity(0.4)),
-                    ),
+                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                    child: Center(child: Icon(Symbols.public_rounded, size: 32, color: muted.withOpacity(0.4))),
                   ),
                 ),
               ],
@@ -1639,125 +1731,11 @@ class TabCard extends StatelessWidget {
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  void _openMenu(BuildContext context, Offset position) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panel = isDark ? looplyPanelDark : looplyPanelLight;
-    final text = isDark ? looplyTextDark : looplyTextLight;
-
-    showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, 0),
-      color: panel,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      items: [
-        PopupMenuItem(
-          value: 'settings',
-          child: Row(
-            children: [
-              Icon(Symbols.settings_rounded, color: text, size: 19),
-              const SizedBox(width: 10),
-              Text('Settings', style: TextStyle(color: text)),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'theme',
-          child: Row(
-            children: [
-              Icon(Symbols.dark_mode_rounded, color: text, size: 19),
-              const SizedBox(width: 10),
-              Text('Theme', style: TextStyle(color: text)),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'idiom',
-          child: Row(
-            children: [
-              Icon(Symbols.language_rounded, color: text, size: 19),
-              const SizedBox(width: 10),
-              Text('Idioma', style: TextStyle(color: text)),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (value == 'theme') {
-        _showThemeSheet(context);
-      }
-    });
-  }
-
-  void _showThemeSheet(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panel = isDark ? looplyPanelDark : looplyPanelLight;
-    final text = isDark ? looplyTextDark : looplyTextLight;
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return ValueListenableBuilder<ThemeMode>(
-          valueListenable: themeController,
-          builder: (context, mode, _) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-                      child: Row(
-                        children: [
-                          Text('Tema', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
-                        ],
-                      ),
-                    ),
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.light,
-                      groupValue: mode,
-                      activeColor: looplyBlue,
-                      title: Text('Claro', style: TextStyle(color: text)),
-                      onChanged: (value) {
-                        if (value != null) themeController.setMode(value);
-                      },
-                    ),
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.dark,
-                      groupValue: mode,
-                      activeColor: looplyBlue,
-                      title: Text('Escuro', style: TextStyle(color: text)),
-                      onChanged: (value) {
-                        if (value != null) themeController.setMode(value);
-                      },
-                    ),
-                    RadioListTile<ThemeMode>(
-                      value: ThemeMode.system,
-                      groupValue: mode,
-                      activeColor: looplyBlue,
-                      title: Text('Automático (sistema)', style: TextStyle(color: text)),
-                      onChanged: (value) {
-                        if (value != null) themeController.setMode(value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? looplyBgDark : looplyBgLight;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
     final panel2 = isDark ? looplyPanel2Dark : looplyPanel2Light;
     final text = isDark ? looplyTextDark : looplyTextLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
@@ -1768,19 +1746,15 @@ class ProfileScreen extends StatelessWidget {
       extendBodyBehindAppBar: true,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
-            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent)
-            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent),
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Container(
-                    height: 130,
-                    width: double.infinity,
-                    color: coverColor,
-                  ),
+                  Container(height: 130, width: double.infinity, color: coverColor),
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 6,
                     right: 12,
@@ -1789,10 +1763,7 @@ class ProfileScreen extends StatelessWidget {
                         return Container(
                           width: 38,
                           height: 38,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
-                          ),
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: (isDark ? Colors.white : Colors.black).withOpacity(0.08)),
                           child: IconButton(
                             padding: EdgeInsets.zero,
                             icon: Icon(Symbols.more_vert_rounded, color: text, size: 20),
@@ -1812,11 +1783,7 @@ class ProfileScreen extends StatelessWidget {
                     child: Container(
                       width: 94,
                       height: 94,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: bg, width: 4),
-                        color: panel2,
-                      ),
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: bg, width: 4), color: panel2),
                       child: Icon(Symbols.person_rounded, color: muted, size: 42),
                     ),
                   ),
@@ -1825,7 +1792,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1836,7 +1803,150 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              sliver: SliverList.list(
+                children: [
+                  Text('Geral', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted)),
+                  const SizedBox(height: 10),
+                  _ProfileActionTile(icon: Symbols.settings_rounded, label: 'Settings', onTap: () {}),
+                  const SizedBox(height: 10),
+                  _ProfileActionTile(icon: Symbols.dark_mode_rounded, label: 'Theme', onTap: () => _showThemeSheet(context)),
+                  const SizedBox(height: 10),
+                  _ProfileActionTile(icon: Symbols.language_rounded, label: 'Idioma', onTap: () {}),
+                  const SizedBox(height: 10),
+                  _ProfileActionTile(icon: Symbols.shield_rounded, label: 'Bloqueador de anúncios', trailing: 'Ativo', onTap: () {}),
+                  const SizedBox(height: 10),
+                  _ProfileActionTile(icon: Symbols.speed_rounded, label: 'Acelerador de navegação', trailing: 'Ativo', onTap: () {}),
+                ],
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _openMenu(BuildContext context, Offset position) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, 0),
+      color: panel,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: [
+        PopupMenuItem(value: 'settings', child: Row(children: [Icon(Symbols.settings_rounded, color: text, size: 19), const SizedBox(width: 10), Text('Settings', style: TextStyle(color: text))])),
+        PopupMenuItem(value: 'theme', child: Row(children: [Icon(Symbols.dark_mode_rounded, color: text, size: 19), const SizedBox(width: 10), Text('Theme', style: TextStyle(color: text))])),
+        PopupMenuItem(value: 'idiom', child: Row(children: [Icon(Symbols.language_rounded, color: text, size: 19), const SizedBox(width: 10), Text('Idioma', style: TextStyle(color: text))])),
+      ],
+    ).then((value) {
+      if (value == 'theme') _showThemeSheet(context);
+    });
+  }
+
+  void _showThemeSheet(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: panel,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return ValueListenableBuilder<ThemeMode>(
+          valueListenable: themeController,
+          builder: (context, mode, _) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+                      child: Row(children: [Text('Tema', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))]),
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.light,
+                      groupValue: mode,
+                      activeColor: looplyPrimary,
+                      title: Text('Claro', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.dark,
+                      groupValue: mode,
+                      activeColor: looplyPrimary,
+                      title: Text('Escuro', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.system,
+                      groupValue: mode,
+                      activeColor: looplyPrimary,
+                      title: Text('Automático (sistema)', style: TextStyle(color: text)),
+                      onChanged: (value) {
+                        if (value != null) themeController.setMode(value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ProfileActionTile extends StatelessWidget {
+  const _ProfileActionTile({required this.icon, required this.label, required this.onTap, this.trailing});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
+    final panel2 = isDark ? looplyPanel2Dark : looplyPanel2Light;
+    final text = isDark ? looplyTextDark : looplyTextLight;
+    final muted = isDark ? looplyMutedDark : looplyMutedLight;
+
+    return Material(
+      color: panel,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: panel2),
+                child: Icon(icon, color: looplyPrimary, size: 19),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600))),
+              if (trailing != null) Text(trailing!, style: TextStyle(color: muted, fontSize: 12)),
+              const SizedBox(width: 6),
+              Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+            ],
+          ),
         ),
       ),
     );
