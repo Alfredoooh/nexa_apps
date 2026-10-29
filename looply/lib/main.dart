@@ -45,6 +45,24 @@ Color mutedText(BuildContext context) => Theme.of(context).brightness == Brightn
 Color accentColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyBlueDark : looplyPrimary;
 Color lineColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyLineDark : looplyLineLight;
 
+
+Brightness _brightnessForMode(BuildContext context, ThemeMode mode) {
+  if (mode == ThemeMode.dark) return Brightness.dark;
+  if (mode == ThemeMode.light) return Brightness.light;
+  return MediaQuery.platformBrightnessOf(context);
+}
+
+Color _panelForMode(BuildContext context, ThemeMode mode) =>
+    _brightnessForMode(context, mode) == Brightness.dark ? looplyPanelDark : looplyPanelLight;
+Color _textForMode(BuildContext context, ThemeMode mode) =>
+    _brightnessForMode(context, mode) == Brightness.dark ? looplyTextDark : looplyTextLight;
+Color _mutedForMode(BuildContext context, ThemeMode mode) =>
+    _brightnessForMode(context, mode) == Brightness.dark ? looplyMutedDark : looplyMutedLight;
+Color _accentForMode(BuildContext context, ThemeMode mode) =>
+    _brightnessForMode(context, mode) == Brightness.dark ? looplyBlueDark : looplyPrimary;
+Color _pillForMode(BuildContext context, ThemeMode mode) =>
+    _brightnessForMode(context, mode) == Brightness.dark ? looplyPanel2Dark : looplyPanel2Light;
+
 class ThemeController extends ValueNotifier<ThemeMode> {
   ThemeController() : super(ThemeMode.system);
   void setMode(ThemeMode mode) => value = mode;
@@ -409,6 +427,7 @@ class LooplyApp extends StatelessWidget {
         title: 'Looply',
         debugShowCheckedModeBanner: false,
         themeMode: mode,
+        themeAnimationDuration: Duration.zero,
         theme: _buildTheme(Brightness.light),
         darkTheme: _buildTheme(Brightness.dark),
         home: const LooplyShell(),
@@ -1005,18 +1024,13 @@ class HomeScreen extends StatelessWidget {
 }
 
 void _showLooplyDrawer(BuildContext context) {
-  final bg = pageBg(context);
-  final text = mainText(context);
-  final muted = mutedText(context);
-  final accent = accentColor(context);
-
   showGeneralDialog<void>(
     context: context,
     useRootNavigator: true,
     barrierDismissible: true,
     barrierLabel: 'Fechar menu',
     barrierColor: Colors.black.withOpacity(.48),
-    transitionDuration: const Duration(milliseconds: 270),
+    transitionDuration: const Duration(milliseconds: 250),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return Material(
         color: Colors.transparent,
@@ -1035,44 +1049,54 @@ void _showLooplyDrawer(BuildContext context) {
                 widthFactor: .82,
                 heightFactor: 1,
                 child: Material(
-                  color: bg,
+                  color: pageBg(context),
                   elevation: 18,
                   shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                   child: SafeArea(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 76,
+                                  height: 76,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+                                  child: Icon(Symbols.person_rounded, size: 42, color: mutedText(context)),
+                                ),
+                                const SizedBox(height: 12),
+                                Text('Utilizador', style: TextStyle(color: mainText(context), fontSize: 16, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
+                        ),
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 24, 16, 20),
-                          child: Row(children: [
-                            Container(width: 44, height: 44, decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(14)), child: Icon(Symbols.public_rounded, color: accent, size: 25)),
-                            const SizedBox(width: 13),
-                            Expanded(child: Text('Looply', style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w800))),
-                            IconButton(tooltip: 'Fechar menu', icon: Icon(Symbols.close_rounded, color: muted), onPressed: () => Navigator.of(dialogContext).pop()),
-                          ]),
+                          padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Navigator.of(dialogContext).pop();
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (context.mounted) {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                                  }
+                                });
+                              },
+                              icon: const Icon(Symbols.settings_rounded),
+                              label: const Text('Configurações'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: accentColor(context),
+                                foregroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF111318) : Colors.white,
+                                shape: const StadiumBorder(),
+                              ),
+                            ),
+                          ),
                         ),
-                        Divider(height: 1, color: lineColor(context)),
-                        const SizedBox(height: 10),
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
-                          leading: Container(width: 44, height: 44, decoration: BoxDecoration(shape: BoxShape.circle, color: accent.withOpacity(.15)), child: Icon(Symbols.person_rounded, color: accent, size: 24)),
-                          title: Text('Utilizador', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
-                          subtitle: Text('Configurações e preferências', style: TextStyle(color: muted, fontSize: 12)),
-                          trailing: Icon(Symbols.chevron_right_rounded, color: muted),
-                          onTap: () {
-                            Navigator.of(dialogContext).pop();
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (context.mounted) Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 8),
-                        Divider(height: 1, color: lineColor(context)),
-                        ListTile(leading: Icon(Symbols.home_rounded, color: muted), title: Text('Início', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(0); }),
-                        ListTile(leading: Icon(Symbols.sports_esports_rounded, color: muted), title: Text('Jogos', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(1); }),
-                        ListTile(leading: Icon(Symbols.history_rounded, color: muted), title: Text('Atividade', style: TextStyle(color: text)), onTap: () { Navigator.of(dialogContext).pop(); ShellTabRequest.instance.request(2); }),
-                        const Spacer(),
-                        Padding(padding: const EdgeInsets.fromLTRB(20, 8, 20, 18), child: Text('Looply Browser', style: TextStyle(color: muted, fontSize: 12))),
                       ],
                     ),
                   ),
@@ -1084,7 +1108,8 @@ void _showLooplyDrawer(BuildContext context) {
       );
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final slide = Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      final slide = Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero)
+          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
       return SlideTransition(position: slide, child: child);
     },
   );
@@ -1462,7 +1487,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true, domStorageEnabled: true, databaseEnabled: true,
                 mediaPlaybackRequiresUserGesture: false, transparentBackground: true, underPageBackgroundColor: bg,
-                cacheMode: CacheMode.LOAD_DEFAULT, hardwareAcceleration: true,
+                cacheMode: CacheMode.LOAD_DEFAULT, hardwareAcceleration: true, useHybridComposition: true,
                 useOnRenderProcessGone: true, safeBrowsingEnabled: true, useShouldInterceptRequest: true,
                 mixedContentMode: MixedContentMode.MIXED_CONTENT_NEVER_ALLOW,
               ),
@@ -1798,6 +1823,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
               underPageBackgroundColor: bg,
               cacheMode: CacheMode.LOAD_DEFAULT,
               hardwareAcceleration: true,
+              useHybridComposition: true,
               useOnRenderProcessGone: true,
               safeBrowsingEnabled: true,
               useShouldInterceptRequest: true,
@@ -2129,23 +2155,37 @@ class SettingsScreen extends StatelessWidget {
   void _showThemeSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: panelColor(context),
-      showDragHandle: true,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      showDragHandle: false,
       isScrollControlled: true,
       useSafeArea: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
         valueListenable: themeController,
         builder: (context, mode, _) {
-          final text = mainText(context);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
-              RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: mode, activeColor: accentColor(context), title: Text('Claro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-              RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: mode, activeColor: accentColor(context), title: Text('Escuro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-              RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: mode, activeColor: accentColor(context), title: Text('Automático (sistema)', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-            ]),
+          final surface = _panelForMode(context, mode);
+          final text = _textForMode(context, mode);
+          final accent = _accentForMode(context, mode);
+          return Material(
+            color: surface,
+            surfaceTintColor: Colors.transparent,
+            clipBehavior: Clip.antiAlias,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const SizedBox(height: 12),
+                  Container(width: 32, height: 4, decoration: BoxDecoration(color: _mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+                  Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+                  RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: mode, activeColor: accent, title: Text('Claro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+                  RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: mode, activeColor: accent, title: Text('Escuro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+                  RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: mode, activeColor: accent, title: Text('Automático', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
+                ]),
+              ),
+            ),
           );
         },
       ),
@@ -2154,27 +2194,58 @@ class SettingsScreen extends StatelessWidget {
 
   void _showEnginePicker(BuildContext context) {
     showModalBottomSheet<void>(
-      context: context, backgroundColor: panelColor(context), showDragHandle: true, useSafeArea: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (sheetContext) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 4, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800)))),
-        ...searchEngines.map((engine) => ListTile(
-          leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedText(context), size: 18), placeholder: (_, __) => const SizedBox.shrink())),
-          title: Text(engine.name, style: TextStyle(color: mainText(context))),
-          trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentColor(context), fill: 1) : const SizedBox.shrink()),
-          onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },
-        )),
-      ])),
+      context: context,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      showDragHandle: false,
+      useSafeArea: true,
+      builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeController,
+        builder: (context, mode, _) => Material(
+          color: _panelForMode(context, mode),
+          surfaceTintColor: Colors.transparent,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(height: 12),
+            Container(width: 32, height: 4, decoration: BoxDecoration(color: _mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+            Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: _textForMode(context, mode), fontSize: 17, fontWeight: FontWeight.w800)))),
+            ...searchEngines.map((engine) => ListTile(
+              leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: _pillForMode(context, mode)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: _mutedForMode(context, mode), size: 18), placeholder: (_, __) => const SizedBox.shrink())),
+              title: Text(engine.name, style: TextStyle(color: _textForMode(context, mode))),
+              trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: _accentForMode(context, mode), fill: 1) : const SizedBox.shrink()),
+              onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },
+            )),
+          ])),
+        ),
+      ),
     );
   }
 
   void _showLanguageInfo(BuildContext context) {
     showModalBottomSheet<void>(
-      context: context, backgroundColor: panelColor(context), showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-      builder: (sheetContext) => Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 24), child: Text('O idioma disponível nesta versão é Português.', style: TextStyle(color: mainText(context), fontSize: 14))),
+      context: context,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      showDragHandle: false,
+      builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeController,
+        builder: (context, mode, _) => Material(
+          color: _panelForMode(context, mode),
+          surfaceTintColor: Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Text('O idioma disponível nesta versão é Português.', style: TextStyle(color: _textForMode(context, mode), fontSize: 14)),
+          ),
+        ),
+      ),
     );
   }
+
 }
 
 class _SettingsTile extends StatelessWidget {
@@ -2254,8 +2325,8 @@ class M3ExpressiveSwitch extends StatelessWidget {
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 350),
                   curve: const Cubic(0.34, 1.4, 0.4, 1),
-                  left: value ? 22 : 2,
-                  top: value ? 2 : 6,
+                  left: value ? 24 : 4,
+                  top: value ? 4 : 8,
                   width: value ? 24 : 16,
                   height: value ? 24 : 16,
                   child: AnimatedContainer(
