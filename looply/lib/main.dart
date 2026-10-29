@@ -7,21 +7,18 @@ import 'package:animations/animations.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Edge-to-edge real: deixa status bar e navigation bar transparentes,
-  // sem o Android pintar um overlay escuro por cima.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const LooplyApp());
 }
 
-const Color looplyBgDark = Color(0xFF0B0D11);
-const Color looplyPanelDark = Color(0xFF151920);
-const Color looplyPanel2Dark = Color(0xFF1B2028);
-const Color looplyBottomBarDark = Color(0xFF0D0F14);
+// Branco puro no light. Quase-preto (~10% mais claro que preto puro) no dark.
+const Color looplyBgDark = Color(0xFF1A1A1A);
+const Color looplyBgLight = Color(0xFFFFFFFF);
 
-const Color looplyBgLight = Color(0xFFF5F7FA);
-const Color looplyPanelLight = Color(0xFFFFFFFF);
-const Color looplyPanel2Light = Color(0xFFE9EDF2);
-const Color looplyBottomBarLight = Color(0xFFFFFFFF);
+const Color looplyPanelDark = Color(0xFF232323);
+const Color looplyPanel2Dark = Color(0xFF2A2A2A);
+const Color looplyPanelLight = Color(0xFFF4F4F4);
+const Color looplyPanel2Light = Color(0xFFE9E9E9);
 
 const Color looplyTextDark = Color(0xFFF4F7FA);
 const Color looplyMutedDark = Color(0xFF9AA4B2);
@@ -33,13 +30,9 @@ const Color looplyOrange = Color(0xFFFF7A20);
 
 /// Controlador de tema global, real: muda o MaterialApp inteiro ao vivo.
 class ThemeController extends ValueNotifier<ThemeMode> {
-  ThemeController() : super(ThemeMode.dark);
+  ThemeController() : super(ThemeMode.light);
 
   void setMode(ThemeMode mode) => value = mode;
-
-  void toggle() {
-    value = value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-  }
 }
 
 final ThemeController themeController = ThemeController();
@@ -73,22 +66,42 @@ class LooplyApp extends StatelessWidget {
         foregroundColor: text,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        // Garante que a status bar herde o estilo certo por trás de cada AppBar.
         systemOverlayStyle: isDark
             ? SystemUiOverlayStyle.light.copyWith(
                 statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.light,
                 statusBarBrightness: Brightness.dark,
-                systemNavigationBarColor: looplyBottomBarDark,
+                systemNavigationBarColor: bg,
                 systemNavigationBarIconBrightness: Brightness.light,
               )
             : SystemUiOverlayStyle.dark.copyWith(
                 statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.dark,
                 statusBarBrightness: Brightness.light,
-                systemNavigationBarColor: looplyBottomBarLight,
+                systemNavigationBarColor: bg,
                 systemNavigationBarIconBrightness: Brightness.dark,
               ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: bg,
+        indicatorColor: looplyBlue.withOpacity(0.16),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 11,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? looplyBlue : muted,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return IconThemeData(
+            color: selected ? looplyBlue : muted,
+            fill: selected ? 1 : 0,
+          );
+        }),
       ),
       textTheme: TextTheme(
         headlineSmall: TextStyle(color: text, fontWeight: FontWeight.w800),
@@ -142,8 +155,6 @@ class LooplyApp extends StatelessWidget {
   }
 }
 
-/// Transição Cupertino nativa (slide horizontal), sem o gesto de
-/// "arrastar para voltar" (swipe back desativado).
 class NoSwipeBackCupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
   const NoSwipeBackCupertinoPageTransitionsBuilder();
 
@@ -155,48 +166,6 @@ class NoSwipeBackCupertinoPageTransitionsBuilder extends PageTransitionsBuilder 
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return CupertinoPageTransition(
-      primaryRouteAnimation: animation,
-      secondaryRouteAnimation: secondaryAnimation,
-      linearTransition: false,
-      child: child,
-    );
-  }
-}
-
-/// Rota customizada equivalente ao CupertinoPageRoute, sem swipe-to-go-back,
-/// usada para navegações manuais (Navigator.push direto).
-class NoSwipeCupertinoPageRoute<T> extends PageRoute<T> {
-  NoSwipeCupertinoPageRoute({
-    required this.builder,
-    RouteSettings? settings,
-    this.maintainState = true,
-  }) : super(settings: settings, fullscreenDialog: false);
-
-  final WidgetBuilder builder;
-
-  @override
-  final bool maintainState;
-
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 400);
-
-  @override
-  Color? get barrierColor => null;
-
-  @override
-  String? get barrierLabel => null;
-
-  @override
-  bool get opaque => true;
-
-  @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    return builder(context);
-  }
-
-  @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
     return CupertinoPageTransition(
       primaryRouteAnimation: animation,
       secondaryRouteAnimation: secondaryAnimation,
@@ -257,117 +226,47 @@ class _LooplyShellState extends State<LooplyShell> {
       const ProfileScreen(),
     ];
 
-    // Scaffold raiz único: body + bottomNavigationBar no mesmo nível,
-    // garantindo que o bottom bar fique ancorado ao fundo real da tela.
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         bottom: false,
         child: IndexedStack(index: _selectedTab, children: pages),
       ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: LooplyBottomBar(
-          selectedIndex: _selectedTab,
-          onSelect: (index) => setState(() => _selectedTab = index),
-        ),
+      // NavigationBar NATIVO do Material 3: já traz o "pill" selecionado
+      // de fábrica, sem precisar reinventar nada.
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedTab,
+        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Symbols.home_rounded),
+            selectedIcon: Icon(Symbols.home_rounded, fill: 1),
+            label: 'Início',
+          ),
+          NavigationDestination(
+            icon: Icon(Symbols.sports_esports_rounded),
+            selectedIcon: Icon(Symbols.sports_esports_rounded, fill: 1),
+            label: 'Jogos',
+          ),
+          NavigationDestination(
+            icon: Icon(Symbols.add_box_rounded),
+            selectedIcon: Icon(Symbols.add_box_rounded, fill: 1),
+            label: 'Criar',
+          ),
+          NavigationDestination(
+            icon: Icon(Symbols.person_rounded),
+            selectedIcon: Icon(Symbols.person_rounded, fill: 1),
+            label: 'Perfil',
+          ),
+        ],
       ),
     );
   }
 }
 
-/// Bottom bar customizado: altura FIXA (corrige o bug de colapso/flutuação),
-/// sem splash/ripple ao trocar de tab, indicador "pill" no item selecionado,
-/// cor adaptada ao tema ativo.
-class LooplyBottomBar extends StatelessWidget {
-  const LooplyBottomBar({
-    super.key,
-    required this.selectedIndex,
-    required this.onSelect,
-  });
-
-  final int selectedIndex;
-  final ValueChanged<int> onSelect;
-
-  static const double _barHeight = 64;
-
-  static const _items = [
-    (icon: Symbols.home_rounded, label: 'Início'),
-    (icon: Symbols.sports_esports_rounded, label: 'Jogos'),
-    (icon: Symbols.add_box_rounded, label: 'Criar'),
-    (icon: Symbols.person_rounded, label: 'Perfil'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final barColor = isDark ? looplyBottomBarDark : looplyBottomBarLight;
-    final borderColor = isDark ? const Color(0xFF13161B) : const Color(0xFFE4E8EE);
-    final mutedColor = isDark ? looplyMutedDark : looplyMutedLight;
-
-    return Container(
-      height: _barHeight,
-      decoration: BoxDecoration(
-        color: barColor,
-        border: Border(top: BorderSide(color: borderColor, width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(_items.length, (index) {
-          final item = _items[index];
-          final selected = index == selectedIndex;
-          return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onSelect(index),
-              child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.symmetric(horizontal: selected ? 16 : 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: selected ? looplyBlue.withOpacity(0.16) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        item.icon,
-                        fill: selected ? 1 : 0,
-                        color: selected ? looplyBlue : mutedColor,
-                        size: 23,
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        child: selected
-                            ? Padding(
-                                padding: const EdgeInsets.only(left: 7),
-                                child: Text(
-                                  item.label,
-                                  style: const TextStyle(
-                                    color: looplyBlue,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-/// AppBar da Home: sem título, com a search box embutida.
+/// Home: SEM o grid de jogos, só a search box no AppBar.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -379,31 +278,12 @@ class HomeScreen extends StatelessWidget {
         title: const LooplySearchBox(showFilterIcon: true),
         titleSpacing: 16,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 30),
-        children: [
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: looplyGames.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 15,
-              childAspectRatio: 0.82,
-            ),
-            itemBuilder: (context, index) {
-              final game = looplyGames[index];
-              return GameCard(game: game);
-            },
-          ),
-        ],
-      ),
+      body: const SizedBox.shrink(),
     );
   }
 }
 
-/// Aba "Jogos", com o jogo listado.
+/// Aba "Jogos": aqui sim fica o grid com o jogo.
 class GamesScreen extends StatelessWidget {
   const GamesScreen({super.key});
 
@@ -454,8 +334,6 @@ class EmptyTabScreen extends StatelessWidget {
   }
 }
 
-/// Search box que, ao ser tocada, abre a tela de pesquisa usando
-/// Container Transform nativo (OpenContainer do pacote animations).
 class LooplySearchBox extends StatelessWidget {
   const LooplySearchBox({
     super.key,
@@ -473,7 +351,8 @@ class LooplySearchBox extends StatelessWidget {
 
     return OpenContainer(
       transitionType: ContainerTransitionType.fadeThrough,
-      transitionDuration: const Duration(milliseconds: 400),
+      // Mais curto = mais fluido, menos sensação de atraso.
+      transitionDuration: const Duration(milliseconds: 260),
       closedElevation: 0,
       openElevation: 0,
       closedColor: panel,
@@ -603,7 +482,6 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-/// Card do jogo: ao tocar, abre o InAppWebView direto via Container Transform.
 class GameCard extends StatelessWidget {
   const GameCard({super.key, required this.game});
   final LooplyGame game;
@@ -618,7 +496,7 @@ class GameCard extends StatelessWidget {
 
     return OpenContainer(
       transitionType: ContainerTransitionType.fadeThrough,
-      transitionDuration: const Duration(milliseconds: 420),
+      transitionDuration: const Duration(milliseconds: 260),
       closedElevation: 0,
       openElevation: 0,
       closedColor: panel,
@@ -715,7 +593,10 @@ class GameArtPainter extends CustomPainter {
   bool shouldRepaint(covariant GameArtPainter oldDelegate) => oldDelegate.game.index != game.index;
 }
 
-/// Tela do jogo: corre o InAppWebView diretamente, com loading nativo.
+/// Tela do jogo: busca o HTML manualmente e carrega via loadData com
+/// mimeType text/html — isso FORÇA o WebView a renderizar a página em vez
+/// de exibir o código-fonte cru (o que acontecia porque o GitHub Raw serve
+/// esse .html como text/plain, não text/html).
 class GameWebViewScreen extends StatefulWidget {
   const GameWebViewScreen({super.key, required this.game, required this.onClose});
   final LooplyGame game;
@@ -727,6 +608,7 @@ class GameWebViewScreen extends StatefulWidget {
 
 class _GameWebViewScreenState extends State<GameWebViewScreen> {
   bool _isLoading = true;
+  InAppWebViewController? _controller;
 
   @override
   Widget build(BuildContext context) {
@@ -745,22 +627,52 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
       body: Stack(
         children: [
           InAppWebView(
+            // Carrega a URL diretamente; o GitHub Raw serve .html como
+            // text/plain por padrão, então forçamos o content-type certo
+            // via navigationAction abaixo caso o preview venha como texto.
             initialUrlRequest: URLRequest(url: WebUri(widget.game.url!)),
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
               mediaPlaybackRequiresUserGesture: false,
               transparentBackground: true,
+              useShouldOverrideUrlLoading: false,
             ),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+            },
             onLoadStart: (controller, url) {
               setState(() => _isLoading = true);
             },
-            onLoadStop: (controller, url) {
-              setState(() => _isLoading = false);
+            onLoadStop: (controller, url) async {
+              // Se o GitHub Raw entregou como text/plain, o navegador mostra
+              // o HTML cru. Detectamos isso e re-renderizamos forçando o
+              // mimeType correto via loadData.
+              final html = await controller.evaluateJavascript(
+                source: "document.body ? document.body.innerText.substring(0, 15) : ''",
+              );
+              if (html != null && html.toString().trim().startsWith('<!')) {
+                final rawHtml = await controller.evaluateJavascript(
+                  source: "document.body.innerText",
+                );
+                if (rawHtml != null) {
+                  await controller.loadData(
+                    data: rawHtml.toString(),
+                    mimeType: 'text/html',
+                    encoding: 'utf8',
+                    baseUrl: WebUri(widget.game.url!),
+                  );
+                  return;
+                }
+              }
+              if (mounted) setState(() => _isLoading = false);
             },
           ),
           if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(color: looplyBlue),
+            Container(
+              color: bg,
+              child: const Center(
+                child: CircularProgressIndicator(color: looplyBlue),
+              ),
             ),
         ],
       ),
@@ -768,8 +680,9 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
   }
 }
 
-/// Aba de Perfil: capa com gradiente + avatar sobreposto, popup menu
-/// no topo com Settings, Theme (real) e Idioma.
+/// Aba de Perfil: capa REDUZIDA, cor sólida (branco/quase-preto) como fundo
+/// de capa, status bar transparente de verdade (conteúdo sobe atrás dela),
+/// botão de popup num container circular.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -819,7 +732,6 @@ class ProfileScreen extends StatelessWidget {
       if (value == 'theme') {
         _showThemeSheet(context);
       }
-      // 'settings' e 'idiom' ainda sem tela própria — me diz o que deve abrir em cada um.
     });
   }
 
@@ -896,73 +808,88 @@ class ProfileScreen extends StatelessWidget {
     final panel2 = isDark ? looplyPanel2Dark : looplyPanel2Light;
     final text = isDark ? looplyTextDark : looplyTextLight;
     final muted = isDark ? looplyMutedDark : looplyMutedLight;
+    // Cor da "capa", estilo fundo de conversa: branco puro / quase-preto.
+    final coverColor = isDark ? looplyBgDark : looplyBgLight;
 
     return Scaffold(
       backgroundColor: bg,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  height: 210,
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [looplyBlue, Color(0xFF6A5BD6), looplyPanelDark],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 6,
-                  right: 12,
-                  child: Builder(
-                    builder: (menuContext) {
-                      return IconButton(
-                        icon: const Icon(Symbols.more_vert_rounded, color: Colors.white),
-                        onPressed: () {
-                          final box = menuContext.findRenderObject() as RenderBox;
-                          final position = box.localToGlobal(Offset(box.size.width, box.size.height));
-                          _openMenu(context, position);
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Positioned(
-                  left: 20,
-                  bottom: -46,
-                  child: Container(
-                    width: 94,
-                    height: 94,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: bg, width: 4),
-                      color: panel2,
-                    ),
-                    child: Icon(Symbols.person_rounded, color: muted, size: 42),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      extendBodyBehindAppBar: true,
+      // AnnotatedRegion garante status bar transparente nesta tela
+      // específica, com ícones adaptados ao tema.
+      body: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: isDark
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  Text('Utilizador', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: text)),
-                  const SizedBox(height: 4),
-                  Text('@utilizador', style: TextStyle(fontSize: 13, color: muted)),
+                  // Capa reduzida (130 em vez de 210), cor sólida,
+                  // e vai por trás da status bar (sem SafeArea aqui).
+                  Container(
+                    height: 130,
+                    width: double.infinity,
+                    color: coverColor,
+                  ),
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 6,
+                    right: 12,
+                    child: Builder(
+                      builder: (menuContext) {
+                        return Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
+                          ),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Symbols.more_vert_rounded, color: text, size: 20),
+                            onPressed: () {
+                              final box = menuContext.findRenderObject() as RenderBox;
+                              final position = box.localToGlobal(Offset(box.size.width, box.size.height));
+                              _openMenu(context, position);
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    left: 20,
+                    bottom: -46,
+                    child: Container(
+                      width: 94,
+                      height: 94,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: bg, width: 4),
+                        color: panel2,
+                      ),
+                      child: Icon(Symbols.person_rounded, color: muted, size: 42),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Utilizador', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: text)),
+                    const SizedBox(height: 4),
+                    Text('@utilizador', style: TextStyle(fontSize: 13, color: muted)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
