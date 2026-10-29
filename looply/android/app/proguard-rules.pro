@@ -1,0 +1,5 @@
+-keep class com.pichillilorenzo.flutter_inappwebview.** { *; }
+-dontwarn com.pichillilorenzo.flutter_inappwebview.**
+-keepattributes JavascriptInterface
+-keepattributes *Annotation*
+-keep class com.looply.app.** { *; }
