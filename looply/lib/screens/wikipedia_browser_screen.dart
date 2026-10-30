@@ -14,8 +14,9 @@ import '../theme.dart';
 // browser principal, não tem endereço/voltar/avançar — mas agora FAZ
 // PARTE do sistema de abas: aparece na grelha de Separadores via
 // tabsController.upsertWikipediaTab(), conta no número de abas do
-// bottom bar, e o botão "Abas" aqui encolhe para a grelha usando o mesmo
-// morph de screenshot do main.dart (ShellTabRequest.requestTabs()).
+// bottom bar, e o botão "Abas" aqui encolhe para a grelha usando o
+// morph de screenshot do main.dart — mas com ORIGEM NESTA TELA
+// (ShellTabRequest.requestCloseWikipedia()), nunca na tela principal.
 // Reaberta a partir do card na grelha, volta sempre a abrir esta mesma
 // tela (nunca o BrowserScreen completo) — essa escolha é feita no
 // main.dart, com base em tab.kind == TabKind.wikipedia.
@@ -25,8 +26,8 @@ class WikipediaBrowserScreen extends StatefulWidget {
   const WikipediaBrowserScreen({super.key, this.viewportKey});
   // Key colocada à volta da área exata onde a InAppWebView fica, igual ao
   // viewportKey do BrowserScreen. O shell (main.dart) usa-a para medir o
-  // Rect de destino do morph quando esta tela é reaberta a partir do card
-  // da grelha de abas.
+  // Rect de origem/destino do morph quando esta tela é fechada para a
+  // grelha de abas ou reaberta a partir do card na grelha.
   final GlobalKey? viewportKey;
 
   @override
@@ -77,9 +78,10 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
   }
 
   Future<void> _openTabsGrid() async {
-    // Captura o estado atual da WebView antes de pedir ao shell para
+    // Captura o estado atual da WebView ANTES de pedir ao shell para
     // encolher esta tela para a grelha — assim o card já nasce com a
-    // miniatura real em vez de ficar vazio até o próximo onLoadStop.
+    // miniatura real, e o shell usa esta mesma screenshot como origem do
+    // morph (esta tela encolhe, nunca a tela principal por baixo dela).
     final screenshot = await _captureScreenshot();
     final id = _tabId;
     if (id != null) {
@@ -88,7 +90,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
       tabsController.upsertWikipediaTab(screenshot);
     }
     if (!mounted) return;
-    ShellTabRequest.instance.requestTabs();
+    ShellTabRequest.instance.requestCloseWikipedia(screenshot);
   }
 
   @override

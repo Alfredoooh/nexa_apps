@@ -160,6 +160,23 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   void _handleShellTabRequest() {
     if (!mounted) return;
     final request = ShellTabRequest.instance;
+
+    // Pedido vindo da própria WikipediaBrowserScreen ao clicar em "Abas"
+    // dentro dela. A origem do morph de encolhimento é ELA (viewport
+    // medido via _wikipediaViewportKey, que ainda está montado porque a
+    // rota dela continua no topo da pilha neste momento) — nunca a tela
+    // principal. Por isso este branch NÃO faz popUntil(route.isFirst)
+    // antes de abrir a grelha, ao contrário do branch tabsRequested logo
+    // abaixo, que serve para quando o pedido vem da tela principal ou do
+    // BrowserScreen comum.
+    if (request.wikipediaCloseRequested) {
+      request.wikipediaCloseRequested = false;
+      final screenshot = request.wikipediaCloseScreenshot;
+      request.wikipediaCloseScreenshot = null;
+      _closeWikipediaToTabsGrid(screenshot);
+      return;
+    }
+
     if (request.tabsRequested) {
       request.tabsRequested = false;
       request.requestedIndex = null;
@@ -376,6 +393,91 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final target = _rectInOverlay(_previewKeys[appTab.id]!) ??
         _rectInOverlay(_cardKeys[appTab.id]!) ??
+        sourceRect;
+    await _animateSnapshot(to: target);
+    if (mounted) setState(() => _morphing = false);
+  }
+
+  // Espelho de _openTabsGrid(), mas para quando o pedido de encolhimento
+  // para a grelha vem da própria WikipediaBrowserScreen (botão "Abas"
+  // dela). A diferença essencial: a origem do morph é _wikipediaViewportKey
+  // (ainda montado, pois a rota da Wikipédia ainda está no topo da pilha),
+  // e a tab usada é a aba wikipedia já existente no tabsController — nunca
+  // criamos nem tocamos numa appScreenTab da tela principal aqui. A rota da
+  // Wikipédia só é removida da pilha DEPOIS de a grelha já estar montada e
+  // o overlay de morph já estar cobrindo a tela, para nunca expor a tela
+  // principal por baixo nem fazer com que ela "vire" o card na grelha.
+  Future<void> _closeWikipediaToTabsGrid(Uint8List? screenshot) async {
+    if (_showingTabsGrid || _morphing) return;
+    _morphing = true;
+
+    final wikipediaTab = tabsController.getWikipediaTab();
+    if (wikipediaTab == null) {
+      _morphing = false;
+      return;
+    }
+
+    final sourceRect = _rectInOverlay(_wikipediaViewportKey);
+    final bitmap = screenshot ?? wikipediaTab.thumbnail;
+
+    _previewKeys.putIfAbsent(wikipediaTab.id, GlobalKey.new);
+    _cardKeys.putIfAbsent(wikipediaTab.id, GlobalKey.new);
+
+    if (bitmap == null || sourceRect == null) {
+      // Sem screenshot/Rect válidos para animar: apenas troca para a
+      // grelha e remove a rota da Wikipédia, sem morph.
+      setState(() => _showingTabsGrid = true);
+      if (mounted) Navigator.of(context).pop();
+      if (mounted) setState(() => _morphing = false);
+      return;
+    }
+
+    final imageProvider = await _prepareSnapshotImage(bitmap);
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
+
+    if (imageProvider == null) {
+      setState(() => _showingTabsGrid = true);
+      if (mounted) Navigator.of(context).pop();
+      if (mounted) setState(() => _morphing = false);
+      return;
+    }
+
+    // Cobre a WikipediaBrowserScreen (ainda no topo da pilha) com a
+    // própria screenshot dela antes de qualquer coisa mudar de estado.
+    _insertSnapshotOverlay(
+      image: imageProvider,
+      from: sourceRect,
+      opening: true,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      return;
+    }
+
+    // Monta a grelha por baixo do overlay. A rota da Wikipédia continua no
+    // topo da pilha de navegação neste instante — o overlay (rootOverlay)
+    // fica acima dela, então nada "pisca": a tela principal nunca chega a
+    // ficar visível, porque a rota wikipedia só será removida a seguir.
+    setState(() => _showingTabsGrid = true);
+    await WidgetsBinding.instance.endOfFrame;
+
+    // Só agora remove a rota da WikipediaBrowserScreen da pilha — ela já
+    // cumpriu seu papel de origem do morph; o overlay continua cobrindo
+    // tudo por cima dela durante a remoção.
+    if (mounted) Navigator.of(context).pop();
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      return;
+    }
+
+    final target = _rectInOverlay(_previewKeys[wikipediaTab.id]!) ??
+        _rectInOverlay(_cardKeys[wikipediaTab.id]!) ??
         sourceRect;
     await _animateSnapshot(to: target);
     if (mounted) setState(() => _morphing = false);

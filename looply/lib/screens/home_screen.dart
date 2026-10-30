@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
 import 'browser_screen.dart';
 import 'search_screen.dart';
-import 'wikipedia_browser_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -123,9 +123,17 @@ class QuickSiteTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? looplyPanel2Dark : Colors.white;
-    // O tile "Wikipedia" é o único que abre a tela de teste isolada
-    // (WikipediaBrowserScreen), fora do sistema de abas. Todos os outros
-    // continuam a usar openNewTab normalmente.
+    // O tile "Wikipedia" continua especial (abre WikipediaBrowserScreen em
+    // vez de BrowserScreen), mas agora passa pelo MESMO canal que o botão
+    // "Abas" dentro dela usa para voltar: regista/reaproveita a aba via
+    // tabsController.upsertWikipediaTab() e pede ao shell (main.dart) para
+    // empurrar a rota dessa aba diretamente, via
+    // ShellTabRequest.instance.requestTab(tab.id). Isto faz a tela Home
+    // NUNCA ganhar o container/transform do sistema de abas aqui — quem
+    // passa a ser "aba" com Rect/viewportKey válidos é a própria tela da
+    // Wikipédia, exatamente como qualquer site aberto via openNewTab. A
+    // Home só se torna aba quando o utilizador abre a grelha de
+    // Separadores a partir da própria Home (fluxo inalterado).
     final isWikipediaTestTile = site.name == 'Wikipedia';
     return GestureDetector(
       onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
@@ -133,7 +141,10 @@ class QuickSiteTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           if (isWikipediaTestTile) {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WikipediaBrowserScreen()));
+            final existing = tabsController.getWikipediaTab();
+            final tab = existing ?? tabsController.upsertWikipediaTab(null);
+            tabsController.activate(tab.id);
+            ShellTabRequest.instance.requestTab(tab.id);
             return;
           }
           openNewTab(context, site.url, title: site.name);
