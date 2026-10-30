@@ -7,6 +7,7 @@ import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
 import 'browser_screen.dart';
 import 'search_screen.dart';
+import 'wikipedia_browser_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -122,11 +123,21 @@ class QuickSiteTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? looplyPanel2Dark : Colors.white;
+    // O tile "Wikipedia" é o único que abre a tela de teste isolada
+    // (WikipediaBrowserScreen), fora do sistema de abas. Todos os outros
+    // continuam a usar openNewTab normalmente.
+    final isWikipediaTestTile = site.name == 'Wikipedia';
     return GestureDetector(
       onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => openNewTab(context, site.url, title: site.name),
+        onTap: () {
+          if (isWikipediaTestTile) {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WikipediaBrowserScreen()));
+            return;
+          }
+          openNewTab(context, site.url, title: site.name);
+        },
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 40, height: 40,
