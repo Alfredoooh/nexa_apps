@@ -80,11 +80,11 @@ class QuickSiteGridCard extends StatelessWidget {
     final firstRow = quickSites.sublist(0, 5);
     final secondRow = quickSites.sublist(5, 10);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
-      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(28)),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(24)),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: firstRow.map((site) => QuickSiteTile(site: site)).toList()),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: secondRow.map((site) => QuickSiteTile(site: site)).toList()),
       ]),
     );
@@ -114,13 +114,6 @@ class _ViewMoreSitesButton extends StatelessWidget {
   }
 }
 
-// FIX REAL: o container estava correto — o problema é que o PNG/WEBP de
-// cada marca já vem com espaço vazio/transparente em volta do logótipo.
-// Aumentar o container não aumenta o desenho lá dentro. A correção é
-// escalar a IMAGEM com Transform.scale, não o container que a envolve.
-// Container volta ao tamanho original (50px); o ícone lá dentro é que
-// cresce 1.35x, "estourando" visualmente para fora da área natural do
-// asset mas ficando contido pelo ClipOval do container.
 class QuickSiteTile extends StatelessWidget {
   const QuickSiteTile({super.key, required this.site});
   final QuickSite site;
@@ -136,27 +129,30 @@ class QuickSiteTile extends StatelessWidget {
         onTap: () => openNewTab(context, site.url, title: site.name),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 50, height: 50,
+            width: 40, height: 40,
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
               child: Transform.scale(
-                scale: 1.45,
+                scale: 1.12,
                 child: Image.asset(
                   site.assetPath, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 20),
+                  errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 17),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: text)),
+          const SizedBox(height: 5),
+          Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: text)),
         ]),
       ),
     );
   }
 }
 
-// Abre o navegador por uma rota normal, com a transição padrão do ecrã.
+// FIX: usa openBrowserRoute() (Duration.zero) em vez de MaterialPageRoute.
+// É esta troca que elimina o flash cinzento — o ZoomPageTransitionsBuilder
+// nativo do Android (usado por padrão em MaterialPageRoute) é o que expõe
+// a janela de composição onde o InAppWebView ainda não está anexado.
 void openNewTab(BuildContext context, String url, {String? title}) {
   final tab = tabsController.createBrowserTab(url);
   tabsController.activate(tab.id);

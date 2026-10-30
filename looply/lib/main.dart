@@ -45,12 +45,28 @@ class LooplyApp extends StatelessWidget {
 
 Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5}) async {
   try {
-    final boundary = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null || !boundary.attached) {
+    // Aguarda o frame atual terminar para não capturar um RenderObject a meio
+    // de um layout/paint causado pela troca de rota ou pela atualização da aba.
+    await WidgetsBinding.instance.endOfFrame;
+    var renderObject = key.currentContext?.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary || !renderObject.attached) {
+      await WidgetsBinding.instance.endOfFrame;
+      renderObject = key.currentContext?.findRenderObject();
+    }
+    if (renderObject is! RenderRepaintBoundary ||
+        !renderObject.attached ||
+        renderObject.size.isEmpty) {
+      return null;
+    }
+    if (renderObject.debugNeedsPaint) {
       await WidgetsBinding.instance.endOfFrame;
     }
-    final ready = key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (ready == null || !ready.attached) return null;
+
+    final ready = key.currentContext?.findRenderObject();
+    if (ready is! RenderRepaintBoundary || !ready.attached || ready.size.isEmpty) {
+      return null;
+    }
+
     final image = await ready.toImage(pixelRatio: pixelRatio);
     try {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -63,6 +79,7 @@ Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5
   }
 }
 
+
 class LooplyShell extends StatefulWidget {
   const LooplyShell({super.key});
   @override
@@ -74,7 +91,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   bool _showingTabsGrid = false;
   bool _morphing = false;
   final GlobalKey _repaintKey = GlobalKey();
-  final GlobalKey _rootKey = GlobalKey();
   final GlobalKey _browserViewportKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
@@ -83,8 +99,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   OverlayEntry? _morphEntry;
+  ImageProvider? _morphImage;
+  Rect? _morphFrom;
+  Rect? _morphTo;
+  bool _morphOpening = true;
   Uint8List? _lastScreenSnapshot;
-  Rect? _lastScreenRect;
   String? _preferredReturnTabId;
   bool _restoreChecked = false;
 
@@ -103,7 +122,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     WidgetsBinding.instance.removeObserver(this);
     tabsController.removeListener(_onTabsChanged);
     ShellTabRequest.instance.removeListener(_handleShellTabRequest);
-    _morphEntry?.remove();
+    _removeSnapshotOverlay();
     _morphController.dispose();
     super.dispose();
   }
@@ -126,9 +145,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final tab = tabsController.createBrowserTab(restored.url);
     tabsController.activate(tab.id);
-    Navigator.of(context).push(
-      openBrowserRoute(tabId: tab.id, initialUrl: restored.url),
-    );
+    Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: restored.url));
   }
 
   void _onTabsChanged() {
@@ -167,65 +184,77 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
   }
 
-  void _prepareSnapshotOverlay({required Uint8List bitmap, required Rect from, required bool opening}) {
-    _morphEntry?.remove();
-    _morphEntry = null;
-    _morphController.stop();
-    _morphController.value = 0;
-    _morphEntry = OverlayEntry(
-      builder: (overlayContext) => Positioned.fill(
-        child: IgnorePointer(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Não pinta um fundo por cima da grelha: a captura deve
-              // ampliar-se sobre o ecrã que já está visível.
-              Positioned.fromRect(
-                rect: from,
-                child: ClipRRect(
-                  borderRadius: opening ? BorderRadius.zero : BorderRadius.circular(18),
-                  child: Image.memory(bitmap, fit: BoxFit.cover, gaplessPlayback: true),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
+  Future<ImageProvider?> _prepareSnapshotImage(Uint8List bitmap) async {
+    final provider = MemoryImage(bitmap);
+    try {
+      // Decodifica antes de inserir o overlay. Assim o primeiro frame da
+      // animação já contém a imagem real e nunca um placeholder cinzento.
+      await precacheImage(provider, context);
+      return provider;
+    } catch (_) {
+      return null;
+    }
   }
 
-  // Curva suavizada (easeInOutCubic em vez de linear no driver da animação)
-  // para que a transição de container-morph pareça mais fluida e menos
-  // abrupta, tanto a abrir quanto a fechar.
-  Future<void> _animateSnapshot({required Uint8List bitmap, required Rect from, required Rect to, required bool opening}) async {
-    if (!mounted) return;
-    _morphEntry?.remove();
-    _morphEntry = null;
+  void _insertSnapshotOverlay({
+    required ImageProvider image,
+    required Rect from,
+    required bool opening,
+  }) {
+    _removeSnapshotOverlay();
     _morphController.stop();
     _morphController.value = 0;
-    final startRadius = opening ? BorderRadius.zero : BorderRadius.circular(18);
-    final endRadius = opening ? BorderRadius.circular(18) : BorderRadius.zero;
+    _morphImage = image;
+    _morphFrom = from;
+    _morphTo = from;
+    _morphOpening = opening;
+
+    // A mesma OverlayEntry permanece montada do primeiro ao último frame.
+    // Não removemos uma imagem para inserir outra no início da animação —
+    // essa troca de entries era a origem do frame vazio/flash.
     _morphEntry = OverlayEntry(
       builder: (overlayContext) => Positioned.fill(
         child: IgnorePointer(
           child: AnimatedBuilder(
             animation: _morphController,
             builder: (context, _) {
+              final imageProvider = _morphImage;
+              final from = _morphFrom;
+              final to = _morphTo;
+              if (imageProvider == null || from == null || to == null) {
+                return const SizedBox.expand();
+              }
+
               final t = Curves.easeInOutCubic.transform(_morphController.value);
               final rect = Rect.lerp(from, to, t) ?? to;
-              final radius = BorderRadius.lerp(startRadius, endRadius, t) ?? BorderRadius.zero;
+              final startRadius = _morphOpening
+                  ? BorderRadius.zero
+                  : BorderRadius.circular(18);
+              final endRadius = _morphOpening
+                  ? BorderRadius.circular(18)
+                  : BorderRadius.zero;
+              final radius = BorderRadius.lerp(startRadius, endRadius, t) ??
+                  BorderRadius.zero;
+
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Mantém o ecrã de origem visível por trás da captura.
+                  if (!_morphOpening)
+                    Positioned.fill(
+                      child: ColoredBox(color: pageBg(overlayContext)),
+                    ),
                   Positioned.fromRect(
                     rect: rect,
                     child: Material(
                       color: Colors.transparent,
                       child: ClipRRect(
                         borderRadius: radius,
-                        child: Image.memory(bitmap, fit: BoxFit.cover, gaplessPlayback: true),
+                        child: Image(
+                          image: imageProvider,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.medium,
+                        ),
                       ),
                     ),
                   ),
@@ -237,110 +266,185 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       ),
     );
     Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
+  }
+
+  void _removeSnapshotOverlay() {
+    _morphEntry?.remove();
+    _morphEntry = null;
+    _morphImage = null;
+    _morphFrom = null;
+    _morphTo = null;
+  }
+
+  Future<void> _animateSnapshot({
+    required Rect to,
+    bool keepOverlayAtEnd = false,
+  }) async {
+    if (!mounted || _morphEntry == null) return;
+    _morphTo = to;
+    _morphEntry!.markNeedsBuild();
+
     try {
-      await _morphController.animateTo(1, curve: Curves.easeInOutCubic);
+      // A curva é aplicada apenas no builder. O driver fica linear para não
+      // aplicar easeInOut duas vezes e alterar a velocidade a meio do morph.
+      await _morphController.animateTo(
+        1,
+        duration: const Duration(milliseconds: 470),
+        curve: Curves.linear,
+      );
     } finally {
-      _morphEntry?.remove();
-      _morphEntry = null;
-      if (mounted) setState(() => _morphing = false);
+      if (!keepOverlayAtEnd) _removeSnapshotOverlay();
     }
   }
 
   Future<void> _openTabsGrid() async {
     if (_showingTabsGrid || _morphing) return;
+    _morphing = true;
+
     final sourceRect = _rectInOverlay(_repaintKey);
     final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.35);
-    if (!mounted) return;
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
+
     if (bitmap == null || sourceRect == null) {
-      setState(() => _showingTabsGrid = true);
+      final appTab = tabsController.upsertAppScreenTab(
+        _screenKeys[_selectedTab],
+        _screenLabels[_selectedTab],
+        _screenIcons[_selectedTab],
+        bitmap,
+      );
+      _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
+      _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
+      setState(() {
+        _showingTabsGrid = true;
+        _morphing = false;
+      });
+      return;
+    }
+
+    final imageProvider = await _prepareSnapshotImage(bitmap);
+    if (!mounted) {
+      _morphing = false;
       return;
     }
 
     _lastScreenSnapshot = bitmap;
-    _lastScreenRect = sourceRect;
     final appTab = tabsController.upsertAppScreenTab(
-      _screenKeys[_selectedTab], _screenLabels[_selectedTab], _screenIcons[_selectedTab], bitmap,
+      _screenKeys[_selectedTab],
+      _screenLabels[_selectedTab],
+      _screenIcons[_selectedTab],
+      bitmap,
     );
     _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
     _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
 
-    _prepareSnapshotOverlay(bitmap: bitmap, from: sourceRect, opening: true);
-    setState(() {
-      _showingTabsGrid = true;
-      _morphing = true;
-    });
+    if (imageProvider == null) {
+      setState(() {
+        _showingTabsGrid = true;
+        _morphing = false;
+      });
+      return;
+    }
 
+    // Primeiro cobrimos o ecrã atual com a captura já descodificada.
+    // Só depois montamos a grelha por baixo dela.
+    _insertSnapshotOverlay(
+      image: imageProvider,
+      from: sourceRect,
+      opening: true,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      return;
+    }
+
+    setState(() => _showingTabsGrid = true);
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      return;
+    }
 
-    final target = _rectInOverlay(_previewKeys[appTab.id]!) ?? _rectInOverlay(_cardKeys[appTab.id]!) ?? sourceRect;
-    await _animateSnapshot(bitmap: bitmap, from: sourceRect, to: target, opening: true);
+    final target = _rectInOverlay(_previewKeys[appTab.id]!) ??
+        _rectInOverlay(_cardKeys[appTab.id]!) ??
+        sourceRect;
+    await _animateSnapshot(to: target);
+    if (mounted) setState(() => _morphing = false);
   }
 
   Future<void> _closeTabsGrid({BrowserTab? openTab}) async {
     if (_morphing || !_showingTabsGrid) return;
+    _morphing = true;
 
     final preferredReturnTab = tabsController.getTab(_preferredReturnTabId ?? '');
-    final targetTab = openTab ?? preferredReturnTab ?? tabsController.getAppScreen(_screenKeys[_selectedTab]);
+    final targetTab = openTab ??
+        preferredReturnTab ??
+        tabsController.getAppScreen(_screenKeys[_selectedTab]);
     _preferredReturnTabId = null;
+
     final sourceKey = targetTab == null
         ? null
-        : targetTab.kind == TabKind.browser
-            ? (_previewKeys[targetTab.id] ?? _cardKeys[targetTab.id])
-            : (_cardKeys[targetTab.id] ?? _previewKeys[targetTab.id]);
+        : (_previewKeys[targetTab.id] ?? _cardKeys[targetTab.id]);
     final sourceRect = sourceKey == null ? null : _rectInOverlay(sourceKey);
+
     Uint8List? bitmap = targetTab?.thumbnail;
-    if (bitmap == null && targetTab?.kind == TabKind.appScreen) bitmap = _lastScreenSnapshot;
+    if (bitmap == null && targetTab?.kind == TabKind.appScreen) {
+      bitmap = _lastScreenSnapshot;
+    }
     if (bitmap == null && sourceKey != null) {
       bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
     }
-    if (!mounted) return;
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
+
+    final imageProvider = bitmap == null ? null : await _prepareSnapshotImage(bitmap);
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
 
     if (targetTab != null && targetTab.kind == TabKind.browser) {
-      final revealWebView = ValueNotifier<bool>(false);
       tabsController.activate(targetTab.id);
+      final firstLoad = Completer<void>();
 
-      if (bitmap != null && sourceRect != null) {
-        _prepareSnapshotOverlay(
-          bitmap: bitmap,
-          from: sourceRect,
-          opening: false,
-        );
-      }
-
-      // A rota fica transparente durante o morph. Assim, a grelha continua
-      // visível por trás e não há troca prematura do fundo para a página.
-      setState(() => _morphing = bitmap != null && sourceRect != null);
-      final routeFuture = Navigator.of(context).push<void>(
-        _instantBrowserRoute(targetTab, revealWebView: revealWebView),
+      // O push e a inserção do overlay acontecem no mesmo ciclo síncrono:
+      // a captura fica no topo antes do primeiro frame da nova rota.
+      setState(() => _showingTabsGrid = false);
+      Navigator.of(context).push(
+        _instantBrowserRoute(targetTab, firstLoadCompleter: firstLoad),
       );
 
-      await WidgetsBinding.instance.endOfFrame;
-      final destination = _rectInOverlay(_browserViewportKey);
-      if (bitmap != null && sourceRect != null && destination != null) {
-        await _animateSnapshot(
-          bitmap: bitmap,
+      if (imageProvider != null && sourceRect != null) {
+        _insertSnapshotOverlay(
+          image: imageProvider,
           from: sourceRect,
-          to: destination,
           opening: false,
         );
-      } else if (mounted) {
-        setState(() => _morphing = false);
+        await WidgetsBinding.instance.endOfFrame;
+        await WidgetsBinding.instance.endOfFrame;
+        if (mounted) {
+          final destination = _rectInOverlay(_browserViewportKey);
+          if (destination != null) {
+            // A imagem termina no viewport e continua visível por cima da
+            // WebView enquanto o primeiro documento termina de carregar.
+            await _animateSnapshot(to: destination, keepOverlayAtEnd: true);
+            try {
+              await firstLoad.future.timeout(const Duration(seconds: 5));
+            } on TimeoutException {
+              // Não bloquear a navegação indefinidamente se o site demorar.
+            }
+          }
+        }
       }
 
-      if (!mounted) {
-        revealWebView.dispose();
-        return;
-      }
-
-      // A troca do fundo e a revelação do InAppWebView acontecem juntas,
-      // somente depois de a captura terminar a expansão.
-      setState(() => _showingTabsGrid = false);
-      revealWebView.value = true;
-      unawaited(routeFuture.then<void>((_) {
-        revealWebView.dispose();
-      }));
+      _removeSnapshotOverlay();
+      if (mounted) setState(() => _morphing = false);
       return;
     }
 
@@ -348,32 +452,46 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       final index = _screenKeys.indexOf(targetTab.url);
       if (index >= 0) _selectedTab = index;
     }
-    if (bitmap != null && sourceRect != null) {
-      _prepareSnapshotOverlay(bitmap: bitmap, from: sourceRect, opening: false);
+
+    if (imageProvider != null && sourceRect != null) {
+      _insertSnapshotOverlay(
+        image: imageProvider,
+        from: sourceRect,
+        opening: false,
+      );
+      await WidgetsBinding.instance.endOfFrame;
     }
-    setState(() {
-      _showingTabsGrid = false;
-      _morphing = bitmap != null && sourceRect != null;
-    });
+
+    setState(() => _showingTabsGrid = false);
     await WidgetsBinding.instance.endOfFrame;
-    final destination = _rectInOverlay(_repaintKey);
-    if (bitmap != null && sourceRect != null && destination != null) {
-      await _animateSnapshot(bitmap: bitmap, from: sourceRect, to: destination, opening: false);
-    } else if (mounted) {
-      setState(() => _morphing = false);
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (imageProvider != null && sourceRect != null && mounted) {
+      final destination = _rectInOverlay(_repaintKey);
+      if (destination != null) {
+        await _animateSnapshot(to: destination);
+      } else {
+        _removeSnapshotOverlay();
+      }
+    } else {
+      _removeSnapshotOverlay();
     }
+
+    if (mounted) setState(() => _morphing = false);
   }
 
-  PageRoute<void> _instantBrowserRoute(BrowserTab tab, {ValueNotifier<bool>? revealWebView}) {
+  PageRoute<void> _instantBrowserRoute(
+    BrowserTab tab, {
+    Completer<void>? firstLoadCompleter,
+  }) {
     return PageRouteBuilder<void>(
-      opaque: false,
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
         tabId: tab.id,
         initialUrl: tab.url,
         viewportKey: _browserViewportKey,
-        revealWebView: revealWebView,
+        firstLoadCompleter: firstLoadCompleter,
       ),
     );
   }
@@ -393,7 +511,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
         body: Stack(
-          key: _rootKey,
           children: [
             Offstage(
               offstage: _showingTabsGrid,
