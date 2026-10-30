@@ -48,13 +48,13 @@ class _CategorySection extends StatelessWidget {
           child: Text(siteCategoryLabel(category), style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-          decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(28)),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(22)),
           child: Wrap(
-            spacing: 4,
-            runSpacing: 16,
+            spacing: 2,
+            runSpacing: 10,
             alignment: WrapAlignment.start,
-            children: sites.map((site) => SizedBox(width: 76, child: QuickSiteTile(site: site))).toList(),
+            children: sites.map((site) => SizedBox(width: 66, child: QuickSiteTile(site: site))).toList(),
           ),
         ),
       ],

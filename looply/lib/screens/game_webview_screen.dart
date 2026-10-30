@@ -50,14 +50,9 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
                   domStorageEnabled: true,
                   databaseEnabled: true,
                   mediaPlaybackRequiresUserGesture: false,
-                  transparentBackground: false,
+                  transparentBackground: true,
                   cacheMode: CacheMode.LOAD_DEFAULT,
                   hardwareAcceleration: true,
-                  useHybridComposition: true,
-                  useOnRenderProcessGone: true,
-                  safeBrowsingEnabled: true,
-                  useShouldInterceptRequest: true,
-                  mixedContentMode: MixedContentMode.MIXED_CONTENT_NEVER_ALLOW,
                 ),
                 shouldInterceptRequest: (controller, request) async {
                   final url = request.url.toString();

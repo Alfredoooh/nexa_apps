@@ -186,18 +186,18 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
     final text = mainText(context);
     return Material(
       color: pillColor(context),
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(36),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
           child: Row(children: [
-            Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700))),
+            Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
             Container(
-              width: 40, height: 40, alignment: Alignment.center,
+              width: 32, height: 32, alignment: Alignment.center,
               decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? looplyPanel2Dark : Colors.white),
-              child: Icon(Symbols.person_rounded, size: 24, color: mutedText(context)),
+              child: Icon(Symbols.person_rounded, size: 20, color: mutedText(context)),
             ),
           ]),
         ),

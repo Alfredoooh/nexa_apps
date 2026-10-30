@@ -48,10 +48,22 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ),
                 ]),
                 const SizedBox(height: 4),
-                ...recent.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: ActivityTile(entry: entry),
-                )),
+                ...List.generate(recent.length, (index) {
+                  final isFirst = index == 0;
+                  final isLast = index == recent.length - 1;
+                  final top = isFirst ? 22.0 : 8.0;
+                  final bottom = isLast ? 22.0 : 8.0;
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
+                    child: ActivityTile(
+                      entry: recent[index],
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(top),
+                        bottom: Radius.circular(bottom),
+                      ),
+                    ),
+                  );
+                }),
               ],
             ),
     );
@@ -59,23 +71,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
 }
 
 class ActivityTile extends StatelessWidget {
-  const ActivityTile({super.key, required this.entry});
+  const ActivityTile({super.key, required this.entry, this.borderRadius});
   final ActivityEntry entry;
+  final BorderRadius? borderRadius;
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
     final isGame = entry.kind == ActivityKind.game;
     return Material(
-      color: panelColor(context), borderRadius: BorderRadius.circular(16),
-      child: ListTile(
-        leading: Container(
-          width: 40, height: 40, padding: const EdgeInsets.all(9),
-          decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-          child: Icon(isGame ? Symbols.sports_esports_rounded : Symbols.public_rounded, color: isGame ? accentColor(context) : muted, size: 18),
-        ),
-        title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-        subtitle: Text(formatActivityTime(entry.timestamp), style: TextStyle(color: muted, fontSize: 12)),
+      color: settingsCardColor(context),
+      borderRadius: borderRadius ?? BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: () {
           if (isGame) {
             final game = looplyGames.firstWhere((g) => g.url == entry.url, orElse: () => looplyGames.first);
@@ -89,6 +97,27 @@ class ActivityTile extends StatelessWidget {
             Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: entry.url));
           }
         },
+        borderRadius: borderRadius ?? BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+              child: Icon(isGame ? Symbols.sports_esports_rounded : Symbols.public_rounded, color: accentColor(context), size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 3),
+                Text(formatActivityTime(entry.timestamp), style: TextStyle(color: muted, fontSize: 11)),
+              ]),
+            ),
+            Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+          ]),
+        ),
       ),
     );
   }

@@ -21,10 +21,7 @@ class GamesScreen extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-              child: Row(children: [
-                Expanded(child: Text('Jogos', style: TextStyle(color: text, fontSize: 28, fontWeight: FontWeight.w800))),
-                IconButton(tooltip: 'Pesquisar jogos', icon: Icon(Symbols.search_rounded, color: text), onPressed: () => showSearch<void>(context: context, delegate: _GameSearchDelegate(games))),
-              ]),
+              child: Text('Jogos', style: TextStyle(color: text, fontSize: 28, fontWeight: FontWeight.w800)),
             ),
             SizedBox(
               height: 48,
@@ -95,29 +92,39 @@ class _RecommendedGameRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    return InkWell(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 7, 18, 12),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: SizedBox(width: 88, height: 88, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 32)))),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 5),
-            Text(game.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 13, height: 1.3)),
-            const SizedBox(height: 8),
-            Wrap(spacing: 7, runSpacing: 5, children: [
-              _GameMetaPill(label: game.category),
-              const _GameMetaPill(label: 'Jogo web'),
+    final radius = BorderRadius.circular(18);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Material(
+        color: pillColor(context),
+        borderRadius: radius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SizedBox(width: 72, height: 72, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 24)))),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(game.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(game.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 12, height: 1.25)),
+                const SizedBox(height: 7),
+                Wrap(spacing: 6, runSpacing: 4, children: [
+                  _GameMetaPill(label: game.category),
+                  const _GameMetaPill(label: 'Jogo web'),
+                ]),
+              ])),
+              const SizedBox(width: 2),
+              Icon(Symbols.chevron_right_rounded, color: muted, size: 19),
             ]),
-          ]))),
-          const SizedBox(width: 4),
-          Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
-        ]),
+          ),
+        ),
       ),
     );
   }
@@ -129,7 +136,7 @@ class _GameMetaPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(8)),
+    decoration: BoxDecoration(color: softColor(context), borderRadius: BorderRadius.circular(8)),
     child: Text(label, style: TextStyle(color: mutedText(context), fontSize: 11, fontWeight: FontWeight.w600)),
   );
 }
@@ -139,51 +146,28 @@ class _FeaturedGameCard extends StatelessWidget {
   final LooplyGame game;
   @override
   Widget build(BuildContext context) {
-    final text = mainText(context);
     return Material(
-      color: const Color(0xFF20202A),
-      borderRadius: BorderRadius.circular(24),
+      color: pillColor(context),
+      borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SizedBox(height: 154, width: double.infinity, child: CustomPaint(painter: GameArtPainter(game: game), child: Stack(children: [
+          SizedBox(height: 132, width: double.infinity, child: CustomPaint(painter: GameArtPainter(game: game), child: Stack(children: [
             Positioned(right: -12, top: -20, child: Container(width: 135, height: 135, decoration: const BoxDecoration(color: Color(0x55FFFFFF), shape: BoxShape.circle))),
             Positioned(left: 16, bottom: 15, child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7), decoration: BoxDecoration(color: const Color(0xDD14151B), borderRadius: BorderRadius.circular(18)), child: const Text('JOGO EM DESTAQUE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: .4)))),
           ]))),
-          Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 16), child: Row(children: [
+          Padding(padding: const EdgeInsets.fromLTRB(14, 12, 14, 14), child: Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(game.title, style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)),
+                Text(game.title, style: TextStyle(color: mainText(context), fontSize: 16, fontWeight: FontWeight.w800)),
               const SizedBox(height: 4),
               Text('Abra os detalhes e comece a jogar.', style: TextStyle(color: mutedText(context), fontSize: 12)),
             ])),
-            Icon(Symbols.arrow_forward_rounded, color: text),
+            Icon(Symbols.arrow_forward_rounded, color: mainText(context)),
           ])),
         ]),
       ),
     );
-  }
-}
-
-class _GameSearchDelegate extends SearchDelegate<void> {
-  _GameSearchDelegate(this.games);
-  final List<LooplyGame> games;
-  @override
-  List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Symbols.close_rounded), onPressed: () => query = '')];
-  @override
-  Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Symbols.arrow_back_rounded), onPressed: () => close(context, null));
-  @override
-  Widget buildResults(BuildContext context) => _buildMatches(context);
-  @override
-  Widget buildSuggestions(BuildContext context) => _buildMatches(context);
-  Widget _buildMatches(BuildContext context) {
-    final matches = games.where((game) => game.title.toLowerCase().contains(query.toLowerCase())).toList();
-    return ListView(children: matches.map((game) => ListTile(
-      leading: SizedBox(width: 44, height: 44, child: CustomPaint(painter: GameArtPainter(game: game))),
-      title: Text(game.title),
-      subtitle: Text(game.category),
-      onTap: () { close(context, null); Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))); },
-    )).toList());
   }
 }
 
@@ -199,7 +183,7 @@ class GameDetailsScreen extends StatelessWidget {
       backgroundColor: bg,
       appBar: AppBar(title: const Text('Detalhes do jogo')),
       body: ListView(padding: const EdgeInsets.fromLTRB(18, 10, 18, 28), children: [
-        ClipRRect(borderRadius: BorderRadius.circular(24), child: SizedBox(height: 220, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 70))))),
+        ClipRRect(borderRadius: BorderRadius.circular(22), child: SizedBox(height: 210, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 52))))),
         const SizedBox(height: 20),
         Text(game.title, style: TextStyle(color: text, fontSize: 25, fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),

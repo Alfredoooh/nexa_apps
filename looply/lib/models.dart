@@ -73,20 +73,21 @@ bool isAdBlockedUrl(String url) {
 }
 
 class SearchEngine {
-  const SearchEngine({required this.name, required this.domain, required this.urlTemplate});
+  const SearchEngine({required this.name, required this.domain, required this.urlTemplate, this.assetPath});
   final String name;
   final String domain;
   final String urlTemplate;
+  final String? assetPath;
   String buildUrl(String query) => urlTemplate.replaceAll('{q}', Uri.encodeQueryComponent(query));
   String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
 }
 
 const List<SearchEngine> searchEngines = [
-  SearchEngine(name: 'Google', domain: 'google.com', urlTemplate: 'https://www.google.com/search?q={q}'),
-  SearchEngine(name: 'Bing', domain: 'bing.com', urlTemplate: 'https://www.bing.com/search?q={q}'),
-  SearchEngine(name: 'DuckDuckGo', domain: 'duckduckgo.com', urlTemplate: 'https://duckduckgo.com/?q={q}'),
-  SearchEngine(name: 'Yahoo', domain: 'yahoo.com', urlTemplate: 'https://search.yahoo.com/search?p={q}'),
-  SearchEngine(name: 'Brave', domain: 'search.brave.com', urlTemplate: 'https://search.brave.com/search?q={q}'),
+  SearchEngine(name: 'Google', domain: 'google.com', assetPath: 'assets/images/quick_sites/google.webp', urlTemplate: 'https://www.google.com/search?q={q}'),
+  SearchEngine(name: 'Bing', domain: 'bing.com', assetPath: 'assets/images/quick_sites/bing.webp', urlTemplate: 'https://www.bing.com/search?q={q}'),
+  SearchEngine(name: 'DuckDuckGo', domain: 'duckduckgo.com', assetPath: 'assets/images/quick_sites/duckduckgo.webp', urlTemplate: 'https://duckduckgo.com/?q={q}'),
+  SearchEngine(name: 'Yahoo', domain: 'yahoo.com', assetPath: 'assets/images/quick_sites/yahoo.webp', urlTemplate: 'https://search.yahoo.com/search?p={q}'),
+  SearchEngine(name: 'Brave', domain: 'search.brave.com', assetPath: 'assets/images/quick_sites/brave.webp', urlTemplate: 'https://search.brave.com/search?q={q}'),
   SearchEngine(name: 'Ecosia', domain: 'ecosia.org', urlTemplate: 'https://www.ecosia.org/search?q={q}'),
 ];
 
@@ -291,7 +292,7 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
-  BrowserTab upsertAppScreenTab(String screenKey, String label, IconData icon, Uint8List thumbnail) {
+  BrowserTab upsertAppScreenTab(String screenKey, String label, IconData icon, Uint8List? thumbnail) {
     final index = _tabs.indexWhere((tab) => tab.kind == TabKind.appScreen && tab.url == screenKey);
     if (index >= 0) {
       final tab = _tabs.removeAt(index);

@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -106,7 +105,19 @@ class SettingsScreen extends StatelessWidget {
             Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
             Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: textForMode(context, mode), fontSize: 17, fontWeight: FontWeight.w800)))),
             ...searchEngines.map((engine) => ListTile(
-              leading: Container(width: 34, height: 34, padding: const EdgeInsets.all(6), decoration: BoxDecoration(shape: BoxShape.circle, color: pillForMode(context, mode)), child: CachedNetworkImage(imageUrl: engine.faviconUrl, fit: BoxFit.contain, errorWidget: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18), placeholder: (_, __) => const SizedBox.shrink())),
+              leading: Container(
+                width: 34,
+                height: 34,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: pillForMode(context, mode)),
+                child: engine.assetPath != null
+                    ? Image.asset(
+                        engine.assetPath!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18),
+                      )
+                    : Icon(Icons.eco_rounded, color: const Color(0xFF4CAF50), size: 20),
+              ),
               title: Text(engine.name, style: TextStyle(color: textForMode(context, mode))),
               trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentForMode(context, mode), fill: 1) : const SizedBox.shrink()),
               onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },

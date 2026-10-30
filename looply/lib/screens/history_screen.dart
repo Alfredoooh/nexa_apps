@@ -38,11 +38,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
       body: entries.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Symbols.history_rounded, size: 48, color: muted), const SizedBox(height: 12), Text('Sem histórico', style: TextStyle(color: text, fontWeight: FontWeight.w700))]))
-          : ListView.separated(
+          : ListView.builder(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
               itemCount: entries.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 7),
-              itemBuilder: (context, index) => ActivityTile(entry: entries[index]),
+              itemBuilder: (context, index) {
+                final isFirst = index == 0;
+                final isLast = index == entries.length - 1;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
+                  child: ActivityTile(
+                    entry: entries[index],
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(isFirst ? 22 : 8),
+                      bottom: Radius.circular(isLast ? 22 : 8),
+                    ),
+                  ),
+                );
+              },
             ),
     );
   }

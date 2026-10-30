@@ -41,7 +41,7 @@ class _AdBlockStatsChartState extends State<AdBlockStatsChart> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: panelColor(context), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(18)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(Symbols.shield_rounded, color: accent, size: 20),
@@ -99,7 +99,7 @@ class ActivitySummaryCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: panelColor(context), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(18)),
       child: Row(children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
