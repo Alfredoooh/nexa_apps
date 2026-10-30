@@ -4,13 +4,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/stats_chart.dart';
+import 'browser_screen.dart';
 import 'game_webview_screen.dart';
-import 'home_screen.dart';
 import 'history_screen.dart';
 
-// Tela de Atividade: mostra resumo, gráfico de anúncios bloqueados e
-// as 5 entradas mais recentes, com botão "Ver tudo" que leva ao
-// histórico completo.
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
   @override
@@ -84,7 +81,12 @@ class ActivityTile extends StatelessWidget {
             final game = looplyGames.firstWhere((g) => g.url == entry.url, orElse: () => looplyGames.first);
             Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
           } else {
-            openNewTab(context, entry.url, title: entry.title);
+            // FIX: mesma correção — abrir aba a partir do histórico/atividade
+            // também passa pela rota sem transição.
+            final tab = tabsController.createBrowserTab(entry.url);
+            tabsController.activate(tab.id);
+            activityController.log(ActivityKind.site, entry.title, entry.url);
+            Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: entry.url));
           }
         },
       ),

@@ -114,9 +114,13 @@ class _ViewMoreSitesButton extends StatelessWidget {
   }
 }
 
-// FIX: container aumentado de 50x50 para 56x56, padding reduzido de 2 para
-// 1, para que o ícone .webp ocupe quase inteiramente a área circular
-// visível — antes sobrava bastante espaço vazio em volta.
+// FIX REAL: o container estava correto — o problema é que o PNG/WEBP de
+// cada marca já vem com espaço vazio/transparente em volta do logótipo.
+// Aumentar o container não aumenta o desenho lá dentro. A correção é
+// escalar a IMAGEM com Transform.scale, não o container que a envolve.
+// Container volta ao tamanho original (50px); o ícone lá dentro é que
+// cresce 1.35x, "estourando" visualmente para fora da área natural do
+// asset mas ficando contido pelo ClipOval do container.
 class QuickSiteTile extends StatelessWidget {
   const QuickSiteTile({super.key, required this.site});
   final QuickSite site;
@@ -132,12 +136,15 @@ class QuickSiteTile extends StatelessWidget {
         onTap: () => openNewTab(context, site.url, title: site.name),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 56, height: 56, padding: const EdgeInsets.all(1),
+            width: 50, height: 50,
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
-              child: Image.asset(
-                site.assetPath, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 24),
+              child: Transform.scale(
+                scale: 1.35,
+                child: Image.asset(
+                  site.assetPath, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 20),
+                ),
               ),
             ),
           ),
@@ -149,9 +156,13 @@ class QuickSiteTile extends StatelessWidget {
   }
 }
 
+// FIX: usa openBrowserRoute() (Duration.zero) em vez de MaterialPageRoute.
+// É esta troca que elimina o flash cinzento — o ZoomPageTransitionsBuilder
+// nativo do Android (usado por padrão em MaterialPageRoute) é o que expõe
+// a janela de composição onde o InAppWebView ainda não está anexado.
 void openNewTab(BuildContext context, String url, {String? title}) {
   final tab = tabsController.createBrowserTab(url);
   tabsController.activate(tab.id);
   activityController.log(ActivityKind.site, title ?? url, url);
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => BrowserScreen(tabId: tab.id, initialUrl: url)));
+  Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: url));
 }

@@ -12,6 +12,34 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
+// Rota dedicada para abrir o BrowserScreen, usada em TODO lugar onde o
+// app navega para um site (Home, pesquisa, histórico, atividade, menu
+// da própria tela de browser). Sem transição (Duration.zero), igual à
+// rota já usada entre Abas e Browser.
+//
+// Motivo: o MaterialPageRoute padrão usa, no Android, o
+// ZoomPageTransitionsBuilder nativo (fade + scale). Esse transition
+// builder cria uma janela de composição em que a superfície do
+// InAppWebView (useHybridComposition: true) ainda não está anexada à
+// árvore de camadas — e o Android pinta a cor de fundo da Window
+// (cinza) durante esse intervalo. É esse builder, especificamente, que
+// causa o flash cinzento — não o WebView em si. Remover a transição
+// SÓ nas rotas que abrem o browser elimina o bug sem mexer na
+// animação nativa das outras telas (Settings, Jogos, Histórico, etc.),
+// que continuam a usar MaterialPageRoute normalmente.
+PageRoute<void> openBrowserRoute({required String tabId, required String initialUrl, GlobalKey? viewportKey, ValueListenable<bool>? revealWebView}) {
+  return PageRouteBuilder<void>(
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
+      tabId: tabId,
+      initialUrl: initialUrl,
+      viewportKey: viewportKey,
+      revealWebView: revealWebView,
+    ),
+  );
+}
+
 class BrowserScreen extends StatefulWidget {
   const BrowserScreen({super.key, required this.tabId, required this.initialUrl, this.viewportKey, this.revealWebView});
   final String tabId;
@@ -41,11 +69,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
   @override
   void initState() {
     super.initState();
-    // FIX: usa a URL mais recente guardada no próprio tab (se já existir
-    // e tiver navegado), em vez de widget.initialUrl, que representa só
-    // a URL do momento em que a aba foi criada. Isso é o que fazia o
-    // WebView "voltar" para uma página antiga/errada ao reabrir a aba,
-    // com um recarregamento visível que parecia uma animação quebrada.
     final existingTab = tabsController.getTab(widget.tabId);
     _currentUrl = (existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl;
     _currentTitle = existingTab?.title ?? '';
@@ -115,11 +138,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
-        // FIX: ColoredBox envolvendo TODO o Scaffold, antes de qualquer
-        // outra camada — garante que não há nenhum frame, em nenhuma
-        // circunstância (incluindo o instante exato do pop/push entre
-        // rotas), onde a cor de fundo padrão do sistema (cinza) fique
-        // visível por trás do conteúdo.
         child: ColoredBox(
           color: bg,
           child: Scaffold(
@@ -179,8 +197,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (!_renderProcessCrashed)
           InAppWebView(
             key: _webViewKey,
-            // FIX: usa _currentUrl (já resolvido a partir do tab atual no
-            // initState) em vez de widget.initialUrl diretamente.
             initialUrlRequest: URLRequest(url: WebUri(_currentUrl)),
             pullToRefreshController: _pullToRefreshController,
             initialSettings: InAppWebViewSettings(

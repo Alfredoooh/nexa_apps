@@ -72,7 +72,9 @@ class _SearchScreenState extends State<SearchScreen> {
     final tab = tabsController.createBrowserTab(url);
     tabsController.activate(tab.id);
     activityController.log(ActivityKind.site, value, url);
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => BrowserScreen(tabId: tab.id, initialUrl: url)));
+    // FIX: pushReplacement com openBrowserRoute() (sem transição) em vez
+    // de MaterialPageRoute — mesma causa/correção do home_screen.dart.
+    Navigator.of(context).pushReplacement(openBrowserRoute(tabId: tab.id, initialUrl: url));
   }
 
   bool _looksLikeUrl(String text) => !text.contains(' ') && (text.contains('.') || text.startsWith('localhost'));
