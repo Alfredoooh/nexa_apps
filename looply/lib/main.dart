@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -43,67 +40,21 @@ class LooplyApp extends StatelessWidget {
   }
 }
 
-Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5}) async {
-  try {
-    // Aguarda o frame atual terminar para não capturar um RenderObject a meio
-    // de um layout/paint causado pela troca de rota ou pela atualização da aba.
-    await WidgetsBinding.instance.endOfFrame;
-    var renderObject = key.currentContext?.findRenderObject();
-    if (renderObject is! RenderRepaintBoundary || !renderObject.attached) {
-      await WidgetsBinding.instance.endOfFrame;
-      renderObject = key.currentContext?.findRenderObject();
-    }
-    if (renderObject is! RenderRepaintBoundary ||
-        !renderObject.attached ||
-        renderObject.size.isEmpty) {
-      return null;
-    }
-    if (renderObject.debugNeedsPaint) {
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    final ready = key.currentContext?.findRenderObject();
-    if (ready is! RenderRepaintBoundary || !ready.attached || ready.size.isEmpty) {
-      return null;
-    }
-
-    final image = await ready.toImage(pixelRatio: pixelRatio);
-    try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } finally {
-      image.dispose();
-    }
-  } catch (_) {
-    return null;
-  }
-}
-
-
 class LooplyShell extends StatefulWidget {
   const LooplyShell({super.key});
+
   @override
   State<LooplyShell> createState() => _LooplyShellState();
 }
 
 class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedTab = 0;
-  bool _showingTabsGrid = false;
-  bool _morphing = false;
-  final GlobalKey _repaintKey = GlobalKey();
-  final GlobalKey _browserViewportKey = GlobalKey();
-  final Map<String, GlobalKey> _previewKeys = {};
-  final Map<String, GlobalKey> _cardKeys = {};
+  bool _tabsGridMounted = false;
   final List<String> _screenKeys = const ['home_screen', 'games_screen', 'activity_screen'];
   final List<String> _screenLabels = const ['Início', 'Jogos', 'Atividade'];
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
-  late final AnimationController _morphController;
-  OverlayEntry? _morphEntry;
-  ImageProvider? _morphImage;
-  Rect? _morphFrom;
-  Rect? _morphTo;
-  bool _morphOpening = true;
-  Uint8List? _lastScreenSnapshot;
+  late final AnimationController _gridController;
+  late final CurvedAnimation _gridFade;
   String? _preferredReturnTabId;
   bool _restoreChecked = false;
 
@@ -113,7 +64,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     WidgetsBinding.instance.addObserver(this);
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
-    _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
+    _gridController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _gridFade = CurvedAnimation(parent: _gridController, curve: Curves.easeInOutCubic);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRestoreSession());
   }
 
@@ -122,14 +74,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     WidgetsBinding.instance.removeObserver(this);
     tabsController.removeListener(_onTabsChanged);
     ShellTabRequest.instance.removeListener(_handleShellTabRequest);
-    _removeSnapshotOverlay();
-    _morphController.dispose();
+    _gridFade.dispose();
+    _gridController.dispose();
     super.dispose();
   }
 
-  // Quando o app vai para segundo plano, pausado ou é encerrado, marca o
-  // instante — é o que decide, no próximo arranque, se ainda estamos
-  // dentro da janela de 1h para restaurar o browser.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
@@ -165,286 +114,39 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       });
       return;
     }
+
     final requested = request.requestedIndex;
     request.requestedIndex = null;
     if (requested == null) return;
     setState(() => _selectedTab = requested.clamp(0, 2).toInt());
   }
 
-  Rect? _rectInOverlay(GlobalKey key) {
-    try {
-      final overlay = Overlay.of(context, rootOverlay: true);
-      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
-      final box = key.currentContext?.findRenderObject() as RenderBox?;
-      if (overlayBox == null || box == null || !box.attached) return null;
-      final topLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-      return topLeft & box.size;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<ImageProvider?> _prepareSnapshotImage(Uint8List bitmap) async {
-    final provider = MemoryImage(bitmap);
-    try {
-      // Decodifica antes de inserir o overlay. Assim o primeiro frame da
-      // animação já contém a imagem real e nunca um placeholder cinzento.
-      await precacheImage(provider, context);
-      return provider;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _insertSnapshotOverlay({
-    required ImageProvider image,
-    required Rect from,
-    required bool opening,
-  }) {
-    _removeSnapshotOverlay();
-    _morphController.stop();
-    _morphController.value = 0;
-    _morphImage = image;
-    _morphFrom = from;
-    _morphTo = from;
-    _morphOpening = opening;
-
-    // A mesma OverlayEntry permanece montada do primeiro ao último frame.
-    // Não removemos uma imagem para inserir outra no início da animação —
-    // essa troca de entries era a origem do frame vazio/flash.
-    _morphEntry = OverlayEntry(
-      builder: (overlayContext) => Positioned.fill(
-        child: IgnorePointer(
-          child: AnimatedBuilder(
-            animation: _morphController,
-            builder: (context, _) {
-              final imageProvider = _morphImage;
-              final from = _morphFrom;
-              final to = _morphTo;
-              if (imageProvider == null || from == null || to == null) {
-                return const SizedBox.expand();
-              }
-
-              final t = Curves.easeInOutCubic.transform(_morphController.value);
-              final rect = Rect.lerp(from, to, t) ?? to;
-              final startRadius = _morphOpening
-                  ? BorderRadius.zero
-                  : BorderRadius.circular(18);
-              final endRadius = _morphOpening
-                  ? BorderRadius.circular(18)
-                  : BorderRadius.zero;
-              final radius = BorderRadius.lerp(startRadius, endRadius, t) ??
-                  BorderRadius.zero;
-
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (!_morphOpening)
-                    Positioned.fill(
-                      child: ColoredBox(color: pageBg(overlayContext)),
-                    ),
-                  Positioned.fromRect(
-                    rect: rect,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ClipRRect(
-                        borderRadius: radius,
-                        child: Image(
-                          image: imageProvider,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
-  }
-
-  void _removeSnapshotOverlay() {
-    _morphEntry?.remove();
-    _morphEntry = null;
-    _morphImage = null;
-    _morphFrom = null;
-    _morphTo = null;
-  }
-
-  Future<void> _animateSnapshot({
-    required Rect to,
-    bool keepOverlayAtEnd = false,
-  }) async {
-    if (!mounted || _morphEntry == null) return;
-    _morphTo = to;
-    _morphEntry!.markNeedsBuild();
-
-    try {
-      // A curva é aplicada apenas no builder. O driver fica linear para não
-      // aplicar easeInOut duas vezes e alterar a velocidade a meio do morph.
-      await _morphController.animateTo(
-        1,
-        duration: const Duration(milliseconds: 470),
-        curve: Curves.linear,
-      );
-    } finally {
-      if (!keepOverlayAtEnd) _removeSnapshotOverlay();
-    }
-  }
-
   Future<void> _openTabsGrid() async {
-    if (_showingTabsGrid || _morphing) return;
-    _morphing = true;
+    if (_tabsGridMounted) return;
 
-    final sourceRect = _rectInOverlay(_repaintKey);
-    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.35);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    if (bitmap == null || sourceRect == null) {
-      final appTab = tabsController.upsertAppScreenTab(
-        _screenKeys[_selectedTab],
-        _screenLabels[_selectedTab],
-        _screenIcons[_selectedTab],
-        bitmap,
-      );
-      _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
-      _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
-      setState(() {
-        _showingTabsGrid = true;
-        _morphing = false;
-      });
-      return;
-    }
-
-    final imageProvider = await _prepareSnapshotImage(bitmap);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    _lastScreenSnapshot = bitmap;
-    final appTab = tabsController.upsertAppScreenTab(
+    _preferredReturnTabId = tabsController.activeTabId;
+    tabsController.upsertAppScreenTab(
       _screenKeys[_selectedTab],
       _screenLabels[_selectedTab],
       _screenIcons[_selectedTab],
-      bitmap,
+      null,
     );
-    _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
-    _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
-
-    if (imageProvider == null) {
-      setState(() {
-        _showingTabsGrid = true;
-        _morphing = false;
-      });
-      return;
-    }
-
-    // Primeiro cobrimos o ecrã atual com a captura já descodificada.
-    // Só depois montamos a grelha por baixo dela.
-    _insertSnapshotOverlay(
-      image: imageProvider,
-      from: sourceRect,
-      opening: true,
-    );
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      return;
-    }
-
-    setState(() => _showingTabsGrid = true);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      return;
-    }
-
-    final target = _rectInOverlay(_previewKeys[appTab.id]!) ??
-        _rectInOverlay(_cardKeys[appTab.id]!) ??
-        sourceRect;
-    await _animateSnapshot(to: target);
-    if (mounted) setState(() => _morphing = false);
+    setState(() => _tabsGridMounted = true);
+    await _gridController.forward(from: 0);
   }
 
   Future<void> _closeTabsGrid({BrowserTab? openTab}) async {
-    if (_morphing || !_showingTabsGrid) return;
-    _morphing = true;
+    if (!_tabsGridMounted) return;
 
     final preferredReturnTab = tabsController.getTab(_preferredReturnTabId ?? '');
-    final targetTab = openTab ??
-        preferredReturnTab ??
-        tabsController.getAppScreen(_screenKeys[_selectedTab]);
+    final targetTab = openTab ?? preferredReturnTab ?? tabsController.getAppScreen(_screenKeys[_selectedTab]);
     _preferredReturnTabId = null;
-
-    final sourceKey = targetTab == null
-        ? null
-        : (_previewKeys[targetTab.id] ?? _cardKeys[targetTab.id]);
-    final sourceRect = sourceKey == null ? null : _rectInOverlay(sourceKey);
-
-    Uint8List? bitmap = targetTab?.thumbnail;
-    if (bitmap == null && targetTab?.kind == TabKind.appScreen) {
-      bitmap = _lastScreenSnapshot;
-    }
-    if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
-    }
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    final imageProvider = bitmap == null ? null : await _prepareSnapshotImage(bitmap);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
 
     if (targetTab != null && targetTab.kind == TabKind.browser) {
       tabsController.activate(targetTab.id);
-      final firstLoad = Completer<void>();
-
-      // O push e a inserção do overlay acontecem no mesmo ciclo síncrono:
-      // a captura fica no topo antes do primeiro frame da nova rota.
-      setState(() => _showingTabsGrid = false);
-      Navigator.of(context).push(
-        _instantBrowserRoute(targetTab, firstLoadCompleter: firstLoad),
-      );
-
-      if (imageProvider != null && sourceRect != null) {
-        _insertSnapshotOverlay(
-          image: imageProvider,
-          from: sourceRect,
-          opening: false,
-        );
-        await WidgetsBinding.instance.endOfFrame;
-        await WidgetsBinding.instance.endOfFrame;
-        if (mounted) {
-          final destination = _rectInOverlay(_browserViewportKey);
-          if (destination != null) {
-            // A imagem termina no viewport e continua visível por cima da
-            // WebView enquanto o primeiro documento termina de carregar.
-            await _animateSnapshot(to: destination, keepOverlayAtEnd: true);
-            try {
-              await firstLoad.future.timeout(const Duration(seconds: 5));
-            } on TimeoutException {
-              // Não bloquear a navegação indefinidamente se o site demorar.
-            }
-          }
-        }
-      }
-
-      _removeSnapshotOverlay();
-      if (mounted) setState(() => _morphing = false);
+      setState(() => _tabsGridMounted = false);
+      _gridController.value = 0;
+      Navigator.of(context).push(_instantBrowserRoute(targetTab));
       return;
     }
 
@@ -453,45 +155,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       if (index >= 0) _selectedTab = index;
     }
 
-    if (imageProvider != null && sourceRect != null) {
-      _insertSnapshotOverlay(
-        image: imageProvider,
-        from: sourceRect,
-        opening: false,
-      );
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    setState(() => _showingTabsGrid = false);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (imageProvider != null && sourceRect != null && mounted) {
-      final destination = _rectInOverlay(_repaintKey);
-      if (destination != null) {
-        await _animateSnapshot(to: destination);
-      } else {
-        _removeSnapshotOverlay();
-      }
-    } else {
-      _removeSnapshotOverlay();
-    }
-
-    if (mounted) setState(() => _morphing = false);
+    await _gridController.reverse();
+    if (mounted) setState(() => _tabsGridMounted = false);
   }
 
-  PageRoute<void> _instantBrowserRoute(
-    BrowserTab tab, {
-    Completer<void>? firstLoadCompleter,
-  }) {
+  PageRoute<void> _instantBrowserRoute(BrowserTab tab) {
     return PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
       pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
         tabId: tab.id,
         initialUrl: tab.url,
-        viewportKey: _browserViewportKey,
-        firstLoadCompleter: firstLoadCompleter,
       ),
     );
   }
@@ -511,40 +185,75 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
         body: Stack(
+          fit: StackFit.expand,
           children: [
-            Offstage(
-              offstage: _showingTabsGrid,
-              child: SafeArea(
-                bottom: false,
-                child: RepaintBoundary(
-                  key: _repaintKey,
-                  child: IndexedStack(index: _selectedTab, children: pages),
+            AnimatedBuilder(
+              animation: _gridController,
+              builder: (context, child) {
+                final progress = Curves.easeInOutCubic.transform(_gridController.value);
+                return Transform.scale(
+                  scale: 1 - (0.055 * progress),
+                  alignment: Alignment.center,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26 * progress),
+                    child: child,
+                  ),
+                );
+              },
+              child: IgnorePointer(
+                ignoring: _tabsGridMounted,
+                child: SafeArea(
+                  bottom: false,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 420),
+                    reverseDuration: const Duration(milliseconds: 320),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final scale = Tween<double>(begin: 0.985, end: 1).animate(
+                        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+                      );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: scale, child: child),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey<int>(_selectedTab),
+                      child: pages[_selectedTab],
+                    ),
+                  ),
                 ),
               ),
             ),
-            if (_showingTabsGrid)
-              PopScope<void>(
-                canPop: false,
-                onPopInvokedWithResult: (didPop, result) {
-                  if (!didPop) _closeTabsGrid();
-                },
-                child: TabsGridScreen(
-                  previewKeys: _previewKeys,
-                  cardKeys: _cardKeys,
-                  onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
-                  onClose: () => _closeTabsGrid(),
-                  onNewTab: () {
-                    final tab = tabsController.createBrowserTab('https://www.google.com');
-                    _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-                    _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-                    _closeTabsGrid(openTab: tab);
-                  },
+            if (_tabsGridMounted)
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _gridController,
+                  builder: (context, child) => IgnorePointer(
+                    ignoring: _gridController.value < 0.96,
+                    child: FadeTransition(opacity: _gridFade, child: child),
+                  ),
+                  child: PopScope<void>(
+                    canPop: false,
+                    onPopInvokedWithResult: (didPop, result) {
+                      if (!didPop) _closeTabsGrid();
+                    },
+                    child: TabsGridScreen(
+                      onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
+                      onClose: () => _closeTabsGrid(),
+                      onNewTab: () {
+                        final tab = tabsController.createBrowserTab('https://www.google.com');
+                        _closeTabsGrid(openTab: tab);
+                      },
+                    ),
+                  ),
                 ),
               ),
           ],
         ),
         bottomNavigationBar: Offstage(
-          offstage: _showingTabsGrid,
+          offstage: _tabsGridMounted,
           child: NavigationBar(
             selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
             onDestinationSelected: (index) {
@@ -571,10 +280,16 @@ class _TabsCountIcon extends StatelessWidget {
   const _TabsCountIcon({required this.count, required this.color});
   final int count;
   final Color color;
+
   @override
   Widget build(BuildContext context) => Container(
-    width: 23, height: 23, alignment: Alignment.center,
-    decoration: BoxDecoration(border: Border.all(color: color.withOpacity(.85), width: 1.5), borderRadius: BorderRadius.circular(6)),
-    child: Text('$count', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700, height: 1)),
-  );
+        width: 23,
+        height: 23,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(.85), width: 1.5),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text('$count', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700, height: 1)),
+      );
 }

@@ -6,19 +6,10 @@ import '../models.dart';
 import '../theme.dart';
 
 class TabsGridScreen extends StatefulWidget {
-  const TabsGridScreen({
-    super.key,
-    required this.onSelectTab,
-    required this.onClose,
-    required this.onNewTab,
-    required this.previewKeys,
-    required this.cardKeys,
-  });
+  const TabsGridScreen({super.key, required this.onSelectTab, required this.onClose, required this.onNewTab});
   final ValueChanged<BrowserTab> onSelectTab;
   final VoidCallback onClose;
   final VoidCallback onNewTab;
-  final Map<String, GlobalKey> previewKeys;
-  final Map<String, GlobalKey> cardKeys;
   @override
   State<TabsGridScreen> createState() => _TabsGridScreenState();
 }
@@ -88,16 +79,10 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                         ),
                         itemBuilder: (context, index) {
                           final tab = tabs[index];
-                          final previewKey = widget.previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-                          final cardKey = widget.cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-                          return RepaintBoundary(
-                            key: cardKey,
-                            child: TabGridCard(
-                              tab: tab,
-                              previewKey: previewKey,
-                              onTap: () => widget.onSelectTab(tab),
-                              onClose: tab.kind == TabKind.browser ? () => tabsController.closeTab(tab.id) : null,
-                            ),
+                          return TabGridCard(
+                            tab: tab,
+                            onTap: () => widget.onSelectTab(tab),
+                            onClose: tab.kind == TabKind.browser ? () => tabsController.closeTab(tab.id) : null,
                           );
                         },
                       );
@@ -111,15 +96,8 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
 }
 
 class TabGridCard extends StatelessWidget {
-  const TabGridCard({
-    super.key,
-    required this.tab,
-    required this.previewKey,
-    required this.onTap,
-    this.onClose,
-  });
+  const TabGridCard({super.key, required this.tab, required this.onTap, this.onClose});
   final BrowserTab tab;
-  final GlobalKey previewKey;
   final VoidCallback onTap;
   final VoidCallback? onClose;
 
@@ -173,7 +151,6 @@ class TabGridCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 child: ClipRRect(
-                  key: previewKey,
                   borderRadius: BorderRadius.circular(13),
                   child: Container(
                     width: double.infinity,
