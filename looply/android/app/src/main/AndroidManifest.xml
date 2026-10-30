@@ -11,6 +11,12 @@
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true">
 
+        <!-- Compatibilidade da composição do InAppWebView com a versão antiga estável. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
