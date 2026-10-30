@@ -11,24 +11,40 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
-// O browser entra sem uma transição de rota que altere a composição da
-// PlatformView. A animação entre o ecrã principal e a grelha de abas é
-// feita no shell, sem capturar imagens da WebView.
-PageRoute<void> openBrowserRoute({required String tabId, required String initialUrl}) {
+// As rotas do navegador não usam transições do Material/Android. A superfície
+// nativa do WebView é montada diretamente, sem zoom/fade da janela durante o push.
+PageRoute<void> openBrowserRoute({
+  required String tabId,
+  required String initialUrl,
+  GlobalKey? viewportKey,
+  Completer<void>? firstLoadCompleter,
+}) {
   return PageRouteBuilder<void>(
     transitionDuration: Duration.zero,
     reverseTransitionDuration: Duration.zero,
     pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
       tabId: tabId,
       initialUrl: initialUrl,
+      viewportKey: viewportKey,
+      firstLoadCompleter: firstLoadCompleter,
     ),
   );
 }
 
 class BrowserScreen extends StatefulWidget {
-  const BrowserScreen({super.key, required this.tabId, required this.initialUrl});
+  const BrowserScreen({
+    super.key,
+    required this.tabId,
+    required this.initialUrl,
+    this.viewportKey,
+    this.firstLoadCompleter,
+  });
+
   final String tabId;
   final String initialUrl;
+  final GlobalKey? viewportKey;
+  final Completer<void>? firstLoadCompleter;
+
   @override
   State<BrowserScreen> createState() => _BrowserScreenState();
 }
@@ -48,12 +64,33 @@ class _BrowserScreenState extends State<BrowserScreen> {
   bool _addressBarVisible = true;
   int _lastScrollY = 0;
   Timer? _scrollDebounce;
+  bool _firstLoadCompleted = false;
+
+  String _normalizeInitialUrl(String value) {
+    final raw = value.trim();
+    if (raw.isEmpty) return 'https://www.google.com';
+    final parsed = Uri.tryParse(raw);
+    if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
+      return parsed.toString();
+    }
+    if (raw.contains(' ')) {
+      return 'https://www.google.com/search?q=${Uri.encodeQueryComponent(raw)}';
+    }
+    return 'https://$raw';
+  }
+
+  void _completeFirstLoad() {
+    if (_firstLoadCompleted) return;
+    _firstLoadCompleted = true;
+    final completer = widget.firstLoadCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
+  }
 
   @override
   void initState() {
     super.initState();
     final existingTab = tabsController.getTab(widget.tabId);
-    _currentUrl = (existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl;
+    _currentUrl = _normalizeInitialUrl(widget.initialUrl);
     _currentTitle = existingTab?.title ?? '';
     tabsController.activate(widget.tabId);
     _pullToRefreshController = PullToRefreshController(
@@ -140,7 +177,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
               ),
               if (_isLoading) SizedBox(height: 2, child: LinearProgressIndicator(value: _progress == 0 ? null : _progress, color: accentColor(context), backgroundColor: muted.withOpacity(.15))),
               Expanded(
-                child: ColoredBox(color: bg, child: _buildBrowserWebView(context)),
+                child: KeyedSubtree(
+                  key: widget.viewportKey,
+                  child: ColoredBox(
+                    color: bg,
+                    child: _buildBrowserWebView(context),
+                  ),
+                ),
               ),
               _BrowserBottomBar(
                 canGoBack: _canGoBack,
@@ -167,16 +210,14 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (!_renderProcessCrashed)
           InAppWebView(
             key: _webViewKey,
-            initialUrlRequest: URLRequest(url: WebUri(_currentUrl)),
+            initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl.trim().isEmpty ? _currentUrl : _normalizeInitialUrl(widget.initialUrl))),
             pullToRefreshController: _pullToRefreshController,
+            // Mantém os mesmos parâmetros da versão antiga que carregava
+            // o InAppWebView corretamente. Evita opções de composição extra
+            // que não existiam na implementação estável.
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
-              domStorageEnabled: true,
-              databaseEnabled: true,
               mediaPlaybackRequiresUserGesture: false,
-              // Igual à versão antiga que carregava as páginas corretamente.
-              // O fundo transparente evita que a WebView mostre o cinzento
-              // nativo enquanto o primeiro frame HTML ainda não foi pintado.
               transparentBackground: true,
               cacheMode: CacheMode.LOAD_DEFAULT,
               hardwareAcceleration: true,
@@ -237,6 +278,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 if (url != null) _currentUrl = url.toString();
               });
               _updateTabState(screenshot: screenshot);
+              _completeFirstLoad();
             },
             onReceivedError: (controller, request, error) {
               _pullToRefreshController?.endRefreshing();
@@ -245,6 +287,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                   _isLoading = false;
                   _loadError = error.description;
                 });
+                _completeFirstLoad();
               }
             },
             onRenderProcessGone: (controller, detail) {
@@ -255,6 +298,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 _isLoading = false;
                 _loadError = 'O motor da página foi reiniciado.';
               });
+              _completeFirstLoad();
             },
             onScrollChanged: (controller, x, y) => _onScrollChanged(y),
           ),

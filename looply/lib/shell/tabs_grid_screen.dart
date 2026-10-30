@@ -6,7 +6,14 @@ import '../models.dart';
 import '../theme.dart';
 
 class TabsGridScreen extends StatefulWidget {
-  const TabsGridScreen({super.key, required this.onSelectTab, required this.onClose, required this.onNewTab, required this.previewKeys, required this.cardKeys});
+  const TabsGridScreen({
+    super.key,
+    required this.onSelectTab,
+    required this.onClose,
+    required this.onNewTab,
+    required this.previewKeys,
+    required this.cardKeys,
+  });
   final ValueChanged<BrowserTab> onSelectTab;
   final VoidCallback onClose;
   final VoidCallback onNewTab;
@@ -104,7 +111,13 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
 }
 
 class TabGridCard extends StatelessWidget {
-  const TabGridCard({super.key, required this.tab, required this.previewKey, required this.onTap, this.onClose});
+  const TabGridCard({
+    super.key,
+    required this.tab,
+    required this.previewKey,
+    required this.onTap,
+    this.onClose,
+  });
   final BrowserTab tab;
   final GlobalKey previewKey;
   final VoidCallback onTap;
