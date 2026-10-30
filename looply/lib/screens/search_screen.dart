@@ -72,8 +72,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final tab = tabsController.createBrowserTab(url);
     tabsController.activate(tab.id);
     activityController.log(ActivityKind.site, value, url);
-    // FIX: pushReplacement com openBrowserRoute() (sem transição) em vez
-    // de MaterialPageRoute — mesma causa/correção do home_screen.dart.
+    // Substitui a pesquisa pelo ecrã normal do navegador.
     Navigator.of(context).pushReplacement(openBrowserRoute(tabId: tab.id, initialUrl: url));
   }
 
