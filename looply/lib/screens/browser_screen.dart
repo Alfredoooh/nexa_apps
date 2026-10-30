@@ -12,21 +12,9 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
-// Rota dedicada para abrir o BrowserScreen, usada em TODO lugar onde o
-// app navega para um site (Home, pesquisa, histórico, atividade, menu
-// da própria tela de browser). Sem transição (Duration.zero), igual à
-// rota já usada entre Abas e Browser.
-//
-// Motivo: o MaterialPageRoute padrão usa, no Android, o
-// ZoomPageTransitionsBuilder nativo (fade + scale). Esse transition
-// builder cria uma janela de composição em que a superfície do
-// InAppWebView (useHybridComposition: true) ainda não está anexada à
-// árvore de camadas — e o Android pinta a cor de fundo da Window
-// (cinza) durante esse intervalo. É esse builder, especificamente, que
-// causa o flash cinzento — não o WebView em si. Remover a transição
-// SÓ nas rotas que abrem o browser elimina o bug sem mexer na
-// animação nativa das outras telas (Settings, Jogos, Histórico, etc.),
-// que continuam a usar MaterialPageRoute normalmente.
+// Rota sem transição para o browser. As superfícies nativas do WebView não
+// devem atravessar animações de página do Flutter: o conteúdo fica visível
+// sem o flash da composição durante a entrada/saída da rota.
 PageRoute<void> openBrowserRoute({required String tabId, required String initialUrl, GlobalKey? viewportKey, ValueListenable<bool>? revealWebView}) {
   return PageRouteBuilder<void>(
     transitionDuration: Duration.zero,
@@ -65,12 +53,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
   bool _addressBarVisible = true;
   int _lastScrollY = 0;
   Timer? _scrollDebounce;
+  Timer? _loadTimeout;
 
   @override
   void initState() {
     super.initState();
     final existingTab = tabsController.getTab(widget.tabId);
-    _currentUrl = (existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl;
+    _currentUrl = _normalizeBrowserUrl((existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl);
     _currentTitle = existingTab?.title ?? '';
     tabsController.activate(widget.tabId);
     _pullToRefreshController = PullToRefreshController(
@@ -92,8 +81,25 @@ class _BrowserScreenState extends State<BrowserScreen> {
   @override
   void dispose() {
     _scrollDebounce?.cancel();
+    _loadTimeout?.cancel();
     _controller?.dispose();
     super.dispose();
+  }
+
+  String _normalizeBrowserUrl(String value) {
+    final input = value.trim();
+    if (input.isEmpty) return 'https://www.google.com';
+
+    final parsed = Uri.tryParse(input);
+    if (parsed != null &&
+        (parsed.scheme == 'http' || parsed.scheme == 'https') &&
+        parsed.hasAuthority) {
+      return parsed.toString();
+    }
+
+    if (input.startsWith('www.')) return 'https://$input';
+    if (!input.contains(' ') && input.contains('.')) return 'https://$input';
+    return 'https://www.google.com/search?q=${Uri.encodeQueryComponent(input)}';
   }
 
   void _updateTabState({Uint8List? screenshot}) {
@@ -205,9 +211,13 @@ class _BrowserScreenState extends State<BrowserScreen> {
               databaseEnabled: true,
               mediaPlaybackRequiresUserGesture: false,
               transparentBackground: false,
+              underPageBackgroundColor: bg,
               cacheMode: CacheMode.LOAD_DEFAULT,
               hardwareAcceleration: true,
-              useHybridComposition: true,
+              // Usa a camada de textura integrada no Flutter. Isso mantém
+              // a WebView limitada ao seu viewport e evita que a superfície
+              // híbrida cubra os restantes controlos durante os morphs.
+              useHybridComposition: false,
               useOnRenderProcessGone: true,
               safeBrowsingEnabled: true,
               useShouldInterceptRequest: true,
@@ -236,8 +246,17 @@ class _BrowserScreenState extends State<BrowserScreen> {
             },
             onLoadStart: (controller, url) {
               if (!mounted) return;
+              _loadTimeout?.cancel();
+              _loadTimeout = Timer(const Duration(seconds: 30), () {
+                if (!mounted || !_isLoading) return;
+                setState(() {
+                  _isLoading = false;
+                  _loadError = 'A página está a demorar demasiado tempo a responder.';
+                });
+              });
               setState(() {
                 _isLoading = true;
+                _progress = 0;
                 _loadError = null;
                 if (url != null) _currentUrl = url.toString();
               });
@@ -249,7 +268,19 @@ class _BrowserScreenState extends State<BrowserScreen> {
               setState(() {});
             },
             onLoadStop: (controller, url) async {
+              _loadTimeout?.cancel();
               _pullToRefreshController?.endRefreshing();
+              if (!mounted) return;
+
+              // Liberta a interface imediatamente. A captura de screenshot e
+              // do HTML é secundária e não deve atrasar o fim do carregamento.
+              setState(() {
+                _isLoading = false;
+                _progress = 1;
+                _loadError = null;
+                if (url != null) _currentUrl = url.toString();
+              });
+
               bool back = false;
               bool forward = false;
               Uint8List? screenshot;
@@ -258,31 +289,34 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 back = await controller.canGoBack();
                 forward = await controller.canGoForward();
                 screenshot = await controller.takeScreenshot();
-                if (navigationAcceleratorEnabled.value) html = await controller.getHtml();
+                if (navigationAcceleratorEnabled.value) {
+                  html = await controller.getHtml();
+                }
               } catch (_) {}
+
               if (html != null && navigationAcceleratorEnabled.value) {
                 NavAccelerator.instance.cachePage(url?.toString() ?? _currentUrl, html);
               }
               if (!mounted) return;
               setState(() {
-                _isLoading = false;
-                _loadError = null;
                 _canGoBack = back;
                 _canGoForward = forward;
-                if (url != null) _currentUrl = url.toString();
               });
               _updateTabState(screenshot: screenshot);
             },
             onReceivedError: (controller, request, error) {
               _pullToRefreshController?.endRefreshing();
               if (request.isForMainFrame == true && mounted) {
+                _loadTimeout?.cancel();
                 setState(() {
                   _isLoading = false;
+                  _progress = 0;
                   _loadError = error.description;
                 });
               }
             },
             onRenderProcessGone: (controller, detail) {
+              _loadTimeout?.cancel();
               _pullToRefreshController?.endRefreshing();
               if (!mounted) return;
               setState(() {
@@ -307,6 +341,8 @@ class _BrowserScreenState extends State<BrowserScreen> {
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () {
+                        _loadTimeout?.cancel();
+                        _controller?.dispose();
                         setState(() {
                           _renderProcessCrashed = false;
                           _loadError = null;

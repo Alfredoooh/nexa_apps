@@ -63,21 +63,6 @@ Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5
   }
 }
 
-// Rota com crossfade suave (em vez do slide padrão do Material) — usada
-// para abrir o browser restaurado logo no arranque do app, de forma mais
-// discreta do que um push convencional.
-PageRoute<void> _fadeRoute(Widget Function(BuildContext) builder) {
-  return PageRouteBuilder<void>(
-    transitionDuration: const Duration(milliseconds: 260),
-    reverseTransitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-      return FadeTransition(opacity: curved, child: child);
-    },
-  );
-}
-
 class LooplyShell extends StatefulWidget {
   const LooplyShell({super.key});
   @override
@@ -98,6 +83,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   OverlayEntry? _morphEntry;
+  Rect? _morphFromRect;
+  Rect? _morphToRect;
+  bool _morphOpening = true;
   Uint8List? _lastScreenSnapshot;
   Rect? _lastScreenRect;
   String? _preferredReturnTabId;
@@ -109,7 +97,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     WidgetsBinding.instance.addObserver(this);
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
-    _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
+    _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 620));
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRestoreSession());
   }
 
@@ -141,7 +129,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final tab = tabsController.createBrowserTab(restored.url);
     tabsController.activate(tab.id);
-    Navigator.of(context).push(_fadeRoute((context) => BrowserScreen(tabId: tab.id, initialUrl: restored.url)));
+    Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: restored.url));
   }
 
   void _onTabsChanged() {
@@ -185,55 +173,33 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphEntry = null;
     _morphController.stop();
     _morphController.value = 0;
-    _morphEntry = OverlayEntry(
-      builder: (overlayContext) => Positioned.fill(
-        child: IgnorePointer(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (!opening) Positioned.fill(child: ColoredBox(color: pageBg(context))),
-              Positioned.fromRect(
-                rect: from,
-                child: ClipRRect(
-                  borderRadius: opening ? BorderRadius.zero : BorderRadius.circular(18),
-                  child: Image.memory(bitmap, fit: BoxFit.cover, gaplessPlayback: true),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
-  }
 
-  // Curva suavizada (easeInOutCubic em vez de linear no driver da animação)
-  // para que a transição de container-morph pareça mais fluida e menos
-  // abrupta, tanto a abrir quanto a fechar.
-  Future<void> _animateSnapshot({required Uint8List bitmap, required Rect from, required Rect to, required bool opening}) async {
-    if (!mounted) return;
-    _morphEntry?.remove();
-    _morphEntry = null;
-    _morphController.stop();
-    _morphController.value = 0;
-    final startRadius = opening ? BorderRadius.zero : BorderRadius.circular(18);
-    final endRadius = opening ? BorderRadius.circular(18) : BorderRadius.zero;
+    _morphFromRect = from;
+    _morphToRect = from;
+    _morphOpening = opening;
+
+    // Mantém uma única OverlayEntry durante toda a animação. Antes, o
+    // overlay estático era removido e recriado pelo método de animação,
+    // deixando um frame descoberto que provocava o flash.
     _morphEntry = OverlayEntry(
       builder: (overlayContext) => Positioned.fill(
         child: IgnorePointer(
           child: AnimatedBuilder(
             animation: _morphController,
             builder: (context, _) {
-              final t = Curves.easeInOutCubic.transform(_morphController.value);
-              final rect = Rect.lerp(from, to, t) ?? to;
+              final t = _morphController.value;
+              final source = _morphFromRect ?? from;
+              final destination = _morphToRect ?? from;
+              final rect = Rect.lerp(source, destination, t) ?? destination;
+              final startRadius = _morphOpening ? BorderRadius.zero : BorderRadius.circular(18);
+              final endRadius = _morphOpening ? BorderRadius.circular(18) : BorderRadius.zero;
               final radius = BorderRadius.lerp(startRadius, endRadius, t) ?? BorderRadius.zero;
+
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (!opening)
-                    Positioned.fill(
-                      child: ColoredBox(color: pageBg(context)),
-                    ),
+                  if (!_morphOpening)
+                    Positioned.fill(child: ColoredBox(color: pageBg(context))),
                   Positioned.fromRect(
                     rect: rect,
                     child: Material(
@@ -252,11 +218,30 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       ),
     );
     Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
+  }
+
+  Future<void> _animateSnapshot({required Uint8List bitmap, required Rect from, required Rect to, required bool opening}) async {
+    if (!mounted) return;
+
+    // A mesma entrada que já está a mostrar o snapshot recebe apenas o
+    // destino novo; não removemos/recriamos a imagem no início da animação.
+    if (_morphEntry == null) {
+      _prepareSnapshotOverlay(bitmap: bitmap, from: from, opening: opening);
+    }
+    _morphFromRect = from;
+    _morphToRect = to;
+    _morphOpening = opening;
+    _morphEntry?.markNeedsBuild();
+
     try {
+      // A curva é aplicada uma única vez. Antes era aplicada no controller
+      // e novamente ao calcular o progresso, causando aceleração irregular.
       await _morphController.animateTo(1, curve: Curves.easeInOutCubic);
     } finally {
       _morphEntry?.remove();
       _morphEntry = null;
+      _morphFromRect = null;
+      _morphToRect = null;
       if (mounted) setState(() => _morphing = false);
     }
   }
@@ -321,6 +306,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _showingTabsGrid = false;
       setState(() => _morphing = bitmap != null && sourceRect != null);
       Navigator.of(context).push(_instantBrowserRoute(targetTab, revealWebView: revealWebView));
+      // Inicia o WebView por baixo do snapshot antes de começar o morph.
+      // Assim a página já pode desenhar enquanto o container se expande,
+      // evitando revelar uma superfície ainda vazia no último frame.
+      revealWebView.value = true;
       await WidgetsBinding.instance.endOfFrame;
       final destination = _rectInOverlay(_browserViewportKey);
       if (bitmap != null && sourceRect != null && destination != null) {
@@ -328,7 +317,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       } else if (mounted) {
         setState(() => _morphing = false);
       }
-      revealWebView.value = true;
       return;
     }
 
