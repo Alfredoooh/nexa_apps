@@ -11,39 +11,19 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
-// O browser entra com uma transição "container transform" nativa (fade +
-// scale + cantos arredondados), igual às outras telas do shell. Para evitar
-// o flash cinzento provocado pela PlatformView do InAppWebView ainda não
-// ter pintado o primeiro frame nativo durante a animação, a WebView real só
-// é montada quando a animação de entrada já está suficientemente avançada
-// (ver _revealWebView em BrowserScreen). Até lá mostramos um placeholder na
-// cor de fundo, com a miniatura da aba por cima quando existir, para dar
-// continuidade visual ao "transform" do cartão.
+// O browser entra sem uma transição de rota que altere a composição da
+// PlatformView. A animação entre o ecrã principal, a grelha de abas e o
+// browser é feita no shell (main.dart) através de um morph manual de
+// screenshot sobre um OverlayEntry — nunca anima a InAppWebView em si, por
+// isso não há transição de rota aqui: o Duration.zero é intencional.
 PageRoute<void> openBrowserRoute({required String tabId, required String initialUrl}) {
   return PageRouteBuilder<void>(
-    transitionDuration: const Duration(milliseconds: 280),
-    reverseTransitionDuration: const Duration(milliseconds: 220),
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
     pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
       tabId: tabId,
       initialUrl: initialUrl,
-      routeAnimation: animation,
     ),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-      final scale = Tween<double>(begin: 0.94, end: 1).animate(curved);
-      final radius = Tween<double>(begin: 22, end: 0).animate(curved);
-      return FadeTransition(
-        opacity: curved,
-        child: AnimatedBuilder(
-          animation: radius,
-          builder: (context, c) => ClipRRect(
-            borderRadius: BorderRadius.circular(radius.value),
-            child: c,
-          ),
-          child: ScaleTransition(scale: scale, alignment: Alignment.center, child: child),
-        ),
-      );
-    },
   );
 }
 
@@ -52,15 +32,21 @@ class BrowserScreen extends StatefulWidget {
     super.key,
     required this.tabId,
     required this.initialUrl,
-    this.routeAnimation,
+    this.viewportKey,
+    this.firstLoadCompleter,
   });
   final String tabId;
   final String initialUrl;
-  // Animação da rota PageRouteBuilder que a envolve. Usada apenas para saber
-  // quando é seguro montar a PlatformView do InAppWebView sem provocar o
-  // flash cinzento durante a transição de entrada. Pode ser nula quando a
-  // tela é usada fora dessa rota (ex. em testes).
-  final Animation<double>? routeAnimation;
+  // Key colocada à volta da área exata onde a InAppWebView fica. O shell
+  // (main.dart) usa esta key para medir, em coordenadas do Overlay, o Rect
+  // de destino para onde a imagem do morph deve animar ao entrar nesta
+  // tela vinda da grelha de abas.
+  final GlobalKey? viewportKey;
+  // Resolvido uma única vez, na primeira vez que a página termina de
+  // carregar (onLoadStop). O shell espera por este Future antes de remover
+  // a imagem do morph que está a tapar a WebView — é isto que garante que
+  // nunca se vê a PlatformView nua/cinzenta por baixo da imagem.
+  final Completer<void>? firstLoadCompleter;
   @override
   State<BrowserScreen> createState() => _BrowserScreenState();
 }
@@ -80,12 +66,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
   bool _addressBarVisible = true;
   int _lastScrollY = 0;
   Timer? _scrollDebounce;
-
-  // Controla quando a PlatformView real é inserida na árvore. Começa
-  // "false" sempre que existe uma animação de rota em andamento, para que o
-  // primeiro frame da transição nunca dependa da WebView nativa.
-  bool _webViewRevealed = false;
-  Uint8List? _entryThumbnail;
+  bool _firstLoadSignaled = false;
 
   @override
   void initState() {
@@ -93,7 +74,6 @@ class _BrowserScreenState extends State<BrowserScreen> {
     final existingTab = tabsController.getTab(widget.tabId);
     _currentUrl = (existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl;
     _currentTitle = existingTab?.title ?? '';
-    _entryThumbnail = existingTab?.thumbnail;
     tabsController.activate(widget.tabId);
     _pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: looplyPrimary),
@@ -109,60 +89,24 @@ class _BrowserScreenState extends State<BrowserScreen> {
         }
       },
     );
-    _setupReveal();
-  }
-
-  void _setupReveal() {
-    final animation = widget.routeAnimation;
-    // Sem animação de rota associada (ex. tela usada diretamente): revela
-    // já no primeiro frame, sem atraso.
-    if (animation == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _revealWebView());
-      return;
-    }
-    // Já entrou totalmente animada (ex. veio de pop/hot reload no meio do
-    // caminho): revela de imediato.
-    if (animation.status == AnimationStatus.completed || animation.value >= 0.999) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _revealWebView());
-      return;
-    }
-    void listener() {
-      // Revela a WebView assim que a transição já pintou a maior parte do
-      // "transform" do container — o suficiente para a PlatformView não ser
-      // percebida a aparecer, mas sem esperar a animação terminar de todo.
-      if (animation.value >= 0.65 && !_webViewRevealed) {
-        _revealWebView();
-      }
-    }
-    animation.addListener(listener);
-    // Caso a animação termine (ou seja cancelada/revertida rapidamente)
-    // sem nunca passar pelo limiar acima, garante que a WebView acaba por
-    // aparecer mesmo assim.
-    void statusListener(AnimationStatus status) {
-      if ((status == AnimationStatus.completed || status == AnimationStatus.dismissed) && !_webViewRevealed) {
-        _revealWebView();
-      }
-    }
-    animation.addStatusListener(statusListener);
-    _disposeReveal = () {
-      animation.removeListener(listener);
-      animation.removeStatusListener(statusListener);
-    };
-  }
-
-  VoidCallback? _disposeReveal;
-
-  void _revealWebView() {
-    if (!mounted || _webViewRevealed) return;
-    setState(() => _webViewRevealed = true);
   }
 
   @override
   void dispose() {
-    _disposeReveal?.call();
     _scrollDebounce?.cancel();
     _controller?.dispose();
+    // Se a tela for destruída antes do primeiro carregamento terminar
+    // (ex. utilizador fecha a aba muito rápido), resolve o completer de
+    // qualquer forma para o shell nunca ficar bloqueado à espera dele.
+    _signalFirstLoad();
     super.dispose();
+  }
+
+  void _signalFirstLoad() {
+    if (_firstLoadSignaled) return;
+    _firstLoadSignaled = true;
+    final completer = widget.firstLoadCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
   }
 
   void _updateTabState({Uint8List? screenshot}) {
@@ -225,8 +169,14 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 ),
               ),
               if (_isLoading) SizedBox(height: 2, child: LinearProgressIndicator(value: _progress == 0 ? null : _progress, color: accentColor(context), backgroundColor: muted.withOpacity(.15))),
+              // RepaintBoundary + viewportKey delimitam exatamente a área
+              // onde a InAppWebView vive. É este Rect que o shell usa como
+              // destino do morph vindo da grelha de abas.
               Expanded(
-                child: ColoredBox(color: bg, child: _buildBrowserWebView(context)),
+                child: RepaintBoundary(
+                  key: widget.viewportKey,
+                  child: ColoredBox(color: bg, child: _buildBrowserWebView(context)),
+                ),
               ),
               _BrowserBottomBar(
                 canGoBack: _canGoBack,
@@ -250,17 +200,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
       fit: StackFit.expand,
       children: [
         ColoredBox(color: bg),
-        // Placeholder mostrado enquanto a PlatformView ainda não foi
-        // revelada. Usa a miniatura da aba (quando existir) para que o
-        // "transform" do container pareça contínuo em vez de um corte seco
-        // para uma tela cinza/vazia.
-        if (!_webViewRevealed)
-          Positioned.fill(
-            child: _entryThumbnail != null
-                ? Image.memory(_entryThumbnail!, fit: BoxFit.cover, gaplessPlayback: true)
-                : ColoredBox(color: bg),
-          ),
-        if (_webViewRevealed && !_renderProcessCrashed)
+        if (!_renderProcessCrashed)
           InAppWebView(
             key: _webViewKey,
             initialUrlRequest: URLRequest(url: WebUri(_currentUrl)),
@@ -319,7 +259,10 @@ class _BrowserScreenState extends State<BrowserScreen> {
               if (html != null && navigationAcceleratorEnabled.value) {
                 NavAccelerator.instance.cachePage(url?.toString() ?? _currentUrl, html);
               }
-              if (!mounted) return;
+              if (!mounted) {
+                _signalFirstLoad();
+                return;
+              }
               setState(() {
                 _isLoading = false;
                 _loadError = null;
@@ -328,18 +271,28 @@ class _BrowserScreenState extends State<BrowserScreen> {
                 if (url != null) _currentUrl = url.toString();
               });
               _updateTabState(screenshot: screenshot);
+              // Primeiro onLoadStop: avisa o shell que já há conteúdo real
+              // pintado, para ele poder remover a imagem do morph que está
+              // a tapar a WebView.
+              _signalFirstLoad();
             },
             onReceivedError: (controller, request, error) {
               _pullToRefreshController?.endRefreshing();
-              if (request.isForMainFrame == true && mounted) {
-                setState(() {
-                  _isLoading = false;
-                  _loadError = error.description;
-                });
+              if (request.isForMainFrame == true) {
+                // Também liberta o morph em caso de erro de carregamento —
+                // senão o shell ficaria preso até ao timeout de 5s.
+                _signalFirstLoad();
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                    _loadError = error.description;
+                  });
+                }
               }
             },
             onRenderProcessGone: (controller, detail) {
               _pullToRefreshController?.endRefreshing();
+              _signalFirstLoad();
               if (!mounted) return;
               setState(() {
                 _renderProcessCrashed = true;

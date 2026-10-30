@@ -6,10 +6,23 @@ import '../models.dart';
 import '../theme.dart';
 
 class TabsGridScreen extends StatefulWidget {
-  const TabsGridScreen({super.key, required this.onSelectTab, required this.onClose, required this.onNewTab});
+  const TabsGridScreen({
+    super.key,
+    required this.onSelectTab,
+    required this.onClose,
+    required this.onNewTab,
+    required this.previewKeys,
+    required this.cardKeys,
+  });
   final ValueChanged<BrowserTab> onSelectTab;
   final VoidCallback onClose;
   final VoidCallback onNewTab;
+  // Keys geridas pelo shell (main.dart), uma por id de aba. previewKeys
+  // marca a área da thumbnail dentro do card (destino/origem do morph ao
+  // abrir/fechar a grelha); cardKeys marca o card inteiro, usado como
+  // alternativa quando a aba ainda não tem thumbnail renderizada.
+  final Map<String, GlobalKey> previewKeys;
+  final Map<String, GlobalKey> cardKeys;
   @override
   State<TabsGridScreen> createState() => _TabsGridScreenState();
 }
@@ -79,8 +92,16 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                         ),
                         itemBuilder: (context, index) {
                           final tab = tabs[index];
+                          // As keys são criadas/geridas pelo shell (main.dart);
+                          // aqui só as reutilizamos se já existirem para esta
+                          // aba, para não perder a referência entre rebuilds.
+                          final previewKey = widget.previewKeys.putIfAbsent(tab.id, GlobalKey.new);
+                          final cardKey = widget.cardKeys.putIfAbsent(tab.id, GlobalKey.new);
                           return TabGridCard(
+                            key: ValueKey(tab.id),
                             tab: tab,
+                            previewKey: previewKey,
+                            cardKey: cardKey,
                             onTap: () => widget.onSelectTab(tab),
                             onClose: tab.kind == TabKind.browser ? () => tabsController.closeTab(tab.id) : null,
                           );
@@ -96,9 +117,22 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
 }
 
 class TabGridCard extends StatelessWidget {
-  const TabGridCard({super.key, required this.tab, required this.onTap, this.onClose});
+  const TabGridCard({
+    super.key,
+    required this.tab,
+    required this.onTap,
+    required this.previewKey,
+    required this.cardKey,
+    this.onClose,
+  });
   final BrowserTab tab;
   final VoidCallback onTap;
+  // Key na área da thumbnail — Rect de origem/destino preferencial do morph.
+  final GlobalKey previewKey;
+  // Key no card inteiro — usado pelo shell como fallback quando o Rect da
+  // thumbnail ainda não pôde ser medido (ex. card acabado de entrar na
+  // árvore e ainda sem layout).
+  final GlobalKey cardKey;
   final VoidCallback? onClose;
 
   @override
@@ -113,6 +147,7 @@ class TabGridCard extends StatelessWidget {
     final label = isApp ? (tab.appScreenLabel ?? 'Looply') : ((tab.title?.trim().isNotEmpty ?? false) ? tab.title! : (host.isEmpty ? tab.url : host));
 
     return Material(
+      key: cardKey,
       color: panel,
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
@@ -151,6 +186,7 @@ class TabGridCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                 child: ClipRRect(
+                  key: previewKey,
                   borderRadius: BorderRadius.circular(13),
                   child: Container(
                     width: double.infinity,
