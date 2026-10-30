@@ -12,6 +12,7 @@ import 'screens/activity_screen.dart';
 import 'screens/browser_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/wikipedia_browser_screen.dart';
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
@@ -92,6 +93,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   bool _morphing = false;
   final GlobalKey _repaintKey = GlobalKey();
   final GlobalKey _browserViewportKey = GlobalKey();
+  // Viewport da WikipediaBrowserScreen quando reaberta pela grelha — mesmo
+  // papel do _browserViewportKey, mas para a rota de wikipedia, que usa um
+  // Scaffold/WebView diferente do BrowserScreen normal.
+  final GlobalKey _wikipediaViewportKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
   final List<String> _screenKeys = const ['home_screen', 'games_screen', 'activity_screen'];
@@ -448,6 +453,44 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
+    // Aba da Wikipédia: mesmo tratamento do browser normal (overlay até o
+    // conteúdo carregar), mas abrindo WikipediaBrowserScreen em vez de
+    // BrowserScreen, e medindo o destino através de _wikipediaViewportKey.
+    if (targetTab != null && targetTab.kind == TabKind.wikipedia) {
+      tabsController.activate(targetTab.id);
+      final firstLoad = Completer<void>();
+
+      setState(() => _showingTabsGrid = false);
+      Navigator.of(context).push(
+        _instantWikipediaRoute(firstLoadCompleter: firstLoad),
+      );
+
+      if (imageProvider != null && sourceRect != null) {
+        _insertSnapshotOverlay(
+          image: imageProvider,
+          from: sourceRect,
+          opening: false,
+        );
+        await WidgetsBinding.instance.endOfFrame;
+        await WidgetsBinding.instance.endOfFrame;
+        if (mounted) {
+          final destination = _rectInOverlay(_wikipediaViewportKey);
+          if (destination != null) {
+            await _animateSnapshot(to: destination, keepOverlayAtEnd: true);
+            try {
+              await firstLoad.future.timeout(const Duration(seconds: 5));
+            } on TimeoutException {
+              // Não bloquear a navegação indefinidamente se o site demorar.
+            }
+          }
+        }
+      }
+
+      _removeSnapshotOverlay();
+      if (mounted) setState(() => _morphing = false);
+      return;
+    }
+
     if (targetTab != null && targetTab.kind == TabKind.appScreen) {
       final index = _screenKeys.indexOf(targetTab.url);
       if (index >= 0) _selectedTab = index;
@@ -492,6 +535,20 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         initialUrl: tab.url,
         viewportKey: _browserViewportKey,
         firstLoadCompleter: firstLoadCompleter,
+      ),
+    );
+  }
+
+  // Irmã de _instantBrowserRoute, para a aba especial da Wikipédia.
+  // WikipediaBrowserScreen não recebe tabId/initialUrl — ela já sabe a
+  // própria URL e gere a própria aba via tabsController.getWikipediaTab()/
+  // upsertWikipediaTab() no initState.
+  PageRoute<void> _instantWikipediaRoute({Completer<void>? firstLoadCompleter}) {
+    return PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (context, animation, secondaryAnimation) => WikipediaBrowserScreen(
+        viewportKey: _wikipediaViewportKey,
       ),
     );
   }
