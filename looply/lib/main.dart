@@ -12,6 +12,7 @@ import 'screens/activity_screen.dart';
 import 'screens/browser_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
+import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
@@ -62,13 +63,28 @@ Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5
   }
 }
 
+// Rota com crossfade suave (em vez do slide padrão do Material) — usada
+// para abrir o browser restaurado logo no arranque do app, de forma mais
+// discreta do que um push convencional.
+PageRoute<void> _fadeRoute(Widget Function(BuildContext) builder) {
+  return PageRouteBuilder<void>(
+    transitionDuration: const Duration(milliseconds: 260),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+      return FadeTransition(opacity: curved, child: child);
+    },
+  );
+}
+
 class LooplyShell extends StatefulWidget {
   const LooplyShell({super.key});
   @override
   State<LooplyShell> createState() => _LooplyShellState();
 }
 
-class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin {
+class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedTab = 0;
   bool _showingTabsGrid = false;
   bool _morphing = false;
@@ -85,22 +101,47 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   Uint8List? _lastScreenSnapshot;
   Rect? _lastScreenRect;
   String? _preferredReturnTabId;
+  bool _restoreChecked = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRestoreSession());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     tabsController.removeListener(_onTabsChanged);
     ShellTabRequest.instance.removeListener(_handleShellTabRequest);
     _morphEntry?.remove();
     _morphController.dispose();
     super.dispose();
+  }
+
+  // Quando o app vai para segundo plano, pausado ou é encerrado, marca o
+  // instante — é o que decide, no próximo arranque, se ainda estamos
+  // dentro da janela de 1h para restaurar o browser.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      unawaited(SessionStore.instance.markBackgrounded());
+    }
+  }
+
+  Future<void> _maybeRestoreSession() async {
+    if (_restoreChecked || !mounted) return;
+    _restoreChecked = true;
+    final restored = await SessionStore.instance.getRestorablePage();
+    if (restored == null || !mounted) return;
+
+    final tab = tabsController.createBrowserTab(restored.url);
+    tabsController.activate(tab.id);
+    Navigator.of(context).push(_fadeRoute((context) => BrowserScreen(tabId: tab.id, initialUrl: restored.url)));
   }
 
   void _onTabsChanged() {
@@ -166,6 +207,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
   }
 
+  // Curva suavizada (easeInOutCubic em vez de linear no driver da animação)
+  // para que a transição de container-morph pareça mais fluida e menos
+  // abrupta, tanto a abrir quanto a fechar.
   Future<void> _animateSnapshot({required Uint8List bitmap, required Rect from, required Rect to, required bool opening}) async {
     if (!mounted) return;
     _morphEntry?.remove();
@@ -209,7 +253,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
     Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
     try {
-      await _morphController.animateTo(1, curve: Curves.linear);
+      await _morphController.animateTo(1, curve: Curves.easeInOutCubic);
     } finally {
       _morphEntry?.remove();
       _morphEntry = null;

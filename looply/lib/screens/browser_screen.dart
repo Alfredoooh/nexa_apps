@@ -27,7 +27,7 @@ class _BrowserScreenState extends State<BrowserScreen> {
   PullToRefreshController? _pullToRefreshController;
   bool _isLoading = true;
   double _progress = 0;
-  String _currentUrl = '';
+  late String _currentUrl;
   String _currentTitle = '';
   bool _canGoBack = false;
   bool _canGoForward = false;
@@ -41,7 +41,14 @@ class _BrowserScreenState extends State<BrowserScreen> {
   @override
   void initState() {
     super.initState();
-    _currentUrl = widget.initialUrl;
+    // FIX: usa a URL mais recente guardada no próprio tab (se já existir
+    // e tiver navegado), em vez de widget.initialUrl, que representa só
+    // a URL do momento em que a aba foi criada. Isso é o que fazia o
+    // WebView "voltar" para uma página antiga/errada ao reabrir a aba,
+    // com um recarregamento visível que parecia uma animação quebrada.
+    final existingTab = tabsController.getTab(widget.tabId);
+    _currentUrl = (existingTab != null && existingTab.url.isNotEmpty) ? existingTab.url : widget.initialUrl;
+    _currentTitle = existingTab?.title ?? '';
     tabsController.activate(widget.tabId);
     _pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: looplyPrimary),
@@ -108,48 +115,56 @@ class _BrowserScreenState extends State<BrowserScreen> {
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
-        child: Scaffold(
-          backgroundColor: bg,
-          body: Column(children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              height: _addressBarVisible ? (60 + MediaQuery.of(context).padding.top) : 0,
-              clipBehavior: Clip.hardEdge,
-              child: OverflowBox(
-                minHeight: 60 + MediaQuery.of(context).padding.top,
-                maxHeight: 60 + MediaQuery.of(context).padding.top,
-                alignment: Alignment.bottomCenter,
-                child: _AddressBar(title: _currentTitle.isNotEmpty ? _currentTitle : _currentUrl, url: _currentUrl, isLoading: _isLoading, onReload: () => _controller?.reload()),
-              ),
-            ),
-            if (_isLoading) SizedBox(height: 2, child: LinearProgressIndicator(value: _progress == 0 ? null : _progress, color: accentColor(context), backgroundColor: muted.withOpacity(.15))),
-            Expanded(
-              child: KeyedSubtree(
-                key: widget.viewportKey,
-                child: ColoredBox(
-                  color: bg,
-                  child: widget.revealWebView == null
-                      ? _buildBrowserWebView(context)
-                      : ValueListenableBuilder<bool>(
-                          valueListenable: widget.revealWebView!,
-                          builder: (context, revealed, _) => revealed
-                              ? _buildBrowserWebView(context)
-                              : ColoredBox(color: bg),
-                        ),
+        // FIX: ColoredBox envolvendo TODO o Scaffold, antes de qualquer
+        // outra camada — garante que não há nenhum frame, em nenhuma
+        // circunstância (incluindo o instante exato do pop/push entre
+        // rotas), onde a cor de fundo padrão do sistema (cinza) fique
+        // visível por trás do conteúdo.
+        child: ColoredBox(
+          color: bg,
+          child: Scaffold(
+            backgroundColor: bg,
+            body: Column(children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                height: _addressBarVisible ? (60 + MediaQuery.of(context).padding.top) : 0,
+                clipBehavior: Clip.hardEdge,
+                child: OverflowBox(
+                  minHeight: 60 + MediaQuery.of(context).padding.top,
+                  maxHeight: 60 + MediaQuery.of(context).padding.top,
+                  alignment: Alignment.bottomCenter,
+                  child: _AddressBar(title: _currentTitle.isNotEmpty ? _currentTitle : _currentUrl, url: _currentUrl, isLoading: _isLoading, onReload: () => _controller?.reload()),
                 ),
               ),
-            ),
-            _BrowserBottomBar(
-              canGoBack: _canGoBack,
-              canGoForward: _canGoForward,
-              onBack: () => _controller?.goBack(),
-              onForward: () => _controller?.goForward(),
-              onMenu: () => _showPageMenu(context),
-              onTabs: () { _updateTabState(); ShellTabRequest.instance.requestTabs(); },
-              onHome: () { _updateTabState(); ShellTabRequest.instance.request(0); Navigator.of(context).popUntil((route) => route.isFirst); },
-            ),
-          ]),
+              if (_isLoading) SizedBox(height: 2, child: LinearProgressIndicator(value: _progress == 0 ? null : _progress, color: accentColor(context), backgroundColor: muted.withOpacity(.15))),
+              Expanded(
+                child: KeyedSubtree(
+                  key: widget.viewportKey,
+                  child: ColoredBox(
+                    color: bg,
+                    child: widget.revealWebView == null
+                        ? _buildBrowserWebView(context)
+                        : ValueListenableBuilder<bool>(
+                            valueListenable: widget.revealWebView!,
+                            builder: (context, revealed, _) => revealed
+                                ? _buildBrowserWebView(context)
+                                : ColoredBox(color: bg),
+                          ),
+                  ),
+                ),
+              ),
+              _BrowserBottomBar(
+                canGoBack: _canGoBack,
+                canGoForward: _canGoForward,
+                onBack: () => _controller?.goBack(),
+                onForward: () => _controller?.goForward(),
+                onMenu: () => _showPageMenu(context),
+                onTabs: () { _updateTabState(); ShellTabRequest.instance.requestTabs(); },
+                onHome: () { _updateTabState(); ShellTabRequest.instance.request(0); Navigator.of(context).popUntil((route) => route.isFirst); },
+              ),
+            ]),
+          ),
         ),
       ),
     );
@@ -164,7 +179,9 @@ class _BrowserScreenState extends State<BrowserScreen> {
         if (!_renderProcessCrashed)
           InAppWebView(
             key: _webViewKey,
-            initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+            // FIX: usa _currentUrl (já resolvido a partir do tab atual no
+            // initState) em vez de widget.initialUrl diretamente.
+            initialUrlRequest: URLRequest(url: WebUri(_currentUrl)),
             pullToRefreshController: _pullToRefreshController,
             initialSettings: InAppWebViewSettings(
               javaScriptEnabled: true,
@@ -338,8 +355,6 @@ class _AddressBar extends StatelessWidget {
   }
 }
 
-// Bottom bar: no tema escuro usa o MESMO tom do inputbar; no tema claro
-// mantém o comportamento anterior (cor de página, inalterado).
 class _BrowserBottomBar extends StatelessWidget {
   const _BrowserBottomBar({required this.canGoBack, required this.canGoForward, required this.onBack, required this.onForward, required this.onMenu, required this.onTabs, required this.onHome});
   final bool canGoBack;

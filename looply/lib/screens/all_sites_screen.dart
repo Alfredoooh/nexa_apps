@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 
-// Tela "Ver mais sites" — lista todos os sites de allSites agrupados
-// por categoria, cada grupo com seu próprio card no tom do inputbar.
 class AllSitesScreen extends StatelessWidget {
   const AllSitesScreen({super.key});
 

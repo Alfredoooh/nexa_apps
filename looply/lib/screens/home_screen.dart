@@ -91,8 +91,6 @@ class QuickSiteGridCard extends StatelessWidget {
   }
 }
 
-// Botão Material cheio, chamando para a tela de todos os sites
-// organizados por categoria.
 class _ViewMoreSitesButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -116,6 +114,9 @@ class _ViewMoreSitesButton extends StatelessWidget {
   }
 }
 
+// FIX: container aumentado de 50x50 para 56x56, padding reduzido de 2 para
+// 1, para que o ícone .webp ocupe quase inteiramente a área circular
+// visível — antes sobrava bastante espaço vazio em volta.
 class QuickSiteTile extends StatelessWidget {
   const QuickSiteTile({super.key, required this.site});
   final QuickSite site;
@@ -131,12 +132,12 @@ class QuickSiteTile extends StatelessWidget {
         onTap: () => openNewTab(context, site.url, title: site.name),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
-            width: 50, height: 50, padding: const EdgeInsets.all(2),
+            width: 56, height: 56, padding: const EdgeInsets.all(1),
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
               child: Image.asset(
                 site.assetPath, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 20),
+                errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 24),
               ),
             ),
           ),

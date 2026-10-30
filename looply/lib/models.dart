@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'session_store.dart';
+
 const Set<String> adBlockDomains = {
   'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
   'google-analytics.com', 'googletagmanager.com', 'googletagservices.com',
@@ -42,19 +44,17 @@ const Set<String> adBlockDomains = {
 final ValueNotifier<bool> adBlockEnabled = ValueNotifier<bool>(true);
 final ValueNotifier<bool> navigationAcceleratorEnabled = ValueNotifier<bool>(true);
 
-// Contador de anúncios bloqueados — persiste durante a sessão e alimenta
-// o gráfico de estatísticas.
 class AdBlockStats extends ChangeNotifier {
   AdBlockStats._();
   static final AdBlockStats instance = AdBlockStats._();
   int _totalBlocked = 0;
-  final List<int> _dailyBuckets = List.filled(7, 0); // últimos 7 "dias" de sessão
+  final List<int> _dailyBuckets = List.filled(7, 0);
   int get totalBlocked => _totalBlocked;
   List<int> get dailyBuckets => List.unmodifiable(_dailyBuckets);
 
   void registerBlock() {
     _totalBlocked++;
-    _dailyBuckets[6]++; // bucket "hoje" (último da lista)
+    _dailyBuckets[6]++;
     notifyListeners();
   }
 }
@@ -109,19 +109,16 @@ String siteCategoryLabel(SiteCategory category) => switch (category) {
   SiteCategory.compras => 'Compras',
 };
 
-// Quick site: ícone vem de um asset local (.webp) exibido dentro de um
-// container circular sem borda sólida.
 class QuickSite {
   const QuickSite({required this.name, required this.assetPath, required this.url, this.category = SiteCategory.destaque});
   final String name;
-  final String assetPath; // ex: 'assets/images/quick_sites/google.webp'
+  final String assetPath;
   final String url;
   final SiteCategory category;
 }
 
 const String _qs = 'assets/images/quick_sites';
 
-// As 10 fixas no card da Home (primeira secção da tela principal).
 const List<QuickSite> quickSites = [
   QuickSite(name: 'Google', assetPath: '$_qs/google.webp', url: 'https://www.google.com'),
   QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com'),
@@ -135,29 +132,20 @@ const List<QuickSite> quickSites = [
   QuickSite(name: 'Mais', assetPath: '$_qs/logo_geometrico_g.webp', url: 'https://www.google.com'),
 ];
 
-// Catálogo completo organizado por categoria — usado na tela "Ver mais
-// sites", que lista todos os sites disponíveis agrupados.
 const List<QuickSite> allSites = [
-  // Destaque
   QuickSite(name: 'Google', assetPath: '$_qs/google.webp', url: 'https://www.google.com', category: SiteCategory.destaque),
   QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com', category: SiteCategory.destaque),
   QuickSite(name: 'Wikipedia', assetPath: '$_qs/wikipedia.webp', url: 'https://www.wikipedia.org', category: SiteCategory.destaque),
   QuickSite(name: 'Reddit', assetPath: '$_qs/reddit.webp', url: 'https://www.reddit.com', category: SiteCategory.destaque),
-
-  // Redes sociais
   QuickSite(name: 'Instagram', assetPath: '$_qs/instagram.webp', url: 'https://www.instagram.com', category: SiteCategory.social),
   QuickSite(name: 'X', assetPath: '$_qs/x.webp', url: 'https://x.com', category: SiteCategory.social),
   QuickSite(name: 'TikTok', assetPath: '$_qs/tiktok.webp', url: 'https://www.tiktok.com', category: SiteCategory.social),
   QuickSite(name: 'Gmail', assetPath: '$_qs/gmail.webp', url: 'https://mail.google.com', category: SiteCategory.social),
-
-  // Entretenimento
   QuickSite(name: 'Netflix', assetPath: '$_qs/netflix.webp', url: 'https://www.netflix.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Spotify', assetPath: '$_qs/spotify.webp', url: 'https://open.spotify.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Roblox', assetPath: '$_qs/roblox.webp', url: 'https://www.roblox.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Poki', assetPath: '$_qs/poki.webp', url: 'https://poki.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'BBC', assetPath: '$_qs/bbc.webp', url: 'https://www.bbc.com', category: SiteCategory.entretenimento),
-
-  // Produtividade
   QuickSite(name: 'Notion', assetPath: '$_qs/notion.webp', url: 'https://www.notion.so', category: SiteCategory.produtividade),
   QuickSite(name: 'Dropbox', assetPath: '$_qs/dropbox.webp', url: 'https://www.dropbox.com', category: SiteCategory.produtividade),
   QuickSite(name: 'Zoom', assetPath: '$_qs/zoom.webp', url: 'https://zoom.us', category: SiteCategory.produtividade),
@@ -167,8 +155,6 @@ const List<QuickSite> allSites = [
   QuickSite(name: 'Loom', assetPath: '$_qs/loom.webp', url: 'https://www.loom.com', category: SiteCategory.produtividade),
   QuickSite(name: 'Miro', assetPath: '$_qs/miro.webp', url: 'https://miro.com', category: SiteCategory.produtividade),
   QuickSite(name: 'Lucidspark', assetPath: '$_qs/lucidspark.webp', url: 'https://lucidspark.com', category: SiteCategory.produtividade),
-
-  // Desenvolvimento
   QuickSite(name: 'GitHub', assetPath: '$_qs/github.webp', url: 'https://github.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'GitLab', assetPath: '$_qs/gitlab.webp', url: 'https://gitlab.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'Replit', assetPath: '$_qs/replit.webp', url: 'https://replit.com', category: SiteCategory.desenvolvimento),
@@ -177,8 +163,6 @@ const List<QuickSite> allSites = [
   QuickSite(name: 'Cloudflare', assetPath: '$_qs/cloudflare.webp', url: 'https://www.cloudflare.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'Atlassian', assetPath: '$_qs/atlassian.webp', url: 'https://www.atlassian.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'Zapier', assetPath: '$_qs/zapier.webp', url: 'https://zapier.com', category: SiteCategory.desenvolvimento),
-
-  // Inteligência artificial
   QuickSite(name: 'ChatGPT', assetPath: '$_qs/openai_chatgpt.webp', url: 'https://chat.openai.com', category: SiteCategory.ia),
   QuickSite(name: 'DeepMind', assetPath: '$_qs/deepmind.webp', url: 'https://deepmind.google', category: SiteCategory.ia),
   QuickSite(name: 'Mistral', assetPath: '$_qs/mistral.webp', url: 'https://mistral.ai', category: SiteCategory.ia),
@@ -186,14 +170,10 @@ const List<QuickSite> allSites = [
   QuickSite(name: 'Stability AI', assetPath: '$_qs/stabilityai.webp', url: 'https://stability.ai', category: SiteCategory.ia),
   QuickSite(name: 'Deepgram', assetPath: '$_qs/deepgram.webp', url: 'https://deepgram.com', category: SiteCategory.ia),
   QuickSite(name: 'Sider', assetPath: '$_qs/sider.webp', url: 'https://sider.ai', category: SiteCategory.ia),
-
-  // Apostas desportivas
   QuickSite(name: 'BantuBet', assetPath: '$_qs/bantubet.webp', url: 'https://www.bantubet.com', category: SiteCategory.apostas),
   QuickSite(name: 'PremierBet', assetPath: '$_qs/premierbet.webp', url: 'https://www.premierbet.co.ao', category: SiteCategory.apostas),
   QuickSite(name: 'WeScore', assetPath: '$_qs/wescore.webp', url: 'https://www.wescore.com', category: SiteCategory.apostas),
   QuickSite(name: 'BeSoccer Pro', assetPath: '$_qs/besoccer_pro.webp', url: 'https://www.besoccer.com', category: SiteCategory.apostas),
-
-  // Compras
   QuickSite(name: 'Amazon', assetPath: '$_qs/amazon.webp', url: 'https://www.amazon.com', category: SiteCategory.compras),
   QuickSite(name: 'Alibaba', assetPath: '$_qs/alibaba.webp', url: 'https://www.alibaba.com', category: SiteCategory.compras),
   QuickSite(name: 'Flipkart', assetPath: '$_qs/flipkart.webp', url: 'https://www.flipkart.com', category: SiteCategory.compras),
@@ -330,6 +310,9 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
+  // Agora também persiste a URL/título atuais via SessionStore sempre que
+  // uma aba de browser é atualizada — é isto que permite restaurar a
+  // última página ao reabrir o app dentro da janela de 1h.
   void updateTab(
     String id, {
     String? url,
@@ -348,6 +331,13 @@ class TabsController extends ChangeNotifier {
     if (thumbnail != null) tab.thumbnail = thumbnail;
     tab.touch();
     notifyListeners();
+
+    if (tab.kind == TabKind.browser && tab.url.isNotEmpty) {
+      unawaited(SessionStore.instance.saveLastPage(
+        url: tab.url,
+        title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
+      ));
+    }
   }
 
   void closeTab(String id) {
