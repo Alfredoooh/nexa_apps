@@ -90,13 +90,14 @@ class LooplyShell extends StatefulWidget {
 class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedTab = 0;
   bool _showingTabsGrid = false;
-  bool _wikipediaTabsGridOnTop = false;
+  bool _isWikipediaVisible = false;
+  bool _wikipediaPageCreated = false;
+  String? _wikipediaTabId;
   bool _morphing = false;
   final GlobalKey _repaintKey = GlobalKey();
   final GlobalKey _browserViewportKey = GlobalKey();
-  // Viewport da WikipediaBrowserScreen quando reaberta pela grelha — mesmo
-  // papel do _browserViewportKey, mas para a rota de wikipedia, que usa um
-  // Scaffold/WebView diferente do BrowserScreen normal.
+  // Viewport da WikipediaBrowserScreen persistente no IndexedStack.
+  // É usado como origem/destino do Container Transform específico dela.
   final GlobalKey _wikipediaViewportKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
@@ -109,7 +110,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   Rect? _morphFrom;
   Rect? _morphTo;
   bool _morphOpening = true;
-  bool _morphCoverBackground = true;
   Uint8List? _lastScreenSnapshot;
   String? _preferredReturnTabId;
   bool _restoreChecked = false;
@@ -163,9 +163,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (!mounted) return;
     final request = ShellTabRequest.instance;
 
-    // Pedido vindo da própria WikipediaBrowserScreen. O shell empilha a
-    // grelha por cima da rota atual em vez de remover a Wikipédia; assim a
-    // WebView continua viva e pode ser revelada novamente sem recarregar.
+    // Pedido da página persistente da Wikipédia: a origem do morph é o
+    // viewport próprio dela. Não retiramos a página do IndexedStack.
     if (request.wikipediaCloseRequested) {
       request.wikipediaCloseRequested = false;
       final screenshot = request.wikipediaCloseScreenshot;
@@ -174,10 +173,27 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
+    // A Wikipédia é uma página persistente do IndexedStack, como a Home.
+    // Não fazemos push/pop de rota: isso destruía a WebView e fazia o
+    // renderer perder o foco/toque quando a aba era reaberta.
+    if (request.wikipediaRequested) {
+      request.wikipediaRequested = false;
+      final tab = tabsController.getWikipediaTab() ?? tabsController.upsertWikipediaTab(null);
+      _wikipediaTabId = tab.id;
+      tabsController.activate(tab.id);
+      setState(() {
+        _wikipediaPageCreated = true;
+        _isWikipediaVisible = true;
+        _showingTabsGrid = false;
+      });
+      return;
+    }
+
     if (request.tabsRequested) {
       request.tabsRequested = false;
       request.requestedIndex = null;
       _preferredReturnTabId = tabsController.activeTabId;
+      _isWikipediaVisible = false;
       Navigator.of(context).popUntil((route) => route.isFirst);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openTabsGrid();
@@ -187,7 +203,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final requested = request.requestedIndex;
     request.requestedIndex = null;
     if (requested == null) return;
-    setState(() => _selectedTab = requested.clamp(0, 2).toInt());
+    setState(() {
+      _isWikipediaVisible = false;
+      _selectedTab = requested.clamp(0, 2).toInt();
+    });
   }
 
   Rect? _rectInOverlay(GlobalKey key) {
@@ -219,7 +238,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     required ImageProvider image,
     required Rect from,
     required bool opening,
-    bool coverBackground = true,
   }) {
     _removeSnapshotOverlay();
     _morphController.stop();
@@ -228,7 +246,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphFrom = from;
     _morphTo = from;
     _morphOpening = opening;
-    _morphCoverBackground = coverBackground;
 
     // A mesma OverlayEntry permanece montada do primeiro ao último frame.
     // Não removemos uma imagem para inserir outra no início da animação —
@@ -260,7 +277,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (!_morphOpening && _morphCoverBackground)
+                  if (!_morphOpening)
                     Positioned.fill(
                       child: ColoredBox(color: pageBg(overlayContext)),
                     ),
@@ -397,11 +414,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (mounted) setState(() => _morphing = false);
   }
 
-  // Abre a grelha a partir da WikipediaBrowserScreen. A rota e a WebView
-  // ficam montadas por baixo da grelha; o cartão usa a captura da página e
-  // o retorno revela a mesma instância, sem reconstruir nem recarregar o browser.
+  // Encolhe a página persistente da Wikipédia para a grelha. A origem do
+  // morph é o próprio viewport dela e a WebView continua montada no
+  // IndexedStack, sem pop/push de rota ou reinicialização do documento.
   Future<void> _closeWikipediaToTabsGrid(Uint8List? screenshot) async {
-    if (_showingTabsGrid || _wikipediaTabsGridOnTop || _morphing) return;
+    if (_showingTabsGrid || _morphing) return;
     _morphing = true;
 
     final wikipediaTab = tabsController.getWikipediaTab();
@@ -410,211 +427,59 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
-    // A WikipediaBrowserScreen permanece montada por baixo da grelha. Isto
-    // preserva a mesma WebView, o histórico interno, a posição de scroll e
-    // qualquer atividade que a página esteja a executar.
+    // Guardamos a Wikipédia como destino preferido para o botão Voltar/
+    // fechar da grelha. A página e a WebView continuam montadas no
+    // IndexedStack; apenas ficam cobertas pela grelha durante o morph.
+    _preferredReturnTabId = wikipediaTab.id;
     final sourceRect = _rectInOverlay(_wikipediaViewportKey);
     final bitmap = screenshot ?? wikipediaTab.thumbnail;
-    if (bitmap != null) {
-      tabsController.updateTab(
-        wikipediaTab.id,
-        title: wikipediaTab.title ?? 'Wikipédia',
-        thumbnail: bitmap,
-      );
-    }
 
     _previewKeys.putIfAbsent(wikipediaTab.id, GlobalKey.new);
     _cardKeys.putIfAbsent(wikipediaTab.id, GlobalKey.new);
 
-    final imageProvider = bitmap == null ? null : await _prepareSnapshotImage(bitmap);
+    if (bitmap == null || sourceRect == null) {
+      setState(() => _showingTabsGrid = true);
+      if (mounted) setState(() => _morphing = false);
+      return;
+    }
+
+    final imageProvider = await _prepareSnapshotImage(bitmap);
     if (!mounted) {
       _morphing = false;
       return;
     }
 
-    // Coloca a captura por cima da Wikipédia ANTES de empilhar a grelha.
-    // Ao contrário do comportamento anterior, a rota da Wikipédia nunca é
-    // removida; por isso voltar ao seu cartão revela a mesma instância.
-    if (imageProvider != null && sourceRect != null) {
-      _insertSnapshotOverlay(
-        image: imageProvider,
-        from: sourceRect,
-        opening: true,
-      );
-    }
-
-    _wikipediaTabsGridOnTop = true;
-    Navigator.of(context).push<void>(_wikipediaTabsGridRoute());
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (!mounted) {
-      _removeSnapshotOverlay();
+    if (imageProvider == null) {
+      setState(() => _showingTabsGrid = true);
+      if (mounted) setState(() => _morphing = false);
       return;
     }
 
-    if (imageProvider != null && sourceRect != null) {
-      final target = _rectInOverlay(_previewKeys[wikipediaTab.id]!) ??
-          _rectInOverlay(_cardKeys[wikipediaTab.id]!) ??
-          sourceRect;
-      await _animateSnapshot(to: target);
-    } else {
-      _removeSnapshotOverlay();
-    }
-
-    if (mounted) setState(() => _morphing = false);
-  }
-
-  PageRoute<void> _wikipediaTabsGridRoute() {
-    return PageRouteBuilder<void>(
-      opaque: true,
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (routeContext, animation, secondaryAnimation) => PopScope<void>(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop) _closeWikipediaTabsGridRoute();
-        },
-        child: TabsGridScreen(
-          previewKeys: _previewKeys,
-          cardKeys: _cardKeys,
-          onSelectTab: (tab) => _closeWikipediaTabsGridRoute(openTab: tab),
-          onClose: () => _closeWikipediaTabsGridRoute(),
-          onNewTab: () {
-            final tab = tabsController.createBrowserTab('https://www.google.com');
-            _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-            _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-            _closeWikipediaTabsGridRoute(openTab: tab);
-          },
-        ),
-      ),
+    // A mesma captura permanece sobre a Wikipédia enquanto a grelha é
+    // construída por baixo. Não removemos a rota nem recriamos a WebView.
+    _insertSnapshotOverlay(
+      image: imageProvider,
+      from: sourceRect,
+      opening: true,
     );
-  }
-
-  Future<void> _closeWikipediaTabsGridRoute({BrowserTab? openTab}) async {
-    if (!_wikipediaTabsGridOnTop || _morphing) return;
-    _morphing = true;
-
-    // Fechar a grelha (X/gesto voltar) significa regressar exatamente à
-    // WikipediaBrowserScreen que já está viva por baixo desta rota.
-    final targetTab = openTab ?? tabsController.getWikipediaTab();
-    if (targetTab == null) {
-      _wikipediaTabsGridOnTop = false;
-      Navigator.of(context).pop();
-      if (mounted) setState(() => _morphing = false);
-      return;
-    }
-
-    final sourceKey = _previewKeys[targetTab.id] ?? _cardKeys[targetTab.id];
-    final sourceRect = sourceKey == null ? null : _rectInOverlay(sourceKey);
-    Uint8List? bitmap = targetTab.thumbnail;
-    if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
-    }
+    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
-      _morphing = false;
+      _removeSnapshotOverlay();
       return;
     }
-    final imageProvider = bitmap == null ? null : await _prepareSnapshotImage(bitmap);
+
+    setState(() => _showingTabsGrid = true);
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    if (targetTab.kind == TabKind.wikipedia) {
-      tabsController.activate(targetTab.id);
-      if (imageProvider != null && sourceRect != null) {
-        _insertSnapshotOverlay(
-          image: imageProvider,
-          from: sourceRect,
-          opening: false,
-          coverBackground: false,
-        );
-      }
-
-      _wikipediaTabsGridOnTop = false;
-      Navigator.of(context).pop();
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-
-      if (imageProvider != null && sourceRect != null && mounted) {
-        final destination = _rectInOverlay(_wikipediaViewportKey);
-        if (destination != null) {
-          await _animateSnapshot(to: destination);
-        } else {
-          _removeSnapshotOverlay();
-        }
-      } else {
-        _removeSnapshotOverlay();
-      }
-      if (mounted) setState(() => _morphing = false);
-      return;
-    }
-
-    if (targetTab.kind == TabKind.browser) {
-      tabsController.activate(targetTab.id);
-      final firstLoad = Completer<void>();
-      if (imageProvider != null && sourceRect != null) {
-        _insertSnapshotOverlay(
-          image: imageProvider,
-          from: sourceRect,
-          opening: false,
-        );
-      }
-
-      _wikipediaTabsGridOnTop = false;
-      Navigator.of(context).pop();
-      await WidgetsBinding.instance.endOfFrame;
-      Navigator.of(context).push(
-        _instantBrowserRoute(targetTab, firstLoadCompleter: firstLoad),
-      );
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-
-      if (imageProvider != null && sourceRect != null && mounted) {
-        final destination = _rectInOverlay(_browserViewportKey);
-        if (destination != null) {
-          await _animateSnapshot(to: destination, keepOverlayAtEnd: true);
-          try {
-            await firstLoad.future.timeout(const Duration(seconds: 5));
-          } on TimeoutException {
-            // A navegação continua mesmo se o site demorar a responder.
-          }
-        }
-      }
       _removeSnapshotOverlay();
-      if (mounted) setState(() => _morphing = false);
       return;
     }
 
-    // Para uma aba interna do Looply, fecha-se a grelha e a rota da
-    // Wikipédia, revelando o ecrã interno selecionado no shell.
-    final index = _screenKeys.indexOf(targetTab.url);
-    if (imageProvider != null && sourceRect != null) {
-      _insertSnapshotOverlay(
-        image: imageProvider,
-        from: sourceRect,
-        opening: false,
-      );
-    }
-    _wikipediaTabsGridOnTop = false;
-    Navigator.of(context).pop();
-    if (index >= 0 && mounted) setState(() => _selectedTab = index);
-    await WidgetsBinding.instance.endOfFrame;
-    if (mounted) Navigator.of(context).pop();
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (imageProvider != null && sourceRect != null && mounted) {
-      final destination = _rectInOverlay(_repaintKey);
-      if (destination != null) {
-        await _animateSnapshot(to: destination);
-      } else {
-        _removeSnapshotOverlay();
-      }
-    } else {
-      _removeSnapshotOverlay();
-    }
+    final target = _rectInOverlay(_previewKeys[wikipediaTab.id]!) ??
+        _rectInOverlay(_cardKeys[wikipediaTab.id]!) ??
+        sourceRect;
+    await _animateSnapshot(to: target);
     if (mounted) setState(() => _morphing = false);
   }
 
@@ -652,6 +517,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
 
     if (targetTab != null && targetTab.kind == TabKind.browser) {
+      _isWikipediaVisible = false;
       tabsController.activate(targetTab.id);
       final firstLoad = Completer<void>();
 
@@ -690,17 +556,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
-    // Aba da Wikipédia: mesmo tratamento do browser normal (overlay até o
-    // conteúdo carregar), mas abrindo WikipediaBrowserScreen em vez de
-    // BrowserScreen, e medindo o destino através de _wikipediaViewportKey.
+    // A Wikipédia já está viva no IndexedStack. Reativamo-la diretamente,
+    // sem Navigator.push, para preservar o mesmo InAppWebView, o documento,
+    // o cursor e todo o histórico JS. A captura da aba cobre a troca de
+    // página e executa a mesma animação Container Transform já existente.
     if (targetTab != null && targetTab.kind == TabKind.wikipedia) {
+      _wikipediaTabId = targetTab.id;
       tabsController.activate(targetTab.id);
-      final firstLoad = Completer<void>();
-
-      setState(() => _showingTabsGrid = false);
-      Navigator.of(context).push(
-        _instantWikipediaRoute(firstLoadCompleter: firstLoad),
-      );
+      _wikipediaPageCreated = true;
 
       if (imageProvider != null && sourceRect != null) {
         _insertSnapshotOverlay(
@@ -708,27 +571,32 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           from: sourceRect,
           opening: false,
         );
-        await WidgetsBinding.instance.endOfFrame;
-        await WidgetsBinding.instance.endOfFrame;
-        if (mounted) {
-          final destination = _rectInOverlay(_wikipediaViewportKey);
-          if (destination != null) {
-            await _animateSnapshot(to: destination, keepOverlayAtEnd: true);
-            try {
-              await firstLoad.future.timeout(const Duration(seconds: 5));
-            } on TimeoutException {
-              // Não bloquear a navegação indefinidamente se o site demorar.
-            }
-          }
-        }
       }
 
-      _removeSnapshotOverlay();
+      setState(() {
+        _isWikipediaVisible = true;
+        _showingTabsGrid = false;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+
+      if (imageProvider != null && sourceRect != null && mounted) {
+        final destination = _rectInOverlay(_wikipediaViewportKey);
+        if (destination != null) {
+          await _animateSnapshot(to: destination);
+        } else {
+          _removeSnapshotOverlay();
+        }
+      } else {
+        _removeSnapshotOverlay();
+      }
+
       if (mounted) setState(() => _morphing = false);
       return;
     }
 
     if (targetTab != null && targetTab.kind == TabKind.appScreen) {
+      _isWikipediaVisible = false;
       final index = _screenKeys.indexOf(targetTab.url);
       if (index >= 0) _selectedTab = index;
     }
@@ -742,7 +610,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       await WidgetsBinding.instance.endOfFrame;
     }
 
-    setState(() => _showingTabsGrid = false);
+    setState(() {
+      _isWikipediaVisible = false;
+      _showingTabsGrid = false;
+    });
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
 
@@ -776,20 +647,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
   }
 
-  // Irmã de _instantBrowserRoute, para a aba especial da Wikipédia.
-  // WikipediaBrowserScreen não recebe tabId/initialUrl — ela já sabe a
-  // própria URL e gere a própria aba via tabsController.getWikipediaTab()/
-  // upsertWikipediaTab() no initState.
-  PageRoute<void> _instantWikipediaRoute({Completer<void>? firstLoadCompleter}) {
-    return PageRouteBuilder<void>(
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (context, animation, secondaryAnimation) => WikipediaBrowserScreen(
-        viewportKey: _wikipediaViewportKey,
-        firstLoadCompleter: firstLoadCompleter,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -797,9 +654,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final bg = isDark ? looplyBgDark : looplyBgLight;
     final text = mainText(context);
     final pages = <Widget>[
-      HomeScreen(wikipediaViewportKey: _wikipediaViewportKey),
+      const HomeScreen(),
       const GamesScreen(),
       const ActivityScreen(),
+      if (_wikipediaPageCreated)
+        WikipediaBrowserScreen(
+          tabId: _wikipediaTabId ?? tabsController.getWikipediaTab()!.id,
+          viewportKey: _wikipediaViewportKey,
+          isActive: _isWikipediaVisible && !_showingTabsGrid,
+        )
+      else
+        const SizedBox.shrink(),
     ];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -817,7 +682,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 bottom: false,
                 child: RepaintBoundary(
                   key: _repaintKey,
-                  child: IndexedStack(index: _selectedTab, children: pages),
+                  child: IndexedStack(
+                    index: _isWikipediaVisible ? 3 : _selectedTab,
+                    children: pages,
+                  ),
                 ),
               ),
             ),
@@ -843,7 +711,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           ],
         ),
         bottomNavigationBar: Offstage(
-          offstage: _showingTabsGrid,
+          offstage: _showingTabsGrid || _isWikipediaVisible,
           child: NavigationBar(
             selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
             onDestinationSelected: (index) {
@@ -851,7 +719,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 _openTabsGrid();
                 return;
               }
-              setState(() => _selectedTab = index < 2 ? index : index - 1);
+              setState(() {
+                _isWikipediaVisible = false;
+                _selectedTab = index < 2 ? index : index - 1;
+              });
             },
             destinations: [
               const NavigationDestination(icon: Icon(Symbols.home_rounded), selectedIcon: Icon(Symbols.home_rounded, fill: 1), label: 'Início'),

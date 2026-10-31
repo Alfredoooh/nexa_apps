@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,24 +9,26 @@ import '../models.dart';
 import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 
-// Tela de browser isolada, só para testar a Wikipedia. Diferente do
-// browser principal, não tem endereço/voltar/avançar — mas agora FAZ
-// PARTE do sistema de abas: aparece na grelha de Separadores via
-// tabsController.upsertWikipediaTab(), conta no número de abas do
-// bottom bar, e o botão "Abas" aqui encolhe para a grelha usando o
-// morph de screenshot do main.dart — com ORIGEM NESTA TELA. A grelha é
-// empilhada por cima desta rota, mantendo a mesma InAppWebView viva; ao
-// regressar ao cartão Wikipédia, esta mesma instância volta a aparecer.
+// A Wikipédia é mantida como uma página persistente dentro do IndexedStack
+// do shell. A WebView não é destruída quando a grelha de abas é aberta:
+// apenas a página fica temporariamente fora de vista enquanto a captura
+// executa o Container Transform.
 const String _wikipediaUrl = 'https://www.wikipedia.org';
 
 class WikipediaBrowserScreen extends StatefulWidget {
-  const WikipediaBrowserScreen({super.key, this.viewportKey, this.firstLoadCompleter});
+  const WikipediaBrowserScreen({
+    super.key,
+    required this.tabId,
+    this.viewportKey,
+    this.isActive = false,
+  });
   // Key colocada à volta da área exata onde a InAppWebView fica, igual ao
   // viewportKey do BrowserScreen. O shell (main.dart) usa-a para medir o
-  // Rect de origem/destino do morph quando a grelha é colocada sobre esta
-  // tela e quando a mesma instância volta a ficar visível.
+  // Rect de origem/destino do morph quando esta tela é fechada para a
+  // grelha de abas ou reaberta a partir do card na grelha.
+  final String tabId;
   final GlobalKey? viewportKey;
-  final Completer<void>? firstLoadCompleter;
+  final bool isActive;
 
   @override
   State<WikipediaBrowserScreen> createState() => _WikipediaBrowserScreenState();
@@ -42,11 +43,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
   bool _renderProcessCrashed = false;
   String? _loadError;
   String? _tabId;
-
-  void _completeFirstLoad() {
-    final completer = widget.firstLoadCompleter;
-    if (completer != null && !completer.isCompleted) completer.complete();
-  }
+  bool _tabsRequestInProgress = false;
 
   @override
   void initState() {
@@ -54,47 +51,79 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
     // Regista (ou reaproveita) a aba única da Wikipédia assim que a tela
     // abre, para ela já aparecer corretamente na grelha e no contador do
     // bottom bar mesmo antes do primeiro screenshot existir.
-    final existing = tabsController.getWikipediaTab();
-    final tab = existing ?? tabsController.upsertWikipediaTab(null);
-    _tabId = tab.id;
-    tabsController.activate(tab.id);
+    // O shell cria/ativa o separador antes de montar esta página. Não
+    // notificamos o TabsController aqui, durante a construção do
+    // IndexedStack, para evitar setState durante build.
+    _tabId = widget.tabId;
   }
 
-  Future<bool> _handleBack() async {
+  @override
+  void didUpdateWidget(covariant WikipediaBrowserScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tabId != widget.tabId) {
+      _tabId = widget.tabId;
+    }
+  }
+
+  Future<void> _handleBack() async {
     final controller = _controller;
     if (_canGoBack && controller != null && !_renderProcessCrashed) {
       try {
         await controller.goBack();
-        return false;
+        return;
       } catch (_) {
-        // Fall through to route navigation when the native renderer is gone.
+        // Se o renderer nativo tiver sido reiniciado, regressa à Home.
       }
     }
-    return true;
+    ShellTabRequest.instance.request(0);
+  }
+
+  void _closeToHome() {
+    ShellTabRequest.instance.request(0);
   }
 
   Future<Uint8List?> _captureScreenshot() async {
+    final controller = _controller;
+    if (controller == null) return null;
     try {
-      return await _controller?.takeScreenshot();
+      return await controller
+          .takeScreenshot()
+          .timeout(const Duration(milliseconds: 700));
     } catch (_) {
       return null;
     }
   }
 
   Future<void> _openTabsGrid() async {
-    // Captura o estado atual da WebView ANTES de pedir ao shell para
-    // encolher esta tela para a grelha — assim o card já nasce com a
-    // miniatura real, e o shell usa esta mesma screenshot como origem do
-    // morph (esta tela encolhe, nunca a tela principal por baixo dela).
-    final screenshot = await _captureScreenshot();
-    final id = _tabId;
-    if (id != null) {
-      tabsController.updateTab(id, title: _currentTitle.isNotEmpty ? _currentTitle : 'Wikipédia', thumbnail: screenshot);
-    } else {
-      tabsController.upsertWikipediaTab(screenshot);
+    if (_tabsRequestInProgress) return;
+    _tabsRequestInProgress = true;
+
+    try {
+      // A captura é limitada no tempo: uma chamada nativa do WebView que
+      // demore ou falhe nunca pode bloquear o toque no botão Abas.
+      final freshScreenshot = await _captureScreenshot();
+      final id = _tabId;
+      final previousScreenshot = id == null
+          ? tabsController.getWikipediaTab()?.thumbnail
+          : tabsController.getTab(id)?.thumbnail;
+      final screenshot = freshScreenshot ?? previousScreenshot;
+
+      if (id != null) {
+        tabsController.updateTab(
+          id,
+          title: _currentTitle.isNotEmpty ? _currentTitle : 'Wikipédia',
+          thumbnail: screenshot,
+        );
+      } else {
+        final tab = tabsController.upsertWikipediaTab(screenshot);
+        _tabId = tab.id;
+      }
+
+      if (!mounted) return;
+      ShellTabRequest.instance.requestCloseWikipedia(screenshot);
+    } finally {
+      _tabsRequestInProgress = false;
     }
-    if (!mounted) return;
-    ShellTabRequest.instance.requestCloseWikipedia(screenshot);
   }
 
   @override
@@ -104,10 +133,12 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     return PopScope(
-      canPop: false,
+      // O widget continua montado no IndexedStack quando outra página está
+      // ativa. Só intercepta o botão Voltar enquanto a Wikipédia está visível.
+      canPop: !widget.isActive,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (await _handleBack() && mounted) Navigator.of(context).pop();
+        await _handleBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
@@ -121,7 +152,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
             leading: IconButton(
               tooltip: 'Fechar',
               icon: Icon(Symbols.close_rounded, color: text),
-              onPressed: () => Navigator.of(context).maybePop(),
+              onPressed: _closeToHome,
             ),
             title: Text(
               _currentTitle.isNotEmpty ? _currentTitle : 'Wikipédia',
@@ -215,7 +246,6 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
                 back = await controller.canGoBack();
                 screenshot = await controller.takeScreenshot();
               } catch (_) {}
-              _completeFirstLoad();
               if (!mounted) return;
               setState(() {
                 _isLoading = false;
@@ -228,7 +258,6 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
               }
             },
             onReceivedError: (controller, request, error) {
-              if (request.isForMainFrame == true) _completeFirstLoad();
               if (request.isForMainFrame == true && mounted) {
                 setState(() {
                   _isLoading = false;
@@ -237,7 +266,6 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
               }
             },
             onRenderProcessGone: (controller, detail) {
-              _completeFirstLoad();
               if (!mounted) return;
               setState(() {
                 _renderProcessCrashed = true;

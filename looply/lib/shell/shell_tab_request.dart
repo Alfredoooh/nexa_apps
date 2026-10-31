@@ -10,20 +10,18 @@ class ShellTabRequest extends ChangeNotifier {
   static final ShellTabRequest instance = ShellTabRequest._();
 
   bool tabsRequested = false;
+  bool wikipediaRequested = false;
   int? requestedIndex;
 
-  // Pedido específico de fechamento vindo da própria WikipediaBrowserScreen
-  // (botão "Abas" dela). Diferente de requestTabs(): aqui a origem do morph
-  // de encolhimento para a grelha é a WikipediaBrowserScreen (medida via
-  // _wikipediaViewportKey no shell), NUNCA a tela principal (_repaintKey).
-  // O shell não faz popUntil(route.isFirst) para este caso — a rota da
-  // Wikipédia só é removida depois de o morph já ter começado a animar,
-  // para a screenshot de origem ser sempre a dela mesma, nunca da Home.
+  // Pedido específico vindo do botão Abas da página persistente Wikipédia.
+  // O shell mede o viewport dela e a mantém montada no IndexedStack durante
+  // toda a animação e enquanto a grelha estiver visível.
   bool wikipediaCloseRequested = false;
   Uint8List? wikipediaCloseScreenshot;
 
   void request(int index) {
     tabsRequested = false;
+    wikipediaRequested = false;
     wikipediaCloseRequested = false;
     wikipediaCloseScreenshot = null;
     requestedIndex = index;
@@ -32,6 +30,16 @@ class ShellTabRequest extends ChangeNotifier {
 
   void requestTabs() {
     tabsRequested = true;
+    wikipediaRequested = false;
+    wikipediaCloseRequested = false;
+    wikipediaCloseScreenshot = null;
+    requestedIndex = null;
+    notifyListeners();
+  }
+
+  void requestWikipedia() {
+    tabsRequested = false;
+    wikipediaRequested = true;
     wikipediaCloseRequested = false;
     wikipediaCloseScreenshot = null;
     requestedIndex = null;
@@ -40,6 +48,7 @@ class ShellTabRequest extends ChangeNotifier {
 
   void requestCloseWikipedia(Uint8List? screenshot) {
     tabsRequested = false;
+    wikipediaRequested = false;
     requestedIndex = null;
     wikipediaCloseRequested = true;
     wikipediaCloseScreenshot = screenshot;

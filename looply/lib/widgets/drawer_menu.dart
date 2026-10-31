@@ -5,194 +5,106 @@ import '../screens/history_screen.dart';
 import '../screens/settings_screen.dart';
 import '../theme.dart';
 
-// Novo drawer: topo com ícone+nome do app, lista de opções (tema,
-// histórico, downloads, marcadores), e o botão de Configurações no
-// rodapé com o avatar embutido no canto direito do próprio botão
-// (sem ícone de engrenagem, sem texto "Utilizador").
+// Abre o Drawer gerido pelo próprio Scaffold. Assim o Flutter controla
+// a animação Material, o gesto de arrastar da borda e o fecho por swipe.
 void showLooplyDrawer(BuildContext context) {
-  showGeneralDialog<void>(
-    context: context,
-    useRootNavigator: true,
-    barrierDismissible: true,
-    barrierLabel: 'Fechar menu',
-    barrierColor: Colors.black.withOpacity(.46),
-    transitionDuration: const Duration(milliseconds: 340),
-    pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final slideAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(dialogContext).pop(),
-                child: const SizedBox.expand(),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(-1, 0),
-                  end: Offset.zero,
-                ).animate(slideAnimation),
-                child: _DrawerPanel(
-                  child: SafeArea(
-                    child: Column(
-                      children: [
-                        _DrawerHeader(),
-                        const SizedBox(height: 6),
-                        Expanded(
-                          child: ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            children: [
-                              _DrawerOption(
-                                icon: Symbols.dark_mode_rounded,
-                                label: 'Alterar tema',
-                                onTap: () {
-                                  Navigator.of(dialogContext).pop();
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (context.mounted) showThemeSheet(context);
-                                  });
-                                },
-                              ),
-                              _DrawerOption(
-                                icon: Symbols.history_rounded,
-                                label: 'Histórico',
-                                onTap: () {
-                                  Navigator.of(dialogContext).pop();
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (context.mounted) {
-                                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
-                                    }
-                                  });
-                                },
-                              ),
-                              _DrawerOption(
-                                icon: Symbols.download_rounded,
-                                label: 'Downloads',
-                                onTap: () {
-                                  Navigator.of(dialogContext).pop();
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Ainda não há downloads.')),
-                                      );
-                                    }
-                                  });
-                                },
-                              ),
-                              _DrawerOption(
-                                icon: Symbols.bookmark_rounded,
-                                label: 'Marcadores',
-                                onTap: () {
-                                  Navigator.of(dialogContext).pop();
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Ainda não há marcadores.')),
-                                      );
-                                    }
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
-                          child: _SettingsButtonWithAvatar(
-                            onTap: () {
-                              Navigator.of(dialogContext).pop();
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (context.mounted) {
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-                                }
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final fadeAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOut,
-        reverseCurve: Curves.easeIn,
-      );
-      return FadeTransition(opacity: fadeAnimation, child: child);
-    },
-  );
+  Scaffold.maybeOf(context)?.openDrawer();
 }
 
-class _DrawerPanel extends StatefulWidget {
-  const _DrawerPanel({required this.child});
-  final Widget child;
-
-  @override
-  State<_DrawerPanel> createState() => _DrawerPanelState();
-}
-
-class _DrawerPanelState extends State<_DrawerPanel> {
-  double _dragOffset = 0;
-  bool _dragging = false;
+class LooplyDrawer extends StatelessWidget {
+  const LooplyDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width * .82;
-    final slide = width == 0 ? 0.0 : _dragOffset / width;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: SizedBox(
-        width: width,
-        height: double.infinity,
-        child: AnimatedSlide(
-          offset: Offset(slide, 0),
-          duration: _dragging ? Duration.zero : const Duration(milliseconds: 210),
-          curve: Curves.easeOutCubic,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) => setState(() => _dragging = true),
-            onHorizontalDragUpdate: (details) {
-              if (details.delta.dx >= 0) return;
-              setState(() {
-                _dragOffset = (_dragOffset + details.delta.dx).clamp(-width, 0).toDouble();
-              });
-            },
-            onHorizontalDragEnd: (details) {
-              final shouldClose = _dragOffset < -width * .24 ||
-                  details.velocity.pixelsPerSecond.dx < -560;
-              if (shouldClose) {
-                Navigator.of(context).maybePop();
-              } else {
-                setState(() {
-                  _dragging = false;
-                  _dragOffset = 0;
-                });
-              }
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Material(
-                color: pageBg(context),
-                elevation: 18,
-                child: widget.child,
+    return Drawer(
+      backgroundColor: pageBg(context),
+      elevation: 12,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(
+          right: Radius.circular(12),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _DrawerHeader(),
+            const SizedBox(height: 6),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                children: [
+                  _DrawerOption(
+                    icon: Symbols.dark_mode_rounded,
+                    label: 'Alterar tema',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) showThemeSheet(context);
+                      });
+                    },
+                  ),
+                  _DrawerOption(
+                    icon: Symbols.history_rounded,
+                    label: 'Histórico',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                          );
+                        }
+                      });
+                    },
+                  ),
+                  _DrawerOption(
+                    icon: Symbols.download_rounded,
+                    label: 'Downloads',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Ainda não há downloads.')),
+                          );
+                        }
+                      });
+                    },
+                  ),
+                  _DrawerOption(
+                    icon: Symbols.bookmark_rounded,
+                    label: 'Marcadores',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Ainda não há marcadores.')),
+                          );
+                        }
+                      });
+                    },
+                  ),
+                ],
               ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+              child: _SettingsButtonWithAvatar(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (context.mounted) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show TickerCanceled;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
 import 'browser_screen.dart';
-import 'my_apps_screen.dart';
 import 'search_screen.dart';
-import 'wikipedia_browser_screen.dart';
+import 'my_apps_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.wikipediaViewportKey});
-
-  final GlobalKey? wikipediaViewportKey;
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +19,7 @@ class HomeScreen extends StatelessWidget {
     final muted = mutedText(context);
     return Scaffold(
       backgroundColor: pageBg(context),
+      drawer: const LooplyDrawer(),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
@@ -29,30 +27,28 @@ class HomeScreen extends StatelessWidget {
             const LooplyBigSearchBox(),
             const SizedBox(height: 25),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AllSitesScreen(wikipediaViewportKey: wikipediaViewportKey),
-                  ),
+                  MaterialPageRoute(builder: (_) => const AllSitesScreen()),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
                   child: Row(
                     children: [
                       Text('Sites populares', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: text)),
                       const SizedBox(width: 5),
-                      Icon(Symbols.chevron_right_rounded, size: 19, color: muted),
+                      Icon(Symbols.arrow_forward_rounded, color: muted, size: 17),
                     ],
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 14),
-            QuickSiteGridCard(wikipediaViewportKey: wikipediaViewportKey),
+            const QuickSiteGridCard(),
             const SizedBox(height: 10),
-            const _MyAppsButton(),
+            _ViewMoreSitesButton(),
             const SizedBox(height: 14),
             Text('Navegação simples, rápida e privada.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
           ],
@@ -96,9 +92,7 @@ class LooplyBigSearchBox extends StatelessWidget {
 }
 
 class QuickSiteGridCard extends StatelessWidget {
-  const QuickSiteGridCard({super.key, this.wikipediaViewportKey});
-
-  final GlobalKey? wikipediaViewportKey;
+  const QuickSiteGridCard({super.key});
   @override
   Widget build(BuildContext context) {
     final firstRow = quickSites.sublist(0, 5);
@@ -107,22 +101,21 @@ class QuickSiteGridCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(24)),
       child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: firstRow.map((site) => QuickSiteTile(site: site, wikipediaViewportKey: wikipediaViewportKey)).toList()),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: firstRow.map((site) => QuickSiteTile(site: site)).toList()),
         const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: secondRow.map((site) => QuickSiteTile(site: site, wikipediaViewportKey: wikipediaViewportKey)).toList()),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: secondRow.map((site) => QuickSiteTile(site: site)).toList()),
       ]),
     );
   }
 }
 
-class _MyAppsButton extends StatefulWidget {
-  const _MyAppsButton();
-
+class _ViewMoreSitesButton extends StatefulWidget {
   @override
-  State<_MyAppsButton> createState() => _MyAppsButtonState();
+  State<_ViewMoreSitesButton> createState() => _ViewMoreSitesButtonState();
 }
 
-class _MyAppsButtonState extends State<_MyAppsButton> with SingleTickerProviderStateMixin {
+class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _shimmerController;
 
   @override
@@ -130,23 +123,8 @@ class _MyAppsButtonState extends State<_MyAppsButton> with SingleTickerProviderS
     super.initState();
     _shimmerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 850),
-    );
-    _playLaunchShimmer();
-  }
-
-  Future<void> _playLaunchShimmer() async {
-    for (var pass = 0; pass < 2; pass++) {
-      if (!mounted) return;
-      try {
-        await _shimmerController.forward(from: 0).orCancel;
-      } on TickerCanceled {
-        return;
-      }
-      if (pass == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 140));
-      }
-    }
+      duration: const Duration(milliseconds: 1250),
+    )..repeat(count: 2);
   }
 
   @override
@@ -158,7 +136,7 @@ class _MyAppsButtonState extends State<_MyAppsButton> with SingleTickerProviderS
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
-    return Material(
+    final button = Material(
       color: pillColor(context),
       borderRadius: BorderRadius.circular(28),
       clipBehavior: Clip.antiAlias,
@@ -166,60 +144,63 @@ class _MyAppsButtonState extends State<_MyAppsButton> with SingleTickerProviderS
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const MyAppsScreen()),
         ),
-        child: AnimatedBuilder(
-          animation: _shimmerController,
-          builder: (context, _) {
-            final progress = _shimmerController.value;
-            return ShaderMask(
-              blendMode: BlendMode.srcATop,
-              shaderCallback: (bounds) => LinearGradient(
-                begin: Alignment(-1.8 + (progress * 3.6), 0),
-                end: Alignment(-0.8 + (progress * 3.6), 0),
-                colors: [
-                  Colors.white.withOpacity(0),
-                  Colors.white.withOpacity(.26),
-                  Colors.white.withOpacity(0),
-                ],
-                stops: const [0, .5, 1],
-              ).createShader(bounds),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Symbols.apps_rounded, color: text, size: 18),
-                    const SizedBox(width: 8),
-                    Text('My Apps', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-            );
-          },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Symbols.apps_rounded, color: text, size: 18),
+              const SizedBox(width: 8),
+              Text('My Apps', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
+          ),
         ),
       ),
+    );
+
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      child: button,
+      builder: (context, child) {
+        final progress = _shimmerController.value;
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment(-1.2 + 2.4 * progress, -0.15),
+            end: Alignment(-0.2 + 2.4 * progress, 0.15),
+            colors: [
+              Colors.transparent,
+              Colors.white.withOpacity(.34),
+              Colors.transparent,
+            ],
+            stops: const [0, .5, 1],
+          ).createShader(bounds),
+          child: child,
+        );
+      },
     );
   }
 }
 
 class QuickSiteTile extends StatelessWidget {
-  const QuickSiteTile({super.key, required this.site, this.wikipediaViewportKey});
+  const QuickSiteTile({super.key, required this.site});
   final QuickSite site;
-  final GlobalKey? wikipediaViewportKey;
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? looplyPanel2Dark : Colors.white;
-    // A mesma GlobalKey do shell identifica o viewport desta WebView para
-    // que a captura e a transformação de abas partam da própria Wikipédia.
-    final isWikipediaTestTile = site.name == 'Wikipedia';
+    final isWikipediaTile = site.name == 'Wikipedia';
     return GestureDetector(
       onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          if (isWikipediaTestTile) {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => WikipediaBrowserScreen(viewportKey: wikipediaViewportKey)));
+          if (isWikipediaTile) {
+            // A Wikipédia vive no IndexedStack da shell, tal como a Home.
+            // Se o clique vier de Todos os sites, regressa primeiro à shell.
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            ShellTabRequest.instance.requestWikipedia();
             return;
           }
           openNewTab(context, site.url, title: site.name);

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
+/// Espaço reservado para as aplicações do utilizador.
+/// A tela permanece vazia por enquanto, conforme solicitado.
 class MyAppsScreen extends StatelessWidget {
   const MyAppsScreen({super.key});
 
@@ -10,10 +12,11 @@ class MyAppsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        title: const Text('My Apps'),
         backgroundColor: pageBg(context),
         elevation: 0,
+        title: const Text('My Apps'),
       ),
+      body: const SizedBox.expand(),
     );
   }
 }
