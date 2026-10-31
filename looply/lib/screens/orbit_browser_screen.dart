@@ -417,7 +417,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 tooltip: 'Mais opções',
                 icon: Icon(Symbols.more_vert_rounded, color: text),
                 position: PopupMenuPosition.under,
-                alignment: AlignmentDirectional.topEnd,
                 color: pillColor(context),
                 surfaceTintColor: Colors.transparent,
                 elevation: 14,
