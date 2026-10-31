@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' show Rect;
 
 import 'package:flutter/foundation.dart';
 
@@ -11,6 +12,10 @@ class ShellTabRequest extends ChangeNotifier {
 
   bool tabsRequested = false;
   bool wikipediaRequested = false;
+  bool browserCloseRequested = false;
+  Uint8List? browserCloseScreenshot;
+  Rect? browserCloseSourceRect;
+  String? browserCloseTabId;
   int? requestedIndex;
 
   // Pedido específico vindo do botão Abas da página persistente Wikipédia.
@@ -24,6 +29,10 @@ class ShellTabRequest extends ChangeNotifier {
     wikipediaRequested = false;
     wikipediaCloseRequested = false;
     wikipediaCloseScreenshot = null;
+    browserCloseRequested = false;
+    browserCloseScreenshot = null;
+    browserCloseSourceRect = null;
+    browserCloseTabId = null;
     requestedIndex = index;
     notifyListeners();
   }
@@ -33,6 +42,10 @@ class ShellTabRequest extends ChangeNotifier {
     wikipediaRequested = false;
     wikipediaCloseRequested = false;
     wikipediaCloseScreenshot = null;
+    browserCloseRequested = false;
+    browserCloseScreenshot = null;
+    browserCloseSourceRect = null;
+    browserCloseTabId = null;
     requestedIndex = null;
     notifyListeners();
   }
@@ -42,6 +55,10 @@ class ShellTabRequest extends ChangeNotifier {
     wikipediaRequested = true;
     wikipediaCloseRequested = false;
     wikipediaCloseScreenshot = null;
+    browserCloseRequested = false;
+    browserCloseScreenshot = null;
+    browserCloseSourceRect = null;
+    browserCloseTabId = null;
     requestedIndex = null;
     notifyListeners();
   }
@@ -52,6 +69,27 @@ class ShellTabRequest extends ChangeNotifier {
     requestedIndex = null;
     wikipediaCloseRequested = true;
     wikipediaCloseScreenshot = screenshot;
+    browserCloseRequested = false;
+    browserCloseScreenshot = null;
+    browserCloseSourceRect = null;
+    browserCloseTabId = null;
+    notifyListeners();
+  }
+
+  void requestCloseBrowser({
+    required String tabId,
+    required Uint8List? screenshot,
+    required Rect? sourceRect,
+  }) {
+    tabsRequested = false;
+    wikipediaRequested = false;
+    requestedIndex = null;
+    wikipediaCloseRequested = false;
+    wikipediaCloseScreenshot = null;
+    browserCloseRequested = true;
+    browserCloseScreenshot = screenshot;
+    browserCloseSourceRect = sourceRect;
+    browserCloseTabId = tabId;
     notifyListeners();
   }
 }

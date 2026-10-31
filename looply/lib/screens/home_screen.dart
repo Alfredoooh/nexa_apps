@@ -17,45 +17,57 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    return Scaffold(
-      backgroundColor: pageBg(context),
-      drawer: const LooplyDrawer(),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
-          children: [
-            const LooplyBigSearchBox(),
-            const SizedBox(height: 25),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AllSitesScreen()),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                  child: Row(
-                    children: [
-                      Text('Sites populares', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: text)),
-                      const SizedBox(width: 5),
-                      Icon(Symbols.arrow_forward_rounded, color: muted, size: 17),
-                    ],
-                  ),
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+        children: [
+          const LooplyBigSearchBox(),
+          const SizedBox(height: 25),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AllSitesScreen()),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                child: Row(
+                  children: [
+                    Text(
+                      'Sites populares',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: text,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Icon(
+                      Symbols.arrow_forward_rounded,
+                      color: muted,
+                      size: 17,
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 14),
-            const QuickSiteGridCard(),
-            const SizedBox(height: 10),
-            _ViewMoreSitesButton(),
-            const SizedBox(height: 14),
-            Text('Navegação simples, rápida e privada.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
-          ],
-        ),
+          ),
+          const SizedBox(height: 14),
+          const QuickSiteGridCard(),
+          const SizedBox(height: 10),
+          _ViewMoreSitesButton(),
+          const SizedBox(height: 14),
+          Text(
+            'Navegação simples, rápida e privada.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
+
 }
 
 class LooplyBigSearchBox extends StatelessWidget {
