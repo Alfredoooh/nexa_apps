@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import 'search_screen.dart';
 import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 
@@ -78,6 +79,10 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
   Key _webViewKey = UniqueKey();
   bool _tabsRequestInProgress = false;
   bool _firstLoadSignaled = false;
+  final GlobalKey _localViewportKey = GlobalKey();
+
+  GlobalKey get _effectiveViewportKey =>
+      widget.viewportKey ?? _localViewportKey;
 
   @override
   void initState() {
@@ -198,6 +203,21 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
     }
   }
 
+  Rect? _rectInRootOverlay(GlobalKey key) {
+    try {
+      final overlay = Overlay.of(context, rootOverlay: true);
+      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+      final box = key.currentContext?.findRenderObject() as RenderBox?;
+      if (overlayBox == null || box == null || !box.attached || box.size.isEmpty) {
+        return null;
+      }
+      final topLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+      return topLeft & box.size;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _openTabsGrid() async {
     if (_tabsRequestInProgress) return;
     _tabsRequestInProgress = true;
@@ -207,11 +227,16 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
       _updateTabState(screenshot: freshScreenshot ?? oldScreenshot);
 
       if (!mounted) return;
+      final viewportRect = _rectInRootOverlay(_effectiveViewportKey);
       if (widget.isShellPage) {
         ShellTabRequest.instance
             .requestCloseWikipedia(freshScreenshot ?? oldScreenshot);
       } else {
-        ShellTabRequest.instance.requestTabs();
+        ShellTabRequest.instance.requestCloseBrowser(
+          tabId: widget.tabId,
+          screenshot: freshScreenshot ?? oldScreenshot,
+          sourceRect: viewportRect,
+        );
       }
     } finally {
       _tabsRequestInProgress = false;
@@ -263,14 +288,39 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
                 }
               },
             ),
-            title: Text(
-              _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: text,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
+            titleSpacing: 0,
+            title: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SearchScreen()),
+                );
+              },
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: pillColor(context),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Symbols.search_rounded, color: muted, size: 19),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -281,6 +331,44 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
                   icon: _TabsCountIcon(count: tabsController.count, color: text),
                   onPressed: _openTabsGrid,
                 ),
+              ),
+              PopupMenuButton<_BrowserMenuAction>(
+                tooltip: 'Mais opções',
+                icon: Icon(Symbols.more_vert_rounded, color: text),
+                onSelected: (action) async {
+                  switch (action) {
+                    case _BrowserMenuAction.reload:
+                      await _controller?.reload();
+                      break;
+                    case _BrowserMenuAction.copyAddress:
+                      await Clipboard.setData(ClipboardData(text: _currentUrl));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Endereço copiado.'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _BrowserMenuAction.reload,
+                    child: _BrowserMenuItem(
+                      icon: Symbols.refresh_rounded,
+                      label: 'Atualizar página',
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: _BrowserMenuAction.copyAddress,
+                    child: _BrowserMenuItem(
+                      icon: Symbols.content_copy_rounded,
+                      label: 'Copiar endereço',
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -297,7 +385,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
                 ),
               Expanded(
                 child: RepaintBoundary(
-                  key: widget.viewportKey,
+                  key: _effectiveViewportKey,
                   child: _buildWebView(context),
                 ),
               ),
@@ -460,6 +548,27 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+enum _BrowserMenuAction { reload, copyAddress }
+
+class _BrowserMenuItem extends StatelessWidget {
+  const _BrowserMenuItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 19),
+        const SizedBox(width: 12),
+        Text(label),
       ],
     );
   }

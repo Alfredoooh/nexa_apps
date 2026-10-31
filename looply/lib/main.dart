@@ -12,6 +12,7 @@ import 'screens/activity_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/wikipedia_browser_screen.dart';
+import 'widgets/drawer_menu.dart';
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
@@ -169,6 +170,28 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       final screenshot = request.wikipediaCloseScreenshot;
       request.wikipediaCloseScreenshot = null;
       _closeWikipediaToTabsGrid(screenshot);
+      return;
+    }
+
+    // Todas as outras páginas do browser enviam a captura e o retângulo
+    // exato do seu viewport antes de a rota ser removida. Assim o mesmo
+    // Container Transform usado pela Wikipédia começa no browser real,
+    // sem capturar por engano a página que ficou por baixo da rota.
+    if (request.browserCloseRequested) {
+      request.browserCloseRequested = false;
+      final tabId = request.browserCloseTabId;
+      final screenshot = request.browserCloseScreenshot;
+      final sourceRect = request.browserCloseSourceRect;
+      request.browserCloseTabId = null;
+      request.browserCloseScreenshot = null;
+      request.browserCloseSourceRect = null;
+      if (tabId != null) {
+        _closeBrowserToTabsGrid(
+          tabId: tabId,
+          screenshot: screenshot,
+          sourceRect: sourceRect,
+        );
+      }
       return;
     }
 
@@ -482,6 +505,83 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (mounted) setState(() => _morphing = false);
   }
 
+  Future<void> _closeBrowserToTabsGrid({
+    required String tabId,
+    required Uint8List? screenshot,
+    required Rect? sourceRect,
+  }) async {
+    if (_showingTabsGrid || _morphing) return;
+    _morphing = true;
+
+    final browserTab = tabsController.getTab(tabId);
+    if (browserTab == null) {
+      _morphing = false;
+      return;
+    }
+
+    _preferredReturnTabId = browserTab.id;
+    _previewKeys.putIfAbsent(browserTab.id, GlobalKey.new);
+    _cardKeys.putIfAbsent(browserTab.id, GlobalKey.new);
+
+    final bitmap = screenshot ?? browserTab.thumbnail;
+    final imageProvider = bitmap == null
+        ? null
+        : await _prepareSnapshotImage(bitmap);
+
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
+
+    // Cobre o viewport do browser com a captura antes de retirar a rota.
+    // A captura e o retângulo vêm da própria WebView, não da Home/Jogos que
+    // estavam por baixo. Isto torna a abertura da grelha idêntica em todas
+    // as páginas e endereços do navegador.
+    if (imageProvider != null && sourceRect != null) {
+      _insertSnapshotOverlay(
+        image: imageProvider,
+        from: sourceRect,
+        opening: true,
+      );
+      await WidgetsBinding.instance.endOfFrame;
+    }
+
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      _morphing = false;
+      return;
+    }
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() {
+      _isWikipediaVisible = false;
+      _showingTabsGrid = true;
+    });
+
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      _morphing = false;
+      return;
+    }
+
+    if (imageProvider != null && sourceRect != null) {
+      final destination = _rectInOverlay(_previewKeys[browserTab.id]!) ??
+          _rectInOverlay(_cardKeys[browserTab.id]!);
+      if (destination != null) {
+        await _animateSnapshot(to: destination);
+      } else {
+        _removeSnapshotOverlay();
+      }
+    } else {
+      _removeSnapshotOverlay();
+    }
+
+    if (mounted) setState(() => _morphing = false);
+  }
+
   Future<void> _closeTabsGrid({BrowserTab? openTab}) async {
     if (_morphing || !_showingTabsGrid) return;
     _morphing = true;
@@ -674,6 +774,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
+        drawer: const LooplyDrawer(),
+        drawerEnableOpenDragGesture: true,
+        drawerEdgeDragWidth: 28,
         body: Stack(
           children: [
             Offstage(

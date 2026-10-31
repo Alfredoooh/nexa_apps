@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../screens/history_screen.dart';
@@ -16,99 +17,131 @@ class LooplyDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      backgroundColor: pageBg(context),
-      elevation: 12,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(
-          right: Radius.circular(12),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final drawerBackground = pageBg(context);
+    final overlayStyle = isDark
+        ? SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: drawerBackground,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: drawerBackground,
+            systemNavigationBarIconBrightness: Brightness.light,
+          )
+        : SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: drawerBackground,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: drawerBackground,
+            systemNavigationBarIconBrightness: Brightness.dark,
+          );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Drawer(
+        backgroundColor: drawerBackground,
+        elevation: 16,
+        clipBehavior: Clip.antiAlias,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(
+            right: Radius.circular(12),
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            _DrawerHeader(),
-            const SizedBox(height: 6),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                children: [
-                  _DrawerOption(
-                    icon: Symbols.dark_mode_rounded,
-                    label: 'Alterar tema',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) showThemeSheet(context);
-                      });
-                    },
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+            child: Column(
+              children: [
+                _DrawerHeader(),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    children: [
+                      _DrawerOption(
+                        icon: Symbols.dark_mode_rounded,
+                        label: 'Alterar tema',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (context.mounted) showThemeSheet(context);
+                          });
+                        },
+                      ),
+                      _DrawerOption(
+                        icon: Symbols.history_rounded,
+                        label: 'Histórico',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (context.mounted) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const HistoryScreen(),
+                                ),
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      _DrawerOption(
+                        icon: Symbols.download_rounded,
+                        label: 'Downloads',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ainda não há downloads.'),
+                                ),
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      _DrawerOption(
+                        icon: Symbols.bookmark_rounded,
+                        label: 'Marcadores',
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ainda não há marcadores.'),
+                                ),
+                              );
+                            }
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  _DrawerOption(
-                    icon: Symbols.history_rounded,
-                    label: 'Histórico',
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+                  child: _SettingsButtonWithAvatar(
                     onTap: () {
                       Navigator.of(context).pop();
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (context.mounted) {
                           Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
                           );
                         }
                       });
                     },
                   ),
-                  _DrawerOption(
-                    icon: Symbols.download_rounded,
-                    label: 'Downloads',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Ainda não há downloads.')),
-                          );
-                        }
-                      });
-                    },
-                  ),
-                  _DrawerOption(
-                    icon: Symbols.bookmark_rounded,
-                    label: 'Marcadores',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Ainda não há marcadores.')),
-                          );
-                        }
-                      });
-                    },
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
-              child: _SettingsButtonWithAvatar(
-                onTap: () {
-                  Navigator.of(context).pop();
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (context.mounted) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                      );
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+
 }
 
 class _DrawerHeader extends StatelessWidget {
