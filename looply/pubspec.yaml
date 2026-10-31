@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   material_symbols_icons: ^4.2815.0
-  flutter_inappwebview: 6.1.5
+  flutter_inappwebview: any
   cupertino_icons: ^1.0.8
   animations: any
   http: ^1.2.0

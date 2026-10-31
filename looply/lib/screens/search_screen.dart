@@ -8,7 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../theme.dart';
-import 'wikipedia_browser_screen.dart';
+import '../shell/browser_navigation.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -69,12 +69,7 @@ class _SearchScreenState extends State<SearchScreen> {
     FocusScope.of(context).unfocus();
     final url = _looksLikeUrl(value) ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     NavAccelerator.instance.preconnect(url);
-    final tab = tabsController.createBrowserTab(url);
-    tabsController.activate(tab.id);
-    activityController.log(ActivityKind.site, value, url);
-    // FIX: pushReplacement com openBrowserRoute() (sem transição) em vez
-    // de MaterialPageRoute — mesma causa/correção do home_screen.dart.
-    Navigator.of(context).pushReplacement(openBrowserRoute(tabId: tab.id, initialUrl: url));
+    openOrbitTab(context, url, title: value);
   }
 
   bool _looksLikeUrl(String text) => !text.contains(' ') && (text.contains('.') || text.startsWith('localhost'));

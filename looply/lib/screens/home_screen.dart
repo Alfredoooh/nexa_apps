@@ -2,68 +2,75 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
-import '../shell/shell_tab_request.dart';
+import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
-import 'wikipedia_browser_screen.dart';
 import 'search_screen.dart';
 import 'my_apps_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.onOpenDrawer});
+
+  final VoidCallback? onOpenDrawer;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
-        children: [
-          const LooplyBigSearchBox(),
-          const SizedBox(height: 25),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AllSitesScreen()),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                child: Row(
-                  children: [
-                    Text(
-                      'Sites populares',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: text,
+    // Mantém a estrutura de página original da Home (Scaffold + SafeArea).
+    // O Drawer continua no Scaffold principal; o callback evita abrir um
+    // Drawer interno e preserva o Container Transform de ecrã inteiro.
+    return Scaffold(
+      backgroundColor: pageBg(context),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+          children: [
+            LooplyBigSearchBox(onOpenDrawer: onOpenDrawer),
+            const SizedBox(height: 25),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AllSitesScreen()),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Sites populares',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: text,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 5),
-                    Icon(
-                      Symbols.arrow_forward_rounded,
-                      color: muted,
-                      size: 17,
-                    ),
-                  ],
+                      const SizedBox(width: 5),
+                      Icon(
+                        Symbols.arrow_forward_rounded,
+                        color: muted,
+                        size: 17,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          const QuickSiteGridCard(),
-          const SizedBox(height: 10),
-          _ViewMoreSitesButton(),
-          const SizedBox(height: 14),
-          Text(
-            'Navegação simples, rápida e privada.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: muted, fontSize: 12),
-          ),
-        ],
+            const SizedBox(height: 14),
+            const QuickSiteGridCard(),
+            const SizedBox(height: 10),
+            _ViewMoreSitesButton(),
+            const SizedBox(height: 14),
+            Text(
+              'Navegação simples, rápida e privada.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: muted, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -71,7 +78,9 @@ class HomeScreen extends StatelessWidget {
 }
 
 class LooplyBigSearchBox extends StatelessWidget {
-  const LooplyBigSearchBox({super.key});
+  const LooplyBigSearchBox({super.key, this.onOpenDrawer});
+
+  final VoidCallback? onOpenDrawer;
   @override
   Widget build(BuildContext context) {
     final muted = mutedText(context);
@@ -84,7 +93,7 @@ class LooplyBigSearchBox extends StatelessWidget {
           tooltip: 'Abrir menu',
           style: IconButton.styleFrom(foregroundColor: muted, fixedSize: const Size(46, 46)),
           icon: const Icon(Icons.menu_rounded, size: 23),
-          onPressed: () => showLooplyDrawer(context),
+          onPressed: onOpenDrawer ?? () => showLooplyDrawer(context),
         ),
         Expanded(
           child: Semantics(
@@ -202,17 +211,14 @@ class QuickSiteTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? looplyPanel2Dark : Colors.white;
-    final isWikipediaTile = site.name == 'Wikipedia';
+    final isOrbitBrowserShortcut = site.name == 'Wikipedia';
     return GestureDetector(
       onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          if (isWikipediaTile) {
-            // A Wikipédia vive no IndexedStack da shell, tal como a Home.
-            // Se o clique vier de Todos os sites, regressa primeiro à shell.
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            ShellTabRequest.instance.requestWikipedia();
+          if (isOrbitBrowserShortcut) {
+            openOrbitBrowserTab(context);
             return;
           }
           openNewTab(context, site.url, title: site.name);
@@ -239,13 +245,7 @@ class QuickSiteTile extends StatelessWidget {
   }
 }
 
-// FIX: usa openBrowserRoute() (Duration.zero) em vez de MaterialPageRoute.
-// É esta troca que elimina o flash cinzento — o ZoomPageTransitionsBuilder
-// nativo do Android (usado por padrão em MaterialPageRoute) é o que expõe
-// a janela de composição onde o InAppWebView ainda não está anexado.
+// Abre sites como páginas Orbit persistentes dentro do IndexedStack.
 void openNewTab(BuildContext context, String url, {String? title}) {
-  final tab = tabsController.createBrowserTab(url);
-  tabsController.activate(tab.id);
-  activityController.log(ActivityKind.site, title ?? url, url);
-  Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: url));
+  openOrbitTab(context, url, title: title);
 }

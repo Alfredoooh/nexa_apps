@@ -103,7 +103,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                             previewKey: previewKey,
                             cardKey: cardKey,
                             onTap: () => widget.onSelectTab(tab),
-                            onClose: tab.kind == TabKind.browser ? () => tabsController.closeTab(tab.id) : null,
+                            onClose: tab.kind != TabKind.appScreen ? () => tabsController.closeTab(tab.id) : null,
                           );
                         },
                       );

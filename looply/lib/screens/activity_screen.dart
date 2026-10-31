@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/stats_chart.dart';
-import 'wikipedia_browser_screen.dart';
+import '../shell/browser_navigation.dart';
 import 'game_webview_screen.dart';
 import 'history_screen.dart';
 
@@ -89,12 +89,7 @@ class ActivityTile extends StatelessWidget {
             final game = looplyGames.firstWhere((g) => g.url == entry.url, orElse: () => looplyGames.first);
             Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
           } else {
-            // FIX: mesma correção — abrir aba a partir do histórico/atividade
-            // também passa pela rota sem transição.
-            final tab = tabsController.createBrowserTab(entry.url);
-            tabsController.activate(tab.id);
-            activityController.log(ActivityKind.site, entry.title, entry.url);
-            Navigator.of(context).push(openBrowserRoute(tabId: tab.id, initialUrl: entry.url));
+            openOrbitTab(context, entry.url, title: entry.title);
           }
         },
         borderRadius: borderRadius ?? BorderRadius.circular(10),

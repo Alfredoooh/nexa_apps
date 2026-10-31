@@ -241,10 +241,10 @@ class ActivityController extends ChangeNotifier {
 
 final ActivityController activityController = ActivityController();
 
-// TabKind.wikipedia mantém a identidade/ícone da aba especial da Wikipédia,
-// mas usa exatamente o mesmo OrbitBrowserScreen e os mesmos controlos de
-// navegação das restantes abas de browser.
-enum TabKind { browser, appScreen, wikipedia }
+// A aba especial do Orbit Browser mantém uma única instância persistente,
+// usando a mesma OrbitBrowserScreen e os mesmos controlos de navegação
+// das restantes abas de browser.
+enum TabKind { browser, appScreen, orbitBrowser }
 
 class BrowserTab {
   BrowserTab({
@@ -314,12 +314,11 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
-  // Espelha upsertAppScreenTab, mas para a aba única e especial da
-  // Wikipédia de teste. Não há screenKey/URL variável: existe no máximo
-  // uma aba deste tipo — se já existir, só atualiza a miniatura e traz
-  // para o topo da lista; caso contrário, cria uma nova.
-  BrowserTab upsertWikipediaTab(Uint8List? thumbnail) {
-    final index = _tabs.indexWhere((tab) => tab.kind == TabKind.wikipedia);
+  // Cria ou reutiliza a única aba especial do Orbit Browser.
+  // A lógica é a mesma da antiga aba dedicada: a instância é reutilizada,
+  // a miniatura é atualizada quando existe e a aba volta para o topo.
+  BrowserTab upsertOrbitBrowserTab(Uint8List? thumbnail) {
+    final index = _tabs.indexWhere((tab) => tab.kind == TabKind.orbitBrowser);
     if (index >= 0) {
       final tab = _tabs.removeAt(index);
       if (thumbnail != null) tab.thumbnail = thumbnail;
@@ -329,7 +328,7 @@ class TabsController extends ChangeNotifier {
       return tab;
     }
     final tab = BrowserTab(
-      id: 'tab_${_counter++}', kind: TabKind.wikipedia, url: 'https://www.wikipedia.org',
+      id: 'tab_${_counter++}', kind: TabKind.orbitBrowser, url: 'https://www.wikipedia.org',
       appScreenLabel: 'Orbit Browser', appScreenIcon: Symbols.language_rounded, thumbnail: thumbnail,
     );
     _tabs.insert(0, tab);
@@ -391,9 +390,9 @@ class TabsController extends ChangeNotifier {
     return null;
   }
 
-  BrowserTab? getWikipediaTab() {
+  BrowserTab? getOrbitBrowserTab() {
     for (final tab in _tabs) {
-      if (tab.kind == TabKind.wikipedia) return tab;
+      if (tab.kind == TabKind.orbitBrowser) return tab;
     }
     return null;
   }

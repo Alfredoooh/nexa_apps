@@ -1,46 +1,41 @@
 plugins {
-    id "com.android.application"
-    id "org.jetbrains.kotlin.android"
-    id "dev.flutter.flutter-gradle-plugin"
+id "com.android.application"
+id "org.jetbrains.kotlin.android"
+id "dev.flutter.flutter-gradle-plugin"
 }
 
 android {
-    namespace = "com.looply.app"
-    compileSdk = flutter.compileSdkVersion
+namespace = "com.looply.app"
+compileSdk = flutter.compileSdkVersion
+ndkVersion = flutter.ndkVersion
 
-    // Keep this aligned with the NDK package installed by the CI build script.
-    ndkVersion = "28.2.13676358"
+compileOptions {
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
+}
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+kotlinOptions {
+jvmTarget = JavaVersion.VERSION_17.toString()
+}
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
+defaultConfig {
+applicationId = "com.looply.app"
+minSdk = flutter.minSdkVersion
+targetSdk = flutter.targetSdkVersion
+versionCode = flutter.versionCode
+versionName = flutter.versionName
+}
 
-    defaultConfig {
-        applicationId = "com.looply.app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
-
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.debug
-            minifyEnabled = true
-            shrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile('proguard-android-optimize.txt'),
-                'proguard-rules.pro'
-            )
-        }
-    }
+buildTypes {
+release {
+signingConfig = signingConfigs.debug
+minifyEnabled = true
+shrinkResources = true
+proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+}
+}
 }
 
 flutter {
-    source = "../.."
+source = "../.."
 }
