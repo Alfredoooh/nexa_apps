@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -137,15 +139,27 @@ class _ViewMoreSitesButton extends StatefulWidget {
 
 class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
     with SingleTickerProviderStateMixin {
+  static bool _hasPlayedThisLaunch = false;
   late final AnimationController _shimmerController;
+  bool _isShimmerVisible = false;
 
   @override
   void initState() {
     super.initState();
     _shimmerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1250),
-    )..repeat(count: 2);
+      duration: const Duration(milliseconds: 1050),
+    );
+    if (!_hasPlayedThisLaunch) {
+      _hasPlayedThisLaunch = true;
+      _isShimmerVisible = true;
+      _shimmerController.addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) {
+          setState(() => _isShimmerVisible = false);
+        }
+      });
+      _shimmerController.forward();
+    }
   }
 
   @override
@@ -179,6 +193,9 @@ class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
       ),
     );
 
+    // Depois de terminar, devolve o botão sem ShaderMask. Assim o último
+    // frame nunca fica congelado como um brilho permanente.
+    if (!_isShimmerVisible) return button;
     return AnimatedBuilder(
       animation: _shimmerController,
       child: button,
@@ -229,11 +246,10 @@ class QuickSiteTile extends StatelessWidget {
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
               child: Transform.scale(
-                scale: 1.12,
-                child: Image.asset(
-                  site.assetPath, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: text, size: 17),
-                ),
+                // Aumenta apenas o conteúdo do círculo em 10%; o recipiente
+                // continua rigorosamente com 40 x 40 px.
+                scale: 1.232,
+                child: _siteIcon(site, text),
               ),
             ),
           ),
@@ -243,6 +259,35 @@ class QuickSiteTile extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _siteIcon(QuickSite site, Color fallbackColor) {
+  if (site.iconBase64 != null && site.iconBase64!.isNotEmpty) {
+    try {
+      return Image.memory(
+        base64Decode(site.iconBase64!),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+      );
+    } catch (_) {
+      // Se um ícone importado ficar inválido, tenta o favicon do site.
+    }
+  }
+  if (site.faviconUrl != null && site.faviconUrl!.isNotEmpty) {
+    return Image.network(
+      site.faviconUrl!,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+    );
+  }
+  if (site.assetPath != null) {
+    return Image.asset(
+      site.assetPath!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+    );
+  }
+  return Icon(Icons.public_rounded, color: fallbackColor, size: 18);
 }
 
 // Abre sites como páginas Orbit persistentes dentro do IndexedStack.

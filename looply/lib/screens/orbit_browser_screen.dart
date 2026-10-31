@@ -102,6 +102,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
+  void _recordHistoryVisit() {
+    final url = _currentUrl.trim();
+    if (url.isEmpty) return;
+    final title = _currentTitle.trim().isNotEmpty
+        ? _currentTitle.trim()
+        : (Uri.tryParse(url)?.host ?? url);
+    activityController.log(ActivityKind.site, title, url);
+  }
+
   void _updateTabState({Uint8List? screenshot}) {
     tabsController.updateTab(
       widget.tabId,
@@ -666,6 +675,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 _loadError = null;
                 if (url != null) _currentUrl = url.toString();
               });
+              _recordHistoryVisit();
               _updateTabState();
             },
             onTitleChanged: (controller, title) {
@@ -692,6 +702,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 _canGoForward = canForward;
                 if (title?.trim().isNotEmpty == true) _currentTitle = title!;
               });
+              _recordHistoryVisit();
               _updateTabState();
             },
             onLoadStop: (controller, url) async {

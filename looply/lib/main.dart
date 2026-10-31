@@ -18,11 +18,22 @@ import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // Restaurar preferências e dados locais antes de construir a primeira tela:
+  // evita mostrar temporariamente o tema padrão ou uma grelha sem separadores.
+  await themeController.restore();
+  await tabsController.restore();
+  await activityController.restore();
+  await customSitesController.restore();
+  await activeSearchEngine.restore();
+  await restoreRuntimeSettings();
+
   runApp(const LooplyApp());
 }
+
 
 class LooplyApp extends StatelessWidget {
   const LooplyApp({super.key});
@@ -138,15 +149,31 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       unawaited(SessionStore.instance.markBackgrounded());
+      unawaited(tabsController.flushPersistence());
+      unawaited(activityController.flushPersistence());
     }
   }
 
   Future<void> _maybeRestoreSession() async {
     if (_restoreChecked || !mounted) return;
     _restoreChecked = true;
+
+    // Se já existem separadores guardados, restaura a aba que estava ativa
+    // sem criar outra cópia da última página visitada.
+    final savedTabs = tabsController.tabs
+        .where((tab) => tab.kind != TabKind.appScreen)
+        .toList(growable: false);
+    if (savedTabs.isNotEmpty) {
+      final restoredTab = tabsController.getTab(tabsController.activeTabId ?? '') ?? savedTabs.first;
+      _ensureBrowserTabMounted(restoredTab);
+      tabsController.activate(restoredTab.id);
+      if (mounted) setState(() => _activeBrowserTabId = restoredTab.id);
+      return;
+    }
+
+    // Compatibilidade com a sessão simples gravada por versões anteriores.
     final restored = await SessionStore.instance.getRestorablePage();
     if (restored == null || !mounted) return;
-
     final tab = tabsController.createBrowserTab(restored.url);
     _ensureBrowserTabMounted(tab);
     tabsController.activate(tab.id);
@@ -670,6 +697,18 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
 
+  void _returnHomeFromTabs() {
+    final homeTab = tabsController.getAppScreen(_screenKeys.first) ??
+        tabsController.upsertAppScreenTab(
+          _screenKeys.first,
+          _screenLabels.first,
+          _screenIcons.first,
+          null,
+        );
+    unawaited(_closeTabsGrid(openTab: homeTab));
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -750,6 +789,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                     cardKeys: _cardKeys,
                     onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
                     onClose: () => _closeTabsGrid(),
+                    onHome: _returnHomeFromTabs,
                     onNewTab: () {
                       final tab = tabsController.createBrowserTab('https://www.google.com');
                       _ensureBrowserTabMounted(tab);

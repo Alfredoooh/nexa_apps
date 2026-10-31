@@ -10,12 +10,14 @@ class TabsGridScreen extends StatefulWidget {
     super.key,
     required this.onSelectTab,
     required this.onClose,
+    required this.onHome,
     required this.onNewTab,
     required this.previewKeys,
     required this.cardKeys,
   });
   final ValueChanged<BrowserTab> onSelectTab;
   final VoidCallback onClose;
+  final VoidCallback onHome;
   final VoidCallback onNewTab;
   // Keys geridas pelo shell (main.dart), uma por id de aba. previewKeys
   // marca a área da thumbnail dentro do card (destino/origem do morph ao
@@ -44,6 +46,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? looplySoftDark : looplySoftLight;
+    final panel = isDark ? looplyPanelDark : looplyPanelLight;
     final text = mainText(context);
     final muted = mutedText(context);
     final tabs = tabsController.tabs;
@@ -53,25 +56,82 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 14, 10),
+              padding: const EdgeInsets.fromLTRB(10, 8, 12, 10),
               child: Row(
                 children: [
+                  // Botão de voltar simples e totalmente circular, sem título.
                   IconButton(
-                    tooltip: 'Fechar separadores',
-                    style: IconButton.styleFrom(backgroundColor: pillColor(context), foregroundColor: text, fixedSize: const Size(42, 42)),
-                    icon: const Icon(Symbols.close_rounded),
+                    tooltip: 'Voltar',
+                    style: IconButton.styleFrom(
+                      backgroundColor: pillColor(context),
+                      foregroundColor: text,
+                      fixedSize: const Size(46, 46),
+                      shape: const CircleBorder(),
+                    ),
+                    icon: const Icon(Symbols.arrow_back_rounded, size: 23),
                     onPressed: widget.onClose,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Separadores', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w800)),
-                    Text('${tabs.length} ${tabs.length == 1 ? 'aba aberta' : 'abas abertas'}', style: TextStyle(color: muted, fontSize: 12)),
-                  ])),
+                  const SizedBox(width: 12),
+                  // Grupo compacto inspirado na barra da imagem: início e
+                  // contador de separadores dentro de uma única cápsula.
+                  Material(
+                    color: pillColor(context),
+                    borderRadius: BorderRadius.circular(30),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Página inicial',
+                            style: IconButton.styleFrom(
+                              foregroundColor: text,
+                              fixedSize: const Size(42, 42),
+                              shape: const CircleBorder(),
+                            ),
+                            icon: const Icon(Symbols.home_rounded, size: 23),
+                            onPressed: widget.onHome,
+                          ),
+                          const SizedBox(width: 2),
+                          Container(
+                            width: 52,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: panel,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Center(child: _TabsCountBadge(count: tabs.length, color: text)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
                   IconButton(
                     tooltip: 'Nova aba',
-                    style: IconButton.styleFrom(backgroundColor: accentColor(context), foregroundColor: isDark ? const Color(0xFF17181A) : Colors.white, fixedSize: const Size(46, 46)),
-                    icon: const Icon(Symbols.add_rounded),
+                    style: IconButton.styleFrom(
+                      foregroundColor: text,
+                      fixedSize: const Size(46, 46),
+                      shape: const CircleBorder(),
+                    ),
+                    icon: const Icon(Symbols.add_rounded, size: 27),
                     onPressed: widget.onNewTab,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Mais opções',
+                    icon: Icon(Symbols.more_vert_rounded, color: text, size: 24),
+                    color: pillColor(context),
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 10,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                    onSelected: (value) {
+                      if (value == 'new') widget.onNewTab();
+                      if (value == 'home') widget.onHome();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'new', child: _TabsMenuItem(icon: Symbols.add_rounded, label: 'Novo separador')),
+                      PopupMenuItem(value: 'home', child: _TabsMenuItem(icon: Symbols.home_rounded, label: 'Página inicial')),
+                    ],
                   ),
                 ],
               ),
@@ -114,6 +174,39 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
       ),
     );
   }
+}
+
+
+class _TabsCountBadge extends StatelessWidget {
+  const _TabsCountBadge({required this.count, required this.color});
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Symbols.tab_rounded, size: 17, color: color),
+          const SizedBox(width: 3),
+          Text('$count', style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800)),
+        ],
+      );
+}
+
+class _TabsMenuItem extends StatelessWidget {
+  const _TabsMenuItem({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Icon(icon, size: 19, color: mainText(context)),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(color: mainText(context))),
+        ],
+      );
 }
 
 class TabGridCard extends StatelessWidget {

@@ -120,7 +120,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               title: Text(engine.name, style: TextStyle(color: textForMode(context, mode))),
               trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentForMode(context, mode), fill: 1) : const SizedBox.shrink()),
-              onTap: () { activeSearchEngine.value = engine; Navigator.of(sheetContext).pop(); },
+              onTap: () { activeSearchEngine.select(engine); Navigator.of(sheetContext).pop(); },
             )),
           ])),
         ),

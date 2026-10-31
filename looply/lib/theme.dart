@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Paleta escura neutra (sem o azulado anterior) — cinzas verdadeiros,
 // não totalmente pretos, mantendo contraste confortável.
@@ -69,8 +72,36 @@ Color pillForMode(BuildContext context, ThemeMode mode) =>
 
 class ThemeController extends ValueNotifier<ThemeMode> {
   ThemeController() : super(ThemeMode.system);
-  void setMode(ThemeMode mode) => value = mode;
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('looply_theme_mode');
+      value = switch (saved) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      };
+    } catch (_) {}
+  }
+
+  void setMode(ThemeMode mode) {
+    value = mode;
+    unawaited(_persist(mode));
+  }
+
+  Future<void> _persist(ThemeMode mode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('looply_theme_mode', switch (mode) {
+        ThemeMode.light => 'light',
+        ThemeMode.dark => 'dark',
+        _ => 'system',
+      });
+    } catch (_) {}
+  }
 }
+
 
 final ThemeController themeController = ThemeController();
 

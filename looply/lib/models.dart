@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'session_store.dart';
 
@@ -43,6 +45,21 @@ const Set<String> adBlockDomains = {
 // Settings-backed runtime switches.
 final ValueNotifier<bool> adBlockEnabled = ValueNotifier<bool>(true);
 final ValueNotifier<bool> navigationAcceleratorEnabled = ValueNotifier<bool>(true);
+
+bool _runtimePreferenceListenersAttached = false;
+
+Future<void> restoreRuntimeSettings() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    adBlockEnabled.value = prefs.getBool('looply_ad_block_enabled') ?? true;
+    navigationAcceleratorEnabled.value = prefs.getBool('looply_navigation_accelerator_enabled') ?? true;
+    if (_runtimePreferenceListenersAttached) return;
+    _runtimePreferenceListenersAttached = true;
+    adBlockEnabled.addListener(() => unawaited(prefs.setBool('looply_ad_block_enabled', adBlockEnabled.value)));
+    navigationAcceleratorEnabled.addListener(() => unawaited(prefs.setBool('looply_navigation_accelerator_enabled', navigationAcceleratorEnabled.value)));
+  } catch (_) {}
+}
+
 
 class AdBlockStats extends ChangeNotifier {
   AdBlockStats._();
@@ -93,11 +110,36 @@ const List<SearchEngine> searchEngines = [
 
 class SearchEngineController extends ValueNotifier<SearchEngine> {
   SearchEngineController() : super(searchEngines.first);
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name = prefs.getString('looply_search_engine') ?? searchEngines.first.name;
+      SearchEngine? engine;
+      for (final item in searchEngines) {
+        if (item.name == name) { engine = item; break; }
+      }
+      if (engine != null) value = engine;
+    } catch (_) {}
+  }
+
+  void select(SearchEngine engine) {
+    value = engine;
+    unawaited(_persist());
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('looply_search_engine', value.name);
+    } catch (_) {}
+  }
 }
+
 
 final SearchEngineController activeSearchEngine = SearchEngineController();
 
-enum SiteCategory { destaque, produtividade, social, entretenimento, desenvolvimento, ia, apostas, compras }
+enum SiteCategory { destaque, produtividade, social, entretenimento, desenvolvimento, ia, apostas, compras, noticias, viagens, financas, personalizados }
 
 String siteCategoryLabel(SiteCategory category) => switch (category) {
   SiteCategory.destaque => 'Em destaque',
@@ -108,15 +150,29 @@ String siteCategoryLabel(SiteCategory category) => switch (category) {
   SiteCategory.ia => 'Inteligência artificial',
   SiteCategory.apostas => 'Apostas desportivas',
   SiteCategory.compras => 'Compras',
+  SiteCategory.noticias => 'Notícias e informação',
+  SiteCategory.viagens => 'Viagens',
+  SiteCategory.financas => 'Finanças e serviços',
+  SiteCategory.personalizados => 'Os meus sites',
 };
 
 class QuickSite {
-  const QuickSite({required this.name, required this.assetPath, required this.url, this.category = SiteCategory.destaque});
+  const QuickSite({
+    required this.name,
+    required this.url,
+    this.assetPath,
+    this.iconBase64,
+    this.faviconUrl,
+    this.category = SiteCategory.destaque,
+  });
   final String name;
-  final String assetPath;
+  final String? assetPath;
   final String url;
+  final String? iconBase64;
+  final String? faviconUrl;
   final SiteCategory category;
 }
+
 
 const String _qs = 'assets/images/quick_sites';
 
@@ -134,52 +190,142 @@ const List<QuickSite> quickSites = [
 ];
 
 const List<QuickSite> allSites = [
+  // Destaques e pesquisa
   QuickSite(name: 'Google', assetPath: '$_qs/google.webp', url: 'https://www.google.com', category: SiteCategory.destaque),
-  QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Bing', assetPath: '$_qs/bing.webp', url: 'https://www.bing.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Brave', assetPath: '$_qs/brave.webp', url: 'https://search.brave.com', category: SiteCategory.destaque),
+  QuickSite(name: 'DuckDuckGo', assetPath: '$_qs/duckduckgo.webp', url: 'https://duckduckgo.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Yahoo', assetPath: '$_qs/yahoo.webp', url: 'https://www.yahoo.com', category: SiteCategory.destaque),
   QuickSite(name: 'Wikipedia', assetPath: '$_qs/wikipedia.webp', url: 'https://www.wikipedia.org', category: SiteCategory.destaque),
   QuickSite(name: 'Reddit', assetPath: '$_qs/reddit.webp', url: 'https://www.reddit.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Medium', assetPath: '$_qs/medium.webp', url: 'https://medium.com', category: SiteCategory.destaque),
+  QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com', category: SiteCategory.destaque),
+  // Produtividade e criação
+  QuickSite(name: 'Adobe', assetPath: '$_qs/adobe.webp', url: 'https://www.adobe.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Airtable', assetPath: '$_qs/airtable.webp', url: 'https://www.airtable.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Apple', assetPath: '$_qs/apple.webp', url: 'https://www.apple.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Canva', assetPath: '$_qs/canva.webp', url: 'https://www.canva.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Dropbox', assetPath: '$_qs/dropbox.webp', url: 'https://www.dropbox.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Figma', assetPath: '$_qs/figma.webp', url: 'https://www.figma.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Jotform', assetPath: '$_qs/jotform.webp', url: 'https://www.jotform.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Loom', assetPath: '$_qs/loom.webp', url: 'https://www.loom.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Lucidspark', assetPath: '$_qs/lucidspark.webp', url: 'https://lucidspark.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Microsoft', assetPath: '$_qs/microsoft.webp', url: 'https://www.microsoft.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Miro', assetPath: '$_qs/miro.webp', url: 'https://miro.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Notion', assetPath: '$_qs/notion.webp', url: 'https://www.notion.so', category: SiteCategory.produtividade),
+  QuickSite(name: 'Zoom', assetPath: '$_qs/zoom.webp', url: 'https://zoom.us', category: SiteCategory.produtividade),
+  QuickSite(name: 'Oracle', assetPath: '$_qs/oracle.webp', url: 'https://www.oracle.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Recurly', assetPath: '$_qs/recurly.webp', url: 'https://recurly.com', category: SiteCategory.financas),
+  // Redes sociais e comunicação
   QuickSite(name: 'Instagram', assetPath: '$_qs/instagram.webp', url: 'https://www.instagram.com', category: SiteCategory.social),
   QuickSite(name: 'X', assetPath: '$_qs/x.webp', url: 'https://x.com', category: SiteCategory.social),
   QuickSite(name: 'TikTok', assetPath: '$_qs/tiktok.webp', url: 'https://www.tiktok.com', category: SiteCategory.social),
   QuickSite(name: 'Gmail', assetPath: '$_qs/gmail.webp', url: 'https://mail.google.com', category: SiteCategory.social),
+  QuickSite(name: 'Revolt', assetPath: '$_qs/revolt.webp', url: 'https://revolt.chat', category: SiteCategory.social),
+  // Entretenimento e jogos
   QuickSite(name: 'Netflix', assetPath: '$_qs/netflix.webp', url: 'https://www.netflix.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Spotify', assetPath: '$_qs/spotify.webp', url: 'https://open.spotify.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Roblox', assetPath: '$_qs/roblox.webp', url: 'https://www.roblox.com', category: SiteCategory.entretenimento),
   QuickSite(name: 'Poki', assetPath: '$_qs/poki.webp', url: 'https://poki.com', category: SiteCategory.entretenimento),
-  QuickSite(name: 'BBC', assetPath: '$_qs/bbc.webp', url: 'https://www.bbc.com', category: SiteCategory.entretenimento),
-  QuickSite(name: 'Notion', assetPath: '$_qs/notion.webp', url: 'https://www.notion.so', category: SiteCategory.produtividade),
-  QuickSite(name: 'Dropbox', assetPath: '$_qs/dropbox.webp', url: 'https://www.dropbox.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Zoom', assetPath: '$_qs/zoom.webp', url: 'https://zoom.us', category: SiteCategory.produtividade),
-  QuickSite(name: 'Canva', assetPath: '$_qs/canva.webp', url: 'https://www.canva.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Airtable', assetPath: '$_qs/airtable.webp', url: 'https://www.airtable.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Jotform', assetPath: '$_qs/jotform.webp', url: 'https://www.jotform.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Loom', assetPath: '$_qs/loom.webp', url: 'https://www.loom.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Miro', assetPath: '$_qs/miro.webp', url: 'https://miro.com', category: SiteCategory.produtividade),
-  QuickSite(name: 'Lucidspark', assetPath: '$_qs/lucidspark.webp', url: 'https://lucidspark.com', category: SiteCategory.produtividade),
+  // Notícias e desporto
+  QuickSite(name: 'BBC', assetPath: '$_qs/bbc.webp', url: 'https://www.bbc.com', category: SiteCategory.noticias),
+  QuickSite(name: 'BeSoccer Pro', assetPath: '$_qs/besoccer_pro.webp', url: 'https://www.besoccer.com', category: SiteCategory.noticias),
+  // Desenvolvimento e ferramentas
+  QuickSite(name: 'Atlassian', assetPath: '$_qs/atlassian.webp', url: 'https://www.atlassian.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Cloudflare', assetPath: '$_qs/cloudflare.webp', url: 'https://www.cloudflare.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Framer', assetPath: '$_qs/framer.webp', url: 'https://www.framer.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'GitHub', assetPath: '$_qs/github.webp', url: 'https://github.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'GitLab', assetPath: '$_qs/gitlab.webp', url: 'https://gitlab.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'Replit', assetPath: '$_qs/replit.webp', url: 'https://replit.com', category: SiteCategory.desenvolvimento),
-  QuickSite(name: 'Figma', assetPath: '$_qs/figma.webp', url: 'https://www.figma.com', category: SiteCategory.desenvolvimento),
-  QuickSite(name: 'Framer', assetPath: '$_qs/framer.webp', url: 'https://www.framer.com', category: SiteCategory.desenvolvimento),
-  QuickSite(name: 'Cloudflare', assetPath: '$_qs/cloudflare.webp', url: 'https://www.cloudflare.com', category: SiteCategory.desenvolvimento),
-  QuickSite(name: 'Atlassian', assetPath: '$_qs/atlassian.webp', url: 'https://www.atlassian.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Semrush', assetPath: '$_qs/semrush.webp', url: 'https://www.semrush.com', category: SiteCategory.desenvolvimento),
   QuickSite(name: 'Zapier', assetPath: '$_qs/zapier.webp', url: 'https://zapier.com', category: SiteCategory.desenvolvimento),
-  QuickSite(name: 'ChatGPT', assetPath: '$_qs/openai_chatgpt.webp', url: 'https://chat.openai.com', category: SiteCategory.ia),
+  QuickSite(name: 'Deepgram', assetPath: '$_qs/deepgram.webp', url: 'https://deepgram.com', category: SiteCategory.desenvolvimento),
+  // Inteligência artificial
+  QuickSite(name: 'ChatGPT', assetPath: '$_qs/openai_chatgpt.webp', url: 'https://chatgpt.com', category: SiteCategory.ia),
   QuickSite(name: 'DeepMind', assetPath: '$_qs/deepmind.webp', url: 'https://deepmind.google', category: SiteCategory.ia),
   QuickSite(name: 'Mistral', assetPath: '$_qs/mistral.webp', url: 'https://mistral.ai', category: SiteCategory.ia),
   QuickSite(name: 'xAI', assetPath: '$_qs/xai.webp', url: 'https://x.ai', category: SiteCategory.ia),
   QuickSite(name: 'Stability AI', assetPath: '$_qs/stabilityai.webp', url: 'https://stability.ai', category: SiteCategory.ia),
-  QuickSite(name: 'Deepgram', assetPath: '$_qs/deepgram.webp', url: 'https://deepgram.com', category: SiteCategory.ia),
+  QuickSite(name: 'DreamStudio', assetPath: '$_qs/stability_ai.webp', url: 'https://dreamstudio.ai', category: SiteCategory.ia),
   QuickSite(name: 'Sider', assetPath: '$_qs/sider.webp', url: 'https://sider.ai', category: SiteCategory.ia),
+  // Apostas, compras e viagens
   QuickSite(name: 'BantuBet', assetPath: '$_qs/bantubet.webp', url: 'https://www.bantubet.com', category: SiteCategory.apostas),
   QuickSite(name: 'PremierBet', assetPath: '$_qs/premierbet.webp', url: 'https://www.premierbet.co.ao', category: SiteCategory.apostas),
   QuickSite(name: 'WeScore', assetPath: '$_qs/wescore.webp', url: 'https://www.wescore.com', category: SiteCategory.apostas),
-  QuickSite(name: 'BeSoccer Pro', assetPath: '$_qs/besoccer_pro.webp', url: 'https://www.besoccer.com', category: SiteCategory.apostas),
   QuickSite(name: 'Amazon', assetPath: '$_qs/amazon.webp', url: 'https://www.amazon.com', category: SiteCategory.compras),
   QuickSite(name: 'Alibaba', assetPath: '$_qs/alibaba.webp', url: 'https://www.alibaba.com', category: SiteCategory.compras),
   QuickSite(name: 'Flipkart', assetPath: '$_qs/flipkart.webp', url: 'https://www.flipkart.com', category: SiteCategory.compras),
-  QuickSite(name: 'Airbnb', assetPath: '$_qs/airbnb.webp', url: 'https://www.airbnb.com', category: SiteCategory.compras),
+  QuickSite(name: 'Airbnb', assetPath: '$_qs/airbnb.webp', url: 'https://www.airbnb.com', category: SiteCategory.viagens),
+  QuickSite(name: 'Aside', assetPath: '$_qs/aside.webp', url: 'https://aside.com', category: SiteCategory.produtividade),
 ];
+
+
+/// Sites adicionados pelo utilizador. A lista e os ícones enviados são
+/// guardados localmente e reaparecem automaticamente na próxima abertura.
+class CustomSitesController extends ChangeNotifier {
+  static const String _storageKey = 'looply_custom_sites_v1';
+  final List<QuickSite> _sites = [];
+  List<QuickSite> get sites => List.unmodifiable(_sites);
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      _sites
+        ..clear()
+        ..addAll(decoded.whereType<Map>().map((item) {
+          final name = item['name'];
+          final url = item['url'];
+          if (name is! String || url is! String) return null;
+          return QuickSite(
+            name: name,
+            url: url,
+            iconBase64: item['iconBase64'] is String ? item['iconBase64'] as String : null,
+            faviconUrl: item['faviconUrl'] is String ? item['faviconUrl'] as String : null,
+            category: SiteCategory.personalizados,
+          );
+        }).whereType<QuickSite>());
+      notifyListeners();
+    } catch (_) {
+      // Dados de sites inválidos não impedem a abertura do Looply.
+    }
+  }
+
+  bool containsUrl(String url) => _sites.any((site) => site.url == url);
+
+  Future<void> add(QuickSite site) async {
+    _sites.removeWhere((item) => item.url == site.url);
+    _sites.add(site);
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> remove(String url) async {
+    _sites.removeWhere((site) => site.url == url);
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _sites.map((site) => <String, Object?>{
+        'name': site.name,
+        'url': site.url,
+        'iconBase64': site.iconBase64,
+        'faviconUrl': site.faviconUrl,
+      }).toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+    } catch (_) {
+      // Não interrompe a interface se o armazenamento estiver indisponível.
+    }
+  }
+}
+
+final CustomSitesController customSitesController = CustomSitesController();
 
 class NavAccelerator {
   NavAccelerator._();
@@ -226,16 +372,73 @@ class ActivityEntry {
 }
 
 class ActivityController extends ChangeNotifier {
+  static const String _storageKey = 'looply_browsing_history_v1';
   final List<ActivityEntry> _entries = [];
   List<ActivityEntry> get entries => List.unmodifiable(_entries.reversed);
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      _entries
+        ..clear()
+        ..addAll(decoded.whereType<Map>().map((item) {
+          final kindName = item['kind'];
+          final title = item['title'];
+          final url = item['url'];
+          final timestamp = item['timestamp'];
+          if (kindName is! String || title is! String || url is! String) return null;
+          ActivityKind? kind;
+          for (final candidate in ActivityKind.values) {
+            if (candidate.name == kindName) { kind = candidate; break; }
+          }
+          if (kind == null) return null;
+          return ActivityEntry(
+            kind: kind,
+            title: title,
+            url: url,
+            timestamp: timestamp is String ? DateTime.tryParse(timestamp) : null,
+          );
+        }).whereType<ActivityEntry>().toList().take(200));
+      notifyListeners();
+    } catch (_) {}
+  }
+
   void log(ActivityKind kind, String title, String url) {
-    _entries.add(ActivityEntry(kind: kind, title: title, url: url));
+    if (url.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_entries.isNotEmpty) {
+      final latest = _entries.last;
+      if (latest.url == url && now.difference(latest.timestamp).inSeconds < 3) return;
+    }
+    _entries.add(ActivityEntry(kind: kind, title: title, url: url, timestamp: now));
     if (_entries.length > 200) _entries.removeAt(0);
     notifyListeners();
+    unawaited(_persist());
   }
+
   void clear() {
     _entries.clear();
     notifyListeners();
+    unawaited(_persist());
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _entries.map((entry) => <String, Object?>{
+        'kind': entry.kind.name,
+        'title': entry.title,
+        'url': entry.url,
+        'timestamp': entry.timestamp.toIso8601String(),
+      }).toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+    } catch (_) {}
   }
 }
 
@@ -272,12 +475,60 @@ class BrowserTab {
 }
 
 class TabsController extends ChangeNotifier {
+  static const String _storageKey = 'looply_browser_tabs_v2';
+  static const String _activeStorageKey = 'looply_active_browser_tab_v2';
   final List<BrowserTab> _tabs = [];
   int _counter = 0;
   String? _activeTabId;
+  Timer? _persistTimer;
   List<BrowserTab> get tabs => List.unmodifiable(_tabs);
   int get count => _tabs.length;
   String? get activeTabId => _activeTabId;
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      _tabs.clear();
+      var greatestId = -1;
+      for (final value in decoded) {
+        if (value is! Map) continue;
+        final id = value['id'];
+        final kindName = value['kind'];
+        final url = value['url'];
+        if (id is! String || url is! String || url.trim().isEmpty) continue;
+        TabKind? kind;
+        for (final candidate in TabKind.values) {
+          if (candidate.name == kindName) { kind = candidate; break; }
+        }
+        if (kind == null || kind == TabKind.appScreen) continue;
+        final uri = Uri.tryParse(url);
+        if (uri == null || uri.host.isEmpty || (uri.scheme != 'http' && uri.scheme != 'https')) continue;
+        final suffix = int.tryParse(id.startsWith('tab_') ? id.substring(4) : '');
+        if (suffix != null && suffix > greatestId) greatestId = suffix;
+        _tabs.add(BrowserTab(
+          id: id,
+          kind: kind,
+          url: url,
+          title: value['title'] is String ? value['title'] as String : null,
+          lastActivity: value['lastActivity'] is String
+              ? DateTime.tryParse(value['lastActivity'] as String)
+              : null,
+        ));
+      }
+      _counter = greatestId + 1;
+      final savedActive = prefs.getString(_activeStorageKey);
+      _activeTabId = _tabs.any((tab) => tab.id == savedActive)
+          ? savedActive
+          : (_tabs.isNotEmpty ? _tabs.first.id : null);
+      notifyListeners();
+    } catch (_) {
+      // Se a sessão estiver corrompida, o Looply abre normalmente sem abas restauradas.
+    }
+  }
 
   void activate(String id) {
     if (!_tabs.any((tab) => tab.id == id)) return;
@@ -285,6 +536,7 @@ class TabsController extends ChangeNotifier {
     final tab = _tabs.firstWhere((tab) => tab.id == id);
     tab.touch();
     notifyListeners();
+    _schedulePersist();
   }
 
   BrowserTab createBrowserTab(String url) {
@@ -292,6 +544,7 @@ class TabsController extends ChangeNotifier {
     _tabs.insert(0, tab);
     _activeTabId = tab.id;
     notifyListeners();
+    _schedulePersist();
     return tab;
   }
 
@@ -314,9 +567,6 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
-  // Cria ou reutiliza a única aba especial do Orbit Browser.
-  // A lógica é a mesma da antiga aba dedicada: a instância é reutilizada,
-  // a miniatura é atualizada quando existe e a aba volta para o topo.
   BrowserTab upsertOrbitBrowserTab(Uint8List? thumbnail) {
     final index = _tabs.indexWhere((tab) => tab.kind == TabKind.orbitBrowser);
     if (index >= 0) {
@@ -325,6 +575,7 @@ class TabsController extends ChangeNotifier {
       tab.touch();
       _tabs.insert(0, tab);
       notifyListeners();
+      _schedulePersist();
       return tab;
     }
     final tab = BrowserTab(
@@ -332,13 +583,12 @@ class TabsController extends ChangeNotifier {
       appScreenLabel: 'Orbit Browser', appScreenIcon: Symbols.language_rounded, thumbnail: thumbnail,
     );
     _tabs.insert(0, tab);
+    _activeTabId = tab.id;
     notifyListeners();
+    _schedulePersist();
     return tab;
   }
 
-  // Agora também persiste a URL/título atuais via SessionStore sempre que
-  // uma aba de browser é atualizada — é isto que permite restaurar a
-  // última página ao reabrir o app dentro da janela de 1h.
   void updateTab(
     String id, {
     String? url,
@@ -363,6 +613,7 @@ class TabsController extends ChangeNotifier {
         url: tab.url,
         title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
       ));
+      _schedulePersist();
     }
   }
 
@@ -374,6 +625,7 @@ class TabsController extends ChangeNotifier {
           : null;
     }
     notifyListeners();
+    _schedulePersist();
   }
 
   BrowserTab? getTab(String id) {
@@ -395,6 +647,45 @@ class TabsController extends ChangeNotifier {
       if (tab.kind == TabKind.orbitBrowser) return tab;
     }
     return null;
+  }
+
+  Future<void> flushPersistence() {
+    _persistTimer?.cancel();
+    return _persistNow();
+  }
+
+  void _schedulePersist() {
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 280), _persistNow);
+  }
+
+  Future<void> _persistNow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _tabs
+          .where((tab) => tab.kind != TabKind.appScreen)
+          .map((tab) => <String, Object?>{
+                'id': tab.id,
+                'kind': tab.kind.name,
+                'url': tab.url,
+                'title': tab.title,
+                'lastActivity': tab.lastActivity.toIso8601String(),
+              })
+          .toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+      if (_activeTabId == null || !_tabs.any((tab) => tab.id == _activeTabId && tab.kind != TabKind.appScreen)) {
+        await prefs.remove(_activeStorageKey);
+      } else {
+        await prefs.setString(_activeStorageKey, _activeTabId!);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _persistTimer?.cancel();
+    unawaited(_persistNow());
+    super.dispose();
   }
 }
 
