@@ -9,7 +9,6 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'models.dart';
 import 'screens/activity_screen.dart';
-import 'screens/browser_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/wikipedia_browser_screen.dart';
@@ -638,7 +637,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     return PageRouteBuilder<void>(
       transitionDuration: Duration.zero,
       reverseTransitionDuration: Duration.zero,
-      pageBuilder: (context, animation, secondaryAnimation) => BrowserScreen(
+      pageBuilder: (context, animation, secondaryAnimation) =>
+          WikipediaBrowserScreen.forTab(
         tabId: tab.id,
         initialUrl: tab.url,
         viewportKey: _browserViewportKey,

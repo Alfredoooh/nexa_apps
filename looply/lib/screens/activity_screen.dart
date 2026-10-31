@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/stats_chart.dart';
-import 'browser_screen.dart';
+import 'wikipedia_browser_screen.dart';
 import 'game_webview_screen.dart';
 import 'history_screen.dart';
 

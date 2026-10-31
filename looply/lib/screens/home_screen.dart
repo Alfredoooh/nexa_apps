@@ -6,7 +6,7 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
-import 'browser_screen.dart';
+import 'wikipedia_browser_screen.dart';
 import 'search_screen.dart';
 import 'my_apps_screen.dart';
 

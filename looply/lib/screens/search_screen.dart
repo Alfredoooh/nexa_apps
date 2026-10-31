@@ -8,7 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../theme.dart';
-import 'browser_screen.dart';
+import 'wikipedia_browser_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
