@@ -206,7 +206,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       codec = await ui.instantiateImageCodec(bytes, targetWidth: targetWidth);
       final frame = await codec.getNextFrame();
       image = frame.image;
-      final data = await image.toByteData(format: ui.ImageByteFormat.jpeg, quality: 66);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
       return data?.buffer.asUint8List();
     } catch (_) {
       return bytes.length <= 165000 ? bytes : null;
@@ -360,7 +360,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               _BrowserSheetAction(icon: Symbols.search_rounded, label: 'Pesquisar ou escrever endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.openSearch)),
               _BrowserSheetAction(icon: Symbols.history_rounded, label: 'Histórico', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
               _BrowserSheetAction(icon: Symbols.download_rounded, label: 'Downloads', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
-              _BrowserSheetAction(icon: Symbols.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+              _BrowserSheetAction(icon: Icons.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
               _BrowserSheetAction(icon: Symbols.home_rounded, label: 'Página inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
             ]),
           ),
