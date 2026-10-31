@@ -241,10 +241,9 @@ class ActivityController extends ChangeNotifier {
 
 final ActivityController activityController = ActivityController();
 
-// TabKind.wikipedia identifica a aba de teste isolada da Wikipédia: não é
-// um browser normal (sem endereço/voltar/avançar) nem uma appScreen do
-// shell (Início/Jogos/Atividade) — é a sua própria categoria, reaberta
-// sempre através de WikipediaBrowserScreen.
+// TabKind.wikipedia mantém a identidade/ícone da aba especial da Wikipédia,
+// mas usa exatamente o mesmo OrbitBrowserScreen e os mesmos controlos de
+// navegação das restantes abas de browser.
 enum TabKind { browser, appScreen, wikipedia }
 
 class BrowserTab {
@@ -331,7 +330,7 @@ class TabsController extends ChangeNotifier {
     }
     final tab = BrowserTab(
       id: 'tab_${_counter++}', kind: TabKind.wikipedia, url: 'https://www.wikipedia.org',
-      appScreenLabel: 'Wikipédia', appScreenIcon: Symbols.language_rounded, thumbnail: thumbnail,
+      appScreenLabel: 'Orbit Browser', appScreenIcon: Symbols.language_rounded, thumbnail: thumbnail,
     );
     _tabs.insert(0, tab);
     notifyListeners();
@@ -360,7 +359,7 @@ class TabsController extends ChangeNotifier {
     tab.touch();
     notifyListeners();
 
-    if (tab.kind == TabKind.browser && tab.url.isNotEmpty) {
+    if (tab.kind != TabKind.appScreen && tab.url.isNotEmpty) {
       unawaited(SessionStore.instance.saveLastPage(
         url: tab.url,
         title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
@@ -371,8 +370,8 @@ class TabsController extends ChangeNotifier {
   void closeTab(String id) {
     _tabs.removeWhere((tab) => tab.id == id);
     if (_activeTabId == id) {
-      _activeTabId = _tabs.where((tab) => tab.kind == TabKind.browser).isNotEmpty
-          ? _tabs.firstWhere((tab) => tab.kind == TabKind.browser).id
+      _activeTabId = _tabs.where((tab) => tab.kind != TabKind.appScreen).isNotEmpty
+          ? _tabs.firstWhere((tab) => tab.kind != TabKind.appScreen).id
           : null;
     }
     notifyListeners();
