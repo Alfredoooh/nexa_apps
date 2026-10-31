@@ -15,20 +15,19 @@ import '../theme.dart';
 // PARTE do sistema de abas: aparece na grelha de Separadores via
 // tabsController.upsertWikipediaTab(), conta no número de abas do
 // bottom bar, e o botão "Abas" aqui encolhe para a grelha usando o
-// morph de screenshot do main.dart — mas com ORIGEM NESTA TELA
-// (ShellTabRequest.requestCloseWikipedia()), nunca na tela principal.
-// Reaberta a partir do card na grelha, volta sempre a abrir esta mesma
-// tela (nunca o BrowserScreen completo) — essa escolha é feita no
-// main.dart, com base em tab.kind == TabKind.wikipedia.
+// morph de screenshot do main.dart — com ORIGEM NESTA TELA. A grelha é
+// empilhada por cima desta rota, mantendo a mesma InAppWebView viva; ao
+// regressar ao cartão Wikipédia, esta mesma instância volta a aparecer.
 const String _wikipediaUrl = 'https://www.wikipedia.org';
 
 class WikipediaBrowserScreen extends StatefulWidget {
-  const WikipediaBrowserScreen({super.key, this.viewportKey});
+  const WikipediaBrowserScreen({super.key, this.viewportKey, this.firstLoadCompleter});
   // Key colocada à volta da área exata onde a InAppWebView fica, igual ao
   // viewportKey do BrowserScreen. O shell (main.dart) usa-a para medir o
-  // Rect de origem/destino do morph quando esta tela é fechada para a
-  // grelha de abas ou reaberta a partir do card na grelha.
+  // Rect de origem/destino do morph quando a grelha é colocada sobre esta
+  // tela e quando a mesma instância volta a ficar visível.
   final GlobalKey? viewportKey;
+  final Completer<void>? firstLoadCompleter;
 
   @override
   State<WikipediaBrowserScreen> createState() => _WikipediaBrowserScreenState();
@@ -43,6 +42,11 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
   bool _renderProcessCrashed = false;
   String? _loadError;
   String? _tabId;
+
+  void _completeFirstLoad() {
+    final completer = widget.firstLoadCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
+  }
 
   @override
   void initState() {
@@ -211,6 +215,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
                 back = await controller.canGoBack();
                 screenshot = await controller.takeScreenshot();
               } catch (_) {}
+              _completeFirstLoad();
               if (!mounted) return;
               setState(() {
                 _isLoading = false;
@@ -223,6 +228,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
               }
             },
             onReceivedError: (controller, request, error) {
+              if (request.isForMainFrame == true) _completeFirstLoad();
               if (request.isForMainFrame == true && mounted) {
                 setState(() {
                   _isLoading = false;
@@ -231,6 +237,7 @@ class _WikipediaBrowserScreenState extends State<WikipediaBrowserScreen> {
               }
             },
             onRenderProcessGone: (controller, detail) {
+              _completeFirstLoad();
               if (!mounted) return;
               setState(() {
                 _renderProcessCrashed = true;

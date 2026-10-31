@@ -15,9 +15,14 @@ void showLooplyDrawer(BuildContext context) {
     useRootNavigator: true,
     barrierDismissible: true,
     barrierLabel: 'Fechar menu',
-    barrierColor: Colors.black.withOpacity(.48),
-    transitionDuration: const Duration(milliseconds: 250),
+    barrierColor: Colors.black.withOpacity(.46),
+    transitionDuration: const Duration(milliseconds: 340),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      final slideAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
       return Material(
         color: Colors.transparent,
         child: Stack(
@@ -31,13 +36,12 @@ void showLooplyDrawer(BuildContext context) {
             ),
             Align(
               alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: .82,
-                heightFactor: 1,
-                child: Material(
-                  color: pageBg(context),
-                  elevation: 18,
-                  shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(-1, 0),
+                  end: Offset.zero,
+                ).animate(slideAnimation),
+                child: _DrawerPanel(
                   child: SafeArea(
                     child: Column(
                       children: [
@@ -124,11 +128,75 @@ void showLooplyDrawer(BuildContext context) {
       );
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final slide = Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero)
-          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-      return SlideTransition(position: slide, child: child);
+      final fadeAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOut,
+        reverseCurve: Curves.easeIn,
+      );
+      return FadeTransition(opacity: fadeAnimation, child: child);
     },
   );
+}
+
+class _DrawerPanel extends StatefulWidget {
+  const _DrawerPanel({required this.child});
+  final Widget child;
+
+  @override
+  State<_DrawerPanel> createState() => _DrawerPanelState();
+}
+
+class _DrawerPanelState extends State<_DrawerPanel> {
+  double _dragOffset = 0;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width * .82;
+    final slide = width == 0 ? 0.0 : _dragOffset / width;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: width,
+        height: double.infinity,
+        child: AnimatedSlide(
+          offset: Offset(slide, 0),
+          duration: _dragging ? Duration.zero : const Duration(milliseconds: 210),
+          curve: Curves.easeOutCubic,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (_) => setState(() => _dragging = true),
+            onHorizontalDragUpdate: (details) {
+              if (details.delta.dx >= 0) return;
+              setState(() {
+                _dragOffset = (_dragOffset + details.delta.dx).clamp(-width, 0).toDouble();
+              });
+            },
+            onHorizontalDragEnd: (details) {
+              final shouldClose = _dragOffset < -width * .24 ||
+                  details.velocity.pixelsPerSecond.dx < -560;
+              if (shouldClose) {
+                Navigator.of(context).maybePop();
+              } else {
+                setState(() {
+                  _dragging = false;
+                  _dragOffset = 0;
+                });
+              }
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Material(
+                color: pageBg(context),
+                elevation: 18,
+                child: widget.child,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DrawerHeader extends StatelessWidget {

@@ -5,7 +5,9 @@ import '../theme.dart';
 import 'home_screen.dart';
 
 class AllSitesScreen extends StatelessWidget {
-  const AllSitesScreen({super.key});
+  const AllSitesScreen({super.key, this.wikipediaViewportKey});
+
+  final GlobalKey? wikipediaViewportKey;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +27,7 @@ class AllSitesScreen extends StatelessWidget {
         itemBuilder: (context, index) {
           final category = categories[index];
           final sites = grouped[category]!;
-          return _CategorySection(category: category, sites: sites);
+          return _CategorySection(category: category, sites: sites, wikipediaViewportKey: wikipediaViewportKey);
         },
       ),
     );
@@ -33,9 +35,10 @@ class AllSitesScreen extends StatelessWidget {
 }
 
 class _CategorySection extends StatelessWidget {
-  const _CategorySection({required this.category, required this.sites});
+  const _CategorySection({required this.category, required this.sites, this.wikipediaViewportKey});
   final SiteCategory category;
   final List<QuickSite> sites;
+  final GlobalKey? wikipediaViewportKey;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +57,7 @@ class _CategorySection extends StatelessWidget {
             spacing: 2,
             runSpacing: 10,
             alignment: WrapAlignment.start,
-            children: sites.map((site) => SizedBox(width: 66, child: QuickSiteTile(site: site))).toList(),
+            children: sites.map((site) => SizedBox(width: 66, child: QuickSiteTile(site: site, wikipediaViewportKey: wikipediaViewportKey))).toList(),
           ),
         ),
       ],
