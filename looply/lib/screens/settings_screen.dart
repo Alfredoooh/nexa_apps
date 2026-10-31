@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../browser_library.dart';
+import 'bookmarks_screen.dart';
+import 'downloads_screen.dart';
+import 'history_screen.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import '../widgets/m3_switch.dart';
@@ -52,7 +56,7 @@ class SettingsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => _showLanguageInfo(context),
             ),
-            const SizedBox(height: 2),
+            Padding(padding: const EdgeInsets.fromLTRB(4, 18, 4, 10), child: Text('Navegação e segurança', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted))),
             ValueListenableBuilder<bool>(
               valueListenable: adBlockEnabled,
               builder: (context, enabled, _) => _SettingsTile(
@@ -74,14 +78,51 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: enabled ? 'Pré-ligação e cache ativos' : 'Pré-ligação e cache desativados',
                 trailing: M3ExpressiveSwitch(value: enabled, onChanged: (value) => navigationAcceleratorEnabled.value = value),
                 showChevron: false,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(24)),
+                borderRadius: BorderRadius.circular(8),
                 onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
+              ),
+            ),
+            Padding(padding: const EdgeInsets.fromLTRB(4, 18, 4, 10), child: Text('Biblioteca', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted))),
+            AnimatedBuilder(
+              animation: activityController,
+              builder: (context, _) => _SettingsTile(
+                icon: Symbols.history_rounded,
+                label: 'Histórico de navegação',
+                subtitle: '${activityController.entries.length} registos guardados',
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20), bottom: Radius.circular(8)),
+                onTap: () => _openLibraryPage(context, const HistoryScreen()),
+              ),
+            ),
+            const SizedBox(height: 2),
+            AnimatedBuilder(
+              animation: downloadsController,
+              builder: (context, _) => _SettingsTile(
+                icon: Symbols.download_rounded,
+                label: 'Downloads',
+                subtitle: '${downloadsController.entries.length} pedidos registados',
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => _openLibraryPage(context, const DownloadsScreen()),
+              ),
+            ),
+            const SizedBox(height: 2),
+            AnimatedBuilder(
+              animation: bookmarksController,
+              builder: (context, _) => _SettingsTile(
+                icon: Symbols.bookmarks_rounded,
+                label: 'Marcadores',
+                subtitle: '${bookmarksController.entries.length} páginas guardadas',
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
+                onTap: () => _openLibraryPage(context, const BookmarksScreen()),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _openLibraryPage(BuildContext context, Widget page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
   }
 
   String _themeLabel(ThemeMode mode) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => 'Escuro', _ => 'Automático' };

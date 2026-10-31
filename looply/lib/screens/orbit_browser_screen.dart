@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../browser_library.dart';
 import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'history_screen.dart';
+import 'downloads_screen.dart';
 import 'search_screen.dart';
 
 /// Browser único do Looply. Cada separador mantém a sua própria instância
@@ -23,6 +27,7 @@ class OrbitBrowserScreen extends StatefulWidget {
     required this.isActive,
     required this.viewportKey,
     this.firstLoadCompleter,
+    this.isIncognito = false,
   });
 
   final String tabId;
@@ -30,6 +35,7 @@ class OrbitBrowserScreen extends StatefulWidget {
   final bool isActive;
   final GlobalKey viewportKey;
   final Completer<void>? firstLoadCompleter;
+  final bool isIncognito;
 
   @override
   State<OrbitBrowserScreen> createState() => _OrbitBrowserScreenState();
@@ -102,15 +108,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
-  void _recordHistoryVisit() {
-    final url = _currentUrl.trim();
-    if (url.isEmpty) return;
-    final title = _currentTitle.trim().isNotEmpty
-        ? _currentTitle.trim()
-        : (Uri.tryParse(url)?.host ?? url);
-    activityController.log(ActivityKind.site, title, url);
-  }
-
   void _updateTabState({Uint8List? screenshot}) {
     tabsController.updateTab(
       widget.tabId,
@@ -166,11 +163,56 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final controller = _controller;
     if (controller == null) return null;
     try {
-      return await controller
+      final bytes = await controller
           .takeScreenshot()
           .timeout(const Duration(milliseconds: 900));
+      if (bytes == null) return null;
+      return await _downscaleScreenshot(bytes, targetWidth: 420);
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<Uint8List?> _captureFullScreenForMorph() async {
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      var renderObject = widget.viewportKey.currentContext?.findRenderObject();
+      if (renderObject is! RenderRepaintBoundary || !renderObject.attached) {
+        await WidgetsBinding.instance.endOfFrame;
+        renderObject = widget.viewportKey.currentContext?.findRenderObject();
+      }
+      if (renderObject is! RenderRepaintBoundary || !renderObject.attached || renderObject.size.isEmpty) {
+        return null;
+      }
+      if (renderObject.debugNeedsPaint) await WidgetsBinding.instance.endOfFrame;
+      final ready = widget.viewportKey.currentContext?.findRenderObject();
+      if (ready is! RenderRepaintBoundary || !ready.attached || ready.size.isEmpty) return null;
+      final image = await ready.toImage(pixelRatio: 1.15);
+      try {
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        return data?.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _downscaleScreenshot(Uint8List bytes, {required int targetWidth}) async {
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      codec = await ui.instantiateImageCodec(bytes, targetWidth: targetWidth);
+      final frame = await codec.getNextFrame();
+      image = frame.image;
+      final data = await image.toByteData(format: ui.ImageByteFormat.jpeg, quality: 66);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return bytes.length <= 165000 ? bytes : null;
+    } finally {
+      image?.dispose();
+      codec?.dispose();
     }
   }
 
@@ -196,6 +238,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (_tabsRequestInProgress) return;
     _tabsRequestInProgress = true;
     try {
+      // A imagem do morph inclui a AppBar inteira e o conteúdo da página.
+      // A miniatura guardada no cartão continua a ser apenas a captura do site.
+      final morphScreenshot = await _captureFullScreenForMorph();
       final freshScreenshot = await _captureScreenshot();
       final oldScreenshot = tabsController.getTab(widget.tabId)?.thumbnail;
       _updateTabState(screenshot: freshScreenshot ?? oldScreenshot);
@@ -204,7 +249,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       final viewportRect = _rectInRootOverlay(widget.viewportKey);
       ShellTabRequest.instance.requestCloseBrowser(
         tabId: widget.tabId,
-        screenshot: freshScreenshot ?? oldScreenshot,
+        screenshot: morphScreenshot ?? freshScreenshot ?? oldScreenshot,
         sourceRect: viewportRect,
       );
     } finally {
@@ -253,11 +298,79 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           MaterialPageRoute(builder: (_) => const HistoryScreen()),
         );
         break;
+      case _OrbitMenuAction.downloads:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+        );
+        break;
+      case _OrbitMenuAction.bookmark:
+        if (bookmarksController.contains(_currentUrl)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Esta página já está nos marcadores.')),
+            );
+          }
+        } else {
+          bookmarksController.add(
+            _currentTitle.trim().isEmpty ? _currentUrl : _currentTitle,
+            _currentUrl,
+          );
+          unawaited(browserFaviconCache.fetchForUrl(_currentUrl));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Marcador guardado.')),
+            );
+          }
+        }
+        break;
     }
   }
 
-  void _triggerShortcut(_OrbitMenuAction action) {
-    Navigator.of(context).pop();
+  void _showBrowserOptionsSheet() {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final surface = pillColor(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Material(
+        color: surface,
+        surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 32, height: 4, decoration: BoxDecoration(color: muted.withOpacity(.5), borderRadius: BorderRadius.circular(99))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 14, 4, 12),
+                child: Row(children: [
+                  Expanded(child: Text(_currentTitle.isEmpty ? 'Orbit Browser' : _currentTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800))),
+                  IconButton(tooltip: 'Fechar', onPressed: () => Navigator.pop(sheetContext), icon: Icon(Symbols.close_rounded, color: muted)),
+                ]),
+              ),
+              _BrowserSheetAction(icon: Symbols.bookmark_add_rounded, label: 'Adicionar marcador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+              _BrowserSheetAction(icon: Symbols.refresh_rounded, label: 'Atualizar página', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
+              _BrowserSheetAction(icon: Symbols.content_copy_rounded, label: 'Copiar endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
+              _BrowserSheetAction(icon: Symbols.search_rounded, label: 'Pesquisar ou escrever endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.openSearch)),
+              _BrowserSheetAction(icon: Symbols.history_rounded, label: 'Histórico', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+              _BrowserSheetAction(icon: Symbols.download_rounded, label: 'Downloads', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+              _BrowserSheetAction(icon: Symbols.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+              _BrowserSheetAction(icon: Symbols.home_rounded, label: 'Página inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectSheetAction(BuildContext sheetContext, _OrbitMenuAction action) {
+    Navigator.of(sheetContext).pop();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_runShortcut(action));
     });
@@ -340,9 +453,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final fallbackTitle = parsedUri?.host.isNotEmpty == true
         ? parsedUri!.host
         : 'Orbit Browser';
-    final popupWidth = (MediaQuery.sizeOf(context).width - 24)
-        .clamp(286.0, 520.0)
-        .toDouble();
 
     return PopScope<void>(
       // Apenas o separador visível intercepta o botão Voltar. As restantes
@@ -363,7 +473,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 statusBarColor: bg,
                 statusBarIconBrightness: Brightness.dark,
               ),
-        child: Scaffold(
+        child: RepaintBoundary(
+          key: widget.viewportKey,
+          child: Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
             backgroundColor: bg,
@@ -422,142 +534,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   onPressed: _openTabsGrid,
                 ),
               ),
-              PopupMenuButton<_OrbitMenuAction>(
+              IconButton(
                 tooltip: 'Mais opções',
                 icon: Icon(Symbols.more_vert_rounded, color: text),
-                position: PopupMenuPosition.under,
-                color: pillColor(context),
-                surfaceTintColor: Colors.transparent,
-                elevation: 14,
-                shadowColor: Colors.black.withOpacity(.24),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                menuPadding: const EdgeInsets.symmetric(vertical: 9),
-                constraints: BoxConstraints(
-                  minWidth: popupWidth,
-                  maxWidth: popupWidth,
-                ),
-                popUpAnimationStyle: AnimationStyle(
-                  curve: Curves.easeOutCubic,
-                  reverseCurve: Curves.easeInCubic,
-                  duration: const Duration(milliseconds: 270),
-                  reverseDuration: const Duration(milliseconds: 190),
-                ),
-                itemBuilder: (_) => [
-                  PopupMenuItem<_OrbitMenuAction>(
-                    enabled: false,
-                    height: 60,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _OrbitShortcut(
-                          icon: Icons.arrow_back_rounded,
-                          enabled: _canGoBack,
-                          onPressed: () =>
-                              _triggerShortcut(_OrbitMenuAction.back),
-                        ),
-                        _OrbitShortcut(
-                          icon: Icons.arrow_forward_rounded,
-                          enabled: _canGoForward,
-                          onPressed: () =>
-                              _triggerShortcut(_OrbitMenuAction.forward),
-                        ),
-                        _OrbitShortcut(
-                          icon: Icons.content_copy_rounded,
-                          onPressed: () => _triggerShortcut(
-                            _OrbitMenuAction.copyAddress,
-                          ),
-                        ),
-                        _OrbitShortcut(
-                          icon: Icons.info_outline_rounded,
-                          onPressed: () =>
-                              _triggerShortcut(_OrbitMenuAction.siteInfo),
-                        ),
-                        _OrbitShortcut(
-                          icon: Icons.refresh_rounded,
-                          onPressed: () =>
-                              _triggerShortcut(_OrbitMenuAction.reload),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(height: 9),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    enabled: false,
-                    height: 68,
-                    padding: const EdgeInsets.symmetric(horizontal: 17),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _currentTitle.isEmpty ? fallbackTitle : _currentTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: text,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          _currentUrl,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: muted, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(height: 9),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.reload,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.refresh_rounded,
-                      label: 'Atualizar página',
-                    ),
-                  ),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.copyAddress,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.content_copy_rounded,
-                      label: 'Copiar endereço',
-                    ),
-                  ),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.siteInfo,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.info_outline_rounded,
-                      label: 'Informações do site',
-                    ),
-                  ),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.openSearch,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.search_rounded,
-                      label: 'Pesquisar ou escrever endereço',
-                    ),
-                  ),
-                  const PopupMenuDivider(height: 9),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.history,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.history_rounded,
-                      label: 'Histórico',
-                    ),
-                  ),
-                  PopupMenuItem<_OrbitMenuAction>(
-                    value: _OrbitMenuAction.goHome,
-                    child: const _OrbitMenuItem(
-                      icon: Icons.home_rounded,
-                      label: 'Página inicial',
-                    ),
-                  ),
-                ],
-                onSelected: (action) => unawaited(_runShortcut(action)),
+                onPressed: _showBrowserOptionsSheet,
               ),
             ],
           ),
@@ -586,13 +566,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   ),
                 ),
               ),
-              Expanded(
-                child: RepaintBoundary(
-                  key: widget.viewportKey,
-                  child: _buildWebView(context),
-                ),
-              ),
+              Expanded(child: _buildWebView(context)),
             ],
+          ),
           ),
         ),
       ),
@@ -618,6 +594,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               transparentBackground: true,
               cacheMode: CacheMode.LOAD_DEFAULT,
               hardwareAcceleration: true,
+              incognito: widget.isIncognito,
+              useOnDownloadStart: true,
               useShouldOverrideUrlLoading: true,
               supportMultipleWindows: true,
               javaScriptCanOpenWindowsAutomatically: true,
@@ -675,7 +653,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 _loadError = null;
                 if (url != null) _currentUrl = url.toString();
               });
-              _recordHistoryVisit();
               _updateTabState();
             },
             onTitleChanged: (controller, title) {
@@ -702,7 +679,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 _canGoForward = canForward;
                 if (title?.trim().isNotEmpty == true) _currentTitle = title!;
               });
-              _recordHistoryVisit();
+              if (!widget.isIncognito) {
+                activityController.log(
+                  ActivityKind.site,
+                  _currentTitle.trim().isEmpty ? nextUrl : _currentTitle,
+                  nextUrl,
+                );
+                unawaited(browserFaviconCache.fetchForUrl(nextUrl));
+              }
               _updateTabState();
             },
             onLoadStop: (controller, url) async {
@@ -724,7 +708,18 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 }
               } catch (_) {}
 
+              if (screenshot != null) {
+                screenshot = await _downscaleScreenshot(screenshot, targetWidth: 420);
+              }
               final loadedUrl = url?.toString() ?? _currentUrl;
+              if (!widget.isIncognito) {
+                activityController.log(
+                  ActivityKind.site,
+                  _currentTitle.trim().isEmpty ? loadedUrl : _currentTitle,
+                  loadedUrl,
+                );
+                unawaited(browserFaviconCache.fetchForUrl(loadedUrl));
+              }
               if (html != null && navigationAcceleratorEnabled.value) {
                 NavAccelerator.instance.cachePage(loadedUrl, html);
               }
@@ -776,6 +771,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     },
                   );
                 }
+              }
+            },
+            onDownloadStartRequest: (controller, request) {
+              if (!widget.isIncognito) {
+                downloadsController.register(
+                  url: request.url.toString(),
+                  filename: request.suggestedFilename,
+                  mimeType: request.mimeType,
+                );
+              }
+              if (mounted && !widget.isIncognito) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Pedido de transferência recebido.')),
+                );
               }
             },
             onRenderProcessGone: (controller, detail) {
@@ -839,6 +848,40 @@ enum _OrbitMenuAction {
   openSearch,
   goHome,
   history,
+  downloads,
+  bookmark,
+}
+
+class _BrowserSheetAction extends StatelessWidget {
+  const _BrowserSheetAction({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Material(
+        color: settingsCardColor(context),
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(children: [
+              Container(width: 34, height: 34, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(icon, color: accentColor(context), size: 18)),
+              const SizedBox(width: 11),
+              Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600))),
+              Icon(Symbols.chevron_right_rounded, size: 18, color: mutedText(context)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _OrbitShortcut extends StatelessWidget {
@@ -908,23 +951,28 @@ class _TabsCountIcon extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: 23,
-        height: 23,
+  Widget build(BuildContext context) => Stack(
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          border: Border.all(color: color.withOpacity(.85), width: 1.5),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          '$count',
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            height: 1,
+        children: [
+          Icon(Symbols.tab_rounded, size: 25, color: color),
+          Positioned.fill(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: count > 99 ? 7 : 9,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       );
 
 }

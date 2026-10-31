@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'models.dart';
+import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
@@ -30,6 +31,9 @@ Future<void> main() async {
   await customSitesController.restore();
   await activeSearchEngine.restore();
   await restoreRuntimeSettings();
+  await browserFaviconCache.restore();
+  await bookmarksController.restore();
+  await downloadsController.restore();
 
   runApp(const LooplyApp());
 }
@@ -744,13 +748,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           isActive: !_showingTabsGrid && tab.id == _activeBrowserTabId,
           viewportKey: _browserViewportKeys[tab.id]!,
           firstLoadCompleter: _browserFirstLoads[tab.id]!,
+          isIncognito: tab.isIncognito,
         ),
     ];
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
         key: _shellScaffoldKey,
         resizeToAvoidBottomInset: false,
@@ -795,6 +800,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                       _ensureBrowserTabMounted(tab);
                       _closeTabsGrid(openTab: tab);
                     },
+                    onNewIncognitoTab: () {
+                      final tab = tabsController.createBrowserTab(
+                        'https://www.google.com',
+                        isIncognito: true,
+                      );
+                      _ensureBrowserTabMounted(tab);
+                      _closeTabsGrid(openTab: tab);
+                    },
+                    onCloseAllTabs: () {
+                      _preferredReturnTabId = null;
+                      tabsController.closeAllTabs();
+                      setState(() {
+                        _activeBrowserTabId = null;
+                      });
+                    },
                   ),
                 ),
               ),
@@ -832,9 +852,22 @@ class _TabsCountIcon extends StatelessWidget {
   final int count;
   final Color color;
   @override
-  Widget build(BuildContext context) => Container(
-    width: 23, height: 23, alignment: Alignment.center,
-    decoration: BoxDecoration(border: Border.all(color: color.withOpacity(.85), width: 1.5), borderRadius: BorderRadius.circular(6)),
-    child: Text('$count', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700, height: 1)),
+  Widget build(BuildContext context) => Stack(
+    alignment: Alignment.center,
+    children: [
+      Icon(Symbols.tab_rounded, size: 25, color: color),
+      Positioned.fill(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Text(
+              count > 99 ? '99+' : '$count',
+              maxLines: 1,
+              style: TextStyle(color: color, fontSize: count > 99 ? 7 : 9, fontWeight: FontWeight.w900, height: 1),
+            ),
+          ),
+        ),
+      ),
+    ],
   );
 }

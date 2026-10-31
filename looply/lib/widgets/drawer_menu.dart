@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../screens/history_screen.dart';
+import '../screens/downloads_screen.dart';
+import '../screens/bookmarks_screen.dart';
 import '../screens/settings_screen.dart';
 import '../theme.dart';
 
@@ -17,131 +18,80 @@ class LooplyDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final drawerBackground = pageBg(context);
-    final overlayStyle = isDark
-        ? SystemUiOverlayStyle.light.copyWith(
-            statusBarColor: drawerBackground,
-            statusBarIconBrightness: Brightness.light,
-            systemNavigationBarColor: drawerBackground,
-            systemNavigationBarIconBrightness: Brightness.light,
-          )
-        : SystemUiOverlayStyle.dark.copyWith(
-            statusBarColor: drawerBackground,
-            statusBarIconBrightness: Brightness.dark,
-            systemNavigationBarColor: drawerBackground,
-            systemNavigationBarIconBrightness: Brightness.dark,
-          );
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: overlayStyle,
-      child: Drawer(
-        backgroundColor: drawerBackground,
-        elevation: 16,
-        clipBehavior: Clip.antiAlias,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(
-            right: Radius.circular(12),
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-            child: Column(
-              children: [
-                _DrawerHeader(),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    children: [
-                      _DrawerOption(
-                        icon: Symbols.dark_mode_rounded,
-                        label: 'Alterar tema',
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (context.mounted) showThemeSheet(context);
-                          });
-                        },
-                      ),
-                      _DrawerOption(
-                        icon: Symbols.history_rounded,
-                        label: 'Histórico',
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (context.mounted) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const HistoryScreen(),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                      ),
-                      _DrawerOption(
-                        icon: Symbols.download_rounded,
-                        label: 'Downloads',
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Ainda não há downloads.'),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                      ),
-                      _DrawerOption(
-                        icon: Symbols.bookmark_rounded,
-                        label: 'Marcadores',
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Ainda não há marcadores.'),
-                                ),
-                              );
-                            }
-                          });
-                        },
-                      ),
-                    ],
-                  ),
+    return Drawer(
+      backgroundColor: drawerBackground,
+      elevation: 16,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
+      ),
+      child: SafeArea(
+        // A barra de estado herda a mesma SystemUiOverlayStyle do Scaffold
+        // principal. Não há AnnotatedRegion local a mudar a cor ao abrir o drawer.
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+          child: Column(
+            children: [
+              _DrawerHeader(),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _DrawerOption(
+                      icon: Symbols.dark_mode_rounded,
+                      label: 'Alterar tema',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) showThemeSheet(context);
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _DrawerOption(
+                      icon: Symbols.history_rounded,
+                      label: 'Histórico',
+                      onTap: () => _openDrawerPage(context, const HistoryScreen()),
+                    ),
+                    const SizedBox(height: 8),
+                    _DrawerOption(
+                      icon: Symbols.download_rounded,
+                      label: 'Downloads',
+                      onTap: () => _openDrawerPage(context, const DownloadsScreen()),
+                    ),
+                    const SizedBox(height: 8),
+                    _DrawerOption(
+                      icon: Symbols.bookmark_rounded,
+                      label: 'Marcadores',
+                      onTap: () => _openDrawerPage(context, const BookmarksScreen()),
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
-                  child: _SettingsButtonWithAvatar(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (context.mounted) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SettingsScreen(),
-                            ),
-                          );
-                        }
-                      });
-                    },
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                child: _SettingsButtonWithAvatar(
+                  onTap: () => _openDrawerPage(context, const SettingsScreen()),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  void _openDrawerPage(BuildContext context, Widget page) {
+    Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+      }
+    });
+  }
 }
 
 class _DrawerHeader extends StatelessWidget {
@@ -167,20 +117,31 @@ class _DrawerOption extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
+    final muted = mutedText(context);
+    final radius = BorderRadius.circular(14);
     return Material(
-      color: Colors.transparent,
+      color: settingsCardColor(context),
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: radius,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 10),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
           child: Row(children: [
-            Icon(icon, color: text, size: 22),
-            const SizedBox(width: 18),
-            Text(label, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w600)),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+              child: Icon(icon, color: accentColor(context), size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600))),
+            Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
           ]),
         ),
       ),
@@ -198,13 +159,13 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     return Material(
-      color: pillColor(context),
-      borderRadius: BorderRadius.circular(36),
+      color: settingsCardColor(context),
+      borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
+          padding: const EdgeInsets.fromLTRB(14, 8, 9, 8),
           child: Row(children: [
             Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
             Container(

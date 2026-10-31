@@ -458,6 +458,7 @@ class BrowserTab {
     this.appScreenLabel,
     this.appScreenIcon,
     this.thumbnail,
+    this.isIncognito = false,
     DateTime? lastActivity,
   }) : lastActivity = lastActivity ?? DateTime.now();
 
@@ -468,6 +469,7 @@ class BrowserTab {
   String? appScreenLabel;
   IconData? appScreenIcon;
   Uint8List? thumbnail;
+  final bool isIncognito;
   bool canGoBack = false;
   bool canGoForward = false;
   DateTime lastActivity;
@@ -509,11 +511,17 @@ class TabsController extends ChangeNotifier {
         if (uri == null || uri.host.isEmpty || (uri.scheme != 'http' && uri.scheme != 'https')) continue;
         final suffix = int.tryParse(id.startsWith('tab_') ? id.substring(4) : '');
         if (suffix != null && suffix > greatestId) greatestId = suffix;
+        Uint8List? thumbnail;
+        final encodedThumbnail = value['thumbnailBase64'];
+        if (encodedThumbnail is String && encodedThumbnail.isNotEmpty && encodedThumbnail.length <= 95000) {
+          try { thumbnail = base64Decode(encodedThumbnail); } catch (_) {}
+        }
         _tabs.add(BrowserTab(
           id: id,
           kind: kind,
           url: url,
           title: value['title'] is String ? value['title'] as String : null,
+          thumbnail: thumbnail,
           lastActivity: value['lastActivity'] is String
               ? DateTime.tryParse(value['lastActivity'] as String)
               : null,
@@ -539,8 +547,8 @@ class TabsController extends ChangeNotifier {
     _schedulePersist();
   }
 
-  BrowserTab createBrowserTab(String url) {
-    final tab = BrowserTab(id: 'tab_${_counter++}', kind: TabKind.browser, url: url);
+  BrowserTab createBrowserTab(String url, {bool isIncognito = false}) {
+    final tab = BrowserTab(id: 'tab_${_counter++}', kind: TabKind.browser, url: url, isIncognito: isIncognito);
     _tabs.insert(0, tab);
     _activeTabId = tab.id;
     notifyListeners();
@@ -608,7 +616,7 @@ class TabsController extends ChangeNotifier {
     tab.touch();
     notifyListeners();
 
-    if (tab.kind != TabKind.appScreen && tab.url.isNotEmpty) {
+    if (tab.kind != TabKind.appScreen && !tab.isIncognito && tab.url.isNotEmpty) {
       unawaited(SessionStore.instance.saveLastPage(
         url: tab.url,
         title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
@@ -624,6 +632,35 @@ class TabsController extends ChangeNotifier {
           ? _tabs.firstWhere((tab) => tab.kind != TabKind.appScreen).id
           : null;
     }
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void reorderById(String movingId, String targetId) {
+    final from = _tabs.indexWhere((tab) => tab.id == movingId);
+    final to = _tabs.indexWhere((tab) => tab.id == targetId);
+    if (from < 0 || to < 0 || from == to) return;
+    final moving = _tabs.removeAt(from);
+    _tabs.insert(to, moving);
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void closeTabs(Iterable<String> ids) {
+    final removed = ids.toSet();
+    if (removed.isEmpty) return;
+    _tabs.removeWhere((tab) => removed.contains(tab.id));
+    if (_activeTabId != null && removed.contains(_activeTabId)) {
+      final remaining = _tabs.where((tab) => tab.kind != TabKind.appScreen).toList(growable: false);
+      _activeTabId = remaining.isEmpty ? null : remaining.first.id;
+    }
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void closeAllTabs() {
+    _tabs.clear();
+    _activeTabId = null;
     notifyListeners();
     _schedulePersist();
   }
@@ -663,17 +700,23 @@ class TabsController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final payload = _tabs
-          .where((tab) => tab.kind != TabKind.appScreen)
-          .map((tab) => <String, Object?>{
-                'id': tab.id,
-                'kind': tab.kind.name,
-                'url': tab.url,
-                'title': tab.title,
-                'lastActivity': tab.lastActivity.toIso8601String(),
-              })
+          .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito)
+          .map((tab) {
+            final thumbnail = tab.thumbnail;
+            return <String, Object?>{
+              'id': tab.id,
+              'kind': tab.kind.name,
+              'url': tab.url,
+              'title': tab.title,
+              'thumbnailBase64': thumbnail != null && thumbnail.length <= 70000
+                  ? base64Encode(thumbnail)
+                  : null,
+              'lastActivity': tab.lastActivity.toIso8601String(),
+            };
+          })
           .toList();
       await prefs.setString(_storageKey, jsonEncode(payload));
-      if (_activeTabId == null || !_tabs.any((tab) => tab.id == _activeTabId && tab.kind != TabKind.appScreen)) {
+      if (_activeTabId == null || !_tabs.any((tab) => tab.id == _activeTabId && tab.kind != TabKind.appScreen && !tab.isIncognito)) {
         await prefs.remove(_activeStorageKey);
       } else {
         await prefs.setString(_activeStorageKey, _activeTabId!);

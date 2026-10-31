@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../browser_library.dart';
 import '../theme.dart';
 import '../widgets/stats_chart.dart';
 import '../shell/browser_navigation.dart';
@@ -16,7 +20,13 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   @override
-  void initState() { super.initState(); activityController.addListener(_onChanged); }
+  void initState() {
+    super.initState();
+    activityController.addListener(_onChanged);
+    for (final entry in activityController.entries) {
+      if (entry.kind == ActivityKind.site) unawaited(browserFaviconCache.fetchForUrl(entry.url));
+    }
+  }
   @override
   void dispose() { activityController.removeListener(_onChanged); super.dispose(); }
   void _onChanged() { if (mounted) setState(() {}); }
@@ -96,11 +106,29 @@ class ActivityTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: Icon(isGame ? Symbols.sports_esports_rounded : Symbols.public_rounded, color: accentColor(context), size: 19),
+            AnimatedBuilder(
+              animation: browserFaviconCache,
+              builder: (context, _) {
+                final encoded = isGame ? null : browserFaviconCache.forUrl(entry.url);
+                Widget icon = Icon(isGame ? Symbols.sports_esports_rounded : Symbols.public_rounded, color: accentColor(context), size: 19);
+                if (encoded != null) {
+                  try {
+                    icon = Image.memory(
+                      base64Decode(encoded),
+                      width: 22,
+                      height: 22,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: accentColor(context), size: 19),
+                    );
+                  } catch (_) {}
+                }
+                return Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+                  child: Center(child: icon),
+                );
+              },
             ),
             const SizedBox(width: 12),
             Expanded(
