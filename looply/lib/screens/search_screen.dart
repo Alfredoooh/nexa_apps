@@ -85,20 +85,13 @@ class _SearchScreenState extends State<SearchScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
+      value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: bg,
         body: SafeArea(
           child: Column(children: [
             Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
-                  stops: const <double>[0, .68, 1],
-                ),
-              ),
+              color: bg,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(5, 3, 14, 8),
                 child: Row(children: [

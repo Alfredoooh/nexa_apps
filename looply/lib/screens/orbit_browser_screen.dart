@@ -532,14 +532,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
             ? SystemUiOverlayStyle.light.copyWith(
-                statusBarColor: bg,
+                statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.light,
                 statusBarBrightness: Brightness.dark,
                 systemNavigationBarColor: bg,
                 systemNavigationBarIconBrightness: Brightness.light,
               )
             : SystemUiOverlayStyle.dark.copyWith(
-                statusBarColor: bg,
+                statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.dark,
                 statusBarBrightness: Brightness.light,
                 systemNavigationBarColor: bg,

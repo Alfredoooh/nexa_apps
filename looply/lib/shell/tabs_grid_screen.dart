@@ -123,15 +123,8 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
           children: [
             Column(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
-                      stops: const <double>[0, .68, 1],
-                    ),
-                  ),
+                Container(
+                  color: bg,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
                     child: Row(
