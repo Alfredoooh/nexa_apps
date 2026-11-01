@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -163,37 +162,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final controller = _controller;
     if (controller == null) return null;
     try {
-      final bytes = await controller
+      return await controller
           .takeScreenshot()
           .timeout(const Duration(milliseconds: 900));
-      if (bytes == null) return null;
-      return await _downscaleScreenshot(bytes, targetWidth: 420);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<Uint8List?> _captureFullScreenForMorph() async {
-    try {
-      await WidgetsBinding.instance.endOfFrame;
-      var renderObject = widget.viewportKey.currentContext?.findRenderObject();
-      if (renderObject is! RenderRepaintBoundary || !renderObject.attached) {
-        await WidgetsBinding.instance.endOfFrame;
-        renderObject = widget.viewportKey.currentContext?.findRenderObject();
-      }
-      if (renderObject is! RenderRepaintBoundary || !renderObject.attached || renderObject.size.isEmpty) {
-        return null;
-      }
-      if (renderObject.debugNeedsPaint) await WidgetsBinding.instance.endOfFrame;
-      final ready = widget.viewportKey.currentContext?.findRenderObject();
-      if (ready is! RenderRepaintBoundary || !ready.attached || ready.size.isEmpty) return null;
-      final image = await ready.toImage(pixelRatio: 1.15);
-      try {
-        final data = await image.toByteData(format: ui.ImageByteFormat.png);
-        return data?.buffer.asUint8List();
-      } finally {
-        image.dispose();
-      }
     } catch (_) {
       return null;
     }
@@ -238,9 +209,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (_tabsRequestInProgress) return;
     _tabsRequestInProgress = true;
     try {
-      // A imagem do morph inclui a AppBar inteira e o conteúdo da página.
-      // A miniatura guardada no cartão continua a ser apenas a captura do site.
-      final morphScreenshot = await _captureFullScreenForMorph();
+      // Captura apenas a área real da WebView. O Rect de origem aponta para
+      // esta mesma área, mantendo a proporção e o alinhamento do Container Transform.
       final freshScreenshot = await _captureScreenshot();
       final oldScreenshot = tabsController.getTab(widget.tabId)?.thumbnail;
       _updateTabState(screenshot: freshScreenshot ?? oldScreenshot);
@@ -249,7 +219,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       final viewportRect = _rectInRootOverlay(widget.viewportKey);
       ShellTabRequest.instance.requestCloseBrowser(
         tabId: widget.tabId,
-        screenshot: morphScreenshot ?? freshScreenshot ?? oldScreenshot,
+        screenshot: freshScreenshot ?? oldScreenshot,
         sourceRect: viewportRect,
       );
     } finally {
@@ -466,16 +436,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
             ? SystemUiOverlayStyle.light.copyWith(
-                statusBarColor: bg,
+                statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.light,
               )
             : SystemUiOverlayStyle.dark.copyWith(
-                statusBarColor: bg,
+                statusBarColor: Colors.transparent,
                 statusBarIconBrightness: Brightness.dark,
               ),
-        child: RepaintBoundary(
-          key: widget.viewportKey,
-          child: Scaffold(
+        child: Scaffold(
           backgroundColor: bg,
           appBar: AppBar(
             backgroundColor: bg,
@@ -566,9 +534,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   ),
                 ),
               ),
-              Expanded(child: _buildWebView(context)),
+              Expanded(
+                child: RepaintBoundary(
+                  key: widget.viewportKey,
+                  child: _buildWebView(context),
+                ),
+              ),
             ],
-          ),
           ),
         ),
       ),
@@ -951,28 +923,24 @@ class _TabsCountIcon extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) => Container(
+        width: 24,
+        height: 24,
         alignment: Alignment.center,
-        children: [
-          Icon(Symbols.tab_rounded, size: 25, color: color),
-          Positioned.fill(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: count > 99 ? 7 : 9,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-              ),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(.88), width: 1.6),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              count > 99 ? '99+' : '$count',
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
             ),
           ),
-        ],
+        ),
       );
 
 }

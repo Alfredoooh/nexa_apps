@@ -754,8 +754,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
         key: _shellScaffoldKey,
         resizeToAvoidBottomInset: false,
@@ -852,22 +852,23 @@ class _TabsCountIcon extends StatelessWidget {
   final int count;
   final Color color;
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
     alignment: Alignment.center,
-    children: [
-      Icon(Symbols.tab_rounded, size: 25, color: color),
-      Positioned.fill(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              count > 99 ? '99+' : '$count',
-              maxLines: 1,
-              style: TextStyle(color: color, fontSize: count > 99 ? 7 : 9, fontWeight: FontWeight.w900, height: 1),
-            ),
-          ),
+    decoration: BoxDecoration(
+      border: Border.all(color: color.withOpacity(.88), width: 1.6),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
         ),
       ),
-    ],
+    ),
   );
 }

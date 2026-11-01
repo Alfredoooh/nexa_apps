@@ -388,23 +388,24 @@ class _TabsCountBadge extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Stack(
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
     alignment: Alignment.center,
-    children: [
-      Icon(Symbols.tab_rounded, size: 25, color: color),
-      Positioned.fill(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              count > 99 ? '99+' : '$count',
-              maxLines: 1,
-              style: TextStyle(color: color, fontSize: count > 99 ? 7 : 9, fontWeight: FontWeight.w900, height: 1),
-            ),
-          ),
+    decoration: BoxDecoration(
+      border: Border.all(color: color.withOpacity(.88), width: 1.6),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Text(
+          count > 99 ? '99+' : '$count',
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
         ),
       ),
-    ],
+    ),
   );
 }
 
@@ -456,7 +457,7 @@ class TabGridCard extends StatelessWidget {
 
     return Material(
       key: cardKey,
-      color: selected ? accentColor(context).withOpacity(.15) : panel,
+      color: accentColor(context).withOpacity(.15),
       borderRadius: BorderRadius.circular(20),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

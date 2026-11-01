@@ -137,7 +137,7 @@ class _DrawerOption extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: Icon(icon, color: accentColor(context), size: 19),
+              child: Icon(icon, color: settingsIconTone(context), size: 19),
             ),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600))),
@@ -159,13 +159,13 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     return Material(
-      color: settingsCardColor(context),
-      borderRadius: BorderRadius.circular(16),
+      color: pillColor(context),
+      borderRadius: BorderRadius.circular(36),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 9, 8),
+          padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
           child: Row(children: [
             Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
             Container(

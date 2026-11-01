@@ -248,7 +248,7 @@ class QuickSiteTile extends StatelessWidget {
               child: Transform.scale(
                 // Aumenta apenas o conteúdo do círculo em 10%; o recipiente
                 // continua rigorosamente com 40 x 40 px.
-                scale: 1.1,
+                scale: 1.232,
                 child: _siteIcon(site, text),
               ),
             ),

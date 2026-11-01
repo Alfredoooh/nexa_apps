@@ -48,6 +48,11 @@ Color inputBarTone(BuildContext context) =>
 Color settingsCardColor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark ? looplyInputBarDark : looplySettingsCardLight;
 
+Color settingsIconTone(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Color.lerp(Colors.white, looplyBlueDark, .12)!
+        : const Color(0xFF454B54);
+
 // Tom do bottom bar do browser: no escuro, igual ao inputbar; no claro,
 // comportamento inalterado (cor de página).
 Color browserBottomBarColor(BuildContext context) =>
@@ -132,8 +137,8 @@ ThemeData buildLooplyTheme(Brightness brightness) {
       elevation: 0,
       centerTitle: false,
       systemOverlayStyle: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: bg,
