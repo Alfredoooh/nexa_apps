@@ -29,6 +29,7 @@ class OrbitBrowserScreen extends StatefulWidget {
     required this.isActive,
     required this.viewportKey,
     this.firstLoadCompleter,
+    this.browserReadyCompleter,
     this.isIncognito = false,
   });
 
@@ -37,6 +38,7 @@ class OrbitBrowserScreen extends StatefulWidget {
   final bool isActive;
   final GlobalKey viewportKey;
   final Completer<void>? firstLoadCompleter;
+  final Completer<void>? browserReadyCompleter;
   final bool isIncognito;
 
   @override
@@ -530,12 +532,18 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
             ? SystemUiOverlayStyle.light.copyWith(
-                statusBarColor: Colors.transparent,
+                statusBarColor: bg,
                 statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+                systemNavigationBarColor: bg,
+                systemNavigationBarIconBrightness: Brightness.light,
               )
             : SystemUiOverlayStyle.dark.copyWith(
-                statusBarColor: Colors.transparent,
+                statusBarColor: bg,
                 statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+                systemNavigationBarColor: bg,
+                systemNavigationBarIconBrightness: Brightness.dark,
               ),
         child: Scaffold(
           backgroundColor: bg,
@@ -732,6 +740,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             },
             onWebViewCreated: (controller) {
               _controller = controller;
+              final ready = widget.browserReadyCompleter;
+              if (ready != null && !ready.isCompleted) ready.complete();
               unawaited(_refreshNavigationState());
             },
             onProgressChanged: (controller, progress) {

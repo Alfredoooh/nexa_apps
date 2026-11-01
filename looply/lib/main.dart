@@ -110,6 +110,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   String? _activeBrowserTabId;
   final Map<String, GlobalKey> _browserViewportKeys = {};
   final Map<String, Completer<void>> _browserFirstLoads = {};
+  // Sinaliza quando a plataforma nativa da WebView já foi criada. A entrada
+  // do browser só começa depois deste ponto, evitando animar enquanto o
+  // Android ainda está a anexar a PlatformView (causa comum de pequenos saltos).
+  final Map<String, Completer<void>> _browserPlatformReady = {};
   final GlobalKey _repaintKey = GlobalKey();
   final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
   final Map<String, GlobalKey> _previewKeys = {};
@@ -140,8 +144,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
     _browserSlideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
-      reverseDuration: const Duration(milliseconds: 340),
+      duration: const Duration(milliseconds: 420),
+      reverseDuration: const Duration(milliseconds: 390),
     )..value = 1;
     _browserSlidePosition = Tween<Offset>(
       begin: const Offset(0, 1),
@@ -308,6 +312,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     _browserViewportKeys.removeWhere((id, _) => !liveBrowserIds.contains(id));
     _browserFirstLoads.removeWhere((id, _) => !liveBrowserIds.contains(id));
+    _browserPlatformReady.removeWhere((id, _) => !liveBrowserIds.contains(id));
     _previewKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
     _cardKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
 
@@ -323,6 +328,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (tab.kind == TabKind.appScreen) return;
     _browserViewportKeys.putIfAbsent(tab.id, GlobalKey.new);
     _browserFirstLoads.putIfAbsent(tab.id, Completer<void>.new);
+    _browserPlatformReady.putIfAbsent(tab.id, Completer<void>.new);
     _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
     _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
   }
@@ -362,8 +368,31 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     });
     _persistCurrentActivity();
     if (!browserAlreadyVisible) {
-      unawaited(_browserSlideController.forward());
+      unawaited(_playBrowserEntranceWhenReady(tab.id));
     }
+  }
+
+  Future<void> _playBrowserEntranceWhenReady(String tabId) async {
+    final ready = _browserPlatformReady[tabId];
+    if (ready != null && !ready.isCompleted) {
+      try {
+        await ready.future.timeout(const Duration(milliseconds: 650));
+      } on TimeoutException {
+        // Não bloqueia a navegação caso a plataforma demore a sinalizar.
+      }
+    }
+
+    // Deixa o Android anexar a superfície nativa e o Flutter concluir um
+    // frame antes de iniciar o movimento. A transição continua a ser um slide
+    // real, sem fade ou screenshot e sem tocar no Container Transform.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted ||
+        _activeBrowserTabId != tabId ||
+        _showingTabsGrid ||
+        _browserSlideController.isAnimating) {
+      return;
+    }
+    await _browserSlideController.forward();
   }
 
   Future<void> _navigateToShellScreen(int index) async {
@@ -930,6 +959,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           isActive: !_showingTabsGrid && tab.id == _activeBrowserTabId,
           viewportKey: _browserViewportKeys[tab.id]!,
           firstLoadCompleter: _browserFirstLoads[tab.id]!,
+          browserReadyCompleter: _browserPlatformReady[tab.id]!,
           isIncognito: tab.isIncognito,
         ),
     ];
@@ -938,8 +968,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
         key: _shellScaffoldKey,
         resizeToAvoidBottomInset: false,
@@ -978,16 +1008,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                         : (1 - _browserSlidePosition.value.dy).clamp(0.0, 1.0).toDouble();
                     return IgnorePointer(
                       ignoring: _activeBrowserTabId != null,
+                      // Movimento simples por composição: evita recalcular
+                      // clip arredondado e escala em todos os frames, mantendo
+                      // a sensação de a tela anterior ser empurrada para baixo.
                       child: Transform.translate(
-                        offset: Offset(0, 22 * progress),
-                        child: Transform.scale(
-                          scale: 1 - (.035 * progress),
-                          alignment: Alignment.topCenter,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20 * progress),
-                            child: child,
-                          ),
-                        ),
+                        offset: Offset(0, 16 * progress),
+                        child: child,
                       ),
                     );
                   },
@@ -1001,12 +1027,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 offstage: _activeBrowserTabId == null || _showingTabsGrid,
                 child: SlideTransition(
                   position: _browserSlidePosition,
-                  child: SafeArea(
-                    bottom: false,
-                    child: SizedBox.expand(
-                      child: IndexedStack(
-                        index: browserLayerIndex,
-                        children: browserPages,
+                  child: RepaintBoundary(
+                    child: SafeArea(
+                      bottom: false,
+                      child: SizedBox.expand(
+                        child: IndexedStack(
+                          index: browserLayerIndex,
+                          children: browserPages,
+                        ),
                       ),
                     ),
                   ),

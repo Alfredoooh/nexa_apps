@@ -253,7 +253,7 @@ class QuickSiteTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 5),
-          Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: text)),
+          Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: text)),
         ]),
       ),
     );
