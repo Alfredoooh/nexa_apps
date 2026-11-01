@@ -2,29 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
+import '../session_store.dart';
 
-/// Abre My Apps & Games com uma transição vertical nativa e reversível.
-/// Ao fechar, a página desliza para baixo com a mesma curva suave.
-void openMyAppsAndGames(BuildContext context) {
-  Navigator.of(context).push(PageRouteBuilder<void>(
-    transitionDuration: const Duration(milliseconds: 340),
-    reverseTransitionDuration: const Duration(milliseconds: 300),
-    pageBuilder: (context, animation, secondaryAnimation) => const MyAppsScreen(),
+/// Abre My Apps & Games com uma transição vertical contínua.
+/// A tela anterior também se desloca para cima através da secondaryAnimation
+/// da rota raiz; ao fechar, ambos os movimentos regressam suavemente.
+Future<void> openMyAppsAndGames(
+  BuildContext context, {
+  bool persistActivity = true,
+  Map<String, dynamic>? returnTo,
+}) async {
+  final navigator = Navigator.of(context);
+  final previous = returnTo ??
+      await SessionStore.instance.getLastActivity() ??
+      <String, dynamic>{'type': 'shell', 'screenIndex': 0};
+
+  if (persistActivity) {
+    await SessionStore.instance.saveLastActivity({
+      'type': 'my_apps',
+      'returnTo': previous,
+    });
+  }
+  if (!context.mounted || !navigator.mounted) {
+    await SessionStore.instance.saveLastActivity(previous);
+    return;
+  }
+
+  await navigator.push<void>(PageRouteBuilder<void>(
+    settings: const RouteSettings(name: '/my-apps-games'),
+    transitionDuration: const Duration(milliseconds: 480),
+    reverseTransitionDuration: const Duration(milliseconds: 430),
+    pageBuilder: (context, animation, secondaryAnimation) =>
+        const MyAppsScreen(),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
+      final slide = CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        reverseCurve: Curves.easeInOutCubic,
       );
       return SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(0, 1),
           end: Offset.zero,
-        ).animate(curved),
+        ).animate(slide),
         child: child,
       );
     },
   ));
+
+  // Ao regressar, a atividade volta a ser a tela que estava por baixo.
+  await SessionStore.instance.saveLastActivity(previous);
 }
 
 class MyAppsScreen extends StatefulWidget {

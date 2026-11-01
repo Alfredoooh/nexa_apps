@@ -8,6 +8,7 @@ import '../screens/settings_screen.dart';
 import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
+import '../session_store.dart';
 
 // Abre o Drawer gerido pelo próprio Scaffold. Assim o Flutter controla
 // a animação Material, o gesto de arrastar da borda e o fecho por swipe.
@@ -99,17 +100,71 @@ class LooplyDrawer extends StatelessWidget {
     );
   }
 
-  void _openDrawerPage(BuildContext context, Widget page) {
+  Future<void> _openDrawerPage(BuildContext context, Widget page) async {
     final navigator = Navigator.of(context);
+    final previous = await SessionStore.instance.getLastActivity() ??
+        <String, dynamic>{'type': 'shell', 'screenIndex': 0};
+    final routeKey = _drawerRouteKey(page);
+    if (routeKey != null) {
+      await SessionStore.instance.saveLastActivity({
+        'type': 'drawer_page',
+        'page': routeKey,
+        'returnTo': previous,
+      });
+    }
+    if (!context.mounted || !navigator.mounted) return;
+
     navigator.pop();
-    // Aguarda a transição nativa do Drawer terminar antes de colocar a nova
-    // página no Navigator, para não empilhar as duas animações.
-    Future<void>.delayed(const Duration(milliseconds: 260), () {
-      if (navigator.mounted) {
-        navigator.push(MaterialPageRoute(builder: (_) => page));
-      }
-    });
+    // Espera o Drawer terminar de fechar antes de apresentar a página.
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+    if (!navigator.mounted) return;
+    await navigator.push(MaterialPageRoute<void>(builder: (_) => page));
+    if (routeKey != null) {
+      await SessionStore.instance.saveLastActivity(previous);
+    }
   }
+}
+
+
+String? _drawerRouteKey(Widget page) {
+  if (page is HistoryScreen) return 'history';
+  if (page is DownloadsScreen) return 'downloads';
+  if (page is BookmarksScreen) return 'bookmarks';
+  if (page is SettingsScreen) return 'settings';
+  return null;
+}
+
+Widget? _drawerPageForKey(String key) {
+  switch (key) {
+    case 'history':
+      return const HistoryScreen();
+    case 'downloads':
+      return const DownloadsScreen();
+    case 'bookmarks':
+      return const BookmarksScreen();
+    case 'settings':
+      return const SettingsScreen();
+    default:
+      return null;
+  }
+}
+
+/// Reabre uma tela do Drawer que era a atividade visível quando o app foi
+/// encerrado. O destino anterior volta a ser gravado quando o utilizador sai.
+Future<void> restoreDrawerPageActivity(
+  BuildContext context, {
+  required String pageKey,
+  required Map<String, dynamic> returnTo,
+}) async {
+  final page = _drawerPageForKey(pageKey);
+  if (page == null || !context.mounted) {
+    await SessionStore.instance.saveLastActivity(returnTo);
+    return;
+  }
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => page),
+  );
+  await SessionStore.instance.saveLastActivity(returnTo);
 }
 
 class _DrawerHeader extends StatelessWidget {
@@ -176,8 +231,9 @@ class _DrawerOption extends StatelessWidget {
               ),
               if (badge > 0)
                 Container(
-                  constraints: const BoxConstraints(minWidth: 25, minHeight: 25),
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  height: 21,
+                  constraints: const BoxConstraints(minWidth: 21),
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: accentColor(context),
@@ -185,7 +241,14 @@ class _DrawerOption extends StatelessWidget {
                   ),
                   child: Text(
                     badge > 999 ? '999+' : '$badge',
-                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      height: 1,
+                    ),
                   ),
                 ),
             ]),

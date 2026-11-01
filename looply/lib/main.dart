@@ -11,8 +11,8 @@ import 'models.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/discover_screen.dart';
-import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/my_apps_screen.dart';
 import 'screens/orbit_browser_screen.dart';
 import 'widgets/drawer_menu.dart';
 import 'session_store.dart';
@@ -114,9 +114,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  final List<String> _screenKeys = const ['home_screen', 'discover_screen', 'games_screen', 'activity_screen'];
-  final List<String> _screenLabels = const ['Início', 'Descobrir', 'Jogos', 'Atividade'];
-  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
+  // As páginas principais são Início, Descobrir e Atividade. Jogos não é
+  // uma aba principal: continua disponível exclusivamente em My Apps & Games.
+  final List<String> _screenKeys = const ['home_screen', 'discover_screen', 'activity_screen'];
+  final List<String> _screenLabels = const ['Início', 'Descobrir', 'Atividade'];
+  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
   late final Animation<Offset> _browserSlidePosition;
@@ -169,6 +171,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // Quando My Apps, Histórico, Downloads ou outra página está por cima,
+      // não substitui a atividade dessa rota pela tela que ficou atrás.
+      final shellRoute = ModalRoute.of(context);
+      if (shellRoute == null || shellRoute.isCurrent) {
+        _persistCurrentActivity();
+      }
       unawaited(SessionStore.instance.markBackgrounded());
       unawaited(tabsController.flushPersistence());
       unawaited(activityController.flushPersistence());
@@ -179,26 +187,106 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (_restoreChecked || !mounted) return;
     _restoreChecked = true;
 
-    // Se já existem separadores guardados, restaura a aba que estava ativa
-    // sem criar outra cópia da última página visitada.
-    final savedTabs = tabsController.tabs
-        .where((tab) => tab.kind != TabKind.appScreen)
-        .toList(growable: false);
-    if (savedTabs.isNotEmpty) {
-      final restoredTab = tabsController.getTab(tabsController.activeTabId ?? '') ?? savedTabs.first;
-      _ensureBrowserTabMounted(restoredTab);
-      tabsController.activate(restoredTab.id);
-      if (mounted) setState(() => _activeBrowserTabId = restoredTab.id);
+    // A escolha de arranque é a última atividade do utilizador, não o último
+    // URL guardado. Assim, abrir o browser ontem não força o app a arrancar
+    // sempre nesse site se a última utilização foi noutra área.
+    final saved = await SessionStore.instance.getLastActivity();
+    if (!mounted) return;
+
+    if (saved == null) {
+      setState(() {
+        _selectedTab = 0;
+        _activeBrowserTabId = null;
+        _showingTabsGrid = false;
+      });
       return;
     }
 
-    // Compatibilidade com a sessão simples gravada por versões anteriores.
-    final restored = await SessionStore.instance.getRestorablePage();
-    if (restored == null || !mounted) return;
-    final tab = tabsController.createBrowserTab(restored.url);
-    _ensureBrowserTabMounted(tab);
-    tabsController.activate(tab.id);
-    setState(() => _activeBrowserTabId = tab.id);
+    final type = saved['type']?.toString() ?? 'shell';
+    final returnTo = _activityMap(saved['returnTo']);
+
+    if (type == 'my_apps' || type == 'drawer_page') {
+      _restoreBaseActivity(returnTo);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (type == 'my_apps') {
+          unawaited(openMyAppsAndGames(
+            context,
+            persistActivity: false,
+            returnTo: returnTo,
+          ));
+        } else {
+          final pageKey = saved['page']?.toString() ?? '';
+          unawaited(restoreDrawerPageActivity(
+            context,
+            pageKey: pageKey,
+            returnTo: returnTo,
+          ));
+        }
+      });
+      return;
+    }
+
+    if (type == 'tabs_grid') {
+      _restoreBaseActivity(returnTo);
+      _preferredReturnTabId = _activeBrowserTabId;
+      if (mounted) setState(() => _showingTabsGrid = true);
+      return;
+    }
+
+    _restoreBaseActivity(saved);
+  }
+
+  Map<String, dynamic> _activityMap(Object? value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{'type': 'shell', 'screenIndex': 0};
+  }
+
+  void _restoreBaseActivity(Map<String, dynamic> activity) {
+    final type = activity['type']?.toString() ?? 'shell';
+    String? restoredBrowserId;
+    var restoredScreen = 0;
+
+    if (type == 'browser') {
+      final id = activity['tabId']?.toString();
+      final tab = id == null ? null : tabsController.getTab(id);
+      // As sessões privadas não são reabertas automaticamente.
+      if (tab != null && !tab.isIncognito && tab.kind != TabKind.appScreen) {
+        _ensureBrowserTabMounted(tab);
+        tabsController.activate(tab.id);
+        restoredBrowserId = tab.id;
+      }
+    } else if (type == 'shell') {
+      final rawIndex = activity['screenIndex'];
+      if (rawIndex is num) restoredScreen = rawIndex.toInt();
+    }
+
+    if (mounted) {
+      setState(() {
+        _selectedTab = restoredScreen.clamp(0, _screenKeys.length - 1).toInt();
+        _activeBrowserTabId = restoredBrowserId;
+        _showingTabsGrid = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _currentBaseActivity() {
+    final id = _activeBrowserTabId;
+    final active = id == null ? null : tabsController.getTab(id);
+    if (active != null && !active.isIncognito && active.kind != TabKind.appScreen) {
+      return <String, dynamic>{'type': 'browser', 'tabId': active.id};
+    }
+    return <String, dynamic>{'type': 'shell', 'screenIndex': _selectedTab};
+  }
+
+  void _persistCurrentActivity() {
+    final activity = _showingTabsGrid
+        ? <String, dynamic>{
+            'type': 'tabs_grid',
+            'returnTo': _currentBaseActivity(),
+          }
+        : _currentBaseActivity();
+    unawaited(SessionStore.instance.saveLastActivity(activity));
   }
 
   void _onTabsChanged() {
@@ -255,6 +343,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
     });
+    _persistCurrentActivity();
   }
 
   // Transição vertical usada apenas na navegação normal entre Home e Browser.
@@ -269,6 +358,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
     });
+    _persistCurrentActivity();
     unawaited(_browserSlideController.forward());
   }
 
@@ -284,6 +374,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _activeBrowserTabId = null;
       _selectedTab = index.clamp(0, _screenKeys.length - 1).toInt();
     });
+    _persistCurrentActivity();
   }
 
   void _handleShellTabRequest() {
@@ -469,6 +560,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   Future<void> _openTabsGrid() async {
     if (_showingTabsGrid || _morphing) return;
     _morphing = true;
+    final returnTo = _currentBaseActivity();
+    _preferredReturnTabId = _activeBrowserTabId;
+    unawaited(SessionStore.instance.saveLastActivity({
+      'type': 'tabs_grid',
+      'returnTo': returnTo,
+    }));
 
     final sourceRect = _rectInOverlay(_repaintKey);
     final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.35);
@@ -564,6 +661,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     _ensureBrowserTabMounted(browserTab);
     _preferredReturnTabId = browserTab.id;
+    if (!browserTab.isIncognito) {
+      unawaited(SessionStore.instance.saveLastActivity({
+        'type': 'tabs_grid',
+        'returnTo': <String, dynamic>{'type': 'browser', 'tabId': browserTab.id},
+      }));
+    }
     final bitmap = screenshot ?? browserTab.thumbnail;
     final imageProvider = bitmap == null
         ? null
@@ -658,6 +761,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _browserSlideController.stop();
       _browserSlideController.value = 1;
       tabsController.activate(targetTab.id);
+      if (!targetTab.isIncognito) {
+        unawaited(SessionStore.instance.saveLastActivity({
+          'type': 'browser',
+          'tabId': targetTab.id,
+        }));
+      } else {
+        unawaited(SessionStore.instance.saveLastActivity({
+          'type': 'shell',
+          'screenIndex': _selectedTab,
+        }));
+      }
 
       // A captura é colocada por cima da grelha antes de trocar o IndexedStack.
       // Assim não há um frame intermédio em que a WebView recém-ativada apareça
@@ -718,9 +832,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
 
     if (targetTab != null && targetTab.kind == TabKind.appScreen) {
-      final index = _screenKeys.indexOf(targetTab.url);
+      var index = _screenKeys.indexOf(targetTab.url);
+      // Compatibilidade com separadores de ecrã 'Jogos' gravados por versões
+      // anteriores: encaminha-os para Descobrir, sem voltar a expor Jogos na
+      // navegação principal.
+      if (index < 0 && targetTab.url == 'games_screen') index = 1;
       if (index >= 0) _selectedTab = index;
     }
+    unawaited(SessionStore.instance.saveLastActivity({
+      'type': 'shell',
+      'screenIndex': _selectedTab,
+    }));
 
     if (imageProvider != null && sourceRect != null) {
       _insertSnapshotOverlay(
@@ -785,13 +907,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       (tab) => tab.id == _activeBrowserTabId,
     );
     final stackIndex = activeBrowserIndex >= 0
-        ? 4 + activeBrowserIndex
+        ? 3 + activeBrowserIndex
         : _selectedTab;
 
     final pages = <Widget>[
       HomeScreen(onOpenDrawer: _openShellDrawer),
       const DiscoverScreen(),
-      const GamesScreen(),
       const ActivityScreen(),
       for (final tab in browserTabs)
         OrbitBrowserScreen(
@@ -805,7 +926,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         ),
     ];
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    final shellSecondaryAnimation = ModalRoute.of(context)?.secondaryAnimation;
+    final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
@@ -883,6 +1005,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                       setState(() {
                         _activeBrowserTabId = null;
                       });
+                      unawaited(SessionStore.instance.saveLastActivity({
+                        'type': 'tabs_grid',
+                        'returnTo': <String, dynamic>{
+                          'type': 'shell',
+                          'screenIndex': _selectedTab,
+                        },
+                      }));
                     },
                   ),
                 ),
@@ -892,26 +1021,44 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: NavigationBar(
-            // A Home continua como página inicial acessível pelo botão Home do
-            // Browser e pela grelha; o primeiro destino da barra é Descobrir.
-            selectedIndex: switch (_selectedTab) { 2 => 1, 3 => 3, _ => 0 },
+            // A navegação principal mantém Início; Descobrir substitui Jogos.
+            // Jogos permanece apenas dentro de My Apps & Games.
+            selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
             onDestinationSelected: (index) {
               if (index == 2) {
                 _openTabsGrid();
                 return;
               }
-              final pageIndex = switch (index) { 0 => 1, 1 => 2, _ => 3 };
+              final pageIndex = switch (index) { 0 => 0, 1 => 1, _ => 2 };
               unawaited(_navigateToShellScreen(pageIndex));
             },
             destinations: [
+              const NavigationDestination(icon: Icon(Symbols.home_rounded), selectedIcon: Icon(Symbols.home_rounded, fill: 1), label: 'Início'),
               const NavigationDestination(icon: Icon(Symbols.explore_rounded), selectedIcon: Icon(Symbols.explore_rounded, fill: 1), label: 'Descobrir'),
-              const NavigationDestination(icon: Icon(Symbols.sports_esports_rounded), selectedIcon: Icon(Symbols.sports_esports_rounded, fill: 1), label: 'Jogos'),
               NavigationDestination(icon: _TabsCountIcon(count: tabsController.count, color: text), selectedIcon: _TabsCountIcon(count: tabsController.count, color: text), label: 'Abas'),
               const NavigationDestination(icon: Icon(Symbols.history_rounded), selectedIcon: Icon(Symbols.history_rounded, fill: 1), label: 'Atividade'),
             ],
           ),
         ),
       ),
+    );
+
+    if (shellSecondaryAnimation == null) return shellPage;
+
+    // Ao abrir My Apps & Games (ou outra página nativa), o ecrã que fica
+    // atrás também é empurrado para cima. A rota nova sobe por cima dele,
+    // criando uma única transição contínua em vez de um slide isolado.
+    final pushedBackPosition = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0, -0.035),
+    ).animate(CurvedAnimation(
+      parent: shellSecondaryAnimation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    ));
+    return SlideTransition(
+      position: pushedBackPosition,
+      child: shellPage,
     );
   }
 }

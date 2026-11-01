@@ -162,36 +162,10 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Center(
-                          child: Material(
-                            color: pillColor(context),
-                            borderRadius: BorderRadius.circular(99),
-                            child: Padding(
-                              padding: const EdgeInsets.all(3),
-                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                SizedBox(
-                                  width: 38,
-                                  height: 34,
-                                  child: IconButton(
-                                    tooltip: 'Novo separador privado',
-                                    padding: EdgeInsets.zero,
-                                    visualDensity: VisualDensity.compact,
-                                    icon: Icon(Symbols.visibility_off_rounded, color: text, size: 20),
-                                    onPressed: widget.onNewIncognitoTab,
-                                  ),
-                                ),
-                                Container(
-                                  width: 38,
-                                  height: 34,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: isDark ? looplyPanel2Dark : Colors.white,
-                                    borderRadius: BorderRadius.circular(99),
-                                  ),
-                                  child: _TabsCountBadge(count: tabs.length, color: text),
-                                ),
-                              ]),
-                            ),
-                          ),
+                          // Mantém apenas o contador quadrado dos separadores.
+                          // O segmento/atalho privado foi removido desta cápsula;
+                          // a opção anónima continua disponível no menu de três pontos.
+                          child: _TabsCountBadge(count: tabs.length, color: text),
                         ),
                       ),
                       if (_selectionMode) ...[
