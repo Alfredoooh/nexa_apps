@@ -141,8 +141,6 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        flexibleSpace: appBarSoftFade(context),
         toolbarHeight: 60,
         title: const Text('Descobrir'),
         actions: [
@@ -532,7 +530,7 @@ class NewsDetailScreen extends StatelessWidget {
     final muted = mutedText(context);
     return Scaffold(
       backgroundColor: pageBg(context),
-      appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), title: const Text('Detalhes da notícia')),
+      appBar: AppBar(title: const Text('Detalhes da notícia')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         children: [

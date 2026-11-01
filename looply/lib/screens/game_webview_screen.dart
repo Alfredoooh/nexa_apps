@@ -38,8 +38,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          flexibleSpace: appBarSoftFade(context),
+          backgroundColor: bg,
           surfaceTintColor: Colors.transparent,
           title: Text(widget.game.title),
         ),

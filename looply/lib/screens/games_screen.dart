@@ -182,7 +182,7 @@ class GameDetailsScreen extends StatelessWidget {
     final bg = pageBg(context);
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), title: const Text('Detalhes do jogo')),
+      appBar: AppBar(title: const Text('Detalhes do jogo')),
       body: ListView(padding: const EdgeInsets.fromLTRB(18, 10, 18, 28), children: [
         ClipRRect(borderRadius: BorderRadius.circular(22), child: SizedBox(height: 210, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 52))))),
         const SizedBox(height: 20),

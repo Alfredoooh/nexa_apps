@@ -26,7 +26,7 @@ class SettingsScreen extends StatelessWidget {
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: pageBg(context),
-        appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), toolbarHeight: 64, title: const Text('Configurações')),
+        appBar: AppBar(toolbarHeight: 64, title: const Text('Configurações')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [

@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
 import '../session_store.dart';
 import 'games_screen.dart';
 
-/// Sinaliza à Shell que o modal está aberto para empurrar a tela anterior.
-/// O sheet usa a rota nativa do showModalBottomSheet: entra por baixo e sai
-/// pelo mesmo percurso, sem fade no conteúdo.
-final ValueNotifier<bool> myAppsModalOpen = ValueNotifier<bool>(false);
-
+/// Abre My Apps & Games como uma tela normal usando a transição Cupertino.
+/// A atividade anterior é restaurada quando o utilizador regressa.
 Future<void> openMyAppsAndGames(
   BuildContext context, {
   bool persistActivity = true,
   Map<String, dynamic>? returnTo,
 }) async {
+  final navigator = Navigator.of(context);
   final previous = returnTo ??
       await SessionStore.instance.getLastActivity() ??
       <String, dynamic>{'type': 'shell', 'screenIndex': 0};
@@ -25,45 +24,20 @@ Future<void> openMyAppsAndGames(
       'returnTo': previous,
     });
   }
-  if (!context.mounted) {
+
+  if (!context.mounted || !navigator.mounted) {
     await SessionStore.instance.saveLastActivity(previous);
     return;
   }
 
-  myAppsModalOpen.value = true;
-  try {
-    await showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: false,
-      isScrollControlled: true,
-      useSafeArea: true,
-      enableDrag: true,
-      isDismissible: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(.28),
-      elevation: 0,
-      showDragHandle: true,
-      routeSettings: const RouteSettings(name: '/my-apps-games'),
-      builder: (sheetContext) {
-        final height = MediaQuery.sizeOf(sheetContext).height * .88;
-        return SizedBox(
-          height: height,
-          width: double.infinity,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-            child: Material(
-              color: pageBg(sheetContext),
-              surfaceTintColor: Colors.transparent,
-              child: const MyAppsScreen(),
-            ),
-          ),
-        );
-      },
-    );
-  } finally {
-    myAppsModalOpen.value = false;
-    await SessionStore.instance.saveLastActivity(previous);
-  }
+  await navigator.push<void>(
+    CupertinoPageRoute<void>(
+      settings: const RouteSettings(name: '/my-apps-games'),
+      builder: (_) => const MyAppsScreen(),
+    ),
+  );
+
+  await SessionStore.instance.saveLastActivity(previous);
 }
 
 class MyAppsScreen extends StatefulWidget {
@@ -82,8 +56,6 @@ class _MyAppsScreenState extends State<MyAppsScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        flexibleSpace: appBarSoftFade(context),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text('My Apps & Games'),

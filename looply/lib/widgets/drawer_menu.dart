@@ -47,6 +47,7 @@ class LooplyDrawer extends StatelessWidget {
                     _DrawerOption(
                       icon: Symbols.dark_mode_rounded,
                       label: 'Alterar tema',
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
                       onTap: () {
                         final navigator = Navigator.of(context);
                         navigator.pop();
@@ -61,6 +62,7 @@ class LooplyDrawer extends StatelessWidget {
                       builder: (context, _) => _DrawerOption(
                         icon: Symbols.history_rounded,
                         label: 'Histórico',
+                        borderRadius: BorderRadius.circular(8),
                         badge: activityController.entries.length,
                         onTap: () => _openDrawerPage(context, const HistoryScreen()),
                       ),
@@ -71,6 +73,7 @@ class LooplyDrawer extends StatelessWidget {
                       builder: (context, _) => _DrawerOption(
                         icon: Symbols.download_rounded,
                         label: 'Downloads',
+                        borderRadius: BorderRadius.circular(8),
                         badge: downloadsController.entries.length,
                         onTap: () => _openDrawerPage(context, const DownloadsScreen()),
                       ),
@@ -81,6 +84,7 @@ class LooplyDrawer extends StatelessWidget {
                       builder: (context, _) => _DrawerOption(
                         icon: Symbols.bookmark_rounded,
                         label: 'Marcadores',
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
                         badge: bookmarksController.entries.length,
                         onTap: () => _openDrawerPage(context, const BookmarksScreen()),
                       ),
@@ -192,17 +196,21 @@ class _DrawerOption extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.badge = 0,
+    required this.borderRadius,
   });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final int badge;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
-    // Igual ao raio dos cartões _SettingsTile da tela de Configurações.
-    final radius = BorderRadius.circular(10);
+    // Mesma geometria agrupada dos cartões da tela Configurações:
+    // primeiro cartão com topo mais curvo, cartões centrais discretos,
+    // último cartão com base mais curvada.
+    final radius = borderRadius;
     return Material(
       color: settingsCardColor(context),
       borderRadius: radius,

@@ -53,24 +53,6 @@ Color settingsCardColor(BuildContext context) =>
 Color browserBottomBarColor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark ? looplyInputBarDark : pageBg(context);
 
-
-/// Fundo gradual para AppBars das telas de conteúdo (o Orbit Browser mantém
-/// a sua própria barra e não utiliza este efeito).
-Widget appBarSoftFade(BuildContext context, {Color? bottomColor}) {
-  final top = pillColor(context);
-  final page = bottomColor ?? pageBg(context);
-  return DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: <Color>[top, Color.lerp(top, page, .52)!, page],
-        stops: const <double>[0, .68, 1],
-      ),
-    ),
-  );
-}
-
 Brightness brightnessForMode(BuildContext context, ThemeMode mode) {
   if (mode == ThemeMode.dark) return Brightness.dark;
   if (mode == ThemeMode.light) return Brightness.light;
@@ -149,12 +131,6 @@ ThemeData buildLooplyTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       centerTitle: false,
-      titleSpacing: 8,
-      titleTextStyle: TextStyle(
-        color: text,
-        fontSize: 17,
-        fontWeight: FontWeight.w700,
-      ),
       systemOverlayStyle: isDark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
