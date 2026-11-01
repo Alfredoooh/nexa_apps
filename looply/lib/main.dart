@@ -936,7 +936,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final browserLayerIndex = activeBrowserIndex >= 0 ? activeBrowserIndex : null;
 
-    final shellSecondaryAnimation = ModalRoute.of(context)?.secondaryAnimation;
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
@@ -1061,17 +1060,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         ),
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
-                stops: const <double>[0, .68, 1],
-              ),
-            ),
-            child: NavigationBar(
-              backgroundColor: Colors.transparent,
+          child: NavigationBar(
             // A navegação principal mantém Início; Descobrir substitui Jogos.
             // Jogos permanece apenas dentro de My Apps & Games.
             selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
@@ -1089,44 +1078,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               NavigationDestination(icon: _TabsCountIcon(count: tabsController.count, color: text), selectedIcon: _TabsCountIcon(count: tabsController.count, color: text), label: 'Abas'),
               const NavigationDestination(icon: Icon(Symbols.history_rounded), selectedIcon: Icon(Symbols.history_rounded, fill: 1), label: 'Atividade'),
             ],
-            ),
           ),
         ),
       ),
     );
 
-    // A rota modal My Apps & Games empurra o conteúdo anterior para trás
-    // (ligeiramente para baixo e reduzido). O sheet sobe sem fade; ao fechar,
-    // a mesma transformação é reproduzida ao contrário.
-    return ValueListenableBuilder<bool>(
-      valueListenable: myAppsModalOpen,
-      child: shellPage,
-      builder: (context, isMyAppsOpen, child) {
-        if (!isMyAppsOpen || shellSecondaryAnimation == null) {
-          return child!;
-        }
-        return AnimatedBuilder(
-          animation: shellSecondaryAnimation,
-          child: child,
-          builder: (context, child) {
-            final t = Curves.easeInOutCubic.transform(
-              shellSecondaryAnimation.value.clamp(0.0, 1.0).toDouble(),
-            );
-            return Transform.translate(
-              offset: Offset(0, 18 * t),
-              child: Transform.scale(
-                scale: 1 - (.035 * t),
-                alignment: Alignment.topCenter,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20 * t),
-                  child: child,
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    return shellPage;
   }
 }
 
