@@ -37,7 +37,12 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
       value: isDark ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light) : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(title: Text(widget.game.title)),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          flexibleSpace: appBarSoftFade(context),
+          surfaceTintColor: Colors.transparent,
+          title: Text(widget.game.title),
+        ),
         body: Container(
           color: bg,
           child: Stack(children: [

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -309,7 +310,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         break;
       case _OrbitMenuAction.openSearch:
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SearchScreen()),
+          CupertinoPageRoute(builder: (_) => const SearchScreen()),
         );
         break;
       case _OrbitMenuAction.findInPage:
@@ -320,22 +321,22 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         ShellTabRequest.instance.requestBrowser(newTab.id);
         break;
       case _OrbitMenuAction.bookmarks:
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BookmarksScreen()));
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BookmarksScreen()));
         break;
       case _OrbitMenuAction.settings:
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
         break;
       case _OrbitMenuAction.goHome:
         ShellTabRequest.instance.request(0);
         break;
       case _OrbitMenuAction.history:
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const HistoryScreen()),
+          CupertinoPageRoute(builder: (_) => const HistoryScreen()),
         );
         break;
       case _OrbitMenuAction.downloads:
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const DownloadsScreen()),
+          CupertinoPageRoute(builder: (_) => const DownloadsScreen()),
         );
         break;
       case _OrbitMenuAction.bookmark:
@@ -592,7 +593,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     borderRadius: BorderRadius.circular(22),
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                        CupertinoPageRoute(builder: (_) => const SearchScreen()),
                       );
                     },
                     child: Container(

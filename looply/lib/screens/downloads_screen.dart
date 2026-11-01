@@ -26,6 +26,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: appBarSoftFade(context),
         title: const Text('Downloads'),
         actions: [
           if (entries.isNotEmpty)

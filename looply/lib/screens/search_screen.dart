@@ -90,9 +90,18 @@ class _SearchScreenState extends State<SearchScreen> {
         backgroundColor: bg,
         body: SafeArea(
           child: Column(children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(5, 3, 14, 8),
-              child: Row(children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
+                  stops: const <double>[0, .68, 1],
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(5, 3, 14, 8),
+                child: Row(children: [
                 IconButton(tooltip: 'Voltar', icon: Icon(Symbols.arrow_back_rounded, color: text), onPressed: () => Navigator.of(context).pop()),
                 Expanded(
                   child: Container(
@@ -120,7 +129,8 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
                 if (_controller.text.isNotEmpty)
                   IconButton(tooltip: 'Limpar', icon: Icon(Symbols.close_rounded, color: muted), onPressed: () { _controller.clear(); _focusNode.requestFocus(); }),
-              ]),
+                ]),
+              ),
             ),
             Divider(height: 1, color: lineColor(context)),
             Expanded(

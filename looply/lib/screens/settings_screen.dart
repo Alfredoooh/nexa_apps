@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -21,11 +22,11 @@ class SettingsScreen extends StatelessWidget {
     final muted = mutedText(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: Theme.of(context).brightness == Brightness.dark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: pageBg(context), statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: pageBg(context),
-        appBar: AppBar(toolbarHeight: 64, title: const Text('Configurações')),
+        appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), toolbarHeight: 64, title: const Text('Configurações')),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
@@ -34,7 +35,7 @@ class SettingsScreen extends StatelessWidget {
               icon: Symbols.dark_mode_rounded,
               label: 'Tema',
               trailing: ValueListenableBuilder<ThemeMode>(valueListenable: themeController, builder: (_, mode, __) => Text(_themeLabel(mode), style: TextStyle(color: mutedText(context), fontSize: 12))),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20), bottom: Radius.circular(8)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
               onTap: () => showThemeSheet(context),
             ),
             const SizedBox(height: 2),
@@ -53,7 +54,7 @@ class SettingsScreen extends StatelessWidget {
               icon: Symbols.language_rounded,
               label: 'Idioma',
               trailing: Text('Português', style: TextStyle(color: muted, fontSize: 12)),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
+              borderRadius: BorderRadius.circular(8),
               onTap: () => _showLanguageInfo(context),
             ),
             Padding(padding: const EdgeInsets.fromLTRB(4, 18, 4, 10), child: Text('Navegação e segurança', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: muted))),
@@ -65,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: enabled ? 'Ativado' : 'Desativado',
                 trailing: M3ExpressiveSwitch(value: enabled, onChanged: (value) => adBlockEnabled.value = value),
                 showChevron: false,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20), bottom: Radius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
                 onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
               ),
             ),
@@ -78,7 +79,7 @@ class SettingsScreen extends StatelessWidget {
                 subtitle: enabled ? 'Pré-ligação e cache ativos' : 'Pré-ligação e cache desativados',
                 trailing: M3ExpressiveSwitch(value: enabled, onChanged: (value) => navigationAcceleratorEnabled.value = value),
                 showChevron: false,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
+                borderRadius: BorderRadius.circular(8),
                 onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
               ),
             ),
@@ -122,7 +123,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _openLibraryPage(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => page));
   }
 
   String _themeLabel(ThemeMode mode) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => 'Escuro', _ => 'Automático' };
@@ -214,45 +215,18 @@ class _SettingsTile extends StatelessWidget {
       child: InkWell(
         borderRadius: radius,
         onTap: onTap,
-        child: SizedBox(
-          height: 66,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                  child: Icon(icon, color: settingsIconTone(context), size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600, height: 1.15)),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 3),
-                        Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 11, height: 1.1)),
-                      ],
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 8),
-                  trailing!,
-                ],
-                if (showChevron) ...[
-                  const SizedBox(width: 4),
-                  Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
-                ],
-              ],
-            ),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Container(width: 38, height: 38, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(icon, color: accentColor(context), size: 19)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600)),
+              if (subtitle != null) ...[const SizedBox(height: 3), Text(subtitle!, style: TextStyle(color: muted, fontSize: 11))],
+            ])),
+            if (trailing != null) trailing!,
+            if (showChevron) Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+          ]),
         ),
       ),
     );

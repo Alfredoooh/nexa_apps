@@ -3,16 +3,18 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
 import '../session_store.dart';
+import 'games_screen.dart';
 
-/// Abre My Apps & Games com uma transição vertical contínua.
-/// A tela anterior também se desloca para cima através da secondaryAnimation
-/// da rota raiz; ao fechar, ambos os movimentos regressam suavemente.
+/// Sinaliza à Shell que o modal está aberto para empurrar a tela anterior.
+/// O sheet usa a rota nativa do showModalBottomSheet: entra por baixo e sai
+/// pelo mesmo percurso, sem fade no conteúdo.
+final ValueNotifier<bool> myAppsModalOpen = ValueNotifier<bool>(false);
+
 Future<void> openMyAppsAndGames(
   BuildContext context, {
   bool persistActivity = true,
   Map<String, dynamic>? returnTo,
 }) async {
-  final navigator = Navigator.of(context);
   final previous = returnTo ??
       await SessionStore.instance.getLastActivity() ??
       <String, dynamic>{'type': 'shell', 'screenIndex': 0};
@@ -23,35 +25,45 @@ Future<void> openMyAppsAndGames(
       'returnTo': previous,
     });
   }
-  if (!context.mounted || !navigator.mounted) {
+  if (!context.mounted) {
     await SessionStore.instance.saveLastActivity(previous);
     return;
   }
 
-  await navigator.push<void>(PageRouteBuilder<void>(
-    settings: const RouteSettings(name: '/my-apps-games'),
-    transitionDuration: const Duration(milliseconds: 480),
-    reverseTransitionDuration: const Duration(milliseconds: 430),
-    pageBuilder: (context, animation, secondaryAnimation) =>
-        const MyAppsScreen(),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final slide = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInOutCubic,
-      );
-      return SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 1),
-          end: Offset.zero,
-        ).animate(slide),
-        child: child,
-      );
-    },
-  ));
-
-  // Ao regressar, a atividade volta a ser a tela que estava por baixo.
-  await SessionStore.instance.saveLastActivity(previous);
+  myAppsModalOpen.value = true;
+  try {
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: false,
+      isScrollControlled: true,
+      useSafeArea: true,
+      enableDrag: true,
+      isDismissible: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(.28),
+      elevation: 0,
+      showDragHandle: true,
+      routeSettings: const RouteSettings(name: '/my-apps-games'),
+      builder: (sheetContext) {
+        final height = MediaQuery.sizeOf(sheetContext).height * .88;
+        return SizedBox(
+          height: height,
+          width: double.infinity,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            child: Material(
+              color: pageBg(sheetContext),
+              surfaceTintColor: Colors.transparent,
+              child: const MyAppsScreen(),
+            ),
+          ),
+        );
+      },
+    );
+  } finally {
+    myAppsModalOpen.value = false;
+    await SessionStore.instance.saveLastActivity(previous);
+  }
 }
 
 class MyAppsScreen extends StatefulWidget {
@@ -70,7 +82,9 @@ class _MyAppsScreenState extends State<MyAppsScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        backgroundColor: pageBg(context),
+        backgroundColor: Colors.transparent,
+        flexibleSpace: appBarSoftFade(context),
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text('My Apps & Games'),
       ),
@@ -84,12 +98,14 @@ class _MyAppsScreenState extends State<MyAppsScreen> {
             ),
           ),
           Expanded(
-            child: Center(
-              child: Text(
-                _selected == 0 ? 'Ainda sem aplicações' : 'Ainda sem jogos',
-                style: TextStyle(color: muted, fontSize: 13),
-              ),
-            ),
+            child: _selected == 0
+                ? Center(
+                    child: Text(
+                      'Ainda sem aplicações',
+                      style: TextStyle(color: muted, fontSize: 13),
+                    ),
+                  )
+                : const GamesScreen(),
           ),
         ],
       ),

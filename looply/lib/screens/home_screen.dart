@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
@@ -35,8 +36,8 @@ class HomeScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AllSitesScreen()),
+                onTap: () => Navigator.of(context).push<void>(
+                  CupertinoPageRoute<void>(builder: (_) => const AllSitesScreen()),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
@@ -103,7 +104,7 @@ class LooplyBigSearchBox extends StatelessWidget {
             label: 'Pesquisar ou escrever um endereço',
             child: InkWell(
               borderRadius: BorderRadius.circular(28),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SearchScreen())),
+              onTap: () => Navigator.of(context).push<void>(CupertinoPageRoute<void>(builder: (_) => const SearchScreen())),
               child: Align(alignment: Alignment.centerLeft, child: Text('Pesquisar ou escrever um URL', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 15))),
             ),
           ),

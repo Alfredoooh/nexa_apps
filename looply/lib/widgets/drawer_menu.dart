@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../screens/history_screen.dart';
@@ -41,7 +42,7 @@ class LooplyDrawer extends StatelessWidget {
               const SizedBox(height: 8),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
                     _DrawerOption(
                       icon: Symbols.dark_mode_rounded,
@@ -54,7 +55,7 @@ class LooplyDrawer extends StatelessWidget {
                         });
                       },
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 2),
                     AnimatedBuilder(
                       animation: activityController,
                       builder: (context, _) => _DrawerOption(
@@ -64,7 +65,7 @@ class LooplyDrawer extends StatelessWidget {
                         onTap: () => _openDrawerPage(context, const HistoryScreen()),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 2),
                     AnimatedBuilder(
                       animation: downloadsController,
                       builder: (context, _) => _DrawerOption(
@@ -74,7 +75,7 @@ class LooplyDrawer extends StatelessWidget {
                         onTap: () => _openDrawerPage(context, const DownloadsScreen()),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 2),
                     AnimatedBuilder(
                       animation: bookmarksController,
                       builder: (context, _) => _DrawerOption(
@@ -118,7 +119,7 @@ class LooplyDrawer extends StatelessWidget {
     // Espera o Drawer terminar de fechar antes de apresentar a página.
     await Future<void>.delayed(const Duration(milliseconds: 260));
     if (!navigator.mounted) return;
-    await navigator.push(MaterialPageRoute<void>(builder: (_) => page));
+    await navigator.push<void>(CupertinoPageRoute<void>(builder: (_) => page));
     if (routeKey != null) {
       await SessionStore.instance.saveLastActivity(previous);
     }
@@ -162,7 +163,7 @@ Future<void> restoreDrawerPageActivity(
     return;
   }
   await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => page),
+    CupertinoPageRoute<void>(builder: (_) => page),
   );
   await SessionStore.instance.saveLastActivity(returnTo);
 }
@@ -209,50 +210,48 @@ class _DrawerOption extends StatelessWidget {
       child: InkWell(
         borderRadius: radius,
         onTap: onTap,
-        child: SizedBox(
-          height: 66,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-            child: Row(children: [
+        child: Padding(
+          // Mesmos insets, altura natural e caixa de ícone dos _SettingsTile.
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+              child: Icon(icon, color: accentColor(context), size: 19),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (badge > 0)
               Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                child: Icon(icon, color: settingsIconTone(context), size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
+                height: 20,
+                constraints: const BoxConstraints(minWidth: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accentColor(context),
+                  borderRadius: BorderRadius.circular(99),
+                ),
                 child: Text(
-                  label,
+                  badge > 999 ? '999+' : '$badge',
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600, height: 1.15),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
                 ),
               ),
-              if (badge > 0)
-                Container(
-                  height: 21,
-                  constraints: const BoxConstraints(minWidth: 21),
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accentColor(context),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(
-                    badge > 999 ? '999+' : '$badge',
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
-                    ),
-                  ),
-                ),
-            ]),
-          ),
+          ]),
         ),
       ),
     );

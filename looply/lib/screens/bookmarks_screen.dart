@@ -38,6 +38,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: appBarSoftFade(context),
         title: const Text('Marcadores'),
         actions: [
           if (entries.isNotEmpty)

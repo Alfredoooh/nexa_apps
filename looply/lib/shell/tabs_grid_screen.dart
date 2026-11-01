@@ -123,9 +123,18 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
           children: [
             Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-                  child: Row(
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
+                      stops: const <double>[0, .68, 1],
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+                    child: Row(
                     children: [
                       // Voltar e Home partilham uma única cápsula contínua.
                       Material(
@@ -159,15 +168,11 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           ]),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Center(
-                          // Mantém apenas o contador quadrado dos separadores.
-                          // O segmento/atalho privado foi removido desta cápsula;
-                          // a opção anónima continua disponível no menu de três pontos.
-                          child: _TabsCountBadge(count: tabs.length, color: text),
-                        ),
-                      ),
+                      const Spacer(),
+                      // Contador quadrado alinhado à direita, junto ao menu,
+                      // em vez de ficar solto no centro da AppBar.
+                      _TabsCountBadge(count: tabs.length, color: text),
+                      const SizedBox(width: 6),
                       if (_selectionMode) ...[
                         IconButton(
                           tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
@@ -198,6 +203,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           ],
                         ),
                     ],
+                    ),
                   ),
                 ),
                 Expanded(

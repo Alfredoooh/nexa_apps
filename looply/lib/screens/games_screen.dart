@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
@@ -101,7 +102,7 @@ class _RecommendedGameRow extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           borderRadius: radius,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
+          onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => GameDetailsScreen(game: game))),
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -151,7 +152,7 @@ class _FeaturedGameCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailsScreen(game: game))),
+        onTap: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => GameDetailsScreen(game: game))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SizedBox(height: 132, width: double.infinity, child: CustomPaint(painter: GameArtPainter(game: game), child: Stack(children: [
             Positioned(right: -12, top: -20, child: Container(width: 135, height: 135, decoration: const BoxDecoration(color: Color(0x55FFFFFF), shape: BoxShape.circle))),
@@ -181,7 +182,7 @@ class GameDetailsScreen extends StatelessWidget {
     final bg = pageBg(context);
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(title: const Text('Detalhes do jogo')),
+      appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), title: const Text('Detalhes do jogo')),
       body: ListView(padding: const EdgeInsets.fromLTRB(18, 10, 18, 28), children: [
         ClipRRect(borderRadius: BorderRadius.circular(22), child: SizedBox(height: 210, child: CustomPaint(painter: GameArtPainter(game: game), child: const Center(child: Icon(Symbols.sports_esports_rounded, color: Colors.white, size: 52))))),
         const SizedBox(height: 20),
@@ -201,7 +202,7 @@ class GameDetailsScreen extends StatelessWidget {
         child: SizedBox(height: 52, child: FilledButton.icon(
           onPressed: game.url == null ? null : () {
             activityController.log(ActivityKind.game, game.title, game.url!);
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => GameWebViewScreen(game: game)));
           },
           icon: const Icon(Symbols.play_arrow_rounded),
           label: const Text('Jogar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),

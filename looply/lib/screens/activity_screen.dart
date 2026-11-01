@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
@@ -40,7 +41,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     return Scaffold(
       backgroundColor: pageBg(context),
-      appBar: AppBar(toolbarHeight: 64, title: const Text('Atividade'), actions: [if (entries.isNotEmpty) IconButton(tooltip: 'Limpar atividade', icon: Icon(Symbols.delete_sweep_rounded, color: text), onPressed: activityController.clear)]),
+      appBar: AppBar(backgroundColor: Colors.transparent, flexibleSpace: appBarSoftFade(context), toolbarHeight: 64, title: const Text('Atividade'), actions: [if (entries.isNotEmpty) IconButton(tooltip: 'Limpar atividade', icon: Icon(Symbols.delete_sweep_rounded, color: text), onPressed: activityController.clear)]),
       body: entries.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Symbols.history_rounded, size: 48, color: muted), const SizedBox(height: 12), Text('Sem atividade recente', style: TextStyle(color: text, fontWeight: FontWeight.w700))]))
           : ListView(
@@ -53,7 +54,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Row(children: [
                   Expanded(child: Text('Recente', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
                   TextButton(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                    onPressed: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const HistoryScreen())),
                     child: const Text('Ver tudo'),
                   ),
                 ]),
@@ -97,7 +98,7 @@ class ActivityTile extends StatelessWidget {
         onTap: () {
           if (isGame) {
             final game = looplyGames.firstWhere((g) => g.url == entry.url, orElse: () => looplyGames.first);
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameWebViewScreen(game: game)));
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => GameWebViewScreen(game: game)));
           } else {
             openOrbitTab(context, entry.url, title: entry.title);
           }

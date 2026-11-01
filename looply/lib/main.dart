@@ -140,8 +140,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
     _browserSlideController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
-      reverseDuration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 380),
+      reverseDuration: const Duration(milliseconds: 340),
     )..value = 1;
     _browserSlidePosition = Tween<Offset>(
       begin: const Offset(0, 1),
@@ -351,15 +351,19 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   // original, sem passar por este controlador.
   void _activateBrowserTabWithSlide(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
+    final browserAlreadyVisible =
+        _activeBrowserTabId != null && !_showingTabsGrid;
     _browserSlideController.stop();
-    _browserSlideController.value = 0;
+    _browserSlideController.value = browserAlreadyVisible ? 1 : 0;
     tabsController.activate(tab.id);
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
     });
     _persistCurrentActivity();
-    unawaited(_browserSlideController.forward());
+    if (!browserAlreadyVisible) {
+      unawaited(_browserSlideController.forward());
+    }
   }
 
   Future<void> _navigateToShellScreen(int index) async {
@@ -906,14 +910,18 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final activeBrowserIndex = browserTabs.indexWhere(
       (tab) => tab.id == _activeBrowserTabId,
     );
-    final stackIndex = activeBrowserIndex >= 0
-        ? 3 + activeBrowserIndex
-        : _selectedTab;
 
-    final pages = <Widget>[
+    // A shell principal e os separadores do Orbit são duas camadas reais.
+    // Isto permite que o browser suba por cima da página anterior enquanto
+    // a página de trás é empurrada ligeiramente para baixo, sem substituir
+    // nem reconstruir a WebView persistente. O Container Transform da grelha
+    // continua independente e inalterado.
+    final shellPages = <Widget>[
       HomeScreen(onOpenDrawer: _openShellDrawer),
       const DiscoverScreen(),
       const ActivityScreen(),
+    ];
+    final browserPages = <Widget>[
       for (final tab in browserTabs)
         OrbitBrowserScreen(
           key: ValueKey<String>('orbit-${tab.id}'),
@@ -925,6 +933,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           isIncognito: tab.isIncognito,
         ),
     ];
+
+    final browserLayerIndex = activeBrowserIndex >= 0 ? activeBrowserIndex : null;
 
     final shellSecondaryAnimation = ModalRoute.of(context)?.secondaryAnimation;
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
@@ -940,37 +950,68 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         drawerEdgeDragWidth: 28,
         body: Stack(
           children: [
+            // Página de trás: ao entrar no Orbit é empurrada para baixo e
+            // ligeiramente reduzida. Ao fechar, regressa à posição original.
+            // Este é o conteúdo vivo da tela anterior, não uma screenshot.
             Positioned.fill(
               child: Offstage(
                 offstage: _showingTabsGrid,
-                child: _activeBrowserTabId != null
-                    ? SlideTransition(
-                        position: _browserSlidePosition,
-                        child: SafeArea(
-                          bottom: false,
-                          child: SizedBox.expand(
-                            child: RepaintBoundary(
-                              key: _repaintKey,
-                              child: IndexedStack(
-                                index: stackIndex,
-                                children: pages,
-                              ),
-                            ),
-                          ),
+                child: AnimatedBuilder(
+                  animation: _browserSlideController,
+                  child: SafeArea(
+                    bottom: false,
+                    child: SizedBox.expand(
+                      child: RepaintBoundary(
+                        key: _repaintKey,
+                        child: IndexedStack(
+                          index: _selectedTab,
+                          children: shellPages,
                         ),
-                      )
-                    : SafeArea(
-                        bottom: false,
-                        child: SizedBox.expand(
-                          child: RepaintBoundary(
-                            key: _repaintKey,
-                            child: IndexedStack(
-                              index: stackIndex,
-                              children: pages,
-                            ),
+                      ),
+                    ),
+                  ),
+                  builder: (context, child) {
+                    // Usa exatamente o mesmo progresso curvo da página que
+                    // sobe, para que a tela anterior seja empurrada ao mesmo
+                    // ritmo e regresse sincronizada no fecho.
+                    final progress = _activeBrowserTabId == null
+                        ? 0.0
+                        : (1 - _browserSlidePosition.value.dy).clamp(0.0, 1.0).toDouble();
+                    return IgnorePointer(
+                      ignoring: _activeBrowserTabId != null,
+                      child: Transform.translate(
+                        offset: Offset(0, 22 * progress),
+                        child: Transform.scale(
+                          scale: 1 - (.035 * progress),
+                          alignment: Alignment.topCenter,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20 * progress),
+                            child: child,
                           ),
                         ),
                       ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            // Página que entra: slide ascendente nativo do widget, mantendo
+            // todas as WebViews montadas no IndexedStack.
+            Positioned.fill(
+              child: Offstage(
+                offstage: _activeBrowserTabId == null || _showingTabsGrid,
+                child: SlideTransition(
+                  position: _browserSlidePosition,
+                  child: SafeArea(
+                    bottom: false,
+                    child: SizedBox.expand(
+                      child: IndexedStack(
+                        index: browserLayerIndex,
+                        children: browserPages,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             if (_showingTabsGrid)
@@ -1020,7 +1061,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         ),
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
-          child: NavigationBar(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: <Color>[pillColor(context), Color.lerp(pillColor(context), bg, .52)!, bg],
+                stops: const <double>[0, .68, 1],
+              ),
+            ),
+            child: NavigationBar(
+              backgroundColor: Colors.transparent,
             // A navegação principal mantém Início; Descobrir substitui Jogos.
             // Jogos permanece apenas dentro de My Apps & Games.
             selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
@@ -1038,27 +1089,43 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               NavigationDestination(icon: _TabsCountIcon(count: tabsController.count, color: text), selectedIcon: _TabsCountIcon(count: tabsController.count, color: text), label: 'Abas'),
               const NavigationDestination(icon: Icon(Symbols.history_rounded), selectedIcon: Icon(Symbols.history_rounded, fill: 1), label: 'Atividade'),
             ],
+            ),
           ),
         ),
       ),
     );
 
-    if (shellSecondaryAnimation == null) return shellPage;
-
-    // Ao abrir My Apps & Games (ou outra página nativa), o ecrã que fica
-    // atrás também é empurrado para cima. A rota nova sobe por cima dele,
-    // criando uma única transição contínua em vez de um slide isolado.
-    final pushedBackPosition = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(0, -0.035),
-    ).animate(CurvedAnimation(
-      parent: shellSecondaryAnimation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInOutCubic,
-    ));
-    return SlideTransition(
-      position: pushedBackPosition,
+    // A rota modal My Apps & Games empurra o conteúdo anterior para trás
+    // (ligeiramente para baixo e reduzido). O sheet sobe sem fade; ao fechar,
+    // a mesma transformação é reproduzida ao contrário.
+    return ValueListenableBuilder<bool>(
+      valueListenable: myAppsModalOpen,
       child: shellPage,
+      builder: (context, isMyAppsOpen, child) {
+        if (!isMyAppsOpen || shellSecondaryAnimation == null) {
+          return child!;
+        }
+        return AnimatedBuilder(
+          animation: shellSecondaryAnimation,
+          child: child,
+          builder: (context, child) {
+            final t = Curves.easeInOutCubic.transform(
+              shellSecondaryAnimation.value.clamp(0.0, 1.0).toDouble(),
+            );
+            return Transform.translate(
+              offset: Offset(0, 18 * t),
+              child: Transform.scale(
+                scale: 1 - (.035 * t),
+                alignment: Alignment.topCenter,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20 * t),
+                  child: child,
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

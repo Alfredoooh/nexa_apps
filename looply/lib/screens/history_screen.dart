@@ -29,6 +29,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        flexibleSpace: appBarSoftFade(context),
         toolbarHeight: 64,
         title: const Text('Histórico'),
         actions: [
