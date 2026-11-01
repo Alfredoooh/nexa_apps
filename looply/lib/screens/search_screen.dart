@@ -69,6 +69,9 @@ class _SearchScreenState extends State<SearchScreen> {
     FocusScope.of(context).unfocus();
     final url = _looksLikeUrl(value) ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     NavAccelerator.instance.preconnect(url);
+    // Fecha Search antes de ativar o separador persistente Orbit. A shell
+    // aplica a transição vertical normal (slide up) sem criar uma rota WebView
+    // temporária nem quebrar o IndexedStack.
     openOrbitTab(context, url, title: value);
   }
 

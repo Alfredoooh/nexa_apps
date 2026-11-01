@@ -5,6 +5,8 @@ import '../screens/history_screen.dart';
 import '../screens/downloads_screen.dart';
 import '../screens/bookmarks_screen.dart';
 import '../screens/settings_screen.dart';
+import '../models.dart';
+import '../browser_library.dart';
 import '../theme.dart';
 
 // Abre o Drawer gerido pelo próprio Scaffold. Assim o Flutter controla
@@ -44,29 +46,42 @@ class LooplyDrawer extends StatelessWidget {
                       icon: Symbols.dark_mode_rounded,
                       label: 'Alterar tema',
                       onTap: () {
-                        Navigator.of(context).pop();
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (context.mounted) showThemeSheet(context);
+                        final navigator = Navigator.of(context);
+                        navigator.pop();
+                        Future<void>.delayed(const Duration(milliseconds: 260), () {
+                          if (navigator.mounted) showThemeSheet(navigator.context);
                         });
                       },
                     ),
                     const SizedBox(height: 8),
-                    _DrawerOption(
-                      icon: Symbols.history_rounded,
-                      label: 'Histórico',
-                      onTap: () => _openDrawerPage(context, const HistoryScreen()),
+                    AnimatedBuilder(
+                      animation: activityController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.history_rounded,
+                        label: 'Histórico',
+                        badge: activityController.entries.length,
+                        onTap: () => _openDrawerPage(context, const HistoryScreen()),
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    _DrawerOption(
-                      icon: Symbols.download_rounded,
-                      label: 'Downloads',
-                      onTap: () => _openDrawerPage(context, const DownloadsScreen()),
+                    AnimatedBuilder(
+                      animation: downloadsController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.download_rounded,
+                        label: 'Downloads',
+                        badge: downloadsController.entries.length,
+                        onTap: () => _openDrawerPage(context, const DownloadsScreen()),
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    _DrawerOption(
-                      icon: Symbols.bookmark_rounded,
-                      label: 'Marcadores',
-                      onTap: () => _openDrawerPage(context, const BookmarksScreen()),
+                    AnimatedBuilder(
+                      animation: bookmarksController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.bookmark_rounded,
+                        label: 'Marcadores',
+                        badge: bookmarksController.entries.length,
+                        onTap: () => _openDrawerPage(context, const BookmarksScreen()),
+                      ),
                     ),
                   ],
                 ),
@@ -85,10 +100,13 @@ class LooplyDrawer extends StatelessWidget {
   }
 
   void _openDrawerPage(BuildContext context, Widget page) {
-    Navigator.of(context).pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    // Aguarda a transição nativa do Drawer terminar antes de colocar a nova
+    // página no Navigator, para não empilhar as duas animações.
+    Future<void>.delayed(const Duration(milliseconds: 260), () {
+      if (navigator.mounted) {
+        navigator.push(MaterialPageRoute(builder: (_) => page));
       }
     });
   }
@@ -113,16 +131,22 @@ class _DrawerHeader extends StatelessWidget {
 }
 
 class _DrawerOption extends StatelessWidget {
-  const _DrawerOption({required this.icon, required this.label, required this.onTap});
+  const _DrawerOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badge = 0,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
-    final muted = mutedText(context);
-    final radius = BorderRadius.circular(14);
+    // Igual ao raio dos cartões _SettingsTile da tela de Configurações.
+    final radius = BorderRadius.circular(10);
     return Material(
       color: settingsCardColor(context),
       borderRadius: radius,
@@ -130,19 +154,42 @@ class _DrawerOption extends StatelessWidget {
       child: InkWell(
         borderRadius: radius,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          child: Row(children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: Icon(icon, color: settingsIconTone(context), size: 19),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600))),
-            Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
-          ]),
+        child: SizedBox(
+          height: 66,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+            child: Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+                child: Icon(icon, color: settingsIconTone(context), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600, height: 1.15),
+                ),
+              ),
+              if (badge > 0)
+                Container(
+                  constraints: const BoxConstraints(minWidth: 25, minHeight: 25),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accentColor(context),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    badge > 999 ? '999+' : '$badge',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+                  ),
+                ),
+            ]),
+          ),
         ),
       ),
     );

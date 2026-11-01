@@ -13,6 +13,8 @@ import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import 'history_screen.dart';
 import 'downloads_screen.dart';
+import 'bookmarks_screen.dart';
+import 'settings_screen.dart';
 import 'search_screen.dart';
 
 /// Browser único do Looply. Cada separador mantém a sua própria instância
@@ -44,6 +46,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   InAppWebViewController? _controller;
   PullToRefreshController? _pullToRefreshController;
   Timer? _progressHideTimer;
+  Timer? _findDebounce;
+  final TextEditingController _findController = TextEditingController();
+  final FocusNode _findFocusNode = FocusNode();
+  bool _isFindInPage = false;
 
   bool _isLoading = true;
   bool _showProgress = true;
@@ -93,6 +99,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   @override
   void dispose() {
     _progressHideTimer?.cancel();
+    _findDebounce?.cancel();
+    _findController.dispose();
+    _findFocusNode.dispose();
     // Este State só é descartado quando o separador é realmente fechado.
     // Ao alternar entre abas, o IndexedStack mantém este widget montado.
     super.dispose();
@@ -227,6 +236,49 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
+  void _enterFindInPage() {
+    if (!mounted) return;
+    _findController.clear();
+    setState(() => _isFindInPage = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _findFocusNode.requestFocus();
+    });
+  }
+
+  void _onFindTextChanged(String value) {
+    _findDebounce?.cancel();
+    _findDebounce = Timer(const Duration(milliseconds: 180), () async {
+      final controller = _controller;
+      if (controller == null || !mounted) return;
+      try {
+        if (value.trim().isEmpty) {
+          await controller.clearMatches();
+        } else {
+          await controller.findAllAsync(find: value.trim());
+        }
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _moveFindResult(bool forward) async {
+    final controller = _controller;
+    if (controller == null || _findController.text.trim().isEmpty) return;
+    try {
+      await controller.findNext(forward: forward);
+    } catch (_) {}
+  }
+
+  Future<void> _exitFindInPage() async {
+    _findDebounce?.cancel();
+    _findFocusNode.unfocus();
+    try {
+      await _controller?.clearMatches();
+    } catch (_) {}
+    if (!mounted) return;
+    _findController.clear();
+    setState(() => _isFindInPage = false);
+  }
+
   Future<void> _runShortcut(_OrbitMenuAction action) async {
     if (!mounted) return;
     switch (action) {
@@ -259,6 +311,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const SearchScreen()),
         );
+        break;
+      case _OrbitMenuAction.findInPage:
+        _enterFindInPage();
+        break;
+      case _OrbitMenuAction.newTab:
+        final newTab = tabsController.createBrowserTab('https://www.google.com');
+        ShellTabRequest.instance.requestBrowser(newTab.id);
+        break;
+      case _OrbitMenuAction.bookmarks:
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BookmarksScreen()));
+        break;
+      case _OrbitMenuAction.settings:
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
         break;
       case _OrbitMenuAction.goHome:
         ShellTabRequest.instance.request(0);
@@ -297,42 +362,70 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   void _showBrowserOptionsSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? looplyPanelDark : looplyPanelLight;
     final text = mainText(context);
     final muted = mutedText(context);
-    final surface = pillColor(context);
+
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       elevation: 0,
       useSafeArea: true,
       isScrollControlled: true,
-      builder: (sheetContext) => Material(
-        color: surface,
-        surfaceTintColor: Colors.transparent,
-        clipBehavior: Clip.antiAlias,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 32, height: 4, decoration: BoxDecoration(color: muted.withOpacity(.5), borderRadius: BorderRadius.circular(99))),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 14, 4, 12),
-                child: Row(children: [
-                  Expanded(child: Text(_currentTitle.isEmpty ? 'Orbit Browser' : _currentTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800))),
-                  IconButton(tooltip: 'Fechar', onPressed: () => Navigator.pop(sheetContext), icon: Icon(Symbols.close_rounded, color: muted)),
-                ]),
-              ),
-              _BrowserSheetAction(icon: Symbols.bookmark_add_rounded, label: 'Adicionar marcador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
-              _BrowserSheetAction(icon: Symbols.refresh_rounded, label: 'Atualizar página', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
-              _BrowserSheetAction(icon: Symbols.content_copy_rounded, label: 'Copiar endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
-              _BrowserSheetAction(icon: Symbols.search_rounded, label: 'Pesquisar ou escrever endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.openSearch)),
-              _BrowserSheetAction(icon: Symbols.history_rounded, label: 'Histórico', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
-              _BrowserSheetAction(icon: Symbols.download_rounded, label: 'Downloads', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
-              _BrowserSheetAction(icon: Icons.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
-              _BrowserSheetAction(icon: Symbols.home_rounded, label: 'Página inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
-            ]),
+      showDragHandle: false,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        initialChildSize: .76,
+        minChildSize: .48,
+        maxChildSize: .92,
+        expand: false,
+        builder: (context, scrollController) => Material(
+          color: surface,
+          surfaceTintColor: Colors.transparent,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(color: muted.withOpacity(.5), borderRadius: BorderRadius.circular(99)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+                  child: Row(
+                    children: [
+                      _BrowserQuickAction(icon: Symbols.arrow_back_rounded, label: 'Retroceder', enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
+                      _BrowserQuickAction(icon: Symbols.arrow_forward_rounded, label: 'Avançar', enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
+                      _BrowserQuickAction(icon: Symbols.add_rounded, label: 'Novo separador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
+                      _BrowserQuickAction(icon: Symbols.bookmarks_rounded, label: 'Marcadores', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
+                      _BrowserQuickAction(icon: Symbols.settings_rounded, label: 'Definições', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, thickness: 1, color: muted.withOpacity(.18), indent: 22, endIndent: 22),
+                Expanded(
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
+                    children: [
+                      _BrowserSheetListItem(icon: Symbols.history_rounded, label: 'Histórico', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+                      _BrowserSheetListItem(icon: Symbols.download_rounded, label: 'Transferências', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+                      _BrowserSheetListItem(icon: Symbols.search_rounded, label: 'Pesquisar na página', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
+                      _BrowserSheetListItem(icon: Symbols.bookmark_add_rounded, label: 'Adicionar marcador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+                      Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
+                      _BrowserSheetListItem(icon: Symbols.refresh_rounded, label: 'Atualizar página', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
+                      _BrowserSheetListItem(icon: Symbols.content_copy_rounded, label: 'Copiar endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
+                      _BrowserSheetListItem(icon: Icons.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+                      _BrowserSheetListItem(icon: Symbols.home_rounded, label: 'Página inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -454,60 +547,94 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               onPressed: () => ShellTabRequest.instance.request(0),
             ),
             titleSpacing: 0,
-            title: InkWell(
-              borderRadius: BorderRadius.circular(22),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SearchScreen()),
-                );
-              },
-              child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: pillColor(context),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Symbols.search_rounded, color: muted, size: 19),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: Text(
-                        _currentTitle.isNotEmpty
-                            ? _currentTitle
-                            : fallbackTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: text,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+            title: _isFindInPage
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _findController,
+                          focusNode: _findFocusNode,
+                          autofocus: true,
+                          textInputAction: TextInputAction.search,
+                          onChanged: _onFindTextChanged,
+                          onSubmitted: (_) => _moveFindResult(true),
+                          style: TextStyle(color: text, fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Pesquisar na página',
+                            hintStyle: TextStyle(color: muted, fontSize: 14),
+                            border: InputBorder.none,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
                         ),
                       ),
+                      IconButton(
+                        tooltip: 'Resultado anterior',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _moveFindResult(false),
+                        icon: Icon(Symbols.keyboard_arrow_up_rounded, color: text),
+                      ),
+                      IconButton(
+                        tooltip: 'Próximo resultado',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _moveFindResult(true),
+                        icon: Icon(Symbols.keyboard_arrow_down_rounded, color: text),
+                      ),
+                      IconButton(
+                        tooltip: 'Fechar pesquisa',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _exitFindInPage,
+                        icon: Icon(Symbols.close_rounded, color: text),
+                      ),
+                    ],
+                  )
+                : InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      );
+                    },
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: pillColor(context),
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Symbols.search_rounded, color: muted, size: 19),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+            actions: _isFindInPage
+                ? const []
+                : [
+                    AnimatedBuilder(
+                      animation: tabsController,
+                      builder: (context, _) => IconButton(
+                        tooltip: 'Abas',
+                        icon: _TabsCountIcon(count: tabsController.count, color: text),
+                        onPressed: _openTabsGrid,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Mais opções',
+                      icon: Icon(Symbols.more_vert_rounded, color: text),
+                      onPressed: _showBrowserOptionsSheet,
                     ),
                   ],
-                ),
-              ),
-            ),
-            actions: [
-              AnimatedBuilder(
-                animation: tabsController,
-                builder: (context, _) => IconButton(
-                  tooltip: 'Abas',
-                  icon: _TabsCountIcon(
-                    count: tabsController.count,
-                    color: text,
-                  ),
-                  onPressed: _openTabsGrid,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Mais opções',
-                icon: Icon(Symbols.more_vert_rounded, color: text),
-                onPressed: _showBrowserOptionsSheet,
-              ),
-            ],
           ),
           body: Column(
             children: [
@@ -818,36 +945,78 @@ enum _OrbitMenuAction {
   siteInfo,
   reload,
   openSearch,
+  findInPage,
+  newTab,
+  bookmarks,
+  settings,
   goHome,
   history,
   downloads,
   bookmark,
 }
 
-class _BrowserSheetAction extends StatelessWidget {
-  const _BrowserSheetAction({required this.icon, required this.label, required this.onTap});
+class _BrowserQuickAction extends StatelessWidget {
+  const _BrowserQuickAction({required this.icon, required this.label, required this.onTap, this.enabled = true});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = mainText(context);
+    final muted = mutedText(context);
+    return Expanded(
+      child: Opacity(
+        opacity: enabled ? 1 : .38,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: pillColor(context),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 23, color: enabled ? foreground : muted),
+              ),
+              const SizedBox(height: 8),
+              Text(label, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: enabled ? foreground : muted, fontSize: 10.5, height: 1.2, fontWeight: FontWeight.w500)),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrowserSheetListItem extends StatelessWidget {
+  const _BrowserSheetListItem({required this.icon, required this.label, required this.onTap});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final text = mainText(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
-      child: Material(
-        color: settingsCardColor(context),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
+        child: SizedBox(
+          height: 58,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              Container(width: 34, height: 34, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(icon, color: accentColor(context), size: 18)),
-              const SizedBox(width: 11),
-              Expanded(child: Text(label, style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600))),
-              Icon(Symbols.chevron_right_rounded, size: 18, color: mutedText(context)),
+              SizedBox(width: 42, child: Icon(icon, size: 23, color: mainText(context))),
+              const SizedBox(width: 12),
+              Expanded(child: Text(label, style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w500))),
             ]),
           ),
         ),

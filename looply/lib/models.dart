@@ -638,10 +638,16 @@ class TabsController extends ChangeNotifier {
 
   void reorderById(String movingId, String targetId) {
     final from = _tabs.indexWhere((tab) => tab.id == movingId);
-    final to = _tabs.indexWhere((tab) => tab.id == targetId);
-    if (from < 0 || to < 0 || from == to) return;
+    final target = _tabs.indexWhere((tab) => tab.id == targetId);
+    if (from < 0 || target < 0 || from == target) return;
+
     final moving = _tabs.removeAt(from);
-    _tabs.insert(to, moving);
+    // Depois da remoção, o índice do alvo desloca-se quando o cartão veio
+    // de uma posição anterior. Inserir imediatamente antes do alvo deixa
+    // os restantes cartões preencherem o espaço com AnimatedPositioned.
+    final destination = from < target ? target - 1 : target;
+    final safeDestination = destination.clamp(0, _tabs.length).toInt();
+    _tabs.insert(safeDestination, moving);
     notifyListeners();
     _schedulePersist();
   }

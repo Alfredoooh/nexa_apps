@@ -176,9 +176,7 @@ class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
       borderRadius: BorderRadius.circular(28),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const MyAppsScreen()),
-        ),
+        onTap: () => openMyAppsAndGames(context),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
@@ -186,7 +184,7 @@ class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
             children: [
               Icon(Symbols.apps_rounded, color: text, size: 18),
               const SizedBox(width: 8),
-              Text('My Apps', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+              Text('My Apps & Games', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
           ),
         ),

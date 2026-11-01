@@ -10,6 +10,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'models.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
+import 'screens/discover_screen.dart';
 import 'screens/games_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
@@ -113,10 +114,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  final List<String> _screenKeys = const ['home_screen', 'games_screen', 'activity_screen'];
-  final List<String> _screenLabels = const ['Início', 'Jogos', 'Atividade'];
-  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
+  final List<String> _screenKeys = const ['home_screen', 'discover_screen', 'games_screen', 'activity_screen'];
+  final List<String> _screenLabels = const ['Início', 'Descobrir', 'Jogos', 'Atividade'];
+  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.sports_esports_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
+  late final AnimationController _browserSlideController;
+  late final Animation<Offset> _browserSlidePosition;
   OverlayEntry? _morphEntry;
   ImageProvider? _morphImage;
   Rect? _morphFrom;
@@ -133,6 +136,19 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
+    _browserSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      reverseDuration: const Duration(milliseconds: 280),
+    )..value = 1;
+    _browserSlidePosition = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _browserSlideController,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    ));
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRestoreSession());
   }
 
@@ -143,6 +159,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     ShellTabRequest.instance.removeListener(_handleShellTabRequest);
     _removeSnapshotOverlay();
     _morphController.dispose();
+    _browserSlideController.dispose();
     super.dispose();
   }
 
@@ -228,10 +245,44 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
   void _activateBrowserTab(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
+    // A abertura pela grelha usa exclusivamente o Container Transform.
+    // Repor a posição final do slide normal impede que a WebView fique
+    // deslocada para fora do ecrã depois de uma navegação Home -> Browser.
+    _browserSlideController.stop();
+    _browserSlideController.value = 1;
     tabsController.activate(tab.id);
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
+    });
+  }
+
+  // Transição vertical usada apenas na navegação normal entre Home e Browser.
+  // O Container Transform dos separadores continua a usar o seu overlay/captura
+  // original, sem passar por este controlador.
+  void _activateBrowserTabWithSlide(BrowserTab tab) {
+    _ensureBrowserTabMounted(tab);
+    _browserSlideController.stop();
+    _browserSlideController.value = 0;
+    tabsController.activate(tab.id);
+    setState(() {
+      _activeBrowserTabId = tab.id;
+      _showingTabsGrid = false;
+    });
+    unawaited(_browserSlideController.forward());
+  }
+
+  Future<void> _navigateToShellScreen(int index) async {
+    if (_activeBrowserTabId != null && !_showingTabsGrid) {
+      _browserSlideController.stop();
+      try {
+        await _browserSlideController.reverse();
+      } catch (_) {}
+      if (!mounted) return;
+    }
+    setState(() {
+      _activeBrowserTabId = null;
+      _selectedTab = index.clamp(0, _screenKeys.length - 1).toInt();
     });
   }
 
@@ -261,7 +312,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       request.orbitBrowserRequested = false;
       final tab = tabsController.getOrbitBrowserTab() ??
           tabsController.upsertOrbitBrowserTab(null);
-      _activateBrowserTab(tab);
+      _activateBrowserTabWithSlide(tab);
       return;
     }
 
@@ -269,7 +320,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     request.browserTabRequested = null;
     if (requestedBrowserId != null) {
       final tab = tabsController.getTab(requestedBrowserId);
-      if (tab != null) _activateBrowserTab(tab);
+      if (tab != null) _activateBrowserTabWithSlide(tab);
       return;
     }
 
@@ -286,10 +337,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final requested = request.requestedIndex;
     request.requestedIndex = null;
     if (requested == null) return;
-    setState(() {
-      _activeBrowserTabId = null;
-      _selectedTab = requested.clamp(0, 2).toInt();
-    });
+    unawaited(_navigateToShellScreen(requested));
   }
 
   Rect? _rectInOverlay(GlobalKey key) {
@@ -605,6 +653,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     if (targetTab != null && targetTab.kind != TabKind.appScreen) {
       _ensureBrowserTabMounted(targetTab);
+      // Ao regressar da grelha, o movimento é feito pelo Container Transform.
+      // O slide de navegação normal deve começar já na posição final.
+      _browserSlideController.stop();
+      _browserSlideController.value = 1;
       tabsController.activate(targetTab.id);
 
       // A captura é colocada por cima da grelha antes de trocar o IndexedStack.
@@ -733,11 +785,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       (tab) => tab.id == _activeBrowserTabId,
     );
     final stackIndex = activeBrowserIndex >= 0
-        ? 3 + activeBrowserIndex
+        ? 4 + activeBrowserIndex
         : _selectedTab;
 
     final pages = <Widget>[
       HomeScreen(onOpenDrawer: _openShellDrawer),
+      const DiscoverScreen(),
       const GamesScreen(),
       const ActivityScreen(),
       for (final tab in browserTabs)
@@ -768,18 +821,34 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
             Positioned.fill(
               child: Offstage(
                 offstage: _showingTabsGrid,
-                child: SafeArea(
-                  bottom: false,
-                  child: SizedBox.expand(
-                    child: RepaintBoundary(
-                      key: _repaintKey,
-                      child: IndexedStack(
-                        index: stackIndex,
-                        children: pages,
+                child: _activeBrowserTabId != null
+                    ? SlideTransition(
+                        position: _browserSlidePosition,
+                        child: SafeArea(
+                          bottom: false,
+                          child: SizedBox.expand(
+                            child: RepaintBoundary(
+                              key: _repaintKey,
+                              child: IndexedStack(
+                                index: stackIndex,
+                                children: pages,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : SafeArea(
+                        bottom: false,
+                        child: SizedBox.expand(
+                          child: RepaintBoundary(
+                            key: _repaintKey,
+                            child: IndexedStack(
+                              index: stackIndex,
+                              children: pages,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
             if (_showingTabsGrid)
@@ -823,19 +892,19 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: NavigationBar(
-            selectedIndex: _selectedTab < 2 ? _selectedTab : _selectedTab + 1,
+            // A Home continua como página inicial acessível pelo botão Home do
+            // Browser e pela grelha; o primeiro destino da barra é Descobrir.
+            selectedIndex: switch (_selectedTab) { 2 => 1, 3 => 3, _ => 0 },
             onDestinationSelected: (index) {
               if (index == 2) {
                 _openTabsGrid();
                 return;
               }
-              setState(() {
-                _activeBrowserTabId = null;
-                _selectedTab = index < 2 ? index : index - 1;
-              });
+              final pageIndex = switch (index) { 0 => 1, 1 => 2, _ => 3 };
+              unawaited(_navigateToShellScreen(pageIndex));
             },
             destinations: [
-              const NavigationDestination(icon: Icon(Symbols.home_rounded), selectedIcon: Icon(Symbols.home_rounded, fill: 1), label: 'Início'),
+              const NavigationDestination(icon: Icon(Symbols.explore_rounded), selectedIcon: Icon(Symbols.explore_rounded, fill: 1), label: 'Descobrir'),
               const NavigationDestination(icon: Icon(Symbols.sports_esports_rounded), selectedIcon: Icon(Symbols.sports_esports_rounded, fill: 1), label: 'Jogos'),
               NavigationDestination(icon: _TabsCountIcon(count: tabsController.count, color: text), selectedIcon: _TabsCountIcon(count: tabsController.count, color: text), label: 'Abas'),
               const NavigationDestination(icon: Icon(Symbols.history_rounded), selectedIcon: Icon(Symbols.history_rounded, fill: 1), label: 'Atividade'),

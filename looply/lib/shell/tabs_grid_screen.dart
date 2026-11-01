@@ -112,7 +112,6 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? looplySoftDark : looplySoftLight;
-    final panel = isDark ? looplyPanelDark : looplyPanelLight;
     final text = mainText(context);
     final muted = mutedText(context);
     final tabs = tabsController.tabs;
@@ -120,152 +119,176 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
     return Material(
       color: bg,
       child: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 5, 8, 8),
-              child: Row(
-                children: [
-                  // Arrow simples: sem círculo, sem container e sem fundo.
-                  IconButton(
-                    tooltip: 'Voltar',
-                    visualDensity: VisualDensity.compact,
-                    style: IconButton.styleFrom(
-                      foregroundColor: text,
-                      fixedSize: const Size(36, 36),
-                      shape: const CircleBorder(),
-                    ),
-                    icon: const Icon(Symbols.arrow_back_rounded, size: 25),
-                    onPressed: widget.onClose,
-                  ),
-                  const SizedBox(width: 5),
-                  // Cápsula compacta (Home + ícone de separador com contador).
-                  Material(
-                    color: pillColor(context),
-                    borderRadius: BorderRadius.circular(24),
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 34,
-                            height: 34,
-                            child: IconButton(
-                              tooltip: 'Página inicial',
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
-                              style: IconButton.styleFrom(
-                                foregroundColor: text,
-                                shape: const CircleBorder(),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+                  child: Row(
+                    children: [
+                      // Voltar e Home partilham uma única cápsula contínua.
+                      Material(
+                        color: pillColor(context),
+                        borderRadius: BorderRadius.circular(99),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: IconButton(
+                                tooltip: 'Voltar',
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(Symbols.arrow_back_rounded, size: 22, color: text),
+                                onPressed: widget.onClose,
                               ),
-                              icon: const Icon(Symbols.home_rounded, size: 20),
-                              onPressed: widget.onHome,
                             ),
-                          ),
-                          const SizedBox(width: 2),
-                          Container(
-                            width: 39,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: panel,
-                              borderRadius: BorderRadius.circular(20),
+                            SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: IconButton(
+                                tooltip: 'Página inicial',
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(Symbols.home_rounded, size: 20, color: text),
+                                onPressed: widget.onHome,
+                              ),
                             ),
-                            child: Center(child: _TabsCountBadge(count: tabs.length, color: text)),
-                          ),
-                        ],
+                          ]),
+                        ),
                       ),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_selectionMode) ...[
-                    IconButton(
-                      tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: _selectedIds.isEmpty ? null : _removeSelected,
-                      icon: Icon(Symbols.delete_outline_rounded, color: _selectedIds.isEmpty ? muted : text),
-                    ),
-                    IconButton(
-                      tooltip: 'Concluir seleção',
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(Symbols.check_rounded, color: text),
-                      onPressed: _toggleSelectionMode,
-                    ),
-                  ] else ...[
-                    IconButton(
-                      tooltip: 'Novo separador',
-                      visualDensity: VisualDensity.compact,
-                      style: IconButton.styleFrom(foregroundColor: text, fixedSize: const Size(38, 38)),
-                      icon: const Icon(Symbols.add_rounded, size: 25),
-                      onPressed: widget.onNewTab,
-                    ),
-                    PopupMenuButton<String>(
-                      tooltip: 'Mais opções',
-                      icon: Icon(Symbols.more_vert_rounded, color: text, size: 23),
-                      color: pillColor(context),
-                      surfaceTintColor: Colors.transparent,
-                      elevation: 9,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
-                      onSelected: _handleMenu,
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'incognito', child: _TabsMenuItem(icon: Symbols.visibility_off_rounded, label: 'Abrir separador anónimo')),
-                        PopupMenuItem(value: 'new', child: _TabsMenuItem(icon: Symbols.add_rounded, label: 'Abrir novo separador')),
-                        PopupMenuItem(value: 'select', child: _TabsMenuItem(icon: Symbols.checklist_rounded, label: 'Selecionar separadores')),
-                        PopupMenuItem(value: 'close_all', child: _TabsMenuItem(icon: Symbols.delete_sweep_rounded, label: 'Eliminar todos os separadores')),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Expanded(
-              child: tabs.isEmpty
-                  ? Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Symbols.tab_rounded, size: 44, color: muted),
-                        const SizedBox(height: 10),
-                        Text('Nenhum separador aberto', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                      ]),
-                    )
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final columns = constraints.maxWidth >= 700 ? 3 : 2;
-                        const horizontalPadding = 14.0;
-                        const gap = 12.0;
-                        const verticalPadding = 12.0;
-                        final availableWidth = constraints.maxWidth - horizontalPadding * 2;
-                        final cardWidth = (availableWidth - gap * (columns - 1)) / columns;
-                        final cardHeight = cardWidth / .77;
-                        final rows = (tabs.length / columns).ceil();
-                        final contentHeight = verticalPadding * 2 + rows * cardHeight + (rows - 1) * gap;
-
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.only(bottom: 22),
-                          child: SizedBox(
-                            height: contentHeight,
-                            width: constraints.maxWidth,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                for (var index = 0; index < tabs.length; index++)
-                                  _positionedTab(
-                                    context: context,
-                                    tab: tabs[index],
-                                    index: index,
-                                    columns: columns,
-                                    cardWidth: cardWidth,
-                                    cardHeight: cardHeight,
-                                    gap: gap,
-                                    horizontalPadding: horizontalPadding,
-                                    verticalPadding: verticalPadding,
-                                    selected: _selectedIds.contains(tabs[index].id),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Center(
+                          child: Material(
+                            color: pillColor(context),
+                            borderRadius: BorderRadius.circular(99),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                SizedBox(
+                                  width: 38,
+                                  height: 34,
+                                  child: IconButton(
+                                    tooltip: 'Novo separador privado',
+                                    padding: EdgeInsets.zero,
+                                    visualDensity: VisualDensity.compact,
+                                    icon: Icon(Symbols.visibility_off_rounded, color: text, size: 20),
+                                    onPressed: widget.onNewIncognitoTab,
                                   ),
-                              ],
+                                ),
+                                Container(
+                                  width: 38,
+                                  height: 34,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isDark ? looplyPanel2Dark : Colors.white,
+                                    borderRadius: BorderRadius.circular(99),
+                                  ),
+                                  child: _TabsCountBadge(count: tabs.length, color: text),
+                                ),
+                              ]),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      ),
+                      if (_selectionMode) ...[
+                        IconButton(
+                          tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _selectedIds.isEmpty ? null : _removeSelected,
+                          icon: Icon(Symbols.delete_outline_rounded, color: _selectedIds.isEmpty ? muted : text),
+                        ),
+                        IconButton(
+                          tooltip: 'Concluir seleção',
+                          visualDensity: VisualDensity.compact,
+                          icon: Icon(Symbols.check_rounded, color: text),
+                          onPressed: _toggleSelectionMode,
+                        ),
+                      ] else
+                        PopupMenuButton<String>(
+                          tooltip: 'Mais opções',
+                          icon: Icon(Symbols.more_vert_rounded, color: text, size: 23),
+                          color: pillColor(context),
+                          surfaceTintColor: Colors.transparent,
+                          elevation: 9,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+                          onSelected: _handleMenu,
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'incognito', child: _TabsMenuItem(icon: Symbols.visibility_off_rounded, label: 'Abrir separador anónimo')),
+                            PopupMenuItem(value: 'new', child: _TabsMenuItem(icon: Symbols.add_rounded, label: 'Abrir novo separador')),
+                            PopupMenuItem(value: 'select', child: _TabsMenuItem(icon: Symbols.checklist_rounded, label: 'Selecionar separadores')),
+                            PopupMenuItem(value: 'close_all', child: _TabsMenuItem(icon: Symbols.delete_sweep_rounded, label: 'Eliminar todos os separadores')),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: tabs.isEmpty
+                      ? Center(
+                          child: Column(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Symbols.tab_rounded, size: 44, color: muted),
+                            const SizedBox(height: 10),
+                            Text('Nenhum separador aberto', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                          ]),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.maxWidth >= 700 ? 3 : 2;
+                            const horizontalPadding = 14.0;
+                            const gap = 12.0;
+                            const verticalPadding = 12.0;
+                            final availableWidth = constraints.maxWidth - horizontalPadding * 2;
+                            final cardWidth = (availableWidth - gap * (columns - 1)) / columns;
+                            final cardHeight = cardWidth / .77;
+                            final rows = (tabs.length / columns).ceil();
+                            final contentHeight = verticalPadding * 2 + rows * cardHeight + (rows - 1) * gap;
+
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.only(bottom: 100),
+                              child: SizedBox(
+                                height: contentHeight,
+                                width: constraints.maxWidth,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    for (var index = 0; index < tabs.length; index++)
+                                      _positionedTab(
+                                        context: context,
+                                        tab: tabs[index],
+                                        index: index,
+                                        columns: columns,
+                                        cardWidth: cardWidth,
+                                        cardHeight: cardHeight,
+                                        gap: gap,
+                                        horizontalPadding: horizontalPadding,
+                                        verticalPadding: verticalPadding,
+                                        selected: _selectedIds.contains(tabs[index].id),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+            Positioned(
+              right: 18,
+              bottom: 18,
+              child: FloatingActionButton(
+                heroTag: 'looply-tabs-new-tab-fab',
+                tooltip: 'Novo separador',
+                backgroundColor: accentColor(context),
+                foregroundColor: Colors.white,
+                elevation: 4,
+                onPressed: widget.onNewTab,
+                child: const Icon(Symbols.add_rounded, size: 27),
+              ),
             ),
           ],
         ),
@@ -375,8 +398,8 @@ class _PressScaleState extends State<_PressScale> {
     onPointerCancel: (_) => _end(),
     child: AnimatedScale(
       scale: _pressed ? .94 : 1,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutBack,
       child: widget.child,
     ),
   );
