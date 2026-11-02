@@ -15,7 +15,8 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _emailMode = false;
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
   bool _busy = false;
   bool _obscurePassword = true;
 
@@ -23,6 +24,8 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -35,7 +38,11 @@ class _AuthScreenState extends State<AuthScreen> {
     } on PlatformException catch (error) {
       if (mounted) _showMessage(_googleErrorMessage(error));
     } catch (_) {
-      if (mounted) _showMessage('Não foi possível iniciar o Google Sign-In. Confirma a configuração OAuth do Android.');
+      if (mounted) {
+        _showMessage(
+          'Não foi possível iniciar o Google Sign-In. Confirma a configuração OAuth do Android.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -52,19 +59,66 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _emailSignIn() async {
     setState(() => _busy = true);
     try {
-      await authController.signInWithEmail(_emailController.text, _passwordController.text);
-      if (mounted && authController.value != null) Navigator.of(context).pop();
+      await authController.signInWithEmail(
+        _emailController.text,
+        _passwordController.text,
+      );
+      if (mounted && authController.value != null) {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
-      if (mounted) _showMessage(error is StateError
-          ? 'Login por email indisponível: é necessário configurar um backend de autenticação (por exemplo, Firebase Auth).'
-          : error.toString().replaceFirst('Invalid argument(s): ', ''));
+      if (!mounted) return;
+      _showMessage(
+        error is StateError
+            ? 'Login por email indisponível: é necessário configurar um backend de autenticação (por exemplo, Firebase Auth).'
+            : error.toString().replaceFirst('Invalid argument(s): ', ''),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  InputDecoration _inputDecoration(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
+    final muted = mutedText(context);
+    final accent = accentColor(context);
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: lineColor(context).withOpacity(.9)),
+    );
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, size: 20, color: muted),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: pillColor(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      border: border,
+      enabledBorder: border,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: accent, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+      ),
+      labelStyle: TextStyle(color: muted),
+    );
   }
 
   @override
@@ -72,110 +126,184 @@ class _AuthScreenState extends State<AuthScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     final accent = accentColor(context);
+
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        toolbarHeight: 64,
-        title: const Text('Log in / Sign in'),
+        toolbarHeight: 62,
+        automaticallyImplyLeading: false,
+        backgroundColor: pageBg(context),
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: 4,
+        leading: IconButton(
+          tooltip: 'Fechar',
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: Icon(Symbols.close_rounded, color: text, size: 23),
+        ),
+        title: Text(
+          'Log in / Sign in',
+          style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w700),
+        ),
       ),
       body: SafeArea(
+        top: false,
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 18, 24, 32),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 32),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(color: accent.withOpacity(.13), shape: BoxShape.circle),
-                    child: Icon(Symbols.person_rounded, size: 38, color: accent),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('Bem-vindo ao Looply', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Inicia sessão para manter os teus dados associados à tua conta.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: muted, fontSize: 14, height: 1.45),
-                  ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: _busy ? null : _googleSignIn,
-                      icon: const Icon(Icons.account_circle_outlined, size: 22),
-                      label: const Text('Continuar com Google'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: text,
-                        side: BorderSide(color: lineColor(context)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton.tonalIcon(
-                      onPressed: _busy ? null : () => setState(() => _emailMode = !_emailMode),
-                      icon: const Icon(Symbols.mail_rounded, size: 20),
-                      label: Text(_emailMode ? 'Ocultar login por email' : 'Continuar com email'),
-                      style: FilledButton.styleFrom(
-                        foregroundColor: text,
-                        backgroundColor: pillColor(context),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      ),
-                    ),
-                  ),
-                  if (_emailMode) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      style: TextStyle(color: text),
-                      decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Symbols.mail_outline_rounded)),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      autofillHints: const [AutofillHints.password],
-                      style: TextStyle(color: text),
-                      decoration: InputDecoration(
-                        labelText: 'Palavra-passe',
-                        prefixIcon: const Icon(Symbols.lock_rounded),
-                        suffixIcon: IconButton(
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          icon: Icon(_obscurePassword ? Symbols.visibility_rounded : Symbols.visibility_off_rounded),
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: AutofillGroup(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 82,
+                        height: 82,
+                        decoration: BoxDecoration(
+                          color: pillColor(context),
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(7),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/looply_icon.png',
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: FilledButton(
-                        onPressed: _busy ? null : _emailSignIn,
-                        child: const Text('Entrar'),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Bem-vindo ao Looply',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                  ],
-                  if (_busy) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Inicia sessão para manter os teus dados associados à tua conta.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: muted, fontSize: 13, height: 1.45),
+                    ),
+                    const SizedBox(height: 30),
+                    TextField(
+                      controller: _emailController,
+                      focusNode: _emailFocus,
+                      enabled: !_busy,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.username, AutofillHints.email],
+                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                      style: TextStyle(color: text, fontSize: 14),
+                      decoration: _inputDecoration(
+                        context,
+                        label: 'Email',
+                        icon: Symbols.mail_outline_rounded,
+                      ),
+                    ),
+                    const SizedBox(height: 13),
+                    TextField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      enabled: !_busy,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      onSubmitted: (_) {
+                        if (!_busy) _emailSignIn();
+                      },
+                      style: TextStyle(color: text, fontSize: 14),
+                      decoration: _inputDecoration(
+                        context,
+                        label: 'Palavra-passe',
+                        icon: Symbols.lock_rounded,
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword ? 'Mostrar palavra-passe' : 'Ocultar palavra-passe',
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Symbols.visibility_rounded
+                                : Symbols.visibility_off_rounded,
+                            size: 20,
+                            color: muted,
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 18),
-                    const CircularProgressIndicator(),
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _emailSignIn,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: accent.withOpacity(.45),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 21,
+                                height: 21,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Entrar',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: lineColor(context))),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 13),
+                          child: Text(
+                            'ou',
+                            style: TextStyle(color: muted, fontSize: 12),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: lineColor(context))),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: _busy ? null : _googleSignIn,
+                        icon: const Icon(Symbols.account_circle_rounded, size: 20),
+                        label: const Text('Continuar com Google'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: text,
+                          side: BorderSide(color: lineColor(context)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'A autenticação por email depende de um serviço de contas configurado. O Google abre o seletor nativo quando a configuração OAuth estiver concluída.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: muted.withOpacity(.9), fontSize: 11, height: 1.45),
+                    ),
                   ],
-                  const SizedBox(height: 20),
-                  Text(
-                    'A autenticação por email depende da ligação a um serviço de contas. O Google usa o seletor nativo do dispositivo quando a configuração OAuth estiver concluída.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: muted.withOpacity(.9), fontSize: 11, height: 1.4),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

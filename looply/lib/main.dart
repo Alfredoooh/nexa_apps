@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -121,7 +122,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   // Android ainda está a anexar a PlatformView (causa comum de pequenos saltos).
   final Map<String, Completer<void>> _browserPlatformReady = {};
   final GlobalKey _repaintKey = GlobalKey();
-  final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
   // As páginas principais são Início, Descobrir e Atividade.
@@ -130,6 +130,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
+  late final AnimationController _drawerController;
   late final Animation<Offset> _browserSlidePosition;
   OverlayEntry? _morphEntry;
   ImageProvider? _morphImage;
@@ -147,6 +148,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
+    _drawerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+      reverseDuration: const Duration(milliseconds: 460),
+    );
+    LooplyDrawerBridge.open = _openShellDrawer;
+    LooplyDrawerBridge.close = _closeShellDrawer;
     _browserSlideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 420),
@@ -171,6 +179,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _removeSnapshotOverlay();
     _morphController.dispose();
     _browserSlideController.dispose();
+    _drawerController.dispose();
+    LooplyDrawerBridge.open = null;
+    LooplyDrawerBridge.close = null;
     super.dispose();
   }
 
@@ -339,7 +350,51 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
   void _openShellDrawer() {
-    _shellScaffoldKey.currentState?.openDrawer();
+    if (!mounted || _drawerController.value >= 1) return;
+    unawaited(_drawerController.animateTo(
+      1,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+    ));
+  }
+
+  void _closeShellDrawer() {
+    if (!mounted || _drawerController.value <= 0) return;
+    unawaited(_drawerController.animateBack(
+      0,
+      duration: const Duration(milliseconds: 460),
+      curve: Curves.easeInCubic,
+    ));
+  }
+
+  void _onDrawerDragStart(DragStartDetails details) {
+    _drawerController.stop();
+  }
+
+  void _onDrawerDragUpdate(DragUpdateDetails details, double drawerWidth) {
+    if (drawerWidth <= 0) return;
+    _drawerController.value =
+        (_drawerController.value + details.delta.dx / drawerWidth)
+            .clamp(0.0, 1.0)
+            .toDouble();
+  }
+
+  void _onDrawerDragEnd(DragEndDetails details) {
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    if (velocity > 360) {
+      _openShellDrawer();
+    } else if (velocity < -360) {
+      _closeShellDrawer();
+    } else if (_drawerController.value >= .38) {
+      _openShellDrawer();
+    } else {
+      _closeShellDrawer();
+    }
+  }
+
+  double _drawerWidth(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    return math.min(320.0, math.min(screenWidth * .82, screenWidth - 24)).toDouble();
   }
 
   void _activateBrowserTab(BrowserTab tab) {
@@ -969,12 +1024,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
-        key: _shellScaffoldKey,
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
-        drawer: const LooplyDrawer(),
-        drawerEnableOpenDragGesture: true,
-        drawerEdgeDragWidth: 28,
         body: Stack(
           children: [
             // Página de trás: ao entrar no Orbit é empurrada para baixo e
@@ -1099,7 +1150,69 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       ),
     );
 
-    return shellPage;
+    final drawerWidth = _drawerWidth(context);
+    final drawerPanel = LooplyDrawer(
+      width: drawerWidth,
+      onClose: _closeShellDrawer,
+    );
+    return AnimatedBuilder(
+      animation: _drawerController,
+      child: shellPage,
+      builder: (context, child) {
+        final progress = _drawerController.value.clamp(0.0, 1.0).toDouble();
+        final isDrawerOpen = progress > .001;
+        return Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: drawerWidth,
+              child: drawerPanel,
+            ),
+            Positioned.fill(
+              child: Transform.translate(
+                offset: Offset(drawerWidth * progress, 0),
+                child: child!,
+              ),
+            ),
+            if (!isDrawerOpen)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 28,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragStart: _onDrawerDragStart,
+                  onHorizontalDragUpdate: (details) =>
+                      _onDrawerDragUpdate(details, drawerWidth),
+                  onHorizontalDragEnd: _onDrawerDragEnd,
+                ),
+              )
+            else
+              Positioned(
+                left: drawerWidth * progress,
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _closeShellDrawer,
+                  onHorizontalDragStart: _onDrawerDragStart,
+                  onHorizontalDragUpdate: (details) =>
+                      _onDrawerDragUpdate(details, drawerWidth),
+                  onHorizontalDragEnd: _onDrawerDragEnd,
+                  child: ColoredBox(
+                    color: Colors.black.withOpacity(.07 * progress),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -1145,7 +1258,9 @@ class _LooplyBottomBar extends StatelessWidget {
     final background = browserBottomBarColor(context);
     final foreground = mutedText(context);
     final selected = mainText(context);
-    final indicator = accentColor(context).withOpacity(.15);
+    final indicator = Theme.of(context).brightness == Brightness.dark
+        ? inputBarTone(context)
+        : accentColor(context).withOpacity(.15);
 
     return SafeArea(
       top: false,

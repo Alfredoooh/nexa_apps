@@ -11,19 +11,28 @@ import '../browser_library.dart';
 import '../theme.dart';
 import '../session_store.dart';
 
-// Abre o Drawer gerido pelo próprio Scaffold. Assim o Flutter controla
-// a animação Material, o gesto de arrastar da borda e o fecho por swipe.
+/// Ponte entre os botões da interface e o drawer push/drag do shell.
+/// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
+class LooplyDrawerBridge {
+  static VoidCallback? open;
+  static VoidCallback? close;
+}
+
 void showLooplyDrawer(BuildContext context) {
-  Scaffold.maybeOf(context)?.openDrawer();
+  LooplyDrawerBridge.open?.call();
 }
 
 class LooplyDrawer extends StatelessWidget {
-  const LooplyDrawer({super.key});
+  const LooplyDrawer({super.key, required this.onClose, this.width = 304});
+
+  final VoidCallback onClose;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     final drawerBackground = pageBg(context);
     return Drawer(
+      width: width,
       backgroundColor: drawerBackground,
       elevation: 16,
       clipBehavior: Clip.antiAlias,
@@ -50,8 +59,8 @@ class LooplyDrawer extends StatelessWidget {
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
                       onTap: () {
                         final navigator = Navigator.of(context);
-                        navigator.pop();
-                        Future<void>.delayed(const Duration(milliseconds: 260), () {
+                        onClose();
+                        Future<void>.delayed(const Duration(milliseconds: 470), () {
                           if (navigator.mounted) showThemeSheet(navigator.context);
                         });
                       },
@@ -119,9 +128,9 @@ class LooplyDrawer extends StatelessWidget {
     }
     if (!context.mounted || !navigator.mounted) return;
 
-    navigator.pop();
-    // Espera o Drawer terminar de fechar antes de apresentar a página.
-    await Future<void>.delayed(const Duration(milliseconds: 260));
+    onClose();
+    // Espera o movimento push terminar antes de apresentar a página.
+    await Future<void>.delayed(const Duration(milliseconds: 470));
     if (!navigator.mounted) return;
     await navigator.push<void>(CupertinoPageRoute<void>(builder: (_) => page));
     if (routeKey != null) {
@@ -287,7 +296,7 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
             Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
             Container(
               width: 32, height: 32, alignment: Alignment.center,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? looplyPanel2Dark : Colors.white),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? pillColor(context) : Colors.white),
               child: Icon(Symbols.person_rounded, size: 20, color: mutedText(context)),
             ),
           ]),
@@ -307,31 +316,49 @@ void showThemeSheet(BuildContext context) {
     useSafeArea: true,
     builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
-      builder: (context, mode, _) {
-        final surface = panelForMode(context, mode);
-        final text = textForMode(context, mode);
-        final accent = accentForMode(context, mode);
-        return Material(
-          color: surface,
-          surfaceTintColor: Colors.transparent,
-          clipBehavior: Clip.antiAlias,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const SizedBox(height: 12),
-                Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-                Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
-                RadioListTile<ThemeMode>(value: ThemeMode.light, groupValue: mode, activeColor: accent, title: Text('Claro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-                RadioListTile<ThemeMode>(value: ThemeMode.dark, groupValue: mode, activeColor: accent, title: Text('Escuro', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-                RadioListTile<ThemeMode>(value: ThemeMode.system, groupValue: mode, activeColor: accent, title: Text('Automático', style: TextStyle(color: text)), onChanged: (value) { if (value != null) themeController.setMode(value); }),
-              ]),
+      builder: (context, mode, _) => ValueListenableBuilder<bool>(
+        valueListenable: themeController.pureDark,
+        builder: (context, pureBlack, __) {
+          final surface = panelForMode(context, mode);
+          final text = textForMode(context, mode);
+          final accent = accentForMode(context, mode);
+          Widget option({required String label, required bool selected, required VoidCallback onTap}) =>
+              ListTile(
+                dense: true,
+                leading: Icon(
+                  selected ? Symbols.radio_button_checked_rounded : Symbols.radio_button_unchecked_rounded,
+                  color: selected ? accent : mutedForMode(context, mode),
+                ),
+                title: Text(label, style: TextStyle(color: text)),
+                onTap: onTap,
+              );
+
+          return Material(
+            color: surface,
+            surfaceTintColor: Colors.transparent,
+            clipBehavior: Clip.antiAlias,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const SizedBox(height: 12),
+                  Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+                  Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Tema', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+                  option(label: 'Claro', selected: mode == ThemeMode.light, onTap: () => themeController.setMode(ThemeMode.light)),
+                  if (mode == ThemeMode.dark) ...[
+                    option(label: 'Escuro', selected: !pureBlack, onTap: () => themeController.setMode(ThemeMode.dark)),
+                    option(label: 'Tema escuro profundo', selected: pureBlack, onTap: () => themeController.setPureDark(true)),
+                  ] else
+                    option(label: 'Escuro', selected: false, onTap: () => themeController.setMode(ThemeMode.dark)),
+                  option(label: 'Automático', selected: mode == ThemeMode.system, onTap: () => themeController.setMode(ThemeMode.system)),
+                ]),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     ),
   );
 }
