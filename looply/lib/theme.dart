@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // Paleta escura neutra (sem o azulado anterior) — cinzas verdadeiros,
 // não totalmente pretos, mantendo contraste confortável.
-const Color looplyPrimary = Color(0xFF1A73E8);
+const Color looplyPrimary = Color(0xFF811AE8);
 const Color looplyBgDark = Color(0xFF17181A);
 const Color looplyBgLight = Color(0xFFFFFFFF);
 const Color looplyPanelDark = Color(0xFF212325);
@@ -21,7 +21,12 @@ const Color looplyTextLight = Color(0xFF202124);
 const Color looplyMutedLight = Color(0xFF5F6368);
 const Color looplyLineDark = Color(0xFF34363A);
 const Color looplyLineLight = Color(0xFFE8EAED);
-const Color looplyBlueDark = Color(0xFF8AB4F8);
+const Color looplyPurpleDark = Color(0xFFC18AF8);
+const Color looplyBgAmoled = Color(0xFF000000);
+const Color looplyPanelAmoled = Color(0xFF101010);
+const Color looplyPanel2Amoled = Color(0xFF191919);
+const Color looplySoftAmoled = Color(0xFF050505);
+const Color looplyLineAmoled = Color(0xFF292929);
 
 // Cor do input bar (usada também nos cards de Settings e no bottom bar,
 // só no tema escuro) e a cor "cinza-branco" usada nesses mesmos lugares
@@ -30,28 +35,29 @@ const Color looplyInputBarDark = looplyPanel2Dark;
 const Color looplyInputBarLight = Color(0xFFF0F1F3);
 const Color looplySettingsCardLight = Color(0xFFF0F1F3);
 
-Color pageBg(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyBgDark : looplyBgLight;
-Color panelColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyPanelDark : looplyPanelLight;
-Color pillColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyPanel2Dark : looplyPanel2Light;
-Color softColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplySoftDark : looplySoftLight;
+bool isPureBlackTheme(BuildContext context) => Theme.of(context).brightness == Brightness.dark && Theme.of(context).scaffoldBackgroundColor == looplyBgAmoled;
+Color pageBg(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyBgAmoled : looplyBgDark) : looplyBgLight;
+Color panelColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanelAmoled : looplyPanelDark) : looplyPanelLight;
+Color pillColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanel2Amoled : looplyPanel2Dark) : looplyPanel2Light;
+Color softColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplySoftAmoled : looplySoftDark) : looplySoftLight;
 Color mainText(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyTextDark : looplyTextLight;
 Color mutedText(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyMutedDark : looplyMutedLight;
-Color accentColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyBlueDark : looplyPrimary;
-Color lineColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyLineDark : looplyLineLight;
+Color accentColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyPurpleDark : looplyPrimary;
+Color lineColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyLineAmoled : looplyLineDark) : looplyLineLight;
 
 // Tom do inputbar: usado nos cards de Settings e no bottom bar do browser,
 // SOMENTE no tema escuro. No tema claro, Settings usa cinza-branco e o
 // bottom bar mantém a cor de página normal (sem alteração).
 Color inputBarTone(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark ? looplyInputBarDark : looplyInputBarLight;
+    Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanel2Amoled : looplyInputBarDark) : looplyInputBarLight;
 
 Color settingsCardColor(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark ? looplyInputBarDark : looplySettingsCardLight;
+    Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanel2Amoled : looplyInputBarDark) : looplySettingsCardLight;
 
 // Tom do bottom bar do browser: no escuro, igual ao inputbar; no claro,
 // comportamento inalterado (cor de página).
 Color browserBottomBarColor(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark ? looplyInputBarDark : pageBg(context);
+    Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanel2Amoled : looplyInputBarDark) : pageBg(context);
 
 Brightness brightnessForMode(BuildContext context, ThemeMode mode) {
   if (mode == ThemeMode.dark) return Brightness.dark;
@@ -60,18 +66,20 @@ Brightness brightnessForMode(BuildContext context, ThemeMode mode) {
 }
 
 Color panelForMode(BuildContext context, ThemeMode mode) =>
-    brightnessForMode(context, mode) == Brightness.dark ? looplyPanelDark : looplyPanelLight;
+    brightnessForMode(context, mode) == Brightness.dark ? (themeController.pureDark.value ? looplyPanelAmoled : looplyPanelDark) : looplyPanelLight;
 Color textForMode(BuildContext context, ThemeMode mode) =>
     brightnessForMode(context, mode) == Brightness.dark ? looplyTextDark : looplyTextLight;
 Color mutedForMode(BuildContext context, ThemeMode mode) =>
     brightnessForMode(context, mode) == Brightness.dark ? looplyMutedDark : looplyMutedLight;
 Color accentForMode(BuildContext context, ThemeMode mode) =>
-    brightnessForMode(context, mode) == Brightness.dark ? looplyBlueDark : looplyPrimary;
+    brightnessForMode(context, mode) == Brightness.dark ? looplyPurpleDark : looplyPrimary;
 Color pillForMode(BuildContext context, ThemeMode mode) =>
-    brightnessForMode(context, mode) == Brightness.dark ? looplyPanel2Dark : looplyPanel2Light;
+    brightnessForMode(context, mode) == Brightness.dark ? (themeController.pureDark.value ? looplyPanel2Amoled : looplyPanel2Dark) : looplyPanel2Light;
 
 class ThemeController extends ValueNotifier<ThemeMode> {
   ThemeController() : super(ThemeMode.system);
+
+  final ValueNotifier<bool> pureDark = ValueNotifier<bool>(false);
 
   Future<void> restore() async {
     try {
@@ -82,12 +90,22 @@ class ThemeController extends ValueNotifier<ThemeMode> {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       };
+      pureDark.value = value == ThemeMode.dark && (prefs.getBool('looply_theme_pure_dark') ?? false);
     } catch (_) {}
   }
 
   void setMode(ThemeMode mode) {
     value = mode;
+    // Selecionar "Escuro" volta sempre ao tema escuro normal; o preto puro
+    // só fica ativo quando o utilizador escolhe explicitamente a opção AMOLED.
+    pureDark.value = false;
     unawaited(_persist(mode));
+  }
+
+  void setPureDark(bool enabled) {
+    pureDark.value = enabled;
+    value = ThemeMode.dark;
+    unawaited(_persist(ThemeMode.dark));
   }
 
   Future<void> _persist(ThemeMode mode) async {
@@ -98,6 +116,7 @@ class ThemeController extends ValueNotifier<ThemeMode> {
         ThemeMode.dark => 'dark',
         _ => 'system',
       });
+      await prefs.setBool('looply_theme_pure_dark', pureDark.value);
     } catch (_) {}
   }
 }
@@ -105,14 +124,14 @@ class ThemeController extends ValueNotifier<ThemeMode> {
 
 final ThemeController themeController = ThemeController();
 
-ThemeData buildLooplyTheme(Brightness brightness) {
+ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
   final isDark = brightness == Brightness.dark;
-  final bg = isDark ? looplyBgDark : looplyBgLight;
-  final panel = isDark ? looplyPanelDark : looplyPanelLight;
-  final pill = isDark ? looplyPanel2Dark : looplyPanel2Light;
+  final bg = isDark ? (pureBlack ? looplyBgAmoled : looplyBgDark) : looplyBgLight;
+  final panel = isDark ? (pureBlack ? looplyPanelAmoled : looplyPanelDark) : looplyPanelLight;
+  final pill = isDark ? (pureBlack ? looplyPanel2Amoled : looplyPanel2Dark) : looplyPanel2Light;
   final text = isDark ? looplyTextDark : looplyTextLight;
   final muted = isDark ? looplyMutedDark : looplyMutedLight;
-  final accent = isDark ? looplyBlueDark : looplyPrimary;
+  final accent = isDark ? looplyPurpleDark : looplyPrimary;
   final scheme = ColorScheme.fromSeed(seedColor: looplyPrimary, brightness: brightness, surface: panel).copyWith(primary: accent);
 
   return ThemeData(
@@ -124,7 +143,7 @@ ThemeData buildLooplyTheme(Brightness brightness) {
     splashFactory: NoSplash.splashFactory,
     splashColor: Colors.transparent,
     highlightColor: Colors.transparent,
-    dividerColor: isDark ? looplyLineDark : looplyLineLight,
+    dividerColor: isDark ? (pureBlack ? looplyLineAmoled : looplyLineDark) : looplyLineLight,
     appBarTheme: AppBarTheme(
       backgroundColor: bg,
       foregroundColor: text,

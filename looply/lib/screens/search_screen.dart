@@ -9,6 +9,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../shell/browser_navigation.dart';
+import '../shell/shell_tab_request.dart';
+import '../widgets/looply_popup.dart';
+import '../widgets/search_engine_picker.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -30,7 +33,7 @@ class _SearchScreenState extends State<SearchScreen> {
     'image': 'Pesquisa por imagem',
     'private': 'Novo separador anónimo',
     'history': 'Histórico de pesquisas',
-    'settings': 'Definições de pesquisa',
+    'engine': 'Máquina de pesquisa',
   };
 
   @override
@@ -117,9 +120,90 @@ class _SearchScreenState extends State<SearchScreen> {
     final value = query.trim();
     if (value.isEmpty) return;
     FocusScope.of(context).unfocus();
-    final url = _looksLikeUrl(value) ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
+    final isUrl = _looksLikeUrl(value);
+    if (!isUrl) searchHistoryController.add(value);
+    final url = isUrl ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     unawaited(BrowserPreconnectHints.preconnect(url));
     openOrbitTab(context, url, title: value);
+  }
+
+  void _handleMenuSelection(String action) {
+    switch (action) {
+      case 'engine':
+        showSearchEnginePicker(context);
+        break;
+      case 'history':
+        _showSearchHistory();
+        break;
+      case 'private':
+        final tab = tabsController.createBrowserTab('https://www.google.com', isIncognito: true);
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        ShellTabRequest.instance.requestBrowser(tab.id);
+        break;
+      case 'voice':
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesquisa por voz ainda não está disponível.')));
+        break;
+      case 'image':
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesquisa por imagem ainda não está disponível.')));
+        break;
+    }
+  }
+
+  void _showSearchHistory() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      showDragHandle: false,
+      useSafeArea: true,
+      builder: (sheetContext) => Material(
+        color: panelColor(sheetContext),
+        surfaceTintColor: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        child: SafeArea(
+          child: AnimatedBuilder(
+            animation: searchHistoryController,
+            builder: (context, _) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedText(context).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                  child: Align(alignment: Alignment.centerLeft, child: Text('Pesquisas recentes', style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800))),
+                ),
+                if (searchHistoryController.queries.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+                    child: Text('Ainda não existem pesquisas guardadas.', style: TextStyle(color: mutedText(context))),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .55),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: searchHistoryController.queries.length,
+                      itemBuilder: (context, index) {
+                        final query = searchHistoryController.queries[index];
+                        return ListTile(
+                          leading: Icon(Symbols.history_rounded, color: mutedText(context)),
+                          title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context))),
+                          trailing: Icon(Symbols.north_west_rounded, size: 18, color: mutedText(context)),
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            _submitSearch(query);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _resolveSuggestionPhotos(List<String> suggestions) {
@@ -306,44 +390,70 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   if (_controller.text.isNotEmpty)
                     IconButton(tooltip: 'Limpar', icon: Icon(Symbols.close_rounded, color: muted), onPressed: () { _controller.clear(); _focusNode.requestFocus(); }),
-                  PopupMenuButton<String>(
+                  LooplyPopupMenuButton<String>(
                     tooltip: 'Mais opções de pesquisa',
-                    icon: Icon(Symbols.more_vert_rounded, color: text),
-                    color: settingsCardColor(context),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    onSelected: (_) {},
-                    itemBuilder: (context) => <PopupMenuEntry<String>>[
-                      _buildMenuItem('voice', Icons.mic_none_rounded),
-                      _buildMenuItem('image', Icons.image_search_rounded),
-                      _buildMenuItem('private', Icons.visibility_off_rounded),
-                      _buildMenuItem('history', Symbols.history_rounded),
-                      _buildMenuItem('settings', Symbols.tune_rounded),
+                    iconColor: text,
+                    actions: const <LooplyPopupAction<String>>[
+                      LooplyPopupAction(value: 'voice', label: 'Pesquisa por voz', icon: Icons.mic_none_rounded),
+                      LooplyPopupAction(value: 'image', label: 'Pesquisa por imagem', icon: Icons.image_search_rounded),
+                      LooplyPopupAction(value: 'private', label: 'Novo separador anónimo', icon: Icons.visibility_off_rounded),
+                      LooplyPopupAction(value: 'history', label: 'Histórico de pesquisas', icon: Symbols.history_rounded),
+                      LooplyPopupAction(value: 'engine', label: 'Máquina de pesquisa', icon: Symbols.travel_explore_rounded),
                     ],
+                    onSelected: _handleMenuSelection,
                   ),
                 ]),
               ),
             ),
             Divider(height: 1, color: lineColor(context)),
             Expanded(
-              child: _suggestions.isEmpty
-                  ? const SizedBox.shrink()
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _suggestions.length,
-                      itemBuilder: (context, index) {
-                        final suggestion = _suggestions[index];
-                        return ListTile(
-                          leading: _suggestionLeading(suggestion, muted),
-                          title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
-                          trailing: IconButton(
-                            tooltip: 'Preencher pesquisa',
-                            icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
-                            onPressed: () => _fillSuggestion(suggestion),
-                          ),
-                          onTap: () => _submitSearch(suggestion),
+              child: _controller.text.trim().isEmpty
+                  ? AnimatedBuilder(
+                      animation: searchHistoryController,
+                      builder: (context, _) {
+                        final queries = searchHistoryController.queries;
+                        if (queries.isEmpty) return const SizedBox.shrink();
+                        return ListView(
+                          padding: const EdgeInsets.only(top: 12, bottom: 20),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
+                              child: Text('Pesquisas recentes', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                            ),
+                            for (final query in queries)
+                              ListTile(
+                                leading: Icon(Symbols.history_rounded, color: muted, size: 20),
+                                title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
+                                trailing: IconButton(
+                                  tooltip: 'Preencher pesquisa',
+                                  icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
+                                  onPressed: () => _fillSuggestion(query),
+                                ),
+                                onTap: () => _submitSearch(query),
+                              ),
+                          ],
                         );
                       },
-                    ),
+                    )
+                  : _suggestions.isEmpty
+                      ? const SizedBox.shrink()
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: _suggestions.length,
+                          itemBuilder: (context, index) {
+                            final suggestion = _suggestions[index];
+                            return ListTile(
+                              leading: _suggestionLeading(suggestion, muted),
+                              title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
+                              trailing: IconButton(
+                                tooltip: 'Preencher pesquisa',
+                                icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
+                                onPressed: () => _fillSuggestion(suggestion),
+                              ),
+                              onTap: () => _submitSearch(suggestion),
+                            );
+                          },
+                        ),
             ),
           ]),
         ),
@@ -351,15 +461,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  PopupMenuItem<String> _buildMenuItem(String key, IconData icon) => PopupMenuItem<String>(
-        value: key,
-        height: 48,
-        child: Row(children: [
-          Icon(icon, size: 20, color: mutedText(context)),
-          const SizedBox(width: 12),
-          Text(_menuLabels[key]!, style: TextStyle(color: mainText(context), fontSize: 14)),
-        ]),
-      );
+
 }
 
 class _SuggestionImage extends StatelessWidget {

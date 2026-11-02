@@ -31,7 +31,7 @@ class SessionStore {
   /// Guarda a última área real em que o utilizador estava, sem assumir que
   /// a última página web visitada é sempre o destino correto ao reabrir.
   /// Exemplos: {type: shell, screenIndex: 1}, {type: browser, tabId: ...},
-  /// {type: tabs_grid, returnTo: ...}, {type: my_apps, returnTo: ...}.
+  /// {type: tabs_grid, returnTo: ...}, {type: drawer_page, page: ..., returnTo: ...}.
   Future<void> saveLastActivity(Map<String, dynamic> activity) {
     final snapshot = Map<String, dynamic>.from(activity);
     snapshot['savedAt'] = DateTime.now().toUtc().toIso8601String();

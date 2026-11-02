@@ -1,19 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
-/// Cache persistente de favicons. Guarda os bytes, não apenas o URL remoto,
-/// para que Histórico e Separadores continuem a mostrar o ícone offline.
+/// Cache persistente de favicons em ficheiros no armazenamento privado da app.
+/// Os bytes também permanecem em memória depois do restore para que a UI não
+/// faça leituras de disco nem pedidos de rede durante cada rebuild.
 class BrowserFaviconCache extends ChangeNotifier {
   BrowserFaviconCache._();
   static final BrowserFaviconCache instance = BrowserFaviconCache._();
 
-  static const _storageKey = 'looply_favicon_cache_v1';
+  static const _legacyStorageKey = 'looply_favicon_cache_v1';
   final Map<String, String> _iconsByHost = <String, String>{};
   final Set<String> _loadingHosts = <String>{};
+  Directory? _cacheDirectory;
 
   String? forUrl(String url) {
     final host = Uri.tryParse(url)?.host.toLowerCase();
@@ -21,19 +25,76 @@ class BrowserFaviconCache extends ChangeNotifier {
     return _iconsByHost[host];
   }
 
+  Map<String, String> exportCache() => Map<String, String>.unmodifiable(_iconsByHost);
+
+  Future<void> importCache(Map<dynamic, dynamic> entries) async {
+    for (final entry in entries.entries) {
+      if (entry.key is! String || entry.value is! String) continue;
+      final host = (entry.key as String).toLowerCase();
+      final encoded = entry.value as String;
+      if (!RegExp(r'^[a-z0-9.-]+$').hasMatch(host) || encoded.length > 90000) continue;
+      try {
+        final bytes = base64Decode(encoded);
+        if (bytes.isEmpty || bytes.length > 65000) continue;
+        await _writeIcon(host, bytes);
+        _iconsByHost[host] = encoded;
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  String _safeFilename(String host) =>
+      '${host.replaceAll(RegExp(r'[^a-z0-9.-]'), '_')}.img';
+
+  Future<Directory> _directory() async {
+    final existing = _cacheDirectory;
+    if (existing != null) return existing;
+    final support = await getApplicationSupportDirectory();
+    final directory = Directory('${support.path}${Platform.pathSeparator}favicon_cache');
+    if (!await directory.exists()) await directory.create(recursive: true);
+    _cacheDirectory = directory;
+    return directory;
+  }
+
   Future<void> restore() async {
+    _iconsByHost.clear();
     try {
+      final directory = await _directory();
+      if (await directory.exists()) {
+        await for (final entity in directory.list(followLinks: false)) {
+          if (entity is! File || !entity.path.endsWith('.img')) continue;
+          final filename = entity.uri.pathSegments.last;
+          final host = filename.substring(0, filename.length - 4).toLowerCase();
+          if (host.isEmpty) continue;
+          try {
+            final bytes = await entity.readAsBytes();
+            if (bytes.isNotEmpty && bytes.length <= 65000) {
+              _iconsByHost[host] = base64Encode(bytes);
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Migração única do cache antigo em SharedPreferences para ficheiros.
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
-      _iconsByHost
-        ..clear()
-        ..addEntries(decoded.entries.where((entry) =>
-            entry.key is String && entry.value is String &&
-            (entry.value as String).length <= 90000).map((entry) =>
-              MapEntry(entry.key as String, entry.value as String)));
+      final raw = prefs.getString(_legacyStorageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is! String || entry.value is! String) continue;
+            final host = (entry.key as String).toLowerCase();
+            final encoded = entry.value as String;
+            if (_iconsByHost.containsKey(host) || encoded.length > 90000) continue;
+            try {
+              final bytes = base64Decode(encoded);
+              if (bytes.isEmpty || bytes.length > 65000) continue;
+              _iconsByHost[host] = encoded;
+              await _writeIcon(host, bytes);
+            } catch (_) {}
+          }
+        }
+      }
       notifyListeners();
     } catch (_) {}
   }
@@ -57,24 +118,34 @@ class BrowserFaviconCache extends ChangeNotifier {
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty &&
           response.bodyBytes.length <= 65000 &&
           (contentType.contains('image') || response.bodyBytes.length > 100)) {
-        _iconsByHost[host] = base64Encode(response.bodyBytes);
+        final bytes = response.bodyBytes;
+        await _writeIcon(host, bytes);
+        _iconsByHost[host] = base64Encode(bytes);
         while (_iconsByHost.length > 260) {
-          _iconsByHost.remove(_iconsByHost.keys.first);
+          final oldestHost = _iconsByHost.keys.first;
+          _iconsByHost.remove(oldestHost);
+          await _deleteIcon(oldestHost);
         }
         notifyListeners();
-        await _persist();
       }
     } catch (_) {
-      // O histórico mantém um ícone neutro se o servidor de favicon falhar.
+      // O histórico mantém um ícone neutro se o servidor ou o disco falhar.
     } finally {
       _loadingHosts.remove(host);
     }
   }
 
-  Future<void> _persist() async {
+  Future<void> _writeIcon(String host, List<int> bytes) async {
+    final directory = await _directory();
+    final file = File('${directory.path}${Platform.pathSeparator}${_safeFilename(host)}');
+    await file.writeAsBytes(bytes, flush: true);
+  }
+
+  Future<void> _deleteIcon(String host) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_storageKey, jsonEncode(_iconsByHost));
+      final directory = await _directory();
+      final file = File('${directory.path}${Platform.pathSeparator}${_safeFilename(host)}');
+      if (await file.exists()) await file.delete();
     } catch (_) {}
   }
 }
@@ -101,15 +172,16 @@ class BookmarksController extends ChangeNotifier {
   List<BookmarkEntry> get entries => List.unmodifiable(_entries);
 
   Future<void> restore() async {
+    _entries.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      _entries
-        ..clear()
-        ..addAll(decoded.whereType<Map>().map((item) {
+      final decoded = raw == null || raw.isEmpty ? const <dynamic>[] : jsonDecode(raw);
+      if (decoded is! List) {
+        notifyListeners();
+        return;
+      }
+      _entries.addAll(decoded.whereType<Map>().map((item) {
           final url = item['url'];
           if (url is! String || url.isEmpty) return null;
           final title = item['title'];
@@ -121,8 +193,8 @@ class BookmarksController extends ChangeNotifier {
             createdAt: created is String ? DateTime.tryParse(created) ?? DateTime.now() : DateTime.now(),
           );
         }).whereType<BookmarkEntry>());
-      notifyListeners();
     } catch (_) {}
+    notifyListeners();
   }
 
   bool contains(String url) => _entries.any((entry) => entry.url == url);
@@ -151,6 +223,8 @@ class BookmarksController extends ChangeNotifier {
     notifyListeners();
     unawaited(_persist());
   }
+
+  Future<void> flushPersistence() => _persist();
 
   Future<void> _persist() async {
     try {
@@ -192,15 +266,16 @@ class DownloadsController extends ChangeNotifier {
   List<DownloadEntry> get entries => List.unmodifiable(_entries);
 
   Future<void> restore() async {
+    _entries.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      _entries
-        ..clear()
-        ..addAll(decoded.whereType<Map>().map((item) {
+      final decoded = raw == null || raw.isEmpty ? const <dynamic>[] : jsonDecode(raw);
+      if (decoded is! List) {
+        notifyListeners();
+        return;
+      }
+      _entries.addAll(decoded.whereType<Map>().map((item) {
           final url = item['url'];
           if (url is! String || url.isEmpty) return null;
           return DownloadEntry(
@@ -211,8 +286,8 @@ class DownloadsController extends ChangeNotifier {
             createdAt: item['createdAt'] is String ? DateTime.tryParse(item['createdAt'] as String) ?? DateTime.now() : DateTime.now(),
           );
         }).whereType<DownloadEntry>());
-      notifyListeners();
     } catch (_) {}
+    notifyListeners();
   }
 
   void register({required String url, String? filename, String? mimeType}) {
@@ -241,6 +316,8 @@ class DownloadsController extends ChangeNotifier {
     notifyListeners();
     unawaited(_persist());
   }
+
+  Future<void> flushPersistence() => _persist();
 
   Future<void> _persist() async {
     try {

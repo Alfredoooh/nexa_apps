@@ -21,9 +21,8 @@ import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 
-/// Browser único do Looply. Cada separador mantém a sua própria instância
-/// deste widget e da InAppWebView dentro do IndexedStack. As páginas inativas
-/// ficam Offstage, sem remover o WebView nem reconstruir o documento.
+/// Browser do Looply. A instância é criada apenas para o separador ativo;
+/// os restantes guardam URL, estado e captura local sem WebViews em memória.
 class OrbitBrowserScreen extends StatefulWidget {
   const OrbitBrowserScreen({
     super.key,
@@ -116,7 +115,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     navigationAcceleratorEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
     BrowserPreconnectHints.detach(widget.tabId);
     // Este State só é descartado quando o separador é realmente fechado.
-    // Ao alternar entre abas, o IndexedStack mantém este widget montado.
+    // Este State é descartado quando a aba deixa de ser a ativa.
     super.dispose();
   }
 
@@ -411,7 +410,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
   void _showBrowserOptionsSheet() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? looplyPanelDark : looplyPanelLight;
+    final surface = panelColor(context);
     final text = mainText(context);
     final muted = mutedText(context);
 
@@ -566,9 +565,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         : 'Orbit Browser';
 
     return PopScope<void>(
-      // Apenas o separador visível intercepta o botão Voltar. As restantes
-      // OrbitBrowserScreens permanecem no IndexedStack, mas não podem
-      // interferir no gesto/ação de voltar enquanto estão Offstage.
+      // Esta tela só existe para a aba ativa; por isso apenas ela intercepta
+      // o botão Voltar e não há WebViews Offstage a interferir na navegação.
       canPop: !widget.isActive,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop || !widget.isActive) return;

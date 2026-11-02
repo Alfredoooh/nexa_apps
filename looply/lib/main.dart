@@ -8,11 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import 'models.dart';
+import 'auth_service.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/discover_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/my_apps_screen.dart';
 import 'screens/orbit_browser_screen.dart';
 import 'widgets/drawer_menu.dart';
 import 'session_store.dart';
@@ -29,6 +29,8 @@ Future<void> main() async {
   await themeController.restore();
   await tabsController.restore();
   await activityController.restore();
+  await searchHistoryController.restore();
+  await authController.restore();
   await customSitesController.restore();
   await activeSearchEngine.restore();
   await restoreRuntimeSettings();
@@ -48,14 +50,17 @@ class LooplyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
-      builder: (context, mode, _) => MaterialApp(
-        title: 'Looply',
-        debugShowCheckedModeBanner: false,
-        themeMode: mode,
-        themeAnimationDuration: Duration.zero,
-        theme: buildLooplyTheme(Brightness.light),
-        darkTheme: buildLooplyTheme(Brightness.dark),
-        home: const LooplyShell(),
+      builder: (context, mode, _) => ValueListenableBuilder<bool>(
+        valueListenable: themeController.pureDark,
+        builder: (context, pureBlack, __) => MaterialApp(
+          title: 'Looply',
+          debugShowCheckedModeBanner: false,
+          themeMode: mode,
+          themeAnimationDuration: Duration.zero,
+          theme: buildLooplyTheme(Brightness.light),
+          darkTheme: buildLooplyTheme(Brightness.dark, pureBlack: pureBlack),
+          home: const LooplyShell(),
+        ),
       ),
     );
   }
@@ -119,8 +124,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final GlobalKey<ScaffoldState> _shellScaffoldKey = GlobalKey<ScaffoldState>();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  // As páginas principais são Início, Descobrir e Atividade. Jogos não é
-  // uma aba principal: continua disponível exclusivamente em My Apps & Games.
+  // As páginas principais são Início, Descobrir e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'discover_screen', 'activity_screen'];
   final List<String> _screenLabels = const ['Início', 'Descobrir', 'Atividade'];
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.history_rounded];
@@ -176,7 +180,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Quando My Apps, Histórico, Downloads ou outra página está por cima,
+      // Quando Histórico, Downloads ou outra página está por cima,
       // não substitui a atividade dessa rota pela tela que ficou atrás.
       final shellRoute = ModalRoute.of(context);
       if (shellRoute == null || shellRoute.isCurrent) {
@@ -211,24 +215,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final type = saved['type']?.toString() ?? 'shell';
     final returnTo = _activityMap(saved['returnTo']);
 
-    if (type == 'my_apps' || type == 'drawer_page') {
+    if (type == 'drawer_page') {
       _restoreBaseActivity(returnTo);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        if (type == 'my_apps') {
-          unawaited(openMyAppsAndGames(
-            context,
-            persistActivity: false,
-            returnTo: returnTo,
-          ));
-        } else {
-          final pageKey = saved['page']?.toString() ?? '';
-          unawaited(restoreDrawerPageActivity(
-            context,
-            pageKey: pageKey,
-            returnTo: returnTo,
-          ));
-        }
+        final pageKey = saved['page']?.toString() ?? '';
+        unawaited(restoreDrawerPageActivity(
+          context,
+          pageKey: pageKey,
+          returnTo: returnTo,
+        ));
       });
       return;
     }
@@ -253,13 +249,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     String? restoredBrowserId;
     var restoredScreen = 0;
 
+    BrowserTab? restoreBrowserTab;
     if (type == 'browser') {
       final id = activity['tabId']?.toString();
       final tab = id == null ? null : tabsController.getTab(id);
       // As sessões privadas não são reabertas automaticamente.
       if (tab != null && !tab.isIncognito && tab.kind != TabKind.appScreen) {
-        _ensureBrowserTabMounted(tab);
-        tabsController.activate(tab.id);
+        restoreBrowserTab = tab;
         restoredBrowserId = tab.id;
       }
     } else if (type == 'shell') {
@@ -273,6 +269,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         _activeBrowserTabId = restoredBrowserId;
         _showingTabsGrid = false;
       });
+      if (restoreBrowserTab != null) {
+        _ensureBrowserTabMounted(restoreBrowserTab);
+        tabsController.activate(restoreBrowserTab.id);
+      }
     }
   }
 
@@ -303,18 +303,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         .map((tab) => tab.id)
         .toSet();
 
-    // Cada browser tab mantém o seu próprio OrbitBrowserScreen e a sua
-    // própria InAppWebView na árvore do IndexedStack. Apenas a aba ativa é
-    // pintada; as restantes ficam Offstage sem destruir o documento nativo.
-    for (final tab in tabsController.tabs) {
-      if (tab.kind != TabKind.appScreen) {
-        _ensureBrowserTabMounted(tab);
+    if (_activeBrowserTabId != null) {
+      final active = tabsController.getTab(_activeBrowserTabId!);
+      if (active != null && active.kind != TabKind.appScreen) {
+        _ensureBrowserTabMounted(active);
       }
     }
 
-    _browserViewportKeys.removeWhere((id, _) => !liveBrowserIds.contains(id));
-    _browserFirstLoads.removeWhere((id, _) => !liveBrowserIds.contains(id));
-    _browserPlatformReady.removeWhere((id, _) => !liveBrowserIds.contains(id));
+    // Mantém apenas os recursos de WebView da aba efetivamente ativa.
+    // Miniaturas e chaves dos cartões continuam independentes para a grelha.
+    _browserViewportKeys.removeWhere((id, _) =>
+        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
+    _browserFirstLoads.removeWhere((id, _) =>
+        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
+    _browserPlatformReady.removeWhere((id, _) =>
+        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
     _previewKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
     _cardKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
 
@@ -346,11 +349,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     // deslocada para fora do ecrã depois de uma navegação Home -> Browser.
     _browserSlideController.stop();
     _browserSlideController.value = 1;
-    tabsController.activate(tab.id);
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
     });
+    tabsController.activate(tab.id);
     _persistCurrentActivity();
   }
 
@@ -363,11 +366,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         _activeBrowserTabId != null && !_showingTabsGrid;
     _browserSlideController.stop();
     _browserSlideController.value = browserAlreadyVisible ? 1 : 0;
-    tabsController.activate(tab.id);
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
     });
+    tabsController.activate(tab.id);
     _persistCurrentActivity();
     if (!browserAlreadyVisible) {
       unawaited(_playBrowserEntranceWhenReady(tab.id));
@@ -678,8 +681,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
   // Todas as páginas Orbit usam o mesmo percurso de ida para a grelha.
-  // A WebView permanece montada no IndexedStack: apenas a camada visual é
-  // coberta pela captura durante o Container Transform.
+  // A captura cobre a viewport antes de a WebView ativa ser desmontada;
+  // na grelha ficam apenas as miniaturas persistidas de cada separador.
   Future<void> _closeBrowserToTabsGrid({
     required String tabId,
     required Uint8List? screenshot,
@@ -727,8 +730,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
-    // Não fazemos pop de rota nem recriamos o Orbit Browser. Todas as abas
-    // ficam vivas, tal como a Wikipédia ficava na implementação aprovada.
+    // A grelha passa a apresentar as miniaturas locais. A WebView ativa sai
+    // da árvore enquanto nenhum separador está em utilização direta.
     setState(() => _showingTabsGrid = true);
     await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
@@ -795,6 +798,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       // O slide de navegação normal deve começar já na posição final.
       _browserSlideController.stop();
       _browserSlideController.value = 1;
+      setState(() {
+        _activeBrowserTabId = targetTab.id;
+        _showingTabsGrid = false;
+      });
       tabsController.activate(targetTab.id);
       if (!targetTab.isIncognito) {
         unawaited(SessionStore.instance.saveLastActivity({
@@ -808,7 +815,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         }));
       }
 
-      // A captura é colocada por cima da grelha antes de trocar o IndexedStack.
+      // A captura é colocada por cima da grelha antes de montar a WebView.
       // Assim não há um frame intermédio em que a WebView recém-ativada apareça
       // sem a imagem do cartão, mantendo exatamente o Container Transform.
       if (imageProvider != null && sourceRect != null) {
@@ -818,11 +825,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           opening: false,
         );
       }
-
-      setState(() {
-        _activeBrowserTabId = targetTab.id;
-        _showingTabsGrid = false;
-      });
 
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
@@ -925,22 +927,19 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? looplyBgDark : looplyBgLight;
-    final text = mainText(context);
+    final bg = pageBg(context);
     final browserTabs = tabsController.tabs
         .where((tab) => tab.kind != TabKind.appScreen)
         .toList(growable: false);
-
-    // Garante que todas as abas tenham chaves estáveis antes de construir o
-    // IndexedStack. As páginas inativas continuam montadas, mas não recebem
-    // pintura nem gestos; ao regressar, a mesma WebView volta a ficar visível.
-    for (final tab in browserTabs) {
-      _ensureBrowserTabMounted(tab);
-    }
-
     final activeBrowserIndex = browserTabs.indexWhere(
       (tab) => tab.id == _activeBrowserTabId,
     );
+    final BrowserTab? activeBrowserTab = activeBrowserIndex < 0
+        ? null
+        : browserTabs[activeBrowserIndex];
+    if (activeBrowserTab != null && !_showingTabsGrid) {
+      _ensureBrowserTabMounted(activeBrowserTab);
+    }
 
     // A shell principal e os separadores do Orbit são duas camadas reais.
     // Isto permite que o browser suba por cima da página anterior enquanto
@@ -952,21 +951,18 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       const DiscoverScreen(),
       const ActivityScreen(),
     ];
-    final browserPages = <Widget>[
-      for (final tab in browserTabs)
-        OrbitBrowserScreen(
-          key: ValueKey<String>('orbit-${tab.id}'),
-          tabId: tab.id,
-          initialUrl: tab.url,
-          isActive: !_showingTabsGrid && tab.id == _activeBrowserTabId,
-          viewportKey: _browserViewportKeys[tab.id]!,
-          firstLoadCompleter: _browserFirstLoads[tab.id]!,
-          browserReadyCompleter: _browserPlatformReady[tab.id]!,
-          isIncognito: tab.isIncognito,
-        ),
-    ];
-
-    final browserLayerIndex = activeBrowserIndex >= 0 ? activeBrowserIndex : null;
+    final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
+        ? null
+        : OrbitBrowserScreen(
+            key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
+            tabId: activeBrowserTab.id,
+            initialUrl: activeBrowserTab.url,
+            isActive: true,
+            viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
+            firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
+            browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
+            isIncognito: activeBrowserTab.isIncognito,
+          );
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
@@ -1022,8 +1018,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 ),
               ),
             ),
-            // Página que entra: slide ascendente nativo do widget, mantendo
-            // todas as WebViews montadas no IndexedStack.
+            // Só a WebView da aba ativa existe na árvore. Ao abrir a grelha,
+            // ela é desmontada e a próxima só é criada quando for selecionada.
             Positioned.fill(
               child: Offstage(
                 offstage: _activeBrowserTabId == null || _showingTabsGrid,
@@ -1033,10 +1029,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                     child: SafeArea(
                       bottom: false,
                       child: SizedBox.expand(
-                        child: IndexedStack(
-                          index: browserLayerIndex,
-                          children: browserPages,
-                        ),
+                        child: activeBrowserPage ?? const SizedBox.expand(),
                       ),
                     ),
                   ),
@@ -1090,24 +1083,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         ),
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
-          child: NavigationBar(
-            // A navegação principal mantém Início; Descobrir substitui Jogos.
-            // Jogos permanece apenas dentro de My Apps & Games.
+          child: _LooplyBottomBar(
             selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
-            onDestinationSelected: (index) {
+            tabCount: tabsController.count,
+            onSelect: (index) {
               if (index == 2) {
                 _openTabsGrid();
-                return;
+              } else {
+                final pageIndex = switch (index) { 0 => 0, 1 => 1, _ => 2 };
+                unawaited(_navigateToShellScreen(pageIndex));
               }
-              final pageIndex = switch (index) { 0 => 0, 1 => 1, _ => 2 };
-              unawaited(_navigateToShellScreen(pageIndex));
             },
-            destinations: [
-              const NavigationDestination(icon: Icon(Symbols.home_rounded), selectedIcon: Icon(Symbols.home_rounded, fill: 1), label: 'Início'),
-              const NavigationDestination(icon: Icon(Symbols.explore_rounded), selectedIcon: Icon(Symbols.explore_rounded, fill: 1), label: 'Descobrir'),
-              NavigationDestination(icon: _TabsCountIcon(count: tabsController.count, color: text), selectedIcon: _TabsCountIcon(count: tabsController.count, color: text), label: 'Abas'),
-              const NavigationDestination(icon: Icon(Symbols.history_rounded), selectedIcon: Icon(Symbols.history_rounded, fill: 1), label: 'Atividade'),
-            ],
           ),
         ),
       ),
@@ -1141,4 +1127,123 @@ class _TabsCountIcon extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _LooplyBottomBar extends StatelessWidget {
+  const _LooplyBottomBar({
+    required this.selectedIndex,
+    required this.tabCount,
+    required this.onSelect,
+  });
+
+  final int selectedIndex;
+  final int tabCount;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = browserBottomBarColor(context);
+    final foreground = mutedText(context);
+    final selected = mainText(context);
+    final indicator = accentColor(context).withOpacity(.15);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 64,
+        color: background,
+        padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final slotWidth = constraints.maxWidth / 4;
+            final left = selectedIndex * slotWidth + 3;
+            return Stack(
+              children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeInOutCubic,
+                  left: left,
+                  top: 3,
+                  width: slotWidth - 6,
+                  height: 48,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: indicator,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    _BottomBarItem(
+                      icon: Symbols.home_rounded,
+                      selectedIcon: Symbols.home_rounded,
+                      tooltip: 'Início',
+                      selected: selectedIndex == 0,
+                      color: selectedIndex == 0 ? selected : foreground,
+                      onTap: () => onSelect(0),
+                    ),
+                    _BottomBarItem(
+                      icon: Symbols.explore_rounded,
+                      selectedIcon: Symbols.explore_rounded,
+                      tooltip: 'Descobrir',
+                      selected: selectedIndex == 1,
+                      color: selectedIndex == 1 ? selected : foreground,
+                      onTap: () => onSelect(1),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: IconButton(
+                          tooltip: 'Abas',
+                          onPressed: () => onSelect(2),
+                          icon: _TabsCountIcon(count: tabCount, color: foreground),
+                        ),
+                      ),
+                    ),
+                    _BottomBarItem(
+                      icon: Symbols.history_rounded,
+                      selectedIcon: Symbols.history_rounded,
+                      tooltip: 'Atividade',
+                      selected: selectedIndex == 3,
+                      color: selectedIndex == 3 ? selected : foreground,
+                      onTap: () => onSelect(3),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomBarItem extends StatelessWidget {
+  const _BottomBarItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.tooltip,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String tooltip;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Center(
+          child: IconButton(
+            tooltip: tooltip,
+            onPressed: onTap,
+            icon: Icon(selected ? selectedIcon : icon, color: color, size: 24, fill: selected ? 1 : 0),
+          ),
+        ),
+      );
 }

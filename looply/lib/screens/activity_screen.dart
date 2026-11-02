@@ -53,14 +53,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       appBar: AppBar(
         toolbarHeight: 64,
         title: const Text('Atividade'),
-        actions: [
-          if (entries.isNotEmpty)
-            IconButton(
-              tooltip: 'Limpar atividade',
-              icon: Icon(Symbols.delete_sweep_rounded, color: text),
-              onPressed: activityController.clear,
-            ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),

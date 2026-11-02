@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../browser_library.dart';
 import '../models.dart';
 import '../theme.dart';
+import '../widgets/looply_popup.dart';
 
 class TabsGridScreen extends StatefulWidget {
   const TabsGridScreen({
@@ -111,7 +112,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? looplySoftDark : looplySoftLight;
+    final bg = softColor(context);
     final text = mainText(context);
     final muted = mutedText(context);
     final tabs = tabsController.tabs;
@@ -180,20 +181,17 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           onPressed: _toggleSelectionMode,
                         ),
                       ] else
-                        PopupMenuButton<String>(
+                        LooplyPopupMenuButton<String>(
                           tooltip: 'Mais opções',
-                          icon: Icon(Symbols.more_vert_rounded, color: text, size: 23),
-                          color: pillColor(context),
-                          surfaceTintColor: Colors.transparent,
-                          elevation: 9,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
-                          onSelected: _handleMenu,
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'incognito', child: _TabsMenuItem(icon: Symbols.visibility_off_rounded, label: 'Abrir separador anónimo')),
-                            PopupMenuItem(value: 'new', child: _TabsMenuItem(icon: Symbols.add_rounded, label: 'Abrir novo separador')),
-                            PopupMenuItem(value: 'select', child: _TabsMenuItem(icon: Symbols.checklist_rounded, label: 'Selecionar separadores')),
-                            PopupMenuItem(value: 'close_all', child: _TabsMenuItem(icon: Symbols.delete_sweep_rounded, label: 'Eliminar todos os separadores')),
+                          iconColor: text,
+                          menuWidth: 286,
+                          actions: const <LooplyPopupAction<String>>[
+                            LooplyPopupAction(value: 'incognito', icon: Symbols.visibility_off_rounded, label: 'Abrir separador anónimo'),
+                            LooplyPopupAction(value: 'new', icon: Symbols.add_rounded, label: 'Abrir novo separador'),
+                            LooplyPopupAction(value: 'select', icon: Symbols.checklist_rounded, label: 'Selecionar separadores'),
+                            LooplyPopupAction(value: 'close_all', icon: Symbols.delete_sweep_rounded, label: 'Eliminar todos os separadores'),
                           ],
+                          onSelected: _handleMenu,
                         ),
                     ],
                     ),
@@ -405,19 +403,6 @@ class _TabsCountBadge extends StatelessWidget {
   );
 }
 
-class _TabsMenuItem extends StatelessWidget {
-  const _TabsMenuItem({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(children: [
-    Icon(icon, size: 19, color: mainText(context)),
-    const SizedBox(width: 12),
-    Text(label, style: TextStyle(color: mainText(context))),
-  ]);
-}
-
 class TabGridCard extends StatelessWidget {
   const TabGridCard({
     super.key,
@@ -441,8 +426,8 @@ class TabGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panel = isDark ? looplyPanelDark : looplyPanelLight;
-    final bg = isDark ? looplyBgDark : looplySoftLight;
+    final panel = panelColor(context);
+    final bg = softColor(context);
     final muted = mutedText(context);
     final text = mainText(context);
     final isApp = tab.kind == TabKind.appScreen;

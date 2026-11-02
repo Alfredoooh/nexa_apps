@@ -10,7 +10,8 @@ import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
 import 'search_screen.dart';
-import 'my_apps_screen.dart';
+import 'auth_screen.dart';
+import '../auth_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -19,7 +20,6 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = mainText(context);
     final muted = mutedText(context);
     // Mantém a estrutura de página original da Home (Scaffold + SafeArea).
     // O Drawer continua no Scaffold principal; o callback evita abrir um
@@ -32,40 +32,17 @@ class HomeScreen extends StatelessWidget {
           children: [
             LooplyBigSearchBox(onOpenDrawer: onOpenDrawer),
             const SizedBox(height: 25),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => Navigator.of(context).push<void>(
-                  CupertinoPageRoute<void>(builder: (_) => const AllSitesScreen()),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Sites populares',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: text,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Icon(
-                        Symbols.arrow_forward_rounded,
-                        color: muted,
-                        size: 17,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             const QuickSiteGridCard(),
             const SizedBox(height: 10),
-            _ViewMoreSitesButton(),
+            const _ViewMoreSitesButton(),
+            const SizedBox(height: 10),
+            ValueListenableBuilder<LooplyUser?>(
+              valueListenable: authController,
+              builder: (context, user, _) => user == null
+                  ? const _LoginButton()
+                  : const SizedBox.shrink(),
+            ),
             const SizedBox(height: 14),
             Text(
               'Navegação simples, rápida e privada.',
@@ -133,88 +110,97 @@ class QuickSiteGridCard extends StatelessWidget {
   }
 }
 
-class _ViewMoreSitesButton extends StatefulWidget {
-  @override
-  State<_ViewMoreSitesButton> createState() => _ViewMoreSitesButtonState();
-}
-
-class _ViewMoreSitesButtonState extends State<_ViewMoreSitesButton>
-    with SingleTickerProviderStateMixin {
-  static bool _hasPlayedThisLaunch = false;
-  late final AnimationController _shimmerController;
-  bool _isShimmerVisible = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1050),
-    );
-    if (!_hasPlayedThisLaunch) {
-      _hasPlayedThisLaunch = true;
-      _isShimmerVisible = true;
-      _shimmerController.addStatusListener((status) {
-        if (status == AnimationStatus.completed && mounted) {
-          setState(() => _isShimmerVisible = false);
-        }
-      });
-      _shimmerController.forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
+class _ViewMoreSitesButton extends StatelessWidget {
+  const _ViewMoreSitesButton();
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
-    final button = Material(
+    final accent = accentColor(context);
+    return Material(
       color: pillColor(context),
       borderRadius: BorderRadius.circular(28),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => openMyAppsAndGames(context),
+        onTap: () => Navigator.of(context).push<void>(
+          CupertinoPageRoute<void>(builder: (_) => const AllSitesScreen()),
+        ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Symbols.apps_rounded, color: text, size: 18),
-              const SizedBox(width: 8),
-              Text('My Apps & Games', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+              CustomPaint(
+                size: const Size(31, 31),
+                painter: _DashedCirclePainter(color: accent),
+                child: SizedBox(
+                  width: 31,
+                  height: 31,
+                  child: Icon(Symbols.add_rounded, size: 19, color: accent),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Text('Mais', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
       ),
     );
+  }
+}
 
-    // Depois de terminar, devolve o botão sem ShaderMask. Assim o último
-    // frame nunca fica congelado como um brilho permanente.
-    if (!_isShimmerVisible) return button;
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      child: button,
-      builder: (context, child) {
-        final progress = _shimmerController.value;
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) => LinearGradient(
-            begin: Alignment(-1.2 + 2.4 * progress, -0.15),
-            end: Alignment(-0.2 + 2.4 * progress, 0.15),
-            colors: [
-              Colors.transparent,
-              Colors.white.withOpacity(.34),
-              Colors.transparent,
+class _DashedCirclePainter extends CustomPainter {
+  const _DashedCirclePainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final path = Path()..addOval(rect.deflate(1.3));
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + 3.5).clamp(0.0, metric.length).toDouble();
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += 6.3;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) => oldDelegate.color != color;
+}
+
+class _LoginButton extends StatelessWidget {
+  const _LoginButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    return Material(
+      color: pillColor(context),
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push<void>(
+          CupertinoPageRoute<void>(builder: (_) => const AuthScreen()),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Symbols.login_rounded, color: text, size: 18),
+              const SizedBox(width: 8),
+              Text('Log in / Sign in', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
-            stops: const [0, .5, 1],
-          ).createShader(bounds),
-          child: child,
-        );
-      },
+          ),
+        ),
+      ),
     );
   }
 }
@@ -226,7 +212,7 @@ class QuickSiteTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
-    final circleBg = isDark ? looplyPanel2Dark : Colors.white;
+    final circleBg = isDark ? pillColor(context) : Colors.white;
     final isOrbitBrowserShortcut = site.name == 'Wikipedia';
     return GestureDetector(
       onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),

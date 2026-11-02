@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'session_store.dart';
 
@@ -85,7 +87,7 @@ class AdBlockStats extends ChangeNotifier {
   int countForDate(DateTime date) => _dailyCounts[dateKey(date)] ?? 0;
 
   Future<void> restore() async {
-    if (_restored) return;
+    _dailyCounts.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
@@ -187,6 +189,7 @@ class SearchEngineController extends ValueNotifier<SearchEngine> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final name = prefs.getString('looply_search_engine') ?? searchEngines.first.name;
+      value = searchEngines.first;
       SearchEngine? engine;
       for (final item in searchEngines) {
         if (item.name == name) { engine = item; break; }
@@ -209,7 +212,58 @@ class SearchEngineController extends ValueNotifier<SearchEngine> {
 }
 
 
+
 final SearchEngineController activeSearchEngine = SearchEngineController();
+
+/// Pesquisas recentes persistentes, independentes do histórico de navegação.
+class SearchHistoryController extends ChangeNotifier {
+  static const String _storageKey = 'looply_search_history_v1';
+  final List<String> _queries = <String>[];
+  List<String> get queries => List.unmodifiable(_queries);
+
+  Future<void> restore() async {
+    _queries.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          _queries.addAll(decoded.whereType<String>().map((value) => value.trim())
+              .where((value) => value.isNotEmpty).take(30));
+        }
+      }
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  void add(String query) {
+    final value = query.trim();
+    if (value.isEmpty) return;
+    _queries.removeWhere((item) => item.toLowerCase() == value.toLowerCase());
+    _queries.insert(0, value);
+    if (_queries.length > 30) _queries.removeRange(30, _queries.length);
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  void remove(String query) {
+    _queries.remove(query);
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(_queries));
+    } catch (_) {}
+  }
+}
+
+final SearchHistoryController searchHistoryController = SearchHistoryController();
 
 enum SiteCategory { destaque, produtividade, social, entretenimento, desenvolvimento, ia, apostas, compras, noticias, viagens, financas, personalizados }
 
@@ -340,15 +394,13 @@ class CustomSitesController extends ChangeNotifier {
   List<QuickSite> get sites => List.unmodifiable(_sites);
 
   Future<void> restore() async {
+    _sites.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      _sites
-        ..clear()
-        ..addAll(decoded.whereType<Map>().map((item) {
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) _sites.addAll(decoded.whereType<Map>().map((item) {
           final name = item['name'];
           final url = item['url'];
           if (name is! String || url is! String) return null;
@@ -360,10 +412,11 @@ class CustomSitesController extends ChangeNotifier {
             category: SiteCategory.personalizados,
           );
         }).whereType<QuickSite>());
-      notifyListeners();
+      }
     } catch (_) {
       // Dados de sites inválidos não impedem a abertura do Looply.
     }
+    notifyListeners();
   }
 
   bool containsUrl(String url) => _sites.any((site) => site.url == url);
@@ -380,6 +433,8 @@ class CustomSitesController extends ChangeNotifier {
     notifyListeners();
     await _persist();
   }
+
+  Future<void> flushPersistence() => _persist();
 
   Future<void> _persist() async {
     try {
@@ -417,15 +472,13 @@ class ActivityController extends ChangeNotifier {
   List<ActivityEntry> get entries => List.unmodifiable(_entries.reversed);
 
   Future<void> restore() async {
+    _entries.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      _entries
-        ..clear()
-        ..addAll(decoded.whereType<Map>().map((item) {
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) _entries.addAll(decoded.whereType<Map>().map((item) {
           final kindName = item['kind'];
           final title = item['title'];
           final url = item['url'];
@@ -443,8 +496,9 @@ class ActivityController extends ChangeNotifier {
             timestamp: timestamp is String ? DateTime.tryParse(timestamp) : null,
           );
         }).whereType<ActivityEntry>().toList().take(200));
-      notifyListeners();
+      }
     } catch (_) {}
+    notifyListeners();
   }
 
   void log(ActivityKind kind, String title, String url) {
@@ -516,10 +570,22 @@ class BrowserTab {
   void touch() => lastActivity = DateTime.now();
 }
 
+
+Future<Directory> _tabSnapshotDirectory() async {
+  final support = await getApplicationSupportDirectory();
+  final directory = Directory('${support.path}${Platform.pathSeparator}tab_snapshots');
+  if (!await directory.exists()) await directory.create(recursive: true);
+  return directory;
+}
+
+String _safeTabSnapshotName(String id) =>
+    '${id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png';
+
 class TabsController extends ChangeNotifier {
   static const String _storageKey = 'looply_browser_tabs_v2';
   static const String _activeStorageKey = 'looply_active_browser_tab_v2';
   final List<BrowserTab> _tabs = [];
+  final Set<Future<void>> _pendingSnapshotWrites = <Future<void>>{};
   int _counter = 0;
   String? _activeTabId;
   Timer? _persistTimer;
@@ -528,13 +594,16 @@ class TabsController extends ChangeNotifier {
   String? get activeTabId => _activeTabId;
 
   Future<void> restore() async {
+    _tabs.clear();
+    _activeTabId = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return;
-      _tabs.clear();
+      final decoded = raw == null || raw.isEmpty ? const <dynamic>[] : jsonDecode(raw);
+      if (decoded is! List) {
+        notifyListeners();
+        return;
+      }
       var greatestId = -1;
       for (final value in decoded) {
         if (value is! Map) continue;
@@ -552,9 +621,16 @@ class TabsController extends ChangeNotifier {
         final suffix = int.tryParse(id.startsWith('tab_') ? id.substring(4) : '');
         if (suffix != null && suffix > greatestId) greatestId = suffix;
         Uint8List? thumbnail;
-        final encodedThumbnail = value['thumbnailBase64'];
-        if (encodedThumbnail is String && encodedThumbnail.isNotEmpty && encodedThumbnail.length <= 95000) {
-          try { thumbnail = base64Decode(encodedThumbnail); } catch (_) {}
+        try {
+          final snapshotDirectory = await _tabSnapshotDirectory();
+          final snapshotFile = File('${snapshotDirectory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
+          if (await snapshotFile.exists()) thumbnail = await snapshotFile.readAsBytes();
+        } catch (_) {}
+        if (thumbnail == null) {
+          final encodedThumbnail = value['thumbnailBase64'];
+          if (encodedThumbnail is String && encodedThumbnail.isNotEmpty && encodedThumbnail.length <= 95000) {
+            try { thumbnail = base64Decode(encodedThumbnail); } catch (_) {}
+          }
         }
         _tabs.add(BrowserTab(
           id: id,
@@ -619,7 +695,10 @@ class TabsController extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.kind == TabKind.orbitBrowser);
     if (index >= 0) {
       final tab = _tabs.removeAt(index);
-      if (thumbnail != null) tab.thumbnail = thumbnail;
+      if (thumbnail != null) {
+        tab.thumbnail = thumbnail;
+        if (!tab.isIncognito) _trackSnapshotWrite(tab.id, thumbnail);
+      }
       tab.touch();
       _tabs.insert(0, tab);
       notifyListeners();
@@ -652,7 +731,12 @@ class TabsController extends ChangeNotifier {
     if (title != null) tab.title = title;
     if (canGoBack != null) tab.canGoBack = canGoBack;
     if (canGoForward != null) tab.canGoForward = canGoForward;
-    if (thumbnail != null) tab.thumbnail = thumbnail;
+    if (thumbnail != null) {
+      tab.thumbnail = thumbnail;
+      if (!tab.isIncognito) {
+        _trackSnapshotWrite(id, thumbnail);
+      }
+    }
     tab.touch();
     notifyListeners();
 
@@ -665,8 +749,52 @@ class TabsController extends ChangeNotifier {
     }
   }
 
+  void _trackSnapshotWrite(String id, Uint8List bytes) {
+    final pending = _saveTabSnapshot(id, bytes);
+    _pendingSnapshotWrites.add(pending);
+    unawaited(pending.whenComplete(() => _pendingSnapshotWrites.remove(pending)));
+  }
+
+  Future<void> _saveTabSnapshot(String id, Uint8List bytes) async {
+    try {
+      final directory = await _tabSnapshotDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
+      await file.writeAsBytes(bytes, flush: true);
+    } catch (_) {
+      // A grelha continua a funcionar com a miniatura em memória se o disco falhar.
+    }
+  }
+
+  Future<void> _deleteTabSnapshot(String id) async {
+    try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
+      final directory = await _tabSnapshotDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<void> clearStoredSnapshots() async {
+    try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
+      final directory = await _tabSnapshotDirectory();
+      if (await directory.exists()) {
+        await for (final entity in directory.list(followLinks: false)) {
+          if (entity is File && entity.path.toLowerCase().endsWith('.png')) {
+            await entity.delete();
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   void closeTab(String id) {
     _tabs.removeWhere((tab) => tab.id == id);
+    unawaited(_deleteTabSnapshot(id));
     if (_activeTabId == id) {
       _activeTabId = _tabs.where((tab) => tab.kind != TabKind.appScreen).isNotEmpty
           ? _tabs.firstWhere((tab) => tab.kind != TabKind.appScreen).id
@@ -696,6 +824,7 @@ class TabsController extends ChangeNotifier {
     final removed = ids.toSet();
     if (removed.isEmpty) return;
     _tabs.removeWhere((tab) => removed.contains(tab.id));
+    for (final id in removed) { unawaited(_deleteTabSnapshot(id)); }
     if (_activeTabId != null && removed.contains(_activeTabId)) {
       final remaining = _tabs.where((tab) => tab.kind != TabKind.appScreen).toList(growable: false);
       _activeTabId = remaining.isEmpty ? null : remaining.first.id;
@@ -705,6 +834,7 @@ class TabsController extends ChangeNotifier {
   }
 
   void closeAllTabs() {
+    for (final tab in _tabs) { unawaited(_deleteTabSnapshot(tab.id)); }
     _tabs.clear();
     _activeTabId = null;
     notifyListeners();
@@ -744,6 +874,9 @@ class TabsController extends ChangeNotifier {
 
   Future<void> _persistNow() async {
     try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
       final prefs = await SharedPreferences.getInstance();
       final payload = _tabs
           .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito)
@@ -754,6 +887,7 @@ class TabsController extends ChangeNotifier {
               'kind': tab.kind.name,
               'url': tab.url,
               'title': tab.title,
+              'thumbnailFile': thumbnail != null ? _safeTabSnapshotName(tab.id) : null,
               'thumbnailBase64': thumbnail != null && thumbnail.length <= 70000
                   ? base64Encode(thumbnail)
                   : null,

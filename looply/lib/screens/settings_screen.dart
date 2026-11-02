@@ -11,6 +11,8 @@ import 'history_screen.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import '../widgets/m3_switch.dart';
+import '../widgets/search_engine_picker.dart';
+import '../data_transfer.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -37,7 +39,10 @@ class SettingsScreen extends StatelessWidget {
                   label: 'Tema',
                   trailing: ValueListenableBuilder<ThemeMode>(
                     valueListenable: themeController,
-                    builder: (_, mode, __) => _SettingsValue(_themeLabel(mode)),
+                    builder: (_, mode, __) => ValueListenableBuilder<bool>(
+                      valueListenable: themeController.pureDark,
+                      builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
+                    ),
                   ),
                   onTap: () => showThemeSheet(context),
                 ),
@@ -45,9 +50,9 @@ class SettingsScreen extends StatelessWidget {
                   valueListenable: activeSearchEngine,
                   builder: (context, engine, _) => _SettingsTile(
                     icon: Symbols.travel_explore_rounded,
-                    label: 'Motor de pesquisa',
+                    label: 'Máquina de pesquisa',
                     trailing: _SettingsValue(engine.name),
-                    onTap: () => _showEnginePicker(context),
+                    onTap: () => showSearchEnginePicker(context),
                   ),
                 ),
                 _SettingsTile(
@@ -127,59 +132,73 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: 'Dados',
+              children: [
+                _SettingsTile(
+                  icon: Symbols.file_upload_outlined,
+                  label: 'Exportar dados',
+                  subtitle: 'Guardar histórico e definições num ficheiro JSON',
+                  onTap: () => _exportData(context),
+                ),
+                _SettingsTile(
+                  icon: Symbols.file_download_outlined,
+                  label: 'Importar dados',
+                  subtitle: 'Restaurar um backup JSON do Looply',
+                  onTap: () => _importData(context),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
+  Future<void> _exportData(BuildContext context) async {
+    try {
+      final path = await LooplyDataTransfer.exportToFile();
+      if (!context.mounted) return;
+      final message = path == null ? 'Exportação cancelada.' : 'Backup exportado com sucesso.';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível exportar: $error')));
+    }
+  }
+
+  Future<void> _importData(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Importar dados'),
+        content: const Text('Os dados atuais do Looply serão substituídos pelos dados do backup. A sessão de autenticação será mantida.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Continuar')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final imported = await LooplyDataTransfer.importFromFile();
+      if (!context.mounted) return;
+      if (imported) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados importados com sucesso.')));
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível importar: $error')));
+    }
+  }
+
   void _openLibraryPage(BuildContext context, Widget page) {
     Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => page));
   }
 
-  String _themeLabel(ThemeMode mode) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => 'Escuro', _ => 'Automático' };
+  String _themeLabel(ThemeMode mode, bool pureBlack) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => pureBlack ? 'Escuro profundo' : 'Escuro', _ => 'Automático' };
 
-  void _showEnginePicker(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      showDragHandle: false,
-      useSafeArea: true,
-      builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
-        valueListenable: themeController,
-        builder: (context, mode, _) => Material(
-          color: panelForMode(context, mode),
-          surfaceTintColor: Colors.transparent,
-          clipBehavior: Clip.antiAlias,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const SizedBox(height: 12),
-            Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-            Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text('Motor de pesquisa', style: TextStyle(color: textForMode(context, mode), fontSize: 17, fontWeight: FontWeight.w800)))),
-            ...searchEngines.map((engine) => ListTile(
-              leading: Container(
-                width: 34,
-                height: 34,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(shape: BoxShape.circle, color: pillForMode(context, mode)),
-                child: engine.assetPath != null
-                    ? Image.asset(
-                        engine.assetPath!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18),
-                      )
-                    : Icon(Icons.eco_rounded, color: const Color(0xFF4CAF50), size: 20),
-              ),
-              title: Text(engine.name, style: TextStyle(color: textForMode(context, mode))),
-              trailing: ValueListenableBuilder<SearchEngine>(valueListenable: activeSearchEngine, builder: (_, active, __) => active.name == engine.name ? Icon(Symbols.check_circle_rounded, color: accentForMode(context, mode), fill: 1) : const SizedBox.shrink()),
-              onTap: () { activeSearchEngine.select(engine); Navigator.of(sheetContext).pop(); },
-            )),
-          ])),
-        ),
-      ),
-    );
-  }
 
   void _showLanguageInfo(BuildContext context) {
     showModalBottomSheet<void>(
@@ -303,7 +322,7 @@ class _SettingsTile extends StatelessWidget {
     final muted = mutedText(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = isDark
-        ? Color.lerp(looplyTextDark, looplyBlueDark, .12)!
+        ? Color.lerp(looplyTextDark, looplyPurpleDark, .12)!
         : const Color(0xFF444A50);
     final iconBadge = isDark
         ? const Color(0xFF383B40)
