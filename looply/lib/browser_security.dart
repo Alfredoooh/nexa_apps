@@ -16,7 +16,7 @@ List<ContentBlocker> buildPlatformAdBlockers() {
 
   final escaped = adBlockDomains.map(RegExp.escape).join('|');
   final filter =
-      '^https?://(?:[^/?#]+\\.)?(?:$escaped)(?::[0-9]+)?(?:[/?#]|$)';
+      '^https?://(?:[^/?#]+\\.)?(?:$escaped)(?::[0-9]+)?(?:[/?#]|\$)';
 
   return <ContentBlocker>[
     ContentBlocker(
