@@ -312,7 +312,6 @@ const List<QuickSite> quickSites = [
   QuickSite(name: 'BantuBet', assetPath: '$_qs/bantubet.webp', url: 'https://www.bantubet.com'),
   QuickSite(name: 'PremierBet', assetPath: '$_qs/premierbet.webp', url: 'https://www.premierbet.co.ao'),
   QuickSite(name: 'Wikipedia', assetPath: '$_qs/wikipedia.webp', url: 'https://www.wikipedia.org'),
-  QuickSite(name: 'Mais', assetPath: '$_qs/logo_geometrico_g.webp', url: 'https://www.google.com'),
 ];
 
 const List<QuickSite> allSites = [

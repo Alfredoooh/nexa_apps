@@ -322,7 +322,7 @@ class _SettingsTile extends StatelessWidget {
     final muted = mutedText(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final iconColor = isDark
-        ? Color.lerp(looplyTextDark, looplyPurpleDark, .12)!
+        ? Color.lerp(looplyTextDark, looplyBlueDark, .12)!
         : const Color(0xFF444A50);
     final iconBadge = isDark
         ? const Color(0xFF383B40)

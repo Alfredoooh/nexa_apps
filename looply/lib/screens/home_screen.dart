@@ -35,8 +35,6 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 18),
             const QuickSiteGridCard(),
             const SizedBox(height: 10),
-            const _ViewMoreSitesButton(),
-            const SizedBox(height: 10),
             ValueListenableBuilder<LooplyUser?>(
               valueListenable: authController,
               builder: (context, user, _) => user == null
@@ -97,50 +95,61 @@ class QuickSiteGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firstRow = quickSites.sublist(0, 5);
-    final secondRow = quickSites.sublist(5, 10);
+    final secondRow = quickSites.sublist(5);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(24)),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: firstRow.map((site) => QuickSiteTile(site: site)).toList()),
         const SizedBox(height: 12),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: secondRow.map((site) => QuickSiteTile(site: site)).toList()),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            ...secondRow.map((site) => QuickSiteTile(site: site)),
+            const _MoreSitesTile(),
+          ],
+        ),
       ]),
     );
   }
 }
 
-class _ViewMoreSitesButton extends StatelessWidget {
-  const _ViewMoreSitesButton();
+class _MoreSitesTile extends StatelessWidget {
+  const _MoreSitesTile();
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final accent = accentColor(context);
-    return Material(
-      color: pillColor(context),
-      borderRadius: BorderRadius.circular(28),
-      clipBehavior: Clip.antiAlias,
+    return Semantics(
+      button: true,
+      label: 'Mais sites',
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.of(context).push<void>(
           CupertinoPageRoute<void>(builder: (_) => const AllSitesScreen()),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+        child: SizedBox(
+          width: 54,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               CustomPaint(
-                size: const Size(31, 31),
+                size: const Size(40, 40),
                 painter: _DashedCirclePainter(color: accent),
                 child: SizedBox(
-                  width: 31,
-                  height: 31,
-                  child: Icon(Symbols.add_rounded, size: 19, color: accent),
+                  width: 40,
+                  height: 40,
+                  child: Icon(Symbols.add_rounded, size: 22, color: accent),
                 ),
               ),
-              const SizedBox(width: 9),
-              Text('Mais', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 5),
+              Text(
+                'Mais',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: text),
+              ),
             ],
           ),
         ),
@@ -164,9 +173,9 @@ class _DashedCirclePainter extends CustomPainter {
     for (final metric in path.computeMetrics()) {
       var distance = 0.0;
       while (distance < metric.length) {
-        final end = (distance + 3.5).clamp(0.0, metric.length).toDouble();
+        final end = (distance + 4.2).clamp(0.0, metric.length).toDouble();
         canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance += 6.3;
+        distance += 7.2;
       }
     }
   }
