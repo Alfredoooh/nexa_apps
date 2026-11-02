@@ -17,6 +17,9 @@ dependencies:
   cached_network_image: any
   shared_preferences: ^2.3.3
   image_picker: ^1.2.4
+  path_provider: ^2.1.5
+  file_picker: ^8.1.7
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

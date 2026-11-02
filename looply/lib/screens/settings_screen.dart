@@ -137,13 +137,13 @@ class SettingsScreen extends StatelessWidget {
               title: 'Dados',
               children: [
                 _SettingsTile(
-                  icon: Symbols.file_upload_outlined,
+                  icon: Symbols.upload_rounded,
                   label: 'Exportar dados',
                   subtitle: 'Guardar histórico e definições num ficheiro JSON',
                   onTap: () => _exportData(context),
                 ),
                 _SettingsTile(
-                  icon: Symbols.file_download_outlined,
+                  icon: Symbols.download_rounded,
                   label: 'Importar dados',
                   subtitle: 'Restaurar um backup JSON do Looply',
                   onTap: () => _importData(context),
