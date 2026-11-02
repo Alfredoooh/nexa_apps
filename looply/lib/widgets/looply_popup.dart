@@ -1,5 +1,9 @@
-import 'package:animations/animations.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
@@ -12,8 +16,9 @@ class LooplyPopupAction<T> {
   final IconData icon;
 }
 
-/// Menu flutuante do Looply. Todos os menus usam a mesma geometria, curva e
-/// duração, sem depender da animação nativa inconsistente do PopupMenuButton.
+/// No Android, os menus são exibidos pelo PopupMenu nativo do Kotlin/Android.
+/// Assim a animação de abertura/fecho, a ancoragem e o posicionamento são os
+/// próprios do sistema, em vez de um overlay Flutter simulado.
 class LooplyPopupMenuButton<T> extends StatelessWidget {
   const LooplyPopupMenuButton({
     super.key,
@@ -32,101 +37,122 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
   final Color? iconColor;
   final double menuWidth;
 
+  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
+
   Future<void> _show(BuildContext buttonContext) async {
     final renderObject = buttonContext.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+    if (renderObject is! RenderBox || !renderObject.hasSize || actions.isEmpty) return;
+
     final topLeft = renderObject.localToGlobal(Offset.zero);
     final anchor = topLeft & renderObject.size;
     final screen = MediaQuery.sizeOf(buttonContext);
-    final safePadding = MediaQuery.paddingOf(buttonContext);
-    final width = menuWidth.clamp(190.0, screen.width - 16).toDouble();
-    final estimatedHeight = (actions.length * 48.0 + 12).clamp(60.0, screen.height - safePadding.vertical - 20).toDouble();
-    final left = (anchor.right - width).clamp(8.0, screen.width - width - 8).toDouble();
-    final preferredTop = anchor.bottom + 7;
-    final top = (preferredTop + estimatedHeight <= screen.height - safePadding.bottom - 8)
-        ? preferredTop
-        : (anchor.top - estimatedHeight - 7).clamp(safePadding.top + 8, screen.height - estimatedHeight - 8).toDouble();
 
-    final selected = await showGeneralDialog<T>(
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final iconColor = mutedText(buttonContext);
+        final nativeItems = <Map<String, Object>>[];
+        for (final action in actions) {
+          final iconBytes = await _renderRoundedIcon(action.icon, iconColor);
+          nativeItems.add(<String, Object>{
+            'label': action.label,
+            'value': action.value as Object,
+            if (iconBytes != null) 'icon': iconBytes,
+          });
+        }
+        final selected = await _nativeUi.invokeMethod<dynamic>(
+          'showNativePopup',
+          <String, Object>{
+            'anchor': <String, double>{
+              'right': anchor.right,
+              'bottom': anchor.bottom,
+            },
+            'items': nativeItems,
+          },
+        );
+        if (selected != null) onSelected(selected as T);
+      } on PlatformException {
+        // Não substitui o menu Android por um popup Flutter: mantém apenas
+        // o comportamento nativo quando o canal da plataforma está disponível.
+      } on MissingPluginException {
+        // Não existe PopupMenu Kotlin noutras plataformas.
+      }
+      return;
+    }
+
+    // Fallback nativo da plataforma para builds que não sejam Android.
+    final selected = await showMenu<T>(
       context: buttonContext,
-      useRootNavigator: true,
-      barrierDismissible: true,
-      barrierLabel: 'Fechar menu',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (dialogContext, _, __) => Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => Navigator.of(dialogContext).pop(),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          Positioned(
-            left: left,
-            top: top,
-            width: width,
-            child: Material(
-              color: settingsCardColor(dialogContext),
-              surfaceTintColor: Colors.transparent,
-              elevation: 12,
-              shadowColor: Colors.black.withOpacity(.18),
-              borderRadius: BorderRadius.circular(19),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final action in actions)
-                      InkWell(
-                        onTap: () => Navigator.of(dialogContext).pop(action.value),
-                        child: SizedBox(
-                          height: 48,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Row(
-                              children: [
-                                Icon(action.icon, size: 20, color: mutedText(dialogContext)),
-                                const SizedBox(width: 13),
-                                Expanded(
-                                  child: Text(
-                                    action.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: mainText(dialogContext), fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+      position: RelativeRect.fromLTRB(
+        anchor.left,
+        anchor.bottom,
+        screen.width - anchor.right,
+        screen.height - anchor.bottom,
+      ),
+      items: actions
+          .map(
+            (action) => PopupMenuItem<T>(
+              value: action.value,
+              child: Row(
+                children: [
+                  Icon(action.icon, size: 20, color: mutedText(buttonContext)),
+                  const SizedBox(width: 12),
+                  Flexible(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ],
               ),
             ),
-          ),
-        ],
-      ),
-      transitionBuilder: (context, animation, secondaryAnimation, child) => FadeScaleTransition(
-        animation: CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        ),
-        child: child,
-      ),
+          )
+          .toList(growable: false),
     );
     if (selected != null) onSelected(selected);
+  }
+
+
+  Future<Uint8List?> _renderRoundedIcon(IconData icon, Color color) async {
+    const logicalSize = 24.0;
+    const pixelRatio = 3.0;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          color: color,
+          fontSize: logicalSize,
+          height: 1,
+          fontFamily: icon.fontFamily,
+          fontFamilyFallback: icon.fontFamilyFallback,
+          package: icon.fontPackage,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder)..scale(pixelRatio);
+    painter.paint(
+      canvas,
+      Offset(
+        (logicalSize - painter.width) / 2,
+        (logicalSize - painter.height) / 2,
+      ),
+    );
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(
+      (logicalSize * pixelRatio).round(),
+      (logicalSize * pixelRatio).round(),
+    );
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } finally {
+      image.dispose();
+      picture.dispose();
+    }
   }
 
   @override
   Widget build(BuildContext context) => Builder(
         builder: (buttonContext) => IconButton(
           tooltip: tooltip,
-          icon: Icon(icon, color: iconColor ?? mainText(context)),
+          icon: Icon(icon, color: iconColor ?? mainText(buttonContext)),
           onPressed: () => _show(buttonContext),
         ),
       );

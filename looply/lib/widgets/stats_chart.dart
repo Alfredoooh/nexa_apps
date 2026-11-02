@@ -67,15 +67,18 @@ class AdBlockStatsChart extends StatelessWidget {
                     SizedBox(
                       width: 260,
                       height: 260,
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0, end: progress),
-                        duration: const Duration(milliseconds: 1050),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, _) => CustomPaint(
-                          painter: _AdGaugePainter(
-                            progress: value,
-                            trackColor: muted.withOpacity(.20),
-                            valueColor: accent,
+                      child: Transform.rotate(
+                        angle: math.pi,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: progress),
+                          duration: const Duration(milliseconds: 1050),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) => CustomPaint(
+                            painter: _AdGaugePainter(
+                              progress: value,
+                              trackColor: muted.withOpacity(.20),
+                              valueColor: accent,
+                            ),
                           ),
                         ),
                       ),
@@ -258,7 +261,7 @@ class _ActivityMiniCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(17),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         children: [
