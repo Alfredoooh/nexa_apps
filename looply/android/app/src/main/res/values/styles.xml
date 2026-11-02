@@ -2,14 +2,14 @@
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#811AE8</item>
-        <item name="android:navigationBarColor">#811AE8</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@color/looply_splash_background</item>
+        <item name="android:navigationBarColor">@color/looply_splash_background</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
-        <item name="android:statusBarColor">#0B0D11</item>
-        <item name="android:navigationBarColor">#111419</item>
-        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@color/looply_splash_background</item>
+        <item name="android:statusBarColor">@color/looply_splash_background</item>
+        <item name="android:navigationBarColor">@color/looply_splash_background</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>
