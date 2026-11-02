@@ -5,16 +5,25 @@ import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AlphaAnimation
+import android.view.animation.AnimationSet
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.ScaleAnimation
+import android.view.View
 import android.widget.FrameLayout
-import android.widget.PopupMenu
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.PopupWindow
+import android.widget.ScrollView
+import android.widget.TextView
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.BitmapFactory
-import android.graphics.drawable.BitmapDrawable
-import android.view.ContextThemeWrapper
+import android.graphics.drawable.GradientDrawable
+import android.graphics.Typeface
+import android.text.TextUtils
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
@@ -139,81 +148,198 @@ class MainActivity : FlutterActivity() {
         content.getLocationOnScreen(contentLocation)
 
         val density = resources.displayMetrics.density
-        val right = (anchor["right"] as? Number)?.toDouble() ?: 0.0
-        val bottom = (anchor["bottom"] as? Number)?.toDouble() ?: 0.0
-        val leftMargin = (flutterLocation[0] - contentLocation[0] + right * density).roundToInt()
-        val topMargin = (flutterLocation[1] - contentLocation[1] + bottom * density).roundToInt()
+        fun dp(value: Number): Int = (value.toDouble() * density).roundToInt()
+        val anchorLeft = flutterLocation[0] + dp(anchor["left"] as? Number ?: 0)
+        val anchorTop = flutterLocation[1] + dp(anchor["top"] as? Number ?: 0)
+        val anchorRight = flutterLocation[0] + dp(anchor["right"] as? Number ?: 0)
+        val anchorBottom = flutterLocation[1] + dp(anchor["bottom"] as? Number ?: 0)
+        val anchorCenterY = (anchorTop + anchorBottom) / 2
 
-        val anchorView = View(this).apply {
-            alpha = 0f
-            isClickable = false
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        val layoutParams = FrameLayout.LayoutParams(1, 1).apply {
-            gravity = Gravity.TOP or Gravity.LEFT
-            this.leftMargin = leftMargin
-            this.topMargin = topMargin
-        }
-        content.addView(anchorView, layoutParams)
+        val screenWidth = resources.displayMetrics.widthPixels
+        val availableContentHeight = (content.height - dp(16)).coerceAtLeast(dp(180))
+        val requestedWidth = call.argument<Number>("width")?.toDouble() ?: 252.0
+        val popupWidth = dp(requestedWidth).coerceAtMost(screenWidth - dp(16)).coerceAtLeast(dp(190))
+        val rowHeight = dp(48)
+        val dividerHeight = dp(0.7).coerceAtLeast(1)
+        val desiredHeight = rowHeight * items.size + dividerHeight * (items.size - 1)
+        val popupHeight = desiredHeight.coerceAtMost(availableContentHeight)
 
-        val isDark = isAppDarkTheme()
-        val popupContext = ContextThemeWrapper(
-            this,
-            if (isDark) android.R.style.Theme_Material else android.R.style.Theme_Material_Light
-        )
-        val popup = PopupMenu(popupContext, anchorView, Gravity.END)
-        val iconTint = if (isDark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
+        val dark = isAppDarkTheme()
+        val pureBlack = isAppPureBlackTheme()
+        val backgroundColor = when {
+            dark && pureBlack -> Color.rgb(25, 25, 25)
+            dark -> Color.rgb(43, 45, 48)
+            else -> Color.rgb(255, 255, 255)
+        }
+        val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
+        val iconTint = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
+        val separatorColor = if (dark) Color.argb(115, 130, 134, 139) else Color.argb(115, 218, 220, 224)
+        val outlineColor = if (dark) Color.rgb(64, 66, 70) else Color.rgb(232, 234, 237)
+
+        fun newPopupBackground() = GradientDrawable().apply {
+            setColor(backgroundColor)
+            cornerRadius = dp(14).toFloat()
+            setStroke(dp(1), outlineColor)
+        }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            clipToOutline = true
+            background = newPopupBackground()
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(
+                list,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
+
+        lateinit var popup: PopupWindow
+        var completed = false
         items.forEachIndexed { index, item ->
-            val label = item["label"]?.toString().orEmpty()
-            val menuItem = popup.menu.add(0, index, index, label)
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), 0, dp(16), 0)
+                isClickable = true
+                isFocusable = true
+                minimumHeight = rowHeight
+            }
+
             val iconBytes = item["icon"] as? ByteArray
             if (iconBytes != null) {
                 val bitmap = BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
                 if (bitmap != null) {
-                    val drawable = BitmapDrawable(resources, bitmap)
-                    val iconSize = (24 * density).roundToInt()
-                    drawable.setBounds(0, 0, iconSize, iconSize)
-                    drawable.setTint(iconTint)
-                    menuItem.icon = drawable
+                    val image = ImageView(this).apply {
+                        // Ícone intencionalmente mais contido: 18 dp, próximo
+                        // do tamanho visual dos símbolos usados no Flutter.
+                        layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                            marginEnd = dp(14)
+                        }
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setImageBitmap(bitmap)
+                        setColorFilter(iconTint)
+                    }
+                    row.addView(image)
+                } else {
+                    row.addView(View(this), LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                        marginEnd = dp(14)
+                    })
+                }
+            } else {
+                row.addView(View(this), LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                    marginEnd = dp(14)
+                })
+            }
+
+            val label = TextView(this).apply {
+                text = item["label"]?.toString().orEmpty()
+                setTextColor(textColor)
+                textSize = 14f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_VERTICAL
+                includeFontPadding = false
+            }
+            row.addView(
+                label,
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f),
+            )
+            row.setOnClickListener {
+                if (!completed) {
+                    completed = true
+                    result.success(item["value"])
+                }
+                popup.dismiss()
+            }
+            list.addView(
+                row,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    rowHeight,
+                ),
+            )
+
+            if (index < items.lastIndex) {
+                val divider = View(this).apply {
+                    setBackgroundColor(separatorColor)
+                }
+                list.addView(
+                    divider,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dividerHeight,
+                    ).apply {
+                        leftMargin = dp(14)
+                        rightMargin = dp(14)
+                    },
+                )
+            }
+        }
+
+        popup = PopupWindow(scroll, popupWidth, popupHeight, true).apply {
+            setBackgroundDrawable(newPopupBackground())
+            isOutsideTouchable = true
+            isFocusable = true
+            isClippingEnabled = true
+            elevation = dp(12).toFloat()
+            setOnDismissListener {
+                if (!completed) {
+                    completed = true
+                    result.success(null)
                 }
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            popup.setForceShowIcon(true)
-        } else {
-            // Compatibilidade com versões anteriores ao método público API 29.
-            try {
-                popup.javaClass.getMethod("setForceShowIcon", Boolean::class.javaPrimitiveType)
-                    .invoke(popup, true)
-            } catch (_: Exception) {
-                // O menu nativo continua funcional; apenas os ícones podem ser ocultados.
-            }
-        }
 
-        var completed = false
-        popup.setOnMenuItemClickListener { menuItem ->
-            if (!completed) {
-                completed = true
-                result.success(items.getOrNull(menuItem.itemId)?.get("value"))
-            }
-            true
+        // O menu abre ao lado do controlo, centrado verticalmente na sua
+        // âncora; não usa o comportamento padrão que o coloca sempre abaixo.
+        val gap = dp(8)
+        val spaceRight = screenWidth - anchorRight
+        val spaceLeft = anchorLeft
+        val opensRight = spaceRight >= popupWidth + gap || spaceRight >= spaceLeft
+        val rawPopupX = if (opensRight) {
+            anchorRight + gap
+        } else {
+            anchorLeft - popupWidth - gap
         }
-        popup.setOnDismissListener {
-            if (!completed) {
-                completed = true
-                result.success(null)
-            }
-            content.removeView(anchorView)
-        }
+        val popupXOnScreen = rawPopupX.coerceIn(
+            dp(8),
+            (screenWidth - popupWidth - dp(8)).coerceAtLeast(dp(8)),
+        )
+
+        val minY = contentLocation[1] + dp(8)
+        val maxY = (contentLocation[1] + content.height - popupHeight - dp(8)).coerceAtLeast(minY)
+        val popupYOnScreen = (anchorCenterY - popupHeight / 2).coerceIn(minY, maxY)
+        val popupX = popupXOnScreen - contentLocation[0]
+        val popupY = popupYOnScreen - contentLocation[1]
 
         try {
-            popup.show()
+            popup.showAtLocation(content, Gravity.TOP or Gravity.LEFT, popupX, popupY)
+            val pivotX = if (opensRight) 0.0f else 1.0f
+            val animation = AnimationSet(true).apply {
+                interpolator = DecelerateInterpolator(1.8f)
+                duration = 190
+                addAnimation(
+                    ScaleAnimation(
+                        .92f, 1f, .94f, 1f,
+                        ScaleAnimation.RELATIVE_TO_SELF, pivotX,
+                        ScaleAnimation.RELATIVE_TO_SELF, .5f,
+                    ),
+                )
+                addAnimation(AlphaAnimation(0f, 1f))
+            }
+            scroll.startAnimation(animation)
         } catch (error: RuntimeException) {
-            content.removeView(anchorView)
             if (!completed) {
                 completed = true
                 result.error("popup_failed", error.message, null)
             }
+            popup.dismiss()
         }
     }
 
@@ -225,6 +351,11 @@ class MainActivity : FlutterActivity() {
             else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
                 Configuration.UI_MODE_NIGHT_YES
         }
+    }
+
+    private fun isAppPureBlackTheme(): Boolean {
+        return getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean("flutter.looply_theme_pure_dark", false)
     }
 
     private fun findFlutterView(view: View): FlutterView? {

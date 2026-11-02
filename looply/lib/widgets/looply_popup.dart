@@ -16,9 +16,9 @@ class LooplyPopupAction<T> {
   final IconData icon;
 }
 
-/// No Android, os menus são exibidos pelo PopupMenu nativo do Kotlin/Android.
-/// Assim a animação de abertura/fecho, a ancoragem e o posicionamento são os
-/// próprios do sistema, em vez de um overlay Flutter simulado.
+/// No Android, os menus são desenhados em Kotlin com componentes nativos.
+/// O popup mantém a âncora do botão, mas abre lateralmente e usa animação
+/// de escala/alpha nativa; o Flutter apenas envia os itens e os ícones.
 class LooplyPopupMenuButton<T> extends StatelessWidget {
   const LooplyPopupMenuButton({
     super.key,
@@ -45,7 +45,6 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
 
     final topLeft = renderObject.localToGlobal(Offset.zero);
     final anchor = topLeft & renderObject.size;
-    final screen = MediaQuery.sizeOf(buttonContext);
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
@@ -63,9 +62,14 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
           'showNativePopup',
           <String, Object>{
             'anchor': <String, double>{
+              'left': anchor.left,
+              'top': anchor.top,
               'right': anchor.right,
               'bottom': anchor.bottom,
+              'width': anchor.width,
+              'height': anchor.height,
             },
+            'width': menuWidth,
             'items': nativeItems,
           },
         );
@@ -84,9 +88,9 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
       context: buttonContext,
       position: RelativeRect.fromLTRB(
         anchor.left,
-        anchor.bottom,
-        screen.width - anchor.right,
-        screen.height - anchor.bottom,
+        anchor.top,
+        MediaQuery.sizeOf(buttonContext).width - anchor.right,
+        MediaQuery.sizeOf(buttonContext).height - anchor.bottom,
       ),
       items: actions
           .map(
@@ -108,7 +112,9 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
 
 
   Future<Uint8List?> _renderRoundedIcon(IconData icon, Color color) async {
-    const logicalSize = 24.0;
+    // 20 logical px coincide com o tamanho de ícone usado nos controlos Flutter.
+    // A imagem é enviada em alta densidade e apresentada pelo Android num slot de 18 dp.
+    const logicalSize = 20.0;
     const pixelRatio = 3.0;
     final painter = TextPainter(
       text: TextSpan(

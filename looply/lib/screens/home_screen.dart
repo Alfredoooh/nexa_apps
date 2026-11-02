@@ -22,8 +22,8 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final muted = mutedText(context);
     // Mantém a estrutura de página original da Home (Scaffold + SafeArea).
-    // O Drawer continua no Scaffold principal; o callback evita abrir um
-    // Drawer interno e preserva o Container Transform de ecrã inteiro.
+    // O drawer push/drag pertence ao shell; o callback evita criar um
+    // drawer interno e preserva o Container Transform de ecrã inteiro.
     return Scaffold(
       backgroundColor: pageBg(context),
       body: SafeArea(
@@ -196,7 +196,22 @@ class _LoginButton extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push<void>(
-          CupertinoPageRoute<void>(builder: (_) => const AuthScreen()),
+          PageRouteBuilder<void>(
+            pageBuilder: (context, animation, secondaryAnimation) => const AuthScreen(),
+            transitionDuration: const Duration(milliseconds: 420),
+            reverseTransitionDuration: const Duration(milliseconds: 390),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              final slide = Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ));
+              return SlideTransition(position: slide, child: child);
+            },
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 15),
