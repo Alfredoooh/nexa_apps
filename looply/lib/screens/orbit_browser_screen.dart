@@ -3,14 +3,17 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../browser_security.dart';
 import '../browser_library.dart';
 import '../shell/shell_tab_request.dart';
+import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import 'history_screen.dart';
 import 'downloads_screen.dart';
@@ -82,6 +85,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     _isLoading = existingTab?.thumbnail == null;
     _showProgress = _isLoading;
 
+    adBlockEnabled.addListener(_onRuntimeWebViewSettingsChanged);
+    navigationAcceleratorEnabled.addListener(_onRuntimeWebViewSettingsChanged);
+    BrowserPreconnectHints.setActive(widget.tabId, widget.isActive);
+
     _pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: looplyPrimary),
       onRefresh: () async {
@@ -105,9 +112,47 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     _findDebounce?.cancel();
     _findController.dispose();
     _findFocusNode.dispose();
+    adBlockEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
+    navigationAcceleratorEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
+    BrowserPreconnectHints.detach(widget.tabId);
     // Este State só é descartado quando o separador é realmente fechado.
     // Ao alternar entre abas, o IndexedStack mantém este widget montado.
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant OrbitBrowserScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive) {
+      BrowserPreconnectHints.setActive(widget.tabId, widget.isActive);
+    }
+  }
+
+  void _onRuntimeWebViewSettingsChanged() {
+    final controller = _controller;
+    if (controller == null || !mounted) return;
+    unawaited(_applyRuntimeWebViewSettings(controller));
+  }
+
+  Future<void> _applyRuntimeWebViewSettings(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      final acceleratorEnabled = navigationAcceleratorEnabled.value;
+      await controller.setSettings(
+        settings: InAppWebViewSettings(
+          cacheEnabled: acceleratorEnabled,
+          cacheMode: acceleratorEnabled
+              ? CacheMode.LOAD_DEFAULT
+              : CacheMode.LOAD_NO_CACHE,
+          contentBlockers: adBlockEnabled.value
+              ? buildPlatformAdBlockers()
+              : <ContentBlocker>[],
+        ),
+      );
+    } catch (_) {
+      // A alteração do interruptor não pode interromper a navegação atual.
+    }
   }
 
   void _signalFirstLoad() {
@@ -700,14 +745,29 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               databaseEnabled: true,
               mediaPlaybackRequiresUserGesture: false,
               transparentBackground: true,
-              cacheMode: CacheMode.LOAD_DEFAULT,
+              cacheEnabled: navigationAcceleratorEnabled.value,
+              cacheMode: navigationAcceleratorEnabled.value
+                  ? CacheMode.LOAD_DEFAULT
+                  : CacheMode.LOAD_NO_CACHE,
+              offscreenPreRaster: true,
               hardwareAcceleration: true,
               incognito: widget.isIncognito,
               useOnDownloadStart: true,
               useShouldOverrideUrlLoading: true,
+              useShouldInterceptRequest: defaultTargetPlatform == TargetPlatform.android,
+              contentBlockers: adBlockEnabled.value
+                  ? buildPlatformAdBlockers()
+                  : <ContentBlocker>[],
               supportMultipleWindows: true,
               javaScriptCanOpenWindowsAutomatically: true,
             ),
+            shouldInterceptRequest: (controller, request) async {
+              if (defaultTargetPlatform != TargetPlatform.android) return null;
+              return interceptAdRequest(
+                request,
+                persistStats: !widget.isIncognito,
+              );
+            },
             shouldOverrideUrlLoading: (controller, action) async {
               final uri = action.request.url;
               if (uri == null) return NavigationActionPolicy.ALLOW;
@@ -740,6 +800,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             },
             onWebViewCreated: (controller) {
               _controller = controller;
+              BrowserPreconnectHints.attach(widget.tabId, controller);
+              unawaited(_applyRuntimeWebViewSettings(controller));
               final ready = widget.browserReadyCompleter;
               if (ready != null && !ready.isCompleted) ready.complete();
               unawaited(_refreshNavigationState());
@@ -804,18 +866,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               bool back = false;
               bool forward = false;
               Uint8List? screenshot;
-              String? html;
               try {
                 back = await controller.canGoBack();
                 forward = await controller.canGoForward();
                 screenshot = await controller
                     .takeScreenshot()
                     .timeout(const Duration(seconds: 2));
-                if (navigationAcceleratorEnabled.value) {
-                  html = await controller
-                      .getHtml()
-                      .timeout(const Duration(seconds: 2));
-                }
               } catch (_) {}
 
               if (screenshot != null) {
@@ -829,9 +885,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   loadedUrl,
                 );
                 unawaited(browserFaviconCache.fetchForUrl(loadedUrl));
-              }
-              if (html != null && navigationAcceleratorEnabled.value) {
-                NavAccelerator.instance.cachePage(loadedUrl, html);
               }
 
               if (!mounted) {

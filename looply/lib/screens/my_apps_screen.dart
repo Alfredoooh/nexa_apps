@@ -59,16 +59,20 @@ class _MyAppsScreenState extends State<MyAppsScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text('My Apps & Games'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Center(
+              child: _AppsGamesSlideTab(
+                selectedIndex: _selected,
+                onChanged: (index) => setState(() => _selected = index),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [
-          const SizedBox(height: 12),
-          Center(
-            child: _AppsGamesSlideTab(
-              selectedIndex: _selected,
-              onChanged: (index) => setState(() => _selected = index),
-            ),
-          ),
           Expanded(
             child: _selected == 0
                 ? Center(
@@ -99,8 +103,8 @@ class _AppsGamesSlideTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     return Container(
-      width: 224,
-      height: 44,
+      width: 176,
+      height: 40,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: pillColor(context),
@@ -174,13 +178,13 @@ class _AppsGamesSegmentLabel extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: color, size: 17),
-                const SizedBox(width: 6),
+                Icon(icon, color: color, size: 15),
+                const SizedBox(width: 5),
                 Text(
                   label,
                   style: TextStyle(
                     color: color,
-                    fontSize: 12.5,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

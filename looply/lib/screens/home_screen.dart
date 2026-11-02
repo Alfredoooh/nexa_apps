@@ -229,7 +229,7 @@ class QuickSiteTile extends StatelessWidget {
     final circleBg = isDark ? looplyPanel2Dark : Colors.white;
     final isOrbitBrowserShortcut = site.name == 'Wikipedia';
     return GestureDetector(
-      onTapDown: (_) => NavAccelerator.instance.preconnect(site.url),
+      onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {

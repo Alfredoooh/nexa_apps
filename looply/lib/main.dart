@@ -32,6 +32,7 @@ Future<void> main() async {
   await customSitesController.restore();
   await activeSearchEngine.restore();
   await restoreRuntimeSettings();
+  await AdBlockStats.instance.restore();
   await browserFaviconCache.restore();
   await bookmarksController.restore();
   await downloadsController.restore();
@@ -184,6 +185,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       unawaited(SessionStore.instance.markBackgrounded());
       unawaited(tabsController.flushPersistence());
       unawaited(activityController.flushPersistence());
+      unawaited(AdBlockStats.instance.flushPersistence());
     }
   }
 

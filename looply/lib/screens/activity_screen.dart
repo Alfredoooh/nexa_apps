@@ -25,12 +25,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
     super.initState();
     activityController.addListener(_onChanged);
     for (final entry in activityController.entries) {
-      if (entry.kind == ActivityKind.site) unawaited(browserFaviconCache.fetchForUrl(entry.url));
+      if (entry.kind == ActivityKind.site) {
+        unawaited(browserFaviconCache.fetchForUrl(entry.url));
+      }
     }
   }
+
   @override
-  void dispose() { activityController.removeListener(_onChanged); super.dispose(); }
-  void _onChanged() { if (mounted) setState(() {}); }
+  void dispose() {
+    activityController.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,42 +50,76 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     return Scaffold(
       backgroundColor: pageBg(context),
-      appBar: AppBar(toolbarHeight: 64, title: const Text('Atividade'), actions: [if (entries.isNotEmpty) IconButton(tooltip: 'Limpar atividade', icon: Icon(Symbols.delete_sweep_rounded, color: text), onPressed: activityController.clear)]),
-      body: entries.isEmpty
-          ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Symbols.history_rounded, size: 48, color: muted), const SizedBox(height: 12), Text('Sem atividade recente', style: TextStyle(color: text, fontWeight: FontWeight.w700))]))
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-              children: [
-                const ActivitySummaryCard(),
-                const SizedBox(height: 14),
-                const AdBlockStatsChart(),
-                const SizedBox(height: 18),
-                Row(children: [
-                  Expanded(child: Text('Recente', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const HistoryScreen())),
-                    child: const Text('Ver tudo'),
-                  ),
-                ]),
-                const SizedBox(height: 4),
-                ...List.generate(recent.length, (index) {
-                  final isFirst = index == 0;
-                  final isLast = index == recent.length - 1;
-                  final top = isFirst ? 22.0 : 8.0;
-                  final bottom = isLast ? 22.0 : 8.0;
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
-                    child: ActivityTile(
-                      entry: recent[index],
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(top),
-                        bottom: Radius.circular(bottom),
-                      ),
-                    ),
-                  );
-                }),
-              ],
+      appBar: AppBar(
+        toolbarHeight: 64,
+        title: const Text('Atividade'),
+        actions: [
+          if (entries.isNotEmpty)
+            IconButton(
+              tooltip: 'Limpar atividade',
+              icon: Icon(Symbols.delete_sweep_rounded, color: text),
+              onPressed: activityController.clear,
             ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
+        children: [
+          const AdBlockStatsChart(),
+          const SizedBox(height: 6),
+          ActivitySummaryCard(),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Recente',
+                  style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (entries.isNotEmpty)
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const HistoryScreen()),
+                  ),
+                  child: const Text('Ver tudo'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (recent.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              child: Column(
+                children: [
+                  Icon(Symbols.history_rounded, size: 38, color: muted),
+                  const SizedBox(height: 9),
+                  Text(
+                    'Sem atividade recente',
+                    style: TextStyle(color: muted, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...List.generate(recent.length, (index) {
+              final isFirst = index == 0;
+              final isLast = index == recent.length - 1;
+              final top = isFirst ? 22.0 : 8.0;
+              final bottom = isLast ? 22.0 : 8.0;
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
+                child: ActivityTile(
+                  entry: recent[index],
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(top),
+                    bottom: Radius.circular(bottom),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 }

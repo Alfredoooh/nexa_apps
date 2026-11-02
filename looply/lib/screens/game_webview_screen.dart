@@ -1,12 +1,11 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:http/http.dart' as http;
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
+import '../browser_security.dart';
 import '../theme.dart';
 
 class GameWebViewScreen extends StatefulWidget {
@@ -24,10 +23,36 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
   Key _webViewKey = UniqueKey();
 
   @override
+  void initState() {
+    super.initState();
+    adBlockEnabled.addListener(_applyRuntimeSettings);
+    navigationAcceleratorEnabled.addListener(_applyRuntimeSettings);
+  }
+
+  @override
   void dispose() {
+    adBlockEnabled.removeListener(_applyRuntimeSettings);
+    navigationAcceleratorEnabled.removeListener(_applyRuntimeSettings);
     _webController?.dispose();
     super.dispose();
   }
+
+  void _applyRuntimeSettings() {
+    final controller = _webController;
+    if (controller == null || !mounted) return;
+    controller.setSettings(
+      settings: InAppWebViewSettings(
+        cacheEnabled: navigationAcceleratorEnabled.value,
+        cacheMode: navigationAcceleratorEnabled.value
+            ? CacheMode.LOAD_DEFAULT
+            : CacheMode.LOAD_NO_CACHE,
+        contentBlockers: adBlockEnabled.value
+            ? buildPlatformAdBlockers()
+            : <ContentBlocker>[],
+      ),
+    ).catchError((_) {});
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -55,21 +80,23 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
                   databaseEnabled: true,
                   mediaPlaybackRequiresUserGesture: false,
                   transparentBackground: true,
-                  cacheMode: CacheMode.LOAD_DEFAULT,
+                  cacheEnabled: navigationAcceleratorEnabled.value,
+                  cacheMode: navigationAcceleratorEnabled.value
+                      ? CacheMode.LOAD_DEFAULT
+                      : CacheMode.LOAD_NO_CACHE,
+                  offscreenPreRaster: true,
+                  useShouldInterceptRequest: defaultTargetPlatform == TargetPlatform.android,
+                  contentBlockers: adBlockEnabled.value
+                      ? buildPlatformAdBlockers()
+                      : <ContentBlocker>[],
                   hardwareAcceleration: true,
                 ),
-                shouldInterceptRequest: (controller, request) async {
-                  final url = request.url.toString();
-                  if (isAdBlockedUrl(url)) return WebResourceResponse(contentType: 'text/plain', data: Uint8List(0));
-                  if (url == widget.game.url && (request.method == null || request.method == 'GET')) {
-                    try {
-                      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
-                      if (response.statusCode == 200) return WebResourceResponse(contentType: 'text/html', contentEncoding: 'utf-8', data: response.bodyBytes);
-                    } catch (_) {}
-                  }
-                  return null;
+                shouldInterceptRequest: (controller, request) async =>
+                    interceptAdRequest(request),
+                onWebViewCreated: (controller) {
+                  _webController = controller;
+                  _applyRuntimeSettings();
                 },
-                onWebViewCreated: (controller) => _webController = controller,
                 onLoadStart: (_, __) { if (mounted) setState(() { _isLoading = true; _loadError = null; }); },
                 onLoadStop: (_, __) { if (mounted) setState(() => _isLoading = false); },
                 onReceivedError: (controller, request, error) {

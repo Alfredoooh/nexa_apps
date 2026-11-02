@@ -20,10 +20,6 @@ class GamesScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.only(top: 8, bottom: 28),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-              child: Text('Jogos', style: TextStyle(color: text, fontSize: 28, fontWeight: FontWeight.w800)),
-            ),
             SizedBox(
               height: 48,
               child: ListView(

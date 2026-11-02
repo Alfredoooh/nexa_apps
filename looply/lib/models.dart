@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -64,29 +63,102 @@ Future<void> restoreRuntimeSettings() async {
 class AdBlockStats extends ChangeNotifier {
   AdBlockStats._();
   static final AdBlockStats instance = AdBlockStats._();
-  int _totalBlocked = 0;
-  final List<int> _dailyBuckets = List.filled(7, 0);
-  int get totalBlocked => _totalBlocked;
-  List<int> get dailyBuckets => List.unmodifiable(_dailyBuckets);
 
-  void registerBlock() {
-    _totalBlocked++;
-    _dailyBuckets[6]++;
+  static const String _storageKey = 'looply_adblock_daily_history_v2';
+  final Map<String, int> _dailyCounts = <String, int>{};
+  Timer? _notifyTimer;
+  Timer? _persistTimer;
+  bool _restored = false;
+
+  bool get isRestored => _restored;
+  int get totalBlocked => _dailyCounts.values.fold<int>(0, (sum, value) => sum + value);
+  Map<String, int> get dailyHistory => Map.unmodifiable(_dailyCounts);
+
+  List<int> get dailyBuckets => List<int>.generate(7, (index) {
+    final date = DateTime.now().subtract(Duration(days: 6 - index));
+    return countForDate(date);
+  }, growable: false);
+
+  static String dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  int countForDate(DateTime date) => _dailyCounts[dateKey(date)] ?? 0;
+
+  Future<void> restore() async {
+    if (_restored) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          _dailyCounts
+            ..clear()
+            ..addEntries(decoded.entries.where((entry) =>
+              entry.key is String && entry.value is num && (entry.value as num) >= 0
+            ).map((entry) => MapEntry(entry.key as String, (entry.value as num).toInt())));
+        }
+      }
+    } catch (_) {
+      // Dados antigos/corrompidos não impedem o arranque do navegador.
+    } finally {
+      _restored = true;
+      notifyListeners();
+    }
+  }
+
+  void registerBlock({DateTime? at}) {
+    final key = dateKey(at ?? DateTime.now());
+    _dailyCounts[key] = (_dailyCounts[key] ?? 0) + 1;
+
+    // Mantém no máximo dois anos de histórico, evitando crescimento ilimitado
+    // do SharedPreferences em sessões de navegação longas.
+    if (_dailyCounts.length > 730) {
+      final keys = _dailyCounts.keys.toList()..sort();
+      for (final oldKey in keys.take(_dailyCounts.length - 730)) {
+        _dailyCounts.remove(oldKey);
+      }
+    }
+
+    _notifyTimer?.cancel();
+    _notifyTimer = Timer(const Duration(milliseconds: 180), notifyListeners);
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 650), () {
+      unawaited(_persist());
+    });
+  }
+
+  void clear() {
+    _dailyCounts.clear();
+    _notifyTimer?.cancel();
+    _persistTimer?.cancel();
     notifyListeners();
+    unawaited(_persist());
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(_dailyCounts));
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _notifyTimer?.cancel();
+    _persistTimer?.cancel();
+    super.dispose();
   }
 }
 
 bool isAdBlockedUrl(String url) {
   if (!adBlockEnabled.value) return false;
-  try {
-    final host = Uri.parse(url).host.toLowerCase();
-    if (host.isEmpty) return false;
-    final blocked = adBlockDomains.any((domain) => host == domain || host.endsWith('.$domain'));
-    if (blocked) AdBlockStats.instance.registerBlock();
-    return blocked;
-  } catch (_) {
-    return false;
-  }
+  final uri = Uri.tryParse(url);
+  final host = uri?.host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
+  if (host == null || host.isEmpty) return false;
+  return adBlockDomains.any((domain) => host == domain || host.endsWith('.$domain'));
 }
 
 class SearchEngine {
@@ -327,38 +399,6 @@ class CustomSitesController extends ChangeNotifier {
 
 final CustomSitesController customSitesController = CustomSitesController();
 
-class NavAccelerator {
-  NavAccelerator._();
-  static final NavAccelerator instance = NavAccelerator._();
-  final Set<String> _preconnected = {};
-  final Map<String, String> _pageCache = {};
-  final List<String> _cacheOrder = [];
-  static const int _maxCacheEntries = 25;
-
-  Future<void> preconnect(String url) async {
-    if (!navigationAcceleratorEnabled.value) return;
-    try {
-      final uri = Uri.parse(url);
-      if (uri.host.isEmpty) return;
-      final origin = '${uri.scheme}://${uri.host}';
-      if (!_preconnected.add(origin)) return;
-      unawaited(http.head(Uri.parse(origin)).timeout(const Duration(seconds: 3)).catchError((_) => http.Response('', 0)));
-    } catch (_) {}
-  }
-
-  void cachePage(String url, String html) {
-    if (!navigationAcceleratorEnabled.value) return;
-    if (_pageCache.containsKey(url)) {
-      _cacheOrder.remove(url);
-    } else if (_cacheOrder.length >= _maxCacheEntries) {
-      _pageCache.remove(_cacheOrder.removeAt(0));
-    }
-    _pageCache[url] = html;
-    _cacheOrder.add(url);
-  }
-
-  String? getCachedPage(String url) => navigationAcceleratorEnabled.value ? _pageCache[url] : null;
-}
 
 enum ActivityKind { site, game }
 
