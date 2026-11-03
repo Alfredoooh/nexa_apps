@@ -23,6 +23,7 @@ concurrency:
 jobs:
   build:
     name: Build BrowseIt APK
+    # Secrets are unavailable to pull requests originating from forks.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -120,6 +121,7 @@ jobs:
           printf '%s' "$BROWSEIT_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
+          # Verify alias and certificate fingerprint. This prevents signing with the old key.
           KEY_INFO="$(keytool -list -v \
             -storetype JKS \
             -keystore "$KEYSTORE_PATH" \
@@ -127,7 +129,7 @@ jobs:
             -alias browseit)"
 
           ACTUAL_SHA1="$(printf '%s\n' "$KEY_INFO" | awk -F': ' '/SHA1:/{gsub(/[[:space:]]/, "", $2); print toupper($2); exit}')"
-          EXPECTED_SHA1="D8:D2:AF:AC:01:42:68:F8:7C:42:C5:68:F6:59:DB:83:40:C9:68:6D"
+          EXPECTED_SHA1="1D:83:DE:49:DF:50:68:B7:46:49:91:24:2E:76:E9:60:D0:CB:19:10"
 
           if [[ -z "$ACTUAL_SHA1" ]]; then
             echo "ERROR: Could not read SHA-1 fingerprint from BrowseIt keystore."
@@ -154,15 +156,21 @@ jobs:
 
       - name: Build BrowseIt APK
         shell: bash
+        env:
+          BROWSEIT_GOOGLE_WEB_CLIENT_ID: ${{ secrets.BROWSEIT_GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -euo pipefail
+
+          : "${BROWSEIT_GOOGLE_WEB_CLIENT_ID:?Missing GitHub Actions secret BROWSEIT_GOOGLE_WEB_CLIENT_ID}"
 
           cd "$PROJECT_DIR"
 
           flutter build apk --release \
             --split-per-abi \
             --obfuscate \
-            --split-debug-info=build/debug-info
+            --split-debug-info=build/debug-info \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$BROWSEIT_GOOGLE_WEB_CLIENT_ID" \
+            -PBROWSEIT_GOOGLE_WEB_CLIENT_ID="$BROWSEIT_GOOGLE_WEB_CLIENT_ID"
 
           APK_DIR="build/app/outputs/flutter-apk"
           shopt -s nullglob
