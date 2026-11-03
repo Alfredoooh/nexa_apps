@@ -152,7 +152,7 @@ class MainActivity : FlutterActivity() {
 
     /** Atualiza os filtros cosméticos das WebViews sem recarregar a página. */
     private fun updateNativeAdBlockerOnCurrentWebViews(enabled: Boolean) {
-        LooplyNativeWebViewRegistry.updateAll(enabled)
+        OrbitNativeWebViewRegistry.updateAll(enabled)
         val root = findViewById<View>(android.R.id.content) ?: return
         val script = "window.__looplyAdBlockSetEnabled && window.__looplyAdBlockSetEnabled($enabled);"
 
