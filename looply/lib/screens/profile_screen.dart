@@ -41,7 +41,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                user.displayName?.trim().isNotEmpty == true ? user.displayName! : 'Utilizador Looply',
+                user.displayName?.trim().isNotEmpty == true ? user.displayName! : 'Utilizador BrowseIt',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w800),
               ),

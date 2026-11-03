@@ -190,7 +190,7 @@ class GameDetailsScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(game.description, style: TextStyle(color: muted, fontSize: 15, height: 1.5)),
         const SizedBox(height: 16),
-        Text('O jogo é aberto dentro do Looply através do navegador integrado.', style: TextStyle(color: muted, fontSize: 13, height: 1.4)),
+        Text('O jogo é aberto dentro do BrowseIt através do navegador integrado.', style: TextStyle(color: muted, fontSize: 13, height: 1.4)),
       ]),
       bottomNavigationBar: Container(
         padding: EdgeInsets.fromLTRB(18, 12, 18, 12 + MediaQuery.of(context).padding.bottom),

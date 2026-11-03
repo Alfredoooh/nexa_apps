@@ -21,3 +21,8 @@ build/
 /ios/.symlinks/
 /ios/Flutter/Flutter.framework
 /ios/Flutter/Flutter.podspec
+
+# BrowseIt signing credentials
+/android/app/*.keystore
+/android/app/*.jks
+/android/key.properties

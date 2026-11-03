@@ -1,4 +1,4 @@
-package com.looply.app
+package com.looply.browser.app
 
 import android.net.Uri
 import android.os.SystemClock

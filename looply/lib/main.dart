@@ -10,6 +10,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'models.dart';
 import 'auth_service.dart';
+import 'cloud_sync.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/discover_screen.dart';
@@ -54,7 +55,7 @@ class LooplyApp extends StatelessWidget {
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
         valueListenable: themeController.pureDark,
         builder: (context, pureBlack, __) => MaterialApp(
-          title: 'Looply',
+          title: 'BrowseIt',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
           themeAnimationDuration: Duration.zero,
@@ -140,13 +141,36 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   Uint8List? _lastScreenSnapshot;
   String? _preferredReturnTabId;
   bool _restoreChecked = false;
+  late final List<Listenable> _cloudSyncSources;
+  static const MethodChannel _defaultBrowserIntentChannel = MethodChannel('browseit/default_browser');
+
+  void _onCloudSyncSourceChanged() {
+    BrowseItCloudSync.scheduleAppBackup();
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _cloudSyncSources = <Listenable>[
+      themeController,
+      themeController.pureDark,
+      tabsController,
+      activityController,
+      searchHistoryController,
+      customSitesController,
+      activeSearchEngine,
+      AdBlockStats.instance,
+      browserFaviconCache,
+      bookmarksController,
+      downloadsController,
+    ];
+    for (final source in _cloudSyncSources) {
+      source.addListener(_onCloudSyncSourceChanged);
+    }
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
+    _defaultBrowserIntentChannel.setMethodCallHandler(_handleDefaultBrowserIntent);
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
     _drawerController = AnimationController(
       vsync: this,
@@ -168,14 +192,51 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     ));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRestoreSession());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeRestoreSession();
+      _consumePendingDefaultBrowserUrls();
+    });
+  }
+
+  Future<dynamic> _handleDefaultBrowserIntent(MethodCall call) async {
+    if (call.method != 'openUrl') return null;
+    final url = call.arguments?.toString() ?? '';
+    _openExternalBrowserUrl(url);
+    return true;
+  }
+
+  Future<void> _consumePendingDefaultBrowserUrls() async {
+    try {
+      while (mounted) {
+        final url = await _defaultBrowserIntentChannel.invokeMethod<String>('consumeInitialUrl');
+        if (url == null || url.isEmpty) break;
+        _openExternalBrowserUrl(url);
+      }
+    } on PlatformException {
+      // A aplicação continua a poder ser usada normalmente se não tiver sido
+      // aberta através de um link externo.
+    } on MissingPluginException {
+      // O canal só existe na implementação Android nativa do BrowseIt.
+    }
+  }
+
+  void _openExternalBrowserUrl(String rawUrl) {
+    if (!mounted) return;
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) return;
+    final tab = tabsController.createBrowserTab(uri.toString());
+    ShellTabRequest.instance.requestBrowser(tab.id);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    for (final source in _cloudSyncSources) {
+      source.removeListener(_onCloudSyncSourceChanged);
+    }
     tabsController.removeListener(_onTabsChanged);
     ShellTabRequest.instance.removeListener(_handleShellTabRequest);
+    _defaultBrowserIntentChannel.setMethodCallHandler(null);
     _removeSnapshotOverlay();
     _morphController.dispose();
     _browserSlideController.dispose();
@@ -201,6 +262,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       unawaited(tabsController.flushPersistence());
       unawaited(activityController.flushPersistence());
       unawaited(AdBlockStats.instance.flushPersistence());
+      unawaited(BrowseItCloudSync.syncAppBackup().catchError((_) {}));
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(BrowseItCloudSync.syncAppBackup().catchError((_) {}));
     }
   }
 

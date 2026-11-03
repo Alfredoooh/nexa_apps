@@ -433,7 +433,7 @@ class TabGridCard extends StatelessWidget {
     final isApp = tab.kind == TabKind.appScreen;
     final host = Uri.tryParse(tab.url)?.host ?? '';
     final label = isApp
-        ? (tab.appScreenLabel ?? 'Looply')
+        ? (tab.appScreenLabel ?? 'BrowseIt')
         : ((tab.title?.trim().isNotEmpty ?? false) ? tab.title! : (host.isEmpty ? tab.url : host));
 
     return Material(

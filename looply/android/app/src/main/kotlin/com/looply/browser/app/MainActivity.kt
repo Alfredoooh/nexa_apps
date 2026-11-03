@@ -1,6 +1,26 @@
-package com.looply.app
+package com.looply.browser.app
 
 import android.app.UiModeManager
+import android.Manifest
+import android.app.AlertDialog
+import android.app.role.RoleManager
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.webkit.PermissionRequest
+import android.webkit.GeolocationPermissions
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.CustomCredential
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.security.SecureRandom
+import android.util.Base64
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -51,6 +71,17 @@ class MainActivity : FlutterActivity() {
 
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val nativeAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val pendingExternalUrls = java.util.ArrayDeque<String>()
+    private var defaultBrowserIntentChannel: MethodChannel? = null
+    private var defaultBrowserBridgeReady = false
+    private var pendingRuntimePermissionCallback: ((Boolean) -> Unit)? = null
+    private var pendingRuntimePermissionNames: Set<String> = emptySet()
+    private var pendingLocationPermissionAcceptAny = false
+    private val webPermissionPreferences by lazy {
+        getSharedPreferences("browseit_web_permissions", Context.MODE_PRIVATE)
+    }
+    private val runtimePermissionRequestCode = 7401
     private val nativeStatsLock = Any()
     private var pendingNativeBlocks = 0
     private var nativeStatsChannel: MethodChannel? = null
@@ -72,6 +103,7 @@ class MainActivity : FlutterActivity() {
         val savedMode = readSavedThemeMode()
         val savedPureBlack = readSavedPureBlack()
         applyApplicationNightMode(savedMode)
+        extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
@@ -96,10 +128,34 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "showNativePopup" -> showNativePopup(call, result)
-                    "shareLink" -> shareLink(call, result)
+                    "isDefaultBrowser" -> result.success(isDefaultBrowser())
+                    "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "browseit/google_auth")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "signInGoogle" -> startGoogleSignIn(call, result)
+                    else -> result.notImplemented()
+                }
+            }
+
+        defaultBrowserIntentChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "browseit/default_browser",
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "consumeInitialUrl" -> {
+                        defaultBrowserBridgeReady = true
+                        result.success(if (pendingExternalUrls.isEmpty()) null else pendingExternalUrls.removeFirst())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
 
         nativeStatsChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -125,7 +181,28 @@ class MainActivity : FlutterActivity() {
             appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
         }
         nativeStatsChannel = null
+        defaultBrowserIntentChannel = null
+        defaultBrowserBridgeReady = false
+        nativeAuthScope.cancel()
         super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val url = extractBrowsableUrl(intent) ?: return
+        if (defaultBrowserBridgeReady) {
+            defaultBrowserIntentChannel?.invokeMethod("openUrl", url)
+        } else {
+            pendingExternalUrls.addLast(url)
+        }
+    }
+
+    private fun extractBrowsableUrl(source: Intent?): String? {
+        if (source?.action != Intent.ACTION_VIEW) return null
+        val uri = source.data ?: return null
+        if (uri.scheme != "http" && uri.scheme != "https") return null
+        return uri.toString().takeIf { it.isNotBlank() }
     }
 
     /** Instala a implementação nativa diretamente em cada InAppWebView ativo. */
@@ -279,7 +356,7 @@ class MainActivity : FlutterActivity() {
         val background = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.rgb(20, 21, 23)
+            else -> Color.rgb(23, 24, 26)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
         window.statusBarColor = background
@@ -306,28 +383,245 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun shareLink(call: MethodCall, result: MethodChannel.Result) {
-        val url = call.argument<String>("url")?.trim().orEmpty()
-        if (url.isEmpty()) {
-            result.error("invalid_url", "Não existe uma ligação para partilhar.", null)
+    private fun startGoogleSignIn(call: MethodCall, result: MethodChannel.Result) {
+        val serverClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
+        if (serverClientId.isBlank() || serverClientId.contains("PASTE_WEB_CLIENT_ID_HERE", ignoreCase = true)) {
+            result.error(
+                "google_web_client_id_missing",
+                "Falta configurar o OAuth Client ID do tipo Web em BROWSEIT_GOOGLE_WEB_CLIENT_ID. O Client ID Android não substitui o Web Client ID usado como audience do ID token.",
+                null,
+            )
             return
         }
-        val requestedPackage = call.argument<String>("packageName")
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, url)
-            if (!requestedPackage.isNullOrBlank()) setPackage(requestedPackage)
-        }
-        try {
-            if (!requestedPackage.isNullOrBlank() && sendIntent.resolveActivity(packageManager) != null) {
-                startActivity(sendIntent)
-            } else {
-                sendIntent.setPackage(null)
-                startActivity(Intent.createChooser(sendIntent, "Partilhar ligação"))
+
+        val suppliedNonce = call.argument<String>("nonce")?.trim().orEmpty()
+        val nonce = suppliedNonce.ifBlank { createSecureNonce() }
+        nativeAuthScope.launch {
+            try {
+                val manager = CredentialManager.create(this@MainActivity)
+
+                suspend fun requestGoogleCredential(onlyAuthorized: Boolean) = manager.getCredential(
+                    context = this@MainActivity,
+                    request = GetCredentialRequest.Builder()
+                        .addCredentialOption(
+                            GetGoogleIdOption.Builder()
+                                .setFilterByAuthorizedAccounts(onlyAuthorized)
+                                .setServerClientId(serverClientId)
+                                .setNonce(nonce)
+                                .setAutoSelectEnabled(onlyAuthorized)
+                                .build(),
+                        )
+                        .build(),
+                )
+
+                val response = try {
+                    requestGoogleCredential(true)
+                } catch (_: NoCredentialException) {
+                    requestGoogleCredential(false)
+                }
+
+                val credential = response.credential
+                if (credential !is CustomCredential ||
+                    credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    result.error("google_credential_unexpected", "O Google não devolveu uma credencial de ID token compatível.", null)
+                    return@launch
+                }
+
+                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                result.success(
+                    mapOf(
+                        "idToken" to googleCredential.idToken,
+                        "email" to googleCredential.id,
+                        "displayName" to googleCredential.displayName,
+                        "photoUrl" to googleCredential.profilePictureUri?.toString(),
+                        "nonce" to nonce,
+                    ),
+                )
+            } catch (error: Exception) {
+                val name = error.javaClass.simpleName
+                val code = if (name.contains("Cancellation", true)) "google_cancelled" else "google_sign_in_failed"
+                result.error(code, error.message ?: "Não foi possível iniciar sessão com Google.", null)
             }
-            result.success(true)
-        } catch (error: Exception) {
-            result.error("share_failed", error.message, null)
+        }
+    }
+
+    private fun createSecureNonce(): String {
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    private fun isDefaultBrowser(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
+        } else {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://browseit.invalid"))
+            val resolved = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolved?.activityInfo?.packageName == packageName
+        }
+    }
+
+    private fun requestDefaultBrowser(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val roleManager = getSystemService(RoleManager::class.java) ?: return false
+                if (!roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) return false
+                if (roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) return true
+                startActivityForResult(roleManager.createRequestRoleIntent(RoleManager.ROLE_BROWSER), 7402)
+            } else {
+                startActivity(Intent("android.settings.MANAGE_DEFAULT_APPS_SETTINGS"))
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Called only after an individual website asks to use the camera/microphone. */
+    internal fun requestOrbitWebPermissions(request: PermissionRequest, origin: String) {
+        val parsedOrigin = Uri.parse(origin)
+        if (parsedOrigin.scheme != "https" && parsedOrigin.host != "localhost") {
+            request.deny()
+            return
+        }
+        val resources = request.resources?.toSet().orEmpty()
+        val video = PermissionRequest.RESOURCE_VIDEO_CAPTURE
+        val audio = PermissionRequest.RESOURCE_AUDIO_CAPTURE
+        if (resources.isEmpty() || resources.any { it != video && it != audio }) {
+            request.deny()
+            return
+        }
+        val androidPermissions = buildList {
+            if (video in resources) add(Manifest.permission.CAMERA)
+            if (audio in resources) add(Manifest.permission.RECORD_AUDIO)
+        }.toTypedArray()
+        val displayName = origin.removePrefix("https://").removePrefix("http://").substringBefore('/')
+        AlertDialog.Builder(this)
+            .setTitle("Permitir acesso ao dispositivo?")
+            .setMessage("$displayName pretende utilizar ${buildList { if (video in resources) add("a câmara"); if (audio in resources) add("o microfone") }.joinToString(" e ")}.")
+            .setNegativeButton("Bloquear") { _, _ -> request.deny() }
+            .setPositiveButton("Permitir") { _, _ ->
+                requestRuntimePermissions(androidPermissions) { granted ->
+                    try {
+                        if (granted) request.grant(resources.toTypedArray()) else request.deny()
+                    } catch (_: RuntimeException) {
+                        // O site pode ter cancelado o pedido enquanto o diálogo Android estava aberto.
+                    }
+                }
+            }
+            .setOnCancelListener { request.deny() }
+            .show()
+    }
+
+    /** A geolocalização também exige a permissão do Android e consentimento do site. */
+    internal fun requestOrbitGeolocation(origin: String, callback: GeolocationPermissions.Callback) {
+        val parsedOrigin = Uri.parse(origin)
+        if (parsedOrigin.scheme != "https" && parsedOrigin.host != "localhost") {
+            callback.invoke(origin, false, false)
+            return
+        }
+        val host = origin.removePrefix("https://").removePrefix("http://").substringBefore('/')
+        val savedDecision = webPermissionPreferences.getString("geo:$origin", null)
+        val hasSystemPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (savedDecision == "allow" && hasSystemPermission) {
+            callback.invoke(origin, true, false)
+            return
+        }
+        if (savedDecision == "deny") {
+            callback.invoke(origin, false, false)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Permitir localização?")
+            .setMessage("$host pretende aceder à localização deste dispositivo.")
+            .setNegativeButton("Bloquear") { _, _ ->
+                webPermissionPreferences.edit().putString("geo:$origin", "deny").apply()
+                callback.invoke(origin, false, false)
+            }
+            .setPositiveButton("Permitir") { _, _ ->
+                requestRuntimeLocationPermissions { granted ->
+                    webPermissionPreferences.edit().putString("geo:$origin", if (granted) "allow" else "deny").apply()
+                    callback.invoke(origin, granted, false)
+                }
+            }
+            .setOnCancelListener { callback.invoke(origin, false, false) }
+            .show()
+    }
+
+    private fun requestRuntimeLocationPermissions(callback: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            callback(true)
+            return
+        }
+        val hasCoarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasFine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (hasCoarse || hasFine) {
+            callback(true)
+            return
+        }
+        if (pendingRuntimePermissionCallback != null) {
+            callback(false)
+            return
+        }
+        pendingRuntimePermissionNames = setOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+        pendingLocationPermissionAcceptAny = true
+        pendingRuntimePermissionCallback = callback
+        requestPermissions(
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION),
+            runtimePermissionRequestCode,
+        )
+    }
+
+    private fun requestRuntimePermissions(permissions: Array<String>, callback: (Boolean) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            callback(true)
+            return
+        }
+        val missing = permissions.distinct().filter {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            callback(true)
+            return
+        }
+        if (pendingRuntimePermissionCallback != null) {
+            callback(false)
+            return
+        }
+        pendingRuntimePermissionNames = missing.toSet()
+        pendingLocationPermissionAcceptAny = false
+        pendingRuntimePermissionCallback = callback
+        requestPermissions(missing.toTypedArray(), runtimePermissionRequestCode)
+    }
+
+    @Deprecated("Deprecated in Android API; retained for compatibility with the FlutterActivity permission callback")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != runtimePermissionRequestCode) return
+        val callback = pendingRuntimePermissionCallback
+        val required = pendingRuntimePermissionNames
+        pendingRuntimePermissionCallback = null
+        pendingRuntimePermissionNames = emptySet()
+        val granted = required.isNotEmpty() && if (pendingLocationPermissionAcceptAny) {
+            required.any { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+        } else {
+            required.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+        }
+        pendingLocationPermissionAcceptAny = false
+        callback?.invoke(granted)
+    }
+
+    @Deprecated("Deprecated in Android API; retained for compatibility with WebView file chooser")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == OrbitFileChooserRegistry.REQUEST_CODE) {
+            OrbitFileChooserRegistry.onActivityResult(resultCode, data)
         }
     }
 

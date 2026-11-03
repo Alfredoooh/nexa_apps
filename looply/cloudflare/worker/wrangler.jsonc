@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "browseit-auth",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-03",
+  "workers_dev": true,
+  "vars": {
+    "GOOGLE_WEB_CLIENT_ID": "PASTE_WEB_CLIENT_ID_HERE",
+    "ALLOWED_ORIGIN": "*"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "browseit-users",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

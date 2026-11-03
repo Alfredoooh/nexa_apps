@@ -96,6 +96,7 @@ class SettingsScreen extends StatelessWidget {
                   trailing: const _SettingsValue('Português'),
                   onTap: () => _showLanguageInfo(context),
                 ),
+                const _DefaultBrowserSettingsTile(),
               ],
             ),
             const SizedBox(height: 20),
@@ -180,7 +181,7 @@ class SettingsScreen extends StatelessWidget {
                 _SettingsTile(
                   icon: Symbols.download_rounded,
                   label: 'Importar dados',
-                  subtitle: 'Restaurar um backup JSON do Looply',
+                  subtitle: 'Restaurar um backup JSON do BrowseIt',
                   onTap: () => _importData(context),
                 ),
               ],
@@ -208,7 +209,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Importar dados'),
-        content: const Text('Os dados atuais do Looply serão substituídos pelos dados do backup. A sessão de autenticação será mantida.'),
+        content: const Text('Os dados atuais do BrowseIt serão substituídos pelos dados do backup. A sessão de autenticação será mantida.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
           FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Continuar')),
@@ -444,4 +445,77 @@ class _AccountSlideRoute extends PageRouteBuilder<void> {
             return SlideTransition(position: slide, child: child);
           },
         );
+}
+
+
+class _DefaultBrowserSettingsTile extends StatefulWidget {
+  const _DefaultBrowserSettingsTile();
+
+  @override
+  State<_DefaultBrowserSettingsTile> createState() => _DefaultBrowserSettingsTileState();
+}
+
+class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile> with WidgetsBindingObserver {
+  static const MethodChannel _channel = MethodChannel('looply/native_ui');
+  Future<bool> _status = Future<bool>.value(false);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _status = _queryStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<bool> _queryStatus() => _channel
+      .invokeMethod<bool>('isDefaultBrowser')
+      .then((value) => value ?? false)
+      .catchError((_) => false);
+
+  void _refresh() {
+    if (!mounted) return;
+    setState(() => _status = _queryStatus());
+  }
+
+  Future<void> _requestDefaultBrowser() async {
+    try {
+      final launched = await _channel.invokeMethod<bool>('requestDefaultBrowser') ?? false;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(launched
+            ? 'Escolhe BrowseIt no ecrã do Android para o tornar o navegador padrão.'
+            : 'Este dispositivo não disponibiliza a seleção de navegador padrão por esta API.'),
+      ));
+      _refresh();
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message ?? 'Não foi possível abrir as definições do Android.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _status,
+      builder: (context, snapshot) => _SettingsTile(
+        icon: Symbols.public_rounded,
+        label: 'Navegador padrão',
+        subtitle: snapshot.data == true ? 'BrowseIt é o navegador padrão' : 'Definir BrowseIt como navegador padrão',
+        trailing: snapshot.data == true
+            ? Icon(Symbols.check_circle_rounded, color: accentColor(context), size: 21)
+            : Icon(Symbols.chevron_right_rounded, color: mutedText(context), size: 20),
+        onTap: _requestDefaultBrowser,
+      ),
+    );
+  }
 }

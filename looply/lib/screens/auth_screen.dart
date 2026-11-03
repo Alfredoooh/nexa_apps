@@ -49,11 +49,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String _googleErrorMessage(PlatformException error) {
+    if (error.code == 'google_web_client_id_missing') {
+      return 'Falta criar um OAuth Client ID do tipo Web no Google Cloud e colocá-lo em BROWSEIT_GOOGLE_WEB_CLIENT_ID. O Client ID Android sozinho não emite o ID token destinado ao Worker.';
+    }
+    if (error.code == 'google_cancelled') {
+      return 'O início de sessão Google foi cancelado.';
+    }
     final message = error.message?.toLowerCase() ?? '';
     if (message.contains('developer_error') || message.contains('10')) {
-      return 'Configuração OAuth incompleta: falta associar o applicationId e a SHA-1 ao cliente Google do projeto.';
+      return 'Configuração OAuth Android incompleta: confirma o package com.looply.browser.app e a SHA-1 do certificado usado para assinar esta build.';
     }
-    return error.message ?? 'O início de sessão Google foi cancelado ou falhou.';
+    return error.message ?? 'O início de sessão Google falhou.';
   }
 
   Future<void> _emailSignIn() async {
@@ -70,7 +76,7 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       _showMessage(
         error is StateError
-            ? 'Login por email indisponível: é necessário configurar um backend de autenticação (por exemplo, Firebase Auth).'
+            ? 'O login por email ainda não está ativado no backend Cloudflare do BrowseIt.'
             : error.toString().replaceFirst('Invalid argument(s): ', ''),
       );
     } finally {
@@ -178,7 +184,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Bem-vindo ao Looply',
+                      'Bem-vindo ao BrowseIt',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: text,

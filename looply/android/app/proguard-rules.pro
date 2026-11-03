@@ -2,4 +2,4 @@
 -dontwarn com.pichillilorenzo.flutter_inappwebview.**
 -keepattributes JavascriptInterface
 -keepattributes *Annotation*
--keep class com.looply.app.** { *; }
+-keep class com.looply.browser.app.** { *; }

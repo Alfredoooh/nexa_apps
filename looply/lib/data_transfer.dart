@@ -64,8 +64,8 @@ class LooplyDataTransfer {
     final bytes = await buildExportBytes();
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
     return FilePicker.platform.saveFile(
-      dialogTitle: 'Exportar dados do Looply',
-      fileName: 'looply-backup-$stamp.json',
+      dialogTitle: 'Exportar dados do BrowseIt',
+      fileName: 'browseit-backup-$stamp.json',
       type: FileType.custom,
       allowedExtensions: const ['json'],
       bytes: bytes,
@@ -74,7 +74,7 @@ class LooplyDataTransfer {
 
   static Future<bool> importFromFile() async {
     final selection = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Importar dados do Looply',
+      dialogTitle: 'Importar dados do BrowseIt',
       type: FileType.custom,
       allowedExtensions: const ['json'],
       allowMultiple: false,
@@ -87,11 +87,11 @@ class LooplyDataTransfer {
 
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map || decoded['format'] != 'looply-backup') {
-      throw const FormatException('Este ficheiro não é um backup válido do Looply.');
+      throw const FormatException('Este ficheiro não é um backup válido do BrowseIt.');
     }
     final version = decoded['schemaVersion'];
     if (version is! num || version > schemaVersion || version < 1) {
-      throw const FormatException('A versão deste backup não é compatível com esta versão do Looply.');
+      throw const FormatException('A versão deste backup não é compatível com esta versão do BrowseIt.');
     }
     final data = decoded['preferences'];
     if (data is! Map) throw const FormatException('O backup não contém dados de preferências válidos.');

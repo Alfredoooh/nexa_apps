@@ -104,59 +104,13 @@ class _OrbitWebViewController {
   }
 
   Future<void> evaluateJavascript(String source) async {
-    await evaluateJavascriptResult(source);
-  }
-
-  Future<dynamic> evaluateJavascriptResult(String source) async {
     if (native != null) {
-      return native!.invokeMethod<dynamic>(
+      await native!.invokeMethod<dynamic>(
         'evaluateJavascript',
         <String, Object>{'source': source},
       );
-    }
-    return plugin!.evaluateJavascript(source: source);
-  }
-
-  Future<void> setZoom(double scale) async {
-    if (native != null) {
-      await native!.invokeMethod<void>('setZoom', <String, Object>{'scale': scale});
     } else {
-      final value = scale.clamp(.5, 2.0).toStringAsFixed(2);
-      await plugin!.evaluateJavascript(
-        source: "document.documentElement.style.zoom='$value';",
-      );
-    }
-  }
-
-  Future<void> setDesktopMode(bool enabled) async {
-    if (native != null) {
-      await native!.invokeMethod<void>('setDesktopMode', <String, Object>{'enabled': enabled});
-    } else {
-      await plugin!.evaluateJavascript(
-        source: "(function(){let m=document.querySelector('meta[name=viewport]');if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}m.content='width=${enabled ? '1024' : 'device-width'}, initial-scale=1';})();",
-      );
-    }
-  }
-
-  Future<Map<String, dynamic>> getSiteInfo() async {
-    if (native == null) return <String, dynamic>{};
-    final value = await native!.invokeMapMethod<String, dynamic>('getSiteInfo');
-    return value ?? <String, dynamic>{};
-  }
-
-  Future<void> clearSiteData() async {
-    if (native != null) {
-      await native!.invokeMethod<void>('clearSiteData');
-    } else {
-      await plugin!.evaluateJavascript(
-        source: "localStorage.clear();sessionStorage.clear();caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));",
-      );
-    }
-  }
-
-  Future<void> downloadUrl(String url) async {
-    if (native != null) {
-      await native!.invokeMethod<void>('downloadUrl', <String, Object>{'url': url});
+      await plugin!.evaluateJavascript(source: source);
     }
   }
 
@@ -229,10 +183,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   Key _webViewKey = UniqueKey();
   bool _tabsRequestInProgress = false;
   bool _firstLoadSignaled = false;
-  double _pageZoom = 1.0;
-  bool _desktopMode = false;
-  bool _readerMode = false;
-  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
 
   @override
   void initState() {
@@ -528,17 +478,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       case _OrbitMenuAction.bookmarks:
         Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BookmarksScreen()));
         break;
-      case _OrbitMenuAction.zoom:
-        _showZoomSheet();
+      case _OrbitMenuAction.settings:
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SettingsScreen()));
         break;
-      case _OrbitMenuAction.readerMode:
-        await _toggleReaderMode();
-        break;
-      case _OrbitMenuAction.desktopMode:
-        await _toggleDesktopMode();
-        break;
-      case _OrbitMenuAction.shareLink:
-        _showShareSheet(_currentUrl, _currentTitle);
+      case _OrbitMenuAction.goHome:
+        ShellTabRequest.instance.request(0);
         break;
       case _OrbitMenuAction.history:
         Navigator.of(context).push(
@@ -614,7 +558,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       _BrowserQuickAction(icon: Symbols.arrow_forward_rounded, label: 'Avançar', enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
                       _BrowserQuickAction(icon: Symbols.add_rounded, label: 'Novo separador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
                       _BrowserQuickAction(icon: Symbols.bookmarks_rounded, label: 'Marcadores', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
-                      _BrowserQuickAction(icon: Symbols.zoom_in_rounded, label: 'Zoom', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.zoom)),
+                      _BrowserQuickAction(icon: Symbols.settings_rounded, label: 'Definições', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
                     ],
                   ),
                 ),
@@ -631,10 +575,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
                       _BrowserSheetListItem(icon: Symbols.refresh_rounded, label: 'Atualizar página', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(icon: Symbols.content_copy_rounded, label: 'Copiar endereço', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
-                      _BrowserSheetListItem(icon: Icons.menu_book_rounded, label: _readerMode ? 'Sair do modo de leitura' : 'Modo de leitura', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.readerMode)),
-                      _BrowserSheetListItem(icon: Icons.desktop_windows_rounded, label: _desktopMode ? 'Desativar modo computador' : 'Modo computador', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.desktopMode)),
-                      _BrowserSheetListItem(icon: Icons.share_rounded, label: 'Partilhar ligação', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.shareLink)),
                       _BrowserSheetListItem(icon: Icons.info_outline_rounded, label: 'Informações do site', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+                      _BrowserSheetListItem(icon: Symbols.home_rounded, label: 'Página inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
                     ],
                   ),
                 ),
@@ -677,296 +619,46 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     });
   }
 
-  Future<void> _showSiteInfo() async {
+  void _showSiteInfo() {
     final uri = Uri.tryParse(_currentUrl);
     final host = uri?.host.isNotEmpty == true ? uri!.host : _currentUrl;
-    Map<String, dynamic> info = <String, dynamic>{};
-    try {
-      info = await _controller?.getSiteInfo() ?? <String, dynamic>{};
-    } catch (_) {}
-    if (!mounted) return;
-    final cookieCount = (info['cookieCount'] as num?)?.toInt() ?? 0;
-    final memoryBytes = (info['memoryBytes'] as num?)?.toInt() ?? 0;
-    final storageBytes = (info['storageBytes'] as num?)?.toInt() ?? 0;
-    final secure = uri?.scheme.toLowerCase() == 'https';
-    final cookieNames = (info['cookieNames'] as List?)?.whereType<String>().toList() ?? <String>[];
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: pillColor(context),
         surfaceTintColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(width: 42, height: 42, decoration: BoxDecoration(color: secure ? const Color(0xFF1E8E5A).withOpacity(.15) : Colors.orange.withOpacity(.14), shape: BoxShape.circle), child: Icon(secure ? Icons.lock_rounded : Icons.warning_amber_rounded, color: secure ? const Color(0xFF35B878) : Colors.orange, size: 20)),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_currentTitle.trim().isEmpty ? host : _currentTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context), fontWeight: FontWeight.w700, fontSize: 15)),
-                  const SizedBox(height: 3),
-                  Text(host, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mutedText(context), fontSize: 11.5)),
-                ])),
-              ]),
-              const SizedBox(height: 17),
-              _SiteInfoRow(label: 'Segurança', value: secure ? 'Ligação encriptada (HTTPS)' : 'Ligação sem HTTPS'),
-              _SiteInfoRow(label: 'Cookies', value: '$cookieCount guardados'),
-              _SiteInfoRow(label: 'Memória JavaScript', value: memoryBytes > 0 ? _formatBytes(memoryBytes) : 'Não disponibilizada pelo site'),
-              _SiteInfoRow(label: 'Armazenamento local JS', value: storageBytes > 0 ? _formatBytes(storageBytes) : 'Não disponibilizado'),
-              if (cookieNames.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text('Cookies detetados', style: TextStyle(color: mutedText(context), fontSize: 11, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text(cookieNames.take(5).join(' · '), maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: mutedText(context), fontSize: 10.5)),
-              ],
-              const SizedBox(height: 17),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    Navigator.of(dialogContext).pop();
-                    try {
-                      await _controller?.clearSiteData();
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cookies e armazenamento deste site eliminados.')));
-                    } catch (_) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível limpar os dados deste site.')));
-                    }
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Eliminar dados do site'),
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Fechar')),
-              ),
-            ],
-          ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
         ),
-      ),
-    );
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  Future<void> _showZoomSheet() async {
-    var zoom = _pageZoom;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        child: StatefulBuilder(
-          builder: (context, setSheetState) => Material(
-            color: panelColor(context),
-            surfaceTintColor: Colors.transparent,
-            borderRadius: BorderRadius.circular(32),
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 36, height: 4, decoration: BoxDecoration(color: mutedText(context).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Icon(Icons.zoom_in_rounded, color: accentColor(context)),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text('Zoom da página', style: TextStyle(color: mainText(context), fontWeight: FontWeight.w700, fontSize: 16))),
-                  Text('${(zoom * 100).round()}%', style: TextStyle(color: mainText(context), fontWeight: FontWeight.w700)),
-                  TextButton(onPressed: () { setSheetState(() => zoom = 1); setState(() => _pageZoom = 1); unawaited(_controller?.setZoom(1)); }, child: const Text('Repor')),
-                ]),
-                Slider(
-                  value: zoom,
-                  min: .5,
-                  max: 2,
-                  divisions: 30,
-                  label: '${(zoom * 100).round()}%',
-                  onChanged: (value) {
-                    setSheetState(() => zoom = value);
-                    setState(() => _pageZoom = value);
-                    unawaited(_controller?.setZoom(value));
-                  },
-                ),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('50%', style: TextStyle(color: mutedText(context), fontSize: 11)),
-                  Text('200%', style: TextStyle(color: mutedText(context), fontSize: 11)),
-                ]),
-              ]),
-            ),
-          ),
+        title: Text(
+          'Informações do site',
+          style: TextStyle(color: mainText(context)),
         ),
-      ),
-    );
-  }
-
-  Future<void> _toggleReaderMode() async {
-    final script = _readerMode
-        ? "(function(){if(!window.__looplyReaderBackup)return 'off';document.getElementById('__looplyReaderStyle')?.remove();document.body.innerHTML=window.__looplyReaderBackup.html;document.title=window.__looplyReaderBackup.title;document.documentElement.style.cssText=window.__looplyReaderBackup.htmlStyle;delete window.__looplyReaderBackup;return 'off';})()"
-        : "(function(){if(window.__looplyReaderBackup)return 'on';const candidates=[...document.querySelectorAll('article,main,[role=main],section,div')].filter(e=>e.innerText&&e.innerText.trim().length>350);candidates.sort((a,b)=>b.innerText.length-a.innerText.length);const target=candidates[0]||document.body;const clone=target.cloneNode(true);clone.querySelectorAll('script,style,nav,footer,header,aside,button,form,[aria-hidden=true]').forEach(e=>e.remove());const text=clone.innerText||'';if(text.trim().length<180)return 'unavailable';window.__looplyReaderBackup={html:document.body.innerHTML,title:document.title,htmlStyle:document.documentElement.style.cssText};const wrap=document.createElement('main');wrap.id='__looplyReaderView';wrap.appendChild(clone);document.body.innerHTML='';document.body.appendChild(wrap);const style=document.createElement('style');style.id='__looplyReaderStyle';style.textContent='html,body{background:#f7f5ef!important;color:#202124!important}body{margin:0!important;padding:28px 22px!important;font:18px/1.75 Georgia,serif!important}#__looplyReaderView{max-width:720px;margin:0 auto!important}#__looplyReaderView img{max-width:100%;height:auto}#__looplyReaderView h1,#__looplyReaderView h2,#__looplyReaderView h3{line-height:1.25;color:#17191b}#__looplyReaderView p{margin:0 0 1.15em}';document.head.appendChild(style);document.documentElement.style.background='#f7f5ef';return 'on';})()";
-    try {
-      final result = await _controller?.evaluateJavascriptResult(script);
-      if (result?.toString().contains('unavailable') == true) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Esta página não contém um artigo adequado ao modo de leitura.')));
-        return;
-      }
-      if (!mounted) return;
-      setState(() => _readerMode = !_readerMode);
-    } catch (_) {}
-  }
-
-  Future<void> _toggleDesktopMode() async {
-    final enabled = !_desktopMode;
-    try {
-      await _controller?.setDesktopMode(enabled);
-      if (!mounted) return;
-      setState(() => _desktopMode = enabled);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(enabled ? 'Modo computador ativado.' : 'Modo móvel ativado.')));
-    } catch (_) {}
-  }
-
-  Future<void> _showShareSheet(String url, String title) async {
-    if (url.isEmpty) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-        child: Material(
-          color: panelColor(context),
-          surfaceTintColor: Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 17, 18, 20),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 36, height: 4, decoration: BoxDecoration(color: mutedText(context).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-              const SizedBox(height: 16),
-              Align(alignment: Alignment.centerLeft, child: Text('Partilhar ligação', style: TextStyle(color: mainText(context), fontWeight: FontWeight.w800, fontSize: 17))),
-              const SizedBox(height: 14),
-              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(16)), child: Text(title.trim().isEmpty ? url : title, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context), fontSize: 13))),
-              const SizedBox(height: 18),
-              Row(children: [
-                _ShareTarget(asset: 'assets/images/share/whatsapp.png', color: const Color(0xFF25D366), label: 'WhatsApp', onTap: () => _shareTo(url, 'com.whatsapp', sheetContext)),
-                _ShareTarget(asset: 'assets/images/share/telegram.png', color: const Color(0xFF26A5E4), label: 'Telegram', onTap: () => _shareTo(url, 'org.telegram.messenger', sheetContext)),
-                _ShareTarget(asset: 'assets/images/quick_sites/gmail.webp', color: const Color(0xFFEA4335), label: 'Gmail', onTap: () => _shareTo(url, 'com.google.android.gm', sheetContext)),
-                _ShareTarget(icon: Icons.more_horiz_rounded, color: accentColor(context), label: 'Demais', onTap: () => _shareTo(url, null, sheetContext)),
-              ]),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _shareTo(String url, String? packageName, BuildContext sheetContext) async {
-    Navigator.of(sheetContext).pop();
-    try {
-      await _nativeUi.invokeMethod<void>('shareLink', <String, Object?>{
-        'url': url,
-        if (packageName != null) 'packageName': packageName,
-      });
-    } catch (_) {
-      if (mounted) await Clipboard.setData(ClipboardData(text: url));
-    }
-  }
-
-  void _openContextTarget(String url) {
-    if (url.trim().isEmpty) return;
-    final tab = tabsController.createBrowserTab(url);
-    ShellTabRequest.instance.requestBrowser(tab.id);
-  }
-
-  Future<void> _showContextMenu(Map<dynamic, dynamic> args) async {
-    final type = args['type']?.toString() ?? 'link';
-    final isImage = type == 'image';
-    final url = (isImage ? args['imageUrl'] : args['linkUrl'])?.toString().trim() ?? '';
-    final linkUrl = args['linkUrl']?.toString().trim() ?? '';
-    final label = args['linkText']?.toString().trim() ?? '';
-    final width = (args['imageWidth'] as num?)?.toInt() ?? 0;
-    final height = (args['imageHeight'] as num?)?.toInt() ?? 0;
-    if (url.isEmpty || !mounted) return;
-    final uri = Uri.tryParse(url);
-    final host = uri?.host ?? '';
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: const Color(0xFF343740),
-        surfaceTintColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: 430, maxHeight: MediaQuery.sizeOf(context).height * .82),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 17),
-              child: Row(children: [
-                if (isImage)
-                  ClipRRect(borderRadius: BorderRadius.circular(9), child: Image.network(url, width: 60, height: 48, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 60, height: 48, child: Icon(Icons.image_rounded, color: Colors.white70))))
-                else
-                  Container(width: 48, height: 48, decoration: const BoxDecoration(color: Color(0xFF4A4D55), shape: BoxShape.circle), alignment: Alignment.center, child: Text(host.isEmpty ? '↗' : host[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 20))),
-                const SizedBox(width: 13),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(isImage ? (width > 0 && height > 0 ? 'Imagem ($width×$height)' : 'Imagem') : (label.isEmpty ? host : label), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFF3F4F6), fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(isImage ? host : url, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFB7BBC3), fontSize: 11.5)),
-                ])),
-                IconButton(onPressed: () => Navigator.of(dialogContext).pop(), icon: const Icon(Icons.close_rounded, color: Colors.white70)),
-              ]),
-            ),
-            const Divider(height: 1, color: Color(0xFF4A4D55)),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                children: isImage ? [
-                  _ContextAction(title: 'Abrir imagem num novo separador', onTap: () { Navigator.of(dialogContext).pop(); _openContextTarget(url); }),
-                  _ContextAction(title: 'Pré-visualizar imagem', onTap: () { Navigator.of(dialogContext).pop(); _showWebPreview(url, 'Imagem'); }),
-                  _ContextAction(title: 'Copiar imagem', onTap: () async { await Clipboard.setData(ClipboardData(text: url)); if (dialogContext.mounted) Navigator.of(dialogContext).pop(); }),
-                  _ContextAction(title: 'Transferir imagem', onTap: () async { Navigator.of(dialogContext).pop(); await _controller?.downloadUrl(url); }),
-                  _ContextAction(title: 'Pesquisar a imagem no Google', onTap: () { Navigator.of(dialogContext).pop(); _openContextTarget('https://www.google.com/searchbyimage?image_url=${Uri.encodeComponent(url)}'); }),
-                  _ContextAction(title: 'Partilhar imagem', onTap: () { Navigator.of(dialogContext).pop(); _showShareSheet(url, 'Imagem'); }),
-                ] : [
-                  _ContextAction(title: 'Abrir num novo separador', onTap: () { Navigator.of(dialogContext).pop(); _openContextTarget(url); }),
-                  _ContextAction(title: 'Pré-visualizar página', onTap: () { Navigator.of(dialogContext).pop(); _showWebPreview(url, label.isEmpty ? host : label); }),
-                  _ContextAction(title: 'Copiar endereço do link', onTap: () async { await Clipboard.setData(ClipboardData(text: url)); if (dialogContext.mounted) Navigator.of(dialogContext).pop(); }),
-                  if (label.isNotEmpty) _ContextAction(title: 'Copiar texto do link', onTap: () async { await Clipboard.setData(ClipboardData(text: label)); if (dialogContext.mounted) Navigator.of(dialogContext).pop(); }),
-                  _ContextAction(title: 'Transferir link', onTap: () async { Navigator.of(dialogContext).pop(); await _controller?.downloadUrl(url); }),
-                  _ContextAction(title: 'Adicionar à Lista de leitura', onTap: () { bookmarksController.add(label.isEmpty ? host : label, url); Navigator.of(dialogContext).pop(); }),
-                  _ContextAction(title: 'Partilhar link', onTap: () { Navigator.of(dialogContext).pop(); _showShareSheet(url, label); }),
-                ],
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _currentTitle.isEmpty ? host : _currentTitle,
+              style: TextStyle(
+                color: mainText(context),
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ]),
+            const SizedBox(height: 7),
+            SelectableText(
+              _currentUrl,
+              style: TextStyle(color: mutedText(context), fontSize: 13),
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
       ),
-    );
-  }
-
-  void _showWebPreview(String url, String title) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      builder: (sheetContext) => _OrbitPreviewSheet(url: url, title: title, onOpen: () {
-        Navigator.of(sheetContext).pop();
-        _openContextTarget(url);
-      }),
     );
   }
 
@@ -1213,9 +905,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final args = rawArguments is Map ? rawArguments : const <Object?, Object?>{};
 
     switch (name) {
-      case 'onLongPress':
-        unawaited(_showContextMenu(Map<dynamic, dynamic>.from(args)));
-        break;
       case 'onLoadStart':
         _progressHideTimer?.cancel();
         setState(() {
@@ -1223,7 +912,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           _showProgress = true;
           _progress = 0;
           _loadError = null;
-          _readerMode = false;
           final url = args['url']?.toString();
           if (url != null) _currentUrl = url;
         });
@@ -1303,7 +991,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           _currentUrl = url;
         });
         _updateTabState(screenshot: screenshot);
-        if (_pageZoom != 1.0) unawaited(controller?.setZoom(_pageZoom));
         _signalFirstLoad();
         _progressHideTimer?.cancel();
         _progressHideTimer = Timer(const Duration(milliseconds: 260), () {
@@ -1631,119 +1318,11 @@ enum _OrbitMenuAction {
   findInPage,
   newTab,
   bookmarks,
-  zoom,
-  readerMode,
-  desktopMode,
-  shareLink,
+  settings,
+  goHome,
   history,
   downloads,
   bookmark,
-}
-
-class _SiteInfoRow extends StatelessWidget {
-  const _SiteInfoRow({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(children: [
-      Expanded(child: Text(label, style: TextStyle(color: mutedText(context), fontSize: 12))),
-      const SizedBox(width: 12),
-      Flexible(child: Text(value, textAlign: TextAlign.end, style: TextStyle(color: mainText(context), fontSize: 12, fontWeight: FontWeight.w600))),
-    ]),
-  );
-}
-
-class _ContextAction extends StatelessWidget {
-  const _ContextAction({required this.title, required this.onTap});
-  final String title;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 13, 18, 13),
-      child: Text(title, style: const TextStyle(color: Color(0xFFE7E9ED), fontSize: 15.5, fontWeight: FontWeight.w400)),
-    ),
-  );
-}
-
-class _ShareTarget extends StatelessWidget {
-  const _ShareTarget({this.icon, this.asset, required this.color, required this.label, required this.onTap});
-  final IconData? icon;
-  final String? asset;
-  final Color color;
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Column(children: [
-          Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(.16), shape: BoxShape.circle), alignment: Alignment.center,
-            child: asset != null ? ClipOval(child: Image.asset(asset!, width: 27, height: 27, fit: BoxFit.contain)) : Icon(icon, color: color, size: 23)),
-          const SizedBox(height: 8),
-          Text(label, textAlign: TextAlign.center, style: TextStyle(color: mainText(context), fontSize: 10.5)),
-        ]),
-      ),
-    ),
-  );
-}
-
-class _OrbitPreviewSheet extends StatelessWidget {
-  const _OrbitPreviewSheet({required this.url, required this.title, required this.onOpen});
-  final String url;
-  final String title;
-  final VoidCallback onOpen;
-  @override
-  Widget build(BuildContext context) {
-    final muted = mutedText(context);
-    return Material(
-      color: panelColor(context),
-      surfaceTintColor: Colors.transparent,
-      clipBehavior: Clip.antiAlias,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: SizedBox(
-        height: MediaQuery.sizeOf(context).height * .78,
-        child: Column(children: [
-          const SizedBox(height: 9),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: muted.withOpacity(.5), borderRadius: BorderRadius.circular(99))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 10, 12),
-            child: Row(children: [
-              Icon(Icons.public_rounded, color: mainText(context), size: 21),
-              const SizedBox(width: 10),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title.isEmpty ? Uri.tryParse(url)?.host ?? url : title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context), fontSize: 13.5, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 3),
-                Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 10.5)),
-              ])),
-              IconButton(tooltip: 'Abrir no Orbit', onPressed: onOpen, icon: Icon(Icons.open_in_new_rounded, color: mainText(context))),
-              IconButton(tooltip: 'Fechar', onPressed: () => Navigator.of(context).pop(), icon: Icon(Icons.close_rounded, color: mainText(context))),
-            ]),
-          ),
-          Expanded(
-            child: defaultTargetPlatform == TargetPlatform.android
-                ? AndroidView(
-                    viewType: 'looply/orbit_native_webview',
-                    layoutDirection: TextDirection.ltr,
-                    creationParams: const <String, Object>{'isIncognito': false, 'cacheEnabled': true, 'adBlockEnabled': true},
-                    creationParamsCodec: const StandardMessageCodec(),
-                    onPlatformViewCreated: (viewId) {
-                      final channel = MethodChannel('looply/orbit_webview_$viewId');
-                      unawaited(channel.invokeMethod<void>('configure', <String, Object>{'url': url, 'cacheEnabled': true, 'adBlockEnabled': true}));
-                    },
-                  )
-                : InAppWebView(initialUrlRequest: URLRequest(url: WebUri(url))),
-          ),
-        ]),
-      ),
-    );
-  }
 }
 
 class _BrowserQuickAction extends StatelessWidget {

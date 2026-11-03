@@ -1,9 +1,16 @@
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'cloud_sync.dart';
+
 class LooplyUser {
-  const LooplyUser({required this.email, this.displayName, this.photoUrl, required this.provider});
+  const LooplyUser({
+    required this.email,
+    this.displayName,
+    this.photoUrl,
+    required this.provider,
+  });
 
   final String email;
   final String? displayName;
@@ -11,11 +18,13 @@ class LooplyUser {
   final String provider;
 }
 
-/// Estado de utilizador persistente. A identidade Google usa o seletor nativo;
-/// a autenticação por email precisa de um fornecedor/backend real configurado.
+/// A seleção da conta é feita pelo Credential Manager nativo do Android.
+/// Sem Worker configurado, o perfil fica disponível localmente; quando o
+/// Worker existir, o ID token é validado remotamente e é criada uma sessão.
 class AuthController extends ValueNotifier<LooplyUser?> {
   AuthController() : super(null);
 
+  static const MethodChannel _googleAuth = MethodChannel('browseit/google_auth');
   static const _emailKey = 'looply_auth_email';
   static const _nameKey = 'looply_auth_name';
   static const _photoKey = 'looply_auth_photo';
@@ -36,24 +45,51 @@ class AuthController extends ValueNotifier<LooplyUser?> {
   }
 
   Future<void> signInWithGoogle() async {
-    final google = GoogleSignIn(scopes: const <String>['email']);
-    final account = await google.signIn();
-    if (account == null) return;
+    final nonce = await BrowseItCloudSync.createAuthChallenge();
+    final result = await _googleAuth.invokeMapMethod<String, dynamic>(
+      'signInGoogle',
+      <String, dynamic>{if (nonce != null) 'nonce': nonce},
+    );
+    if (result == null) throw StateError('O Google não devolveu os dados da conta.');
+
+    final idToken = result['idToken']?.toString() ?? '';
+    final email = result['email']?.toString() ?? '';
+    final returnedNonce = result['nonce']?.toString() ?? nonce ?? '';
+    if (idToken.isEmpty || email.isEmpty || returnedNonce.isEmpty) {
+      throw StateError('A credencial Google recebida está incompleta.');
+    }
+
+    // A autenticação Cloudflare só é declarada concluída depois de o Worker
+    // validar o ID token. Sem Worker, guardamos apenas o perfil local recebido
+    // pelo Credential Manager e não persistimos o ID token.
+    if (BrowseItCloudSync.isConfigured) {
+      await BrowseItCloudSync.authenticateGoogleIdToken(
+        idToken: idToken,
+        nonce: returnedNonce,
+      );
+    }
+
     await _save(LooplyUser(
-      email: account.email,
-      displayName: account.displayName,
-      photoUrl: account.photoUrl,
-      provider: 'google',
+      email: email,
+      displayName: result['displayName']?.toString(),
+      photoUrl: result['photoUrl']?.toString(),
+      provider: BrowseItCloudSync.isConfigured ? 'google' : 'google-local',
     ));
+
+    if (BrowseItCloudSync.isConfigured) {
+      try {
+        await BrowseItCloudSync.syncAppBackup();
+      } catch (_) {
+        // O login não perde a sessão por uma falha temporária na cópia inicial.
+      }
+    }
   }
 
   Future<void> signInWithEmail(String email, String password) async {
-    // Não fingir autenticação local: sem Firebase/OAuth server ou API de
-    // autenticação, não existe forma segura de validar a palavra-passe.
     if (email.trim().isEmpty || password.isEmpty) {
       throw ArgumentError('Preenche o email e a palavra-passe.');
     }
-    throw StateError('O login por email ainda precisa de um serviço de autenticação e credenciais de servidor.');
+    throw StateError('O login por email ainda precisa de um endpoint de autenticação próprio.');
   }
 
   Future<void> _save(LooplyUser user) async {
@@ -74,9 +110,7 @@ class AuthController extends ValueNotifier<LooplyUser?> {
   }
 
   Future<void> signOut() async {
-    try {
-      if (value?.provider == 'google') await GoogleSignIn().signOut();
-    } catch (_) {}
+    await BrowseItCloudSync.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_emailKey);
     await prefs.remove(_nameKey);

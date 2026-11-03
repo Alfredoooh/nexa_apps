@@ -4,8 +4,14 @@ id "org.jetbrains.kotlin.android"
 id "dev.flutter.flutter-gradle-plugin"
 }
 
+def browseItWebClientId = (project.findProperty("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: System.getenv("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: "").toString()
+def browseItStoreFile = (project.findProperty("BROWSEIT_KEYSTORE_PATH") ?: System.getenv("BROWSEIT_KEYSTORE_PATH") ?: "").toString()
+def browseItStorePassword = (project.findProperty("BROWSEIT_STORE_PASSWORD") ?: System.getenv("BROWSEIT_STORE_PASSWORD") ?: "").toString()
+def browseItKeyPassword = (project.findProperty("BROWSEIT_KEY_PASSWORD") ?: System.getenv("BROWSEIT_KEY_PASSWORD") ?: "").toString()
+def browseItKeyAlias = (project.findProperty("BROWSEIT_KEY_ALIAS") ?: System.getenv("BROWSEIT_KEY_ALIAS") ?: "browseit").toString()
+
 android {
-namespace = "com.looply.app"
+namespace = "com.looply.browser.app"
 compileSdk = flutter.compileSdkVersion
 ndkVersion = flutter.ndkVersion
 
@@ -19,21 +25,44 @@ jvmTarget = JavaVersion.VERSION_17.toString()
 }
 
 defaultConfig {
-applicationId = "com.looply.app"
+applicationId = "com.looply.browser.app"
 minSdk = flutter.minSdkVersion
 targetSdk = flutter.targetSdkVersion
 versionCode = flutter.versionCode
 versionName = flutter.versionName
+buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${browseItWebClientId}\""
+}
+
+buildFeatures {
+    buildConfig true
+}
+
+signingConfigs {
+    browseitRelease {
+        if (!browseItStoreFile.isBlank()) {
+            storeFile file(browseItStoreFile)
+            storePassword browseItStorePassword
+            keyAlias browseItKeyAlias
+            keyPassword browseItKeyPassword
+        }
+    }
 }
 
 buildTypes {
 release {
-signingConfig = signingConfigs.debug
+signingConfig = browseItStoreFile.isBlank() ? signingConfigs.debug : signingConfigs.browseitRelease
 minifyEnabled = true
 shrinkResources = true
 proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 }
 }
+}
+
+dependencies {
+    implementation "androidx.credentials:credentials:1.6.0"
+    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
 }
 
 flutter {

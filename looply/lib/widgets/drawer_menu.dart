@@ -191,7 +191,7 @@ class _DrawerHeader extends StatelessWidget {
           child: Image.asset('assets/images/looply_icon.png', width: 34, height: 34, fit: BoxFit.cover),
         ),
         const SizedBox(width: 10),
-        Text('Looply', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
+        Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
       ]),
     );
   }
