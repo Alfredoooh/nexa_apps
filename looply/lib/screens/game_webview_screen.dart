@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -46,9 +45,7 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
         cacheMode: navigationAcceleratorEnabled.value
             ? CacheMode.LOAD_DEFAULT
             : CacheMode.LOAD_NO_CACHE,
-        contentBlockers: adBlockEnabled.value
-            ? buildPlatformAdBlockers()
-            : <ContentBlocker>[],
+        contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
       ),
     ).catchError((_) {});
   }
@@ -85,16 +82,12 @@ class _GameWebViewScreenState extends State<GameWebViewScreen> {
                       ? CacheMode.LOAD_DEFAULT
                       : CacheMode.LOAD_NO_CACHE,
                   offscreenPreRaster: true,
-                  useShouldInterceptRequest: defaultTargetPlatform == TargetPlatform.android,
-                  contentBlockers: adBlockEnabled.value
-                      ? buildPlatformAdBlockers()
-                      : <ContentBlocker>[],
+                  contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
                   hardwareAcceleration: true,
                 ),
-                shouldInterceptRequest: (controller, request) async =>
-                    interceptAdRequest(request),
-                onWebViewCreated: (controller) {
+                onWebViewCreated: (controller) async {
                   _webController = controller;
+                  await installNativeAdBlocker();
                   _applyRuntimeSettings();
                 },
                 onLoadStart: (_, __) { if (mounted) setState(() { _isLoading = true; _loadError = null; }); },

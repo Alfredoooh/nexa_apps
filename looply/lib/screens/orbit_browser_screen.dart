@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -144,9 +143,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           cacheMode: acceleratorEnabled
               ? CacheMode.LOAD_DEFAULT
               : CacheMode.LOAD_NO_CACHE,
-          contentBlockers: adBlockEnabled.value
-              ? buildPlatformAdBlockers()
-              : <ContentBlocker>[],
+          contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
         ),
       );
     } catch (_) {
@@ -752,20 +749,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               incognito: widget.isIncognito,
               useOnDownloadStart: true,
               useShouldOverrideUrlLoading: true,
-              useShouldInterceptRequest: defaultTargetPlatform == TargetPlatform.android,
-              contentBlockers: adBlockEnabled.value
-                  ? buildPlatformAdBlockers()
-                  : <ContentBlocker>[],
+              contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
               supportMultipleWindows: true,
-              javaScriptCanOpenWindowsAutomatically: true,
+              javaScriptCanOpenWindowsAutomatically: false,
             ),
-            shouldInterceptRequest: (controller, request) async {
-              if (defaultTargetPlatform != TargetPlatform.android) return null;
-              return interceptAdRequest(
-                request,
-                persistStats: !widget.isIncognito,
-              );
-            },
             shouldOverrideUrlLoading: (controller, action) async {
               final uri = action.request.url;
               if (uri == null) return NavigationActionPolicy.ALLOW;
@@ -784,7 +771,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               // Links target="_blank" abrem no separador atual em vez de
               // criarem uma janela nativa invisível que pode bloquear o WebView.
               final target = action.request.url;
-              if (target == null) return false;
+              if (target == null || action.hasGesture != true) return false;
+              if (isAdBlockedUrl(target.toString())) return false;
               final scheme = target.scheme.toLowerCase();
               if (scheme != 'http' && scheme != 'https') return false;
               try {
@@ -796,9 +784,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               // apenas a criação do popup separado.
               return false;
             },
-            onWebViewCreated: (controller) {
+            onWebViewCreated: (controller) async {
               _controller = controller;
               BrowserPreconnectHints.attach(widget.tabId, controller);
+              await installNativeAdBlocker();
               unawaited(_applyRuntimeWebViewSettings(controller));
               final ready = widget.browserReadyCompleter;
               if (ready != null && !ready.isCompleted) ready.complete();

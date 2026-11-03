@@ -1,22 +1,48 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import 'models.dart';
 
-/// Constrói regras nativas para WebKit. No Android, a contagem exata é feita
-/// em shouldInterceptRequest, pois ContentBlocker não emite callback quando
-/// bloqueia um recurso.
-List<ContentBlocker> buildPlatformAdBlockers() {
-  if (defaultTargetPlatform != TargetPlatform.iOS &&
-      defaultTargetPlatform != TargetPlatform.macOS) {
+const MethodChannel _nativeAdBlockChannel = MethodChannel('looply/native_adblock');
+
+/// Entrega a instalação do filtro ao Android antes da primeira navegação.
+/// As requisições são avaliadas no worker nativo do WebView, sem passar pelo Dart.
+Future<void> installNativeAdBlocker() async {
+  if (defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await _nativeAdBlockChannel.invokeMethod<bool>('install');
+  } on PlatformException {
+    // A navegação continua disponível mesmo que uma versão do plugin não
+    // permita a instalação do hook nativo.
+  } on MissingPluginException {
+    // iOS, desktop e builds sem a implementação Kotlin usam o caminho próprio.
+  }
+}
+
+/// Android recebe uma regra sentinela (nunca corresponde a URLs) para manter
+/// ativo o pipeline nativo de ContentBlocker do plugin. O handler Kotlin
+/// substitui a implementação genérica e faz a filtragem sem pedidos HEAD.
+/// WebKit continua a usar as regras por domínio do próprio ContentBlocker.
+List<ContentBlocker> buildPlatformAdBlockers({bool enabled = true}) {
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return <ContentBlocker>[
+      ContentBlocker(
+        trigger: ContentBlockerTrigger(urlFilter: r'(?!)'),
+        action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+      ),
+    ];
+  }
+
+  if (!enabled ||
+      (defaultTargetPlatform != TargetPlatform.iOS &&
+          defaultTargetPlatform != TargetPlatform.macOS)) {
     return const <ContentBlocker>[];
   }
 
   final escaped = adBlockDomains.map(RegExp.escape).join('|');
   final filter =
-      '^https?://(?:[^/?#]+\\.)?(?:$escaped)(?::[0-9]+)?(?:[/?#]|\$)';
+      '^https?://(?:[^/?#]+\\.)*(?:$escaped)(?::[0-9]+)?(?:[/?#]|\$)';
 
   return <ContentBlocker>[
     ContentBlocker(
@@ -36,30 +62,4 @@ List<ContentBlocker> buildPlatformAdBlockers() {
       action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
     ),
   ];
-}
-
-/// Intercepta uma requisição de sub-recurso no Android WebView. A navegação
-/// principal nunca é bloqueada, mesmo que o próprio site esteja numa lista.
-WebResourceResponse? interceptAdRequest(
-  WebResourceRequest request, {
-  bool persistStats = true,
-}) {
-  if (request.isForMainFrame == true) return null;
-
-  final url = request.url.toString();
-  if (!isAdBlockedUrl(url)) return null;
-
-  if (persistStats) AdBlockStats.instance.registerBlock();
-
-  return WebResourceResponse(
-    contentType: 'text/plain',
-    contentEncoding: 'utf-8',
-    data: Uint8List(0),
-    statusCode: 204,
-    reasonPhrase: 'No Content',
-    headers: const <String, String>{
-      'Cache-Control': 'no-store',
-      'Access-Control-Allow-Origin': '*',
-    },
-  );
 }

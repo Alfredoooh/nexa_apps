@@ -2,8 +2,11 @@ package com.looply.app
 
 import android.app.UiModeManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.animation.AlphaAnimation
@@ -29,6 +32,11 @@ import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import com.pichillilorenzo.flutter_inappwebview_android.webview.in_app_webview.InAppWebView
+import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 class MainActivity : FlutterActivity() {
@@ -36,7 +44,25 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "looply/native_ui"
         private const val PREFS_NAME = "FlutterSharedPreferences"
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
+        private const val PREF_AD_BLOCK_ENABLED = "flutter.looply_ad_block_enabled"
+        private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
     }
+
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val nativeStatsLock = Any()
+    private var pendingNativeBlocks = 0
+    private var nativeStatsChannel: MethodChannel? = null
+    private lateinit var appPreferences: SharedPreferences
+    private val flushNativeBlocksRunnable = Runnable { flushNativeBlockCount() }
+    private val adBlockPreferenceListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { preferences, key ->
+            if (key == PREF_AD_BLOCK_ENABLED) {
+                val enabled = preferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
+                LooplyNativeAdBlockState.enabled = enabled
+                mainHandler.post { updateNativeAdBlockerOnCurrentWebViews(enabled) }
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // O Android guarda o modo de aparência escolhido pela aplicação.
@@ -46,6 +72,9 @@ class MainActivity : FlutterActivity() {
         val savedPureBlack = readSavedPureBlack()
         applyApplicationNightMode(savedMode)
         super.onCreate(savedInstanceState)
+        appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
+        appPreferences.registerOnSharedPreferenceChangeListener(adBlockPreferenceListener)
         applyWindowTheme(savedMode, savedPureBlack)
     }
 
@@ -65,6 +94,144 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        nativeStatsChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "looply/native_adblock",
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "install" -> {
+                        val count = installNativeAdBlockerOnCurrentWebViews()
+                        if (count == 0) scheduleNativeAdBlockerInstallRetry(0)
+                        result.success(count > 0)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        mainHandler.removeCallbacks(flushNativeBlocksRunnable)
+        if (::appPreferences.isInitialized) {
+            flushNativeBlockCount()
+            appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
+        }
+        nativeStatsChannel = null
+        super.onDestroy()
+    }
+
+    /** Instala a implementação nativa diretamente em cada InAppWebView ativo. */
+    private fun installNativeAdBlockerOnCurrentWebViews(): Int {
+        val root = findViewById<View>(android.R.id.content) ?: return 0
+        var found = 0
+
+        fun visit(view: View) {
+            if (view is InAppWebView) {
+                found++
+                val currentHandler = view.contentBlockerHandler
+                if (currentHandler !is LooplyNativeContentBlockerHandler) {
+                    val nativeHandler = LooplyNativeContentBlockerHandler(::recordNativeBlockedRequest)
+                    nativeHandler.setRuleList(currentHandler.getRuleList())
+                    view.contentBlockerHandler = nativeHandler
+                }
+            }
+            if (view is ViewGroup) {
+                for (index in 0 until view.childCount) visit(view.getChildAt(index))
+            }
+        }
+
+        visit(root)
+        return found
+    }
+
+    /** Atualiza os filtros cosméticos das WebViews sem recarregar a página. */
+    private fun updateNativeAdBlockerOnCurrentWebViews(enabled: Boolean) {
+        val root = findViewById<View>(android.R.id.content) ?: return
+        val script = "window.__looplyAdBlockSetEnabled && window.__looplyAdBlockSetEnabled($enabled);"
+
+        fun visit(view: View) {
+            if (view is InAppWebView) {
+                val handler = view.contentBlockerHandler
+                if (handler is LooplyNativeContentBlockerHandler) {
+                    handler.updateCosmeticFilter(view, enabled)
+                } else {
+                    try {
+                        view.evaluateJavascript(script, null)
+                    } catch (_: RuntimeException) {
+                        // A WebView pode estar a ser destruída durante a alteração.
+                    }
+                }
+            }
+            if (view is ViewGroup) {
+                for (index in 0 until view.childCount) visit(view.getChildAt(index))
+            }
+        }
+
+        visit(root)
+    }
+
+    private fun scheduleNativeAdBlockerInstallRetry(attempt: Int) {
+        if (attempt >= 7) return
+        val delay = 70L + (attempt * 70L)
+        mainHandler.postDelayed({
+            val installed = installNativeAdBlockerOnCurrentWebViews()
+            if (installed == 0) scheduleNativeAdBlockerInstallRetry(attempt + 1)
+        }, delay)
+    }
+
+    /** Chamado no worker thread do WebView; só acumula um contador em memória. */
+    private fun recordNativeBlockedRequest(isIncognito: Boolean) {
+        if (isIncognito) return
+        synchronized(nativeStatsLock) {
+            pendingNativeBlocks++
+            if (pendingNativeBlocks == 1) {
+                mainHandler.postDelayed(flushNativeBlocksRunnable, 420L)
+            }
+        }
+    }
+
+    /** Persiste os bloqueios em lote no mesmo JSON que o widget Flutter lê. */
+    private fun flushNativeBlockCount() {
+        val increment = synchronized(nativeStatsLock) {
+            val value = pendingNativeBlocks
+            pendingNativeBlocks = 0
+            value
+        }
+        if (increment <= 0) return
+
+        try {
+            val raw = appPreferences.getString(PREF_ADBLOCK_STATS, "{}") ?: "{}"
+            val daily = try {
+                JSONObject(raw)
+            } catch (_: Exception) {
+                JSONObject()
+            }
+            val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            daily.put(day, daily.optInt(day, 0) + increment)
+
+            val cutoff = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                .format(Date(System.currentTimeMillis() - 730L * 24L * 60L * 60L * 1000L))
+            val staleKeys = ArrayList<String>()
+            val keys = daily.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && key < cutoff) {
+                    staleKeys.add(key)
+                }
+            }
+            staleKeys.forEach { daily.remove(it) }
+            appPreferences.edit().putString(PREF_ADBLOCK_STATS, daily.toString()).apply()
+
+            try {
+                nativeStatsChannel?.invokeMethod("statsChanged", null)
+            } catch (_: RuntimeException) {
+                // A persistência local não depende da tela Flutter estar visível.
+            }
+        } catch (_: Exception) {
+            // Uma falha de estatísticas nunca deve interromper a navegação.
+        }
     }
 
     private fun readSavedThemeMode(): String {

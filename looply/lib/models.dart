@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,6 +41,10 @@ const Set<String> adBlockDomains = {
   'ensighten.com', 'tynt.com', 'addthis.com', 'sharethis.com', 'disqus.com',
   'gemius.pl', 'histats.com', 'statcounter.com', 'clicky.com', 'getclicky.com',
   'woopra.com', 'kissmetrics.com', 'heap.io', 'fullstory.com', 'luckyorange.com',
+  'trafficstars.com', 'plugrush.com', 'tsyndicate.com', 'adcash.com',
+  'adnium.com', 'ero-advertising.com', 'adxpansion.com', 'onclickads.net',
+  'onclickalgo.com', 'onclckmn.com', 'adk2x.com', 'adtrafico.com', 'bebi.com',
+  'a-ads.com', 'trafficfactory.biz',
   'mouseflow.com', 'smartlook.com', 'clarity.ms',
 };
 
@@ -67,7 +72,10 @@ class AdBlockStats extends ChangeNotifier {
   static final AdBlockStats instance = AdBlockStats._();
 
   static const String _storageKey = 'looply_adblock_daily_history_v2';
+  static const String _usageStorageKey = 'looply_app_usage_days_v1';
+  static const MethodChannel _nativeStatsChannel = MethodChannel('looply/native_adblock');
   final Map<String, int> _dailyCounts = <String, int>{};
+  final Set<String> _usageDays = <String>{};
   Timer? _notifyTimer;
   Timer? _persistTimer;
   bool _restored = false;
@@ -85,8 +93,21 @@ class AdBlockStats extends ChangeNotifier {
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   int countForDate(DateTime date) => _dailyCounts[dateKey(date)] ?? 0;
+  bool wasUsedOn(DateTime date) =>
+      _usageDays.contains(dateKey(date)) || countForDate(date) > 0;
+
+  bool _nativeListenerAttached = false;
+
+  void _attachNativeStatsListener() {
+    if (_nativeListenerAttached || defaultTargetPlatform != TargetPlatform.android) return;
+    _nativeListenerAttached = true;
+    _nativeStatsChannel.setMethodCallHandler((call) async {
+      if (call.method == 'statsChanged') await restore();
+    });
+  }
 
   Future<void> restore() async {
+    _attachNativeStatsListener();
     _dailyCounts.clear();
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -101,12 +122,41 @@ class AdBlockStats extends ChangeNotifier {
             ).map((entry) => MapEntry(entry.key as String, (entry.value as num).toInt())));
         }
       }
+      _usageDays.clear();
+      final rawUsage = prefs.getString(_usageStorageKey);
+      if (rawUsage != null && rawUsage.isNotEmpty) {
+        final decodedUsage = jsonDecode(rawUsage);
+        if (decodedUsage is List) {
+          _usageDays.addAll(decodedUsage.whereType<String>().where(
+            (key) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(key),
+          ));
+        }
+      }
     } catch (_) {
       // Dados antigos/corrompidos não impedem o arranque do navegador.
     } finally {
+      // Datas antigas com histórico de navegação são reconhecidas como dias
+      // de utilização. O dia atual também é registado ao abrir a aplicação.
+      for (final entry in activityController.entries) {
+        _usageDays.add(dateKey(entry.timestamp));
+      }
+      _usageDays.add(dateKey(DateTime.now()));
+      if (_usageDays.length > 730) {
+        final ordered = _usageDays.toList()..sort();
+        _usageDays.removeAll(ordered.take(_usageDays.length - 730));
+      }
       _restored = true;
+      unawaited(_persistUsageDays());
       notifyListeners();
     }
+  }
+
+  Future<void> _persistUsageDays() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ordered = _usageDays.toList()..sort();
+      await prefs.setString(_usageStorageKey, jsonEncode(ordered));
+    } catch (_) {}
   }
 
   void registerBlock({DateTime? at}) {
@@ -160,7 +210,26 @@ bool isAdBlockedUrl(String url) {
   final uri = Uri.tryParse(url);
   final host = uri?.host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
   if (host == null || host.isEmpty) return false;
-  return adBlockDomains.any((domain) => host == domain || host.endsWith('.$domain'));
+  if (adBlockDomains.any((domain) => host == domain || host.endsWith('.$domain'))) {
+    return true;
+  }
+
+  // Heurísticas conservadoras usadas também para rejeitar popups publicitários
+  // de subdomínios/hosts novos que ainda não constam na lista de domínios.
+  const adHostLabels = <String>{
+    'ad', 'ads', 'adserver', 'adservice', 'advert', 'advertising', 'banner',
+    'popunder', 'popads', 'clickunder', 'tracker', 'tracking', 'pixel',
+    'beacon', 'affiliate', 'sponsored', 'impression', 'prebid', 'adunit',
+  };
+  final labels = host.split('.').expand((part) => part.split('-'));
+  if (labels.any(adHostLabels.contains)) return true;
+
+  final path = uri?.path.toLowerCase() ?? '';
+  if (RegExp(r'(?:^|/)(?:ads?|adserver|adservice|advert(?:ising)?|banners?|popunder|clickunder|trackers?|tracking|pixels?|beacons?|impressions?|vast)(?:[/._-]|$)')
+      .hasMatch(path)) {
+    return true;
+  }
+  return false;
 }
 
 class SearchEngine {
