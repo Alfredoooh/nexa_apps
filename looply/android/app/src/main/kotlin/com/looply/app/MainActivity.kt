@@ -80,6 +80,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        flutterEngine.platformViewsController.registry.registerViewFactory(
+            "looply/orbit_native_webview",
+            OrbitNativeWebViewFactory(flutterEngine.dartExecutor.binaryMessenger, ::recordNativeBlockedRequest),
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -148,6 +152,7 @@ class MainActivity : FlutterActivity() {
 
     /** Atualiza os filtros cosméticos das WebViews sem recarregar a página. */
     private fun updateNativeAdBlockerOnCurrentWebViews(enabled: Boolean) {
+        LooplyNativeWebViewRegistry.updateAll(enabled)
         val root = findViewById<View>(android.R.id.content) ?: return
         val script = "window.__looplyAdBlockSetEnabled && window.__looplyAdBlockSetEnabled($enabled);"
 
@@ -319,16 +324,13 @@ class MainActivity : FlutterActivity() {
         val anchorLeft = flutterLocation[0] + dp(anchor["left"] as? Number ?: 0)
         val anchorTop = flutterLocation[1] + dp(anchor["top"] as? Number ?: 0)
         val anchorRight = flutterLocation[0] + dp(anchor["right"] as? Number ?: 0)
-        val anchorBottom = flutterLocation[1] + dp(anchor["bottom"] as? Number ?: 0)
-        val anchorCenterY = (anchorTop + anchorBottom) / 2
 
         val screenWidth = resources.displayMetrics.widthPixels
         val availableContentHeight = (content.height - dp(16)).coerceAtLeast(dp(180))
         val requestedWidth = call.argument<Number>("width")?.toDouble() ?: 252.0
         val popupWidth = dp(requestedWidth).coerceAtMost(screenWidth - dp(16)).coerceAtLeast(dp(190))
         val rowHeight = dp(48)
-        val dividerHeight = dp(0.7).coerceAtLeast(1)
-        val desiredHeight = rowHeight * items.size + dividerHeight * (items.size - 1)
+        val desiredHeight = rowHeight * items.size
         val popupHeight = desiredHeight.coerceAtMost(availableContentHeight)
 
         val dark = isAppDarkTheme()
@@ -340,13 +342,10 @@ class MainActivity : FlutterActivity() {
         }
         val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
         val iconTint = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
-        val separatorColor = if (dark) Color.argb(115, 130, 134, 139) else Color.argb(115, 218, 220, 224)
-        val outlineColor = if (dark) Color.rgb(64, 66, 70) else Color.rgb(232, 234, 237)
 
         fun newPopupBackground() = GradientDrawable().apply {
             setColor(backgroundColor)
-            cornerRadius = dp(14).toFloat()
-            setStroke(dp(1), outlineColor)
+            cornerRadius = dp(19).toFloat()
         }
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -367,7 +366,7 @@ class MainActivity : FlutterActivity() {
 
         lateinit var popup: PopupWindow
         var completed = false
-        items.forEachIndexed { index, item ->
+        items.forEach { item ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -382,9 +381,9 @@ class MainActivity : FlutterActivity() {
                 val bitmap = BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
                 if (bitmap != null) {
                     val image = ImageView(this).apply {
-                        // Ícone intencionalmente mais contido: 18 dp, próximo
-                        // do tamanho visual dos símbolos usados no Flutter.
-                        layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                        // Mantém o tamanho visual dos símbolos Flutter; apenas
+                        // o peso é controlado na rasterização, não na dimensão.
+                        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
                             marginEnd = dp(14)
                         }
                         scaleType = ImageView.ScaleType.FIT_CENTER
@@ -393,12 +392,12 @@ class MainActivity : FlutterActivity() {
                     }
                     row.addView(image)
                 } else {
-                    row.addView(View(this), LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                    row.addView(View(this), LinearLayout.LayoutParams(dp(20), dp(20)).apply {
                         marginEnd = dp(14)
                     })
                 }
             } else {
-                row.addView(View(this), LinearLayout.LayoutParams(dp(18), dp(18)).apply {
+                row.addView(View(this), LinearLayout.LayoutParams(dp(20), dp(20)).apply {
                     marginEnd = dp(14)
                 })
             }
@@ -432,21 +431,6 @@ class MainActivity : FlutterActivity() {
                 ),
             )
 
-            if (index < items.lastIndex) {
-                val divider = View(this).apply {
-                    setBackgroundColor(separatorColor)
-                }
-                list.addView(
-                    divider,
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        dividerHeight,
-                    ).apply {
-                        leftMargin = dp(14)
-                        rightMargin = dp(14)
-                    },
-                )
-            }
         }
 
         popup = PopupWindow(scroll, popupWidth, popupHeight, true).apply {
@@ -463,16 +447,14 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // O menu abre ao lado do controlo, centrado verticalmente na sua
-        // âncora; não usa o comportamento padrão que o coloca sempre abaixo.
-        val gap = dp(8)
-        val spaceRight = screenWidth - anchorRight
-        val spaceLeft = anchorLeft
-        val opensRight = spaceRight >= popupWidth + gap || spaceRight >= spaceLeft
+        // O menu sobrepõe o controlo que o abriu e cresce a partir da âncora.
+        // O menu cobre a região do botão que o abriu: a âncora fica por
+        // baixo do popup, em vez de deixar um intervalo lateral visível.
+        val opensRight = anchorLeft < popupWidth + dp(16)
         val rawPopupX = if (opensRight) {
-            anchorRight + gap
+            anchorRight - dp(16)
         } else {
-            anchorLeft - popupWidth - gap
+            anchorRight - popupWidth + dp(16)
         }
         val popupXOnScreen = rawPopupX.coerceIn(
             dp(8),
@@ -481,7 +463,7 @@ class MainActivity : FlutterActivity() {
 
         val minY = contentLocation[1] + dp(8)
         val maxY = (contentLocation[1] + content.height - popupHeight - dp(8)).coerceAtLeast(minY)
-        val popupYOnScreen = (anchorCenterY - popupHeight / 2).coerceIn(minY, maxY)
+        val popupYOnScreen = (anchorTop - dp(4)).coerceIn(minY, maxY)
         val popupX = popupXOnScreen - contentLocation[0]
         val popupY = popupYOnScreen - contentLocation[1]
 

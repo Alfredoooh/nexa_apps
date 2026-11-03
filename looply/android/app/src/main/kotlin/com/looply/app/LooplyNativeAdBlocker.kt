@@ -100,7 +100,7 @@ internal class LooplyNativeContentBlockerHandler(
         }
     }
 
-    private companion object {
+    internal companion object {
         /**
          * Filtro cosmético conservador: esconde slots e iframes de publicidade,
          * preserva o conteúdo principal e observa novas inserções no DOM.
@@ -215,7 +215,7 @@ internal class LooplyNativeContentBlockerHandler(
 }
 
 /** Regras compactas compiladas uma única vez, sem consulta de rede. */
-private object LooplyAdRules {
+internal object LooplyAdRules {
     private val knownAdAndTrackerDomains = setOf(
         "doubleclick.net", "googlesyndication.com", "googleadservices.com",
         "google-analytics.com", "googletagmanager.com", "googletagservices.com",

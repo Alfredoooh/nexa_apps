@@ -113,7 +113,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
 
   Future<Uint8List?> _renderRoundedIcon(IconData icon, Color color) async {
     // 20 logical px coincide com o tamanho de ícone usado nos controlos Flutter.
-    // A imagem é enviada em alta densidade e apresentada pelo Android num slot de 18 dp.
+    // A imagem é enviada em alta densidade e apresentada pelo Android num slot de 20 dp.
     const logicalSize = 20.0;
     const pixelRatio = 3.0;
     final painter = TextPainter(
@@ -123,6 +123,12 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
           color: color,
           fontSize: logicalSize,
           height: 1,
+          fontWeight: FontWeight.w400,
+          fontVariations: const <ui.FontVariation>[
+            ui.FontVariation('wght', 400),
+            ui.FontVariation('GRAD', -25),
+            ui.FontVariation('FILL', 0),
+          ],
           fontFamily: icon.fontFamily,
           fontFamilyFallback: icon.fontFamilyFallback,
           package: icon.fontPackage,

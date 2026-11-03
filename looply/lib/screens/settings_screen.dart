@@ -248,27 +248,22 @@ class _SettingsSection extends StatelessWidget {
         ),
         SizedBox(
           width: double.infinity,
-          child: Material(
-            color: settingsCardColor(context),
-            borderRadius: BorderRadius.circular(20),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var index = 0; index < children.length; index++) ...[
-                  children[index],
-                  if (index != children.length - 1)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 67, right: 14),
-                      child: Divider(
-                        height: 1,
-                        thickness: .7,
-                        color: lineColor(context).withOpacity(.65),
-                      ),
-                    ),
-                ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                Material(
+                  color: settingsCardColor(context),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(index == 0 ? 22 : 8),
+                    bottom: Radius.circular(index == children.length - 1 ? 22 : 8),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: children[index],
+                ),
+                if (index != children.length - 1) const SizedBox(height: 2),
               ],
-            ),
+            ],
           ),
         ),
       ],
@@ -320,36 +315,31 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final iconColor = isDark
-        ? Color.lerp(looplyTextDark, looplyBlueDark, .12)!
-        : const Color(0xFF444A50);
-    final iconBadge = isDark
-        ? const Color(0xFF383B40)
-        : const Color(0xFFE7E9EC);
+    final iconColor = accentColor(context);
+    final iconBadge = pillColor(context);
 
     return SizedBox(
       width: double.infinity,
       child: InkWell(
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: subtitle == null ? 62 : 72),
+          constraints: BoxConstraints(minHeight: subtitle == null ? 58 : 68),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: iconBadge,
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 20),
+                  child: Icon(icon, color: iconColor, size: 19),
                 ),
-                const SizedBox(width: 13),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

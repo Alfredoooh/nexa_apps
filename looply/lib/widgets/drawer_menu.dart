@@ -36,9 +36,7 @@ class LooplyDrawer extends StatelessWidget {
       backgroundColor: drawerBackground,
       elevation: 16,
       clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: SafeArea(
         // A barra de estado herda a mesma SystemUiOverlayStyle do Scaffold
         // principal. Não há AnnotatedRegion local a mudar a cor ao abrir o drawer.

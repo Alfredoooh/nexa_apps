@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.6.0 <4.0.0'
+  sdk: '>=3.8.1 <4.0.0'
 
 dependencies:
   flutter:
@@ -17,6 +17,7 @@ dependencies:
   cached_network_image: any
   shared_preferences: ^2.3.3
   image_picker: ^1.2.4
+  material3_expressive_loading_indicator: ^0.1.2
   path_provider: ^2.1.5
   file_picker: ^8.1.7
   google_sign_in: ^6.2.2

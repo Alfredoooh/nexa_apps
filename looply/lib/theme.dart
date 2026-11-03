@@ -163,6 +163,21 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
     splashColor: Colors.transparent,
     highlightColor: Colors.transparent,
     dividerColor: isDark ? (pureBlack ? looplyLineAmoled : looplyLineDark) : looplyLineLight,
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: isDark
+          ? (pureBlack ? const Color(0xFF292929) : const Color(0xFF3A3C40))
+          : const Color(0xFFF1F3F4),
+      contentTextStyle: TextStyle(
+        color: isDark ? const Color(0xFFFFFFFF) : const Color(0xFF202124),
+        fontSize: 13.5,
+        fontWeight: FontWeight.w500,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      elevation: 6,
+      showCloseIcon: false,
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: bg,
       foregroundColor: text,

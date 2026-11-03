@@ -20,6 +20,120 @@ import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 
+/// Adaptador único para o WebView Android nativo e para o fallback das
+/// restantes plataformas. A UI do Orbit continua integralmente em Flutter.
+class _OrbitWebViewController {
+  _OrbitWebViewController._({this.plugin, this.native});
+
+  factory _OrbitWebViewController.plugin(InAppWebViewController controller) =>
+      _OrbitWebViewController._(plugin: controller);
+
+  factory _OrbitWebViewController.native(MethodChannel channel) =>
+      _OrbitWebViewController._(native: channel);
+
+  final InAppWebViewController? plugin;
+  final MethodChannel? native;
+
+  Future<bool> canGoBack() async => native != null
+      ? (await native!.invokeMethod<bool>('canGoBack') ?? false)
+      : (await plugin!.canGoBack());
+
+  Future<bool> canGoForward() async => native != null
+      ? (await native!.invokeMethod<bool>('canGoForward') ?? false)
+      : (await plugin!.canGoForward());
+
+  Future<String?> getUrl() async => native != null
+      ? native!.invokeMethod<String>('getUrl')
+      : (await plugin!.getUrl())?.toString();
+
+  Future<String?> getTitle() async => native != null
+      ? native!.invokeMethod<String>('getTitle')
+      : plugin!.getTitle();
+
+  Future<Uint8List?> takeScreenshot() async => native != null
+      ? native!.invokeMethod<Uint8List>('takeScreenshot')
+      : plugin!.takeScreenshot();
+
+  Future<void> goBack() async {
+    if (native != null) {
+      await native!.invokeMethod<void>('goBack');
+    } else {
+      await plugin!.goBack();
+    }
+  }
+
+  Future<void> goForward() async {
+    if (native != null) {
+      await native!.invokeMethod<void>('goForward');
+    } else {
+      await plugin!.goForward();
+    }
+  }
+
+  Future<void> reload() async {
+    if (native != null) {
+      await native!.invokeMethod<void>('reload');
+    } else {
+      await plugin!.reload();
+    }
+  }
+
+  Future<void> clearMatches() async {
+    if (native != null) {
+      await native!.invokeMethod<void>('clearMatches');
+    } else {
+      await plugin!.clearMatches();
+    }
+  }
+
+  Future<void> findAll(String query) async {
+    if (native != null) {
+      await native!.invokeMethod<void>('findAll', <String, Object>{'query': query});
+    } else {
+      await plugin!.findAllAsync(find: query);
+    }
+  }
+
+  Future<void> findNext(bool forward) async {
+    if (native != null) {
+      await native!.invokeMethod<void>('findNext', <String, Object>{'forward': forward});
+    } else {
+      await plugin!.findNext(forward: forward);
+    }
+  }
+
+  Future<void> evaluateJavascript(String source) async {
+    if (native != null) {
+      await native!.invokeMethod<dynamic>(
+        'evaluateJavascript',
+        <String, Object>{'source': source},
+      );
+    } else {
+      await plugin!.evaluateJavascript(source: source);
+    }
+  }
+
+  Future<void> setSettings({
+    required bool cacheEnabled,
+    required bool adBlockEnabled,
+  }) async {
+    if (native != null) {
+      await native!.invokeMethod<void>('setSettings', <String, Object>{
+        'cacheEnabled': cacheEnabled,
+        'adBlockEnabled': adBlockEnabled,
+      });
+    } else {
+      await plugin!.setSettings(
+        settings: InAppWebViewSettings(
+          cacheEnabled: cacheEnabled,
+          cacheMode: cacheEnabled ? CacheMode.LOAD_DEFAULT : CacheMode.LOAD_NO_CACHE,
+          contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled),
+        ),
+      );
+    }
+  }
+}
+
 /// Browser do Looply. A instância é criada apenas para o separador ativo;
 /// os restantes guardam URL, estado e captura local sem WebViews em memória.
 class OrbitBrowserScreen extends StatefulWidget {
@@ -47,7 +161,8 @@ class OrbitBrowserScreen extends StatefulWidget {
 }
 
 class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
-  InAppWebViewController? _controller;
+  _OrbitWebViewController? _controller;
+  MethodChannel? _nativeWebViewChannel;
   PullToRefreshController? _pullToRefreshController;
   Timer? _progressHideTimer;
   Timer? _findDebounce;
@@ -113,6 +228,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     adBlockEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
     navigationAcceleratorEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
     BrowserPreconnectHints.detach(widget.tabId);
+    _nativeWebViewChannel?.setMethodCallHandler(null);
+    _nativeWebViewChannel = null;
     // Este State só é descartado quando o separador é realmente fechado.
     // Este State é descartado quando a aba deixa de ser a ativa.
     super.dispose();
@@ -133,18 +250,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   Future<void> _applyRuntimeWebViewSettings(
-    InAppWebViewController controller,
+    _OrbitWebViewController controller,
   ) async {
     try {
-      final acceleratorEnabled = navigationAcceleratorEnabled.value;
       await controller.setSettings(
-        settings: InAppWebViewSettings(
-          cacheEnabled: acceleratorEnabled,
-          cacheMode: acceleratorEnabled
-              ? CacheMode.LOAD_DEFAULT
-              : CacheMode.LOAD_NO_CACHE,
-          contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
-        ),
+        cacheEnabled: navigationAcceleratorEnabled.value,
+        adBlockEnabled: adBlockEnabled.value,
       );
     } catch (_) {
       // A alteração do interruptor não pode interromper a navegação atual.
@@ -298,7 +409,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         if (value.trim().isEmpty) {
           await controller.clearMatches();
         } else {
-          await controller.findAllAsync(find: value.trim());
+          await controller.findAll(value.trim());
         }
       } catch (_) {}
     });
@@ -308,7 +419,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final controller = _controller;
     if (controller == null || _findController.text.trim().isEmpty) return;
     try {
-      await controller.findNext(forward: forward);
+      await controller.findNext(forward);
     } catch (_) {}
   }
 
@@ -724,6 +835,211 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   Widget _buildWebView(BuildContext context) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return _buildAndroidNativeWebView(context);
+    }
+    return _buildPluginWebView(context);
+  }
+
+  Widget _buildAndroidNativeWebView(BuildContext context) {
+    final bg = pageBg(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ColoredBox(color: bg),
+        if (!_renderProcessCrashed)
+          AndroidView(
+            key: _webViewKey,
+            viewType: 'looply/orbit_native_webview',
+            layoutDirection: TextDirection.ltr,
+            creationParams: <String, Object>{
+              'isIncognito': widget.isIncognito,
+              'cacheEnabled': navigationAcceleratorEnabled.value,
+              'adBlockEnabled': adBlockEnabled.value,
+            },
+            creationParamsCodec: const StandardMessageCodec(),
+            onPlatformViewCreated: _onNativePlatformViewCreated,
+          ),
+        if (_renderProcessCrashed || _loadError != null)
+          _buildWebViewErrorOverlay(context, bg),
+      ],
+    );
+  }
+
+  Future<void> _onNativePlatformViewCreated(int viewId) async {
+    if (!mounted) return;
+    final channel = MethodChannel('looply/orbit_webview_$viewId');
+    _nativeWebViewChannel = channel;
+    channel.setMethodCallHandler(_handleNativeWebViewCall);
+    final controller = _OrbitWebViewController.native(channel);
+    _controller = controller;
+    BrowserPreconnectHints.attach(widget.tabId, controller.evaluateJavascript);
+
+    try {
+      await channel.invokeMethod<bool>('configure', <String, Object>{
+        'url': _currentUrl,
+        'cacheEnabled': navigationAcceleratorEnabled.value,
+        'adBlockEnabled': adBlockEnabled.value,
+      });
+      final ready = widget.browserReadyCompleter;
+      if (ready != null && !ready.isCompleted) ready.complete();
+      unawaited(_refreshNavigationState());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = 'Não foi possível iniciar o WebView nativo do Android.';
+        _isLoading = false;
+        _showProgress = false;
+      });
+      _signalFirstLoad();
+    }
+  }
+
+  Future<dynamic> _handleNativeWebViewCall(MethodCall call) async {
+    if (!mounted || call.method != 'event') return null;
+    final event = call.arguments;
+    if (event is! Map) return null;
+    final name = event['name']?.toString() ?? '';
+    final rawArguments = event['arguments'];
+    final args = rawArguments is Map ? rawArguments : const <Object?, Object?>{};
+
+    switch (name) {
+      case 'onLoadStart':
+        _progressHideTimer?.cancel();
+        setState(() {
+          _isLoading = true;
+          _showProgress = true;
+          _progress = 0;
+          _loadError = null;
+          final url = args['url']?.toString();
+          if (url != null) _currentUrl = url;
+        });
+        _updateTabState();
+        break;
+      case 'onProgressChanged':
+        final progress = (args['progress'] as num?)?.toInt() ?? 0;
+        _progressHideTimer?.cancel();
+        setState(() {
+          _showProgress = true;
+          _progress = (progress / 100).clamp(0.0, 1.0);
+          if (progress < 100) _isLoading = true;
+        });
+        break;
+      case 'onTitleChanged':
+        _currentTitle = args['title']?.toString() ?? '';
+        _updateTabState();
+        setState(() {});
+        break;
+      case 'onUpdateVisitedHistory':
+        final url = args['url']?.toString();
+        if (url == null || url.isEmpty) break;
+        setState(() {
+          _currentUrl = url;
+          _canGoBack = args['canGoBack'] as bool? ?? _canGoBack;
+          _canGoForward = args['canGoForward'] as bool? ?? _canGoForward;
+          final title = args['title']?.toString();
+          if (title != null && title.trim().isNotEmpty) _currentTitle = title;
+        });
+        if (!widget.isIncognito) {
+          activityController.log(
+            ActivityKind.site,
+            _currentTitle.trim().isEmpty ? url : _currentTitle,
+            url,
+          );
+          unawaited(browserFaviconCache.fetchForUrl(url));
+        }
+        _updateTabState();
+        break;
+      case 'onLoadStop':
+        final url = args['url']?.toString() ?? _currentUrl;
+        bool back = false;
+        bool forward = false;
+        Uint8List? screenshot;
+        try {
+          final controller = _controller;
+          if (controller != null) {
+            back = await controller.canGoBack();
+            forward = await controller.canGoForward();
+            screenshot = await controller
+                .takeScreenshot()
+                .timeout(const Duration(seconds: 2));
+          }
+        } catch (_) {}
+        if (screenshot != null) {
+          screenshot = await _downscaleScreenshot(screenshot, targetWidth: 420);
+        }
+        if (!widget.isIncognito) {
+          activityController.log(
+            ActivityKind.site,
+            _currentTitle.trim().isEmpty ? url : _currentTitle,
+            url,
+          );
+          unawaited(browserFaviconCache.fetchForUrl(url));
+        }
+        if (!mounted) {
+          _signalFirstLoad();
+          break;
+        }
+        setState(() {
+          _isLoading = false;
+          _progress = 1;
+          _showProgress = true;
+          _loadError = null;
+          _canGoBack = back;
+          _canGoForward = forward;
+          _currentUrl = url;
+        });
+        _updateTabState(screenshot: screenshot);
+        _signalFirstLoad();
+        _progressHideTimer?.cancel();
+        _progressHideTimer = Timer(const Duration(milliseconds: 260), () {
+          if (!mounted) return;
+          setState(() {
+            _showProgress = false;
+            _progress = 0;
+          });
+        });
+        break;
+      case 'onReceivedError':
+        if (args['isForMainFrame'] == true) {
+          _signalFirstLoad();
+          setState(() {
+            _isLoading = false;
+            _progress = 1;
+            _loadError = args['description']?.toString() ?? 'Não foi possível carregar esta página.';
+          });
+          _progressHideTimer?.cancel();
+          _progressHideTimer = Timer(const Duration(milliseconds: 260), () {
+            if (mounted) setState(() => _showProgress = false);
+          });
+        }
+        break;
+      case 'onDownloadStartRequest':
+        if (!widget.isIncognito) {
+          downloadsController.register(
+            url: args['url']?.toString() ?? '',
+            filename: args['suggestedFilename']?.toString(),
+            mimeType: args['mimeType']?.toString(),
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pedido de transferência recebido.')),
+          );
+        }
+        break;
+      case 'onRenderProcessGone':
+        _signalFirstLoad();
+        setState(() {
+          _renderProcessCrashed = true;
+          _isLoading = false;
+          _showProgress = false;
+          _loadError = 'O motor da página foi reiniciado.';
+        });
+        break;
+    }
+    return null;
+  }
+
+  Widget _buildPluginWebView(BuildContext context) {
     final bg = pageBg(context);
     return Stack(
       fit: StackFit.expand,
@@ -785,10 +1101,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               return false;
             },
             onWebViewCreated: (controller) async {
-              _controller = controller;
-              BrowserPreconnectHints.attach(widget.tabId, controller);
+              final orbitController = _OrbitWebViewController.plugin(controller);
+              _controller = orbitController;
+              BrowserPreconnectHints.attach(widget.tabId, orbitController.evaluateJavascript);
               await installNativeAdBlocker();
-              unawaited(_applyRuntimeWebViewSettings(controller));
+              unawaited(_applyRuntimeWebViewSettings(orbitController));
               final ready = widget.browserReadyCompleter;
               if (ready != null && !ready.isCompleted) ready.complete();
               unawaited(_refreshNavigationState());
@@ -950,41 +1267,42 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             },
           ),
         if (_renderProcessCrashed || _loadError != null)
-          Positioned.fill(
-            child: ColoredBox(
-              color: bg,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _renderProcessCrashed
-                            ? Symbols.refresh_rounded
-                            : Symbols.wifi_off_rounded,
-                        size: 42,
-                        color: mutedText(context),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _loadError ??
-                            'Não foi possível carregar esta página.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: mainText(context)),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _retryPage,
-                        child: const Text('Tentar novamente'),
-                      ),
-                    ],
-                  ),
+          _buildWebViewErrorOverlay(context, bg),
+      ],
+    );
+  }
+
+  Widget _buildWebViewErrorOverlay(BuildContext context, Color bg) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: bg,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _renderProcessCrashed ? Symbols.refresh_rounded : Symbols.wifi_off_rounded,
+                  size: 42,
+                  color: mutedText(context),
                 ),
-              ),
+                const SizedBox(height: 12),
+                Text(
+                  _loadError ?? 'Não foi possível carregar esta página.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: mainText(context)),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _retryPage,
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../models.dart';
 import 'shell_tab_request.dart';
@@ -35,28 +34,31 @@ void openOrbitBrowserTab(BuildContext context) {
 class BrowserPreconnectHints {
   BrowserPreconnectHints._();
 
-  static final Map<String, InAppWebViewController> _controllers =
-      <String, InAppWebViewController>{};
+  static final Map<String, Future<void> Function(String source)> _evaluators =
+      <String, Future<void> Function(String source)>{};
   static String? _lastControllerId;
   static final Set<String> _hintedOrigins = <String>{};
 
-  static void attach(String tabId, InAppWebViewController controller) {
-    _controllers[tabId] = controller;
+  static void attach(
+    String tabId,
+    Future<void> Function(String source) evaluateJavascript,
+  ) {
+    _evaluators[tabId] = evaluateJavascript;
     _lastControllerId = tabId;
   }
 
   static void setActive(String tabId, bool active) {
-    if (active && _controllers.containsKey(tabId)) {
+    if (active && _evaluators.containsKey(tabId)) {
       _lastControllerId = tabId;
     }
   }
 
   static void detach(String tabId) {
-    _controllers.remove(tabId);
+    _evaluators.remove(tabId);
     if (_lastControllerId == tabId) {
-      _lastControllerId = _controllers.keys.isEmpty
+      _lastControllerId = _evaluators.keys.isEmpty
           ? null
-          : _controllers.keys.last;
+          : _evaluators.keys.last;
     }
   }
 
@@ -70,10 +72,10 @@ class BrowserPreconnectHints {
     }
 
     final origin = uri.origin;
-    final controller = _lastControllerId == null
+    final evaluateJavascript = _lastControllerId == null
         ? null
-        : _controllers[_lastControllerId!];
-    if (controller == null) return;
+        : _evaluators[_lastControllerId!];
+    if (evaluateJavascript == null) return;
 
     if (!_hintedOrigins.add(origin)) return;
     if (_hintedOrigins.length > 80) _hintedOrigins.clear();
@@ -108,7 +110,7 @@ class BrowserPreconnectHints {
     ''';
 
     try {
-      await controller.evaluateJavascript(source: script);
+      await evaluateJavascript(script);
     } catch (_) {
       // A página pode ainda estar a arrancar ou o separador pode estar oculto.
     }

@@ -247,7 +247,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: accent.withOpacity(.45),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
                         child: _busy
@@ -284,13 +284,18 @@ class _AuthScreenState extends State<AuthScreen> {
                       height: 52,
                       child: OutlinedButton.icon(
                         onPressed: _busy ? null : _googleSignIn,
-                        icon: const Icon(Symbols.account_circle_rounded, size: 20),
+                        icon: Image.asset(
+                          'assets/images/quick_sites/google.webp',
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.contain,
+                        ),
                         label: const Text('Continuar com Google'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: text,
                           side: BorderSide(color: lineColor(context)),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         ),

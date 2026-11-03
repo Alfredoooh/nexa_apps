@@ -1172,26 +1172,19 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               child: drawerPanel,
             ),
             Positioned.fill(
-              child: Transform.translate(
-                offset: Offset(drawerWidth * progress, 0),
-                child: child!,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: _onDrawerDragStart,
+                onHorizontalDragUpdate: (details) =>
+                    _onDrawerDragUpdate(details, drawerWidth),
+                onHorizontalDragEnd: _onDrawerDragEnd,
+                child: Transform.translate(
+                  offset: Offset(drawerWidth * progress, 0),
+                  child: child!,
+                ),
               ),
             ),
-            if (!isDrawerOpen)
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: 28,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragStart: _onDrawerDragStart,
-                  onHorizontalDragUpdate: (details) =>
-                      _onDrawerDragUpdate(details, drawerWidth),
-                  onHorizontalDragEnd: _onDrawerDragEnd,
-                ),
-              )
-            else
+            if (isDrawerOpen)
               Positioned(
                 left: drawerWidth * progress,
                 top: 0,

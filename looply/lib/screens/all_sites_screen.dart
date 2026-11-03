@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:material3_expressive_loading_indicator/material3_expressive_loading_indicator.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
@@ -18,10 +19,18 @@ class AllSitesScreen extends StatefulWidget {
 }
 
 class _AllSitesScreenState extends State<AllSitesScreen> {
+  static const Duration _minimumLoaderDuration = Duration(seconds: 3);
+
+  late Map<SiteCategory, List<QuickSite>> _groupedSites;
+  late List<SiteCategory> _categories;
+  bool _showInitialLoader = true;
+
   @override
   void initState() {
     super.initState();
+    _prepareSites();
     customSitesController.addListener(_onCustomSitesChanged);
+    _hideLoaderAfterMinimumDuration();
   }
 
   @override
@@ -30,8 +39,30 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
     super.dispose();
   }
 
+  void _prepareSites() {
+    final grouped = <SiteCategory, List<QuickSite>>{};
+    for (final site in allSites) {
+      grouped.putIfAbsent(site.category, () => <QuickSite>[]).add(site);
+    }
+    for (final site in customSitesController.sites) {
+      grouped.putIfAbsent(SiteCategory.personalizados, () => <QuickSite>[]).add(site);
+    }
+
+    _groupedSites = grouped;
+    _categories = SiteCategory.values
+        .where((category) => grouped.containsKey(category))
+        .toList(growable: false);
+  }
+
+  Future<void> _hideLoaderAfterMinimumDuration() async {
+    await Future<void>.delayed(_minimumLoaderDuration);
+    if (!mounted) return;
+    setState(() => _showInitialLoader = false);
+  }
+
   void _onCustomSitesChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(_prepareSites);
   }
 
   Future<void> _openAddSiteDialog() async {
@@ -44,16 +75,6 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final grouped = <SiteCategory, List<QuickSite>>{};
-    for (final site in allSites) {
-      grouped.putIfAbsent(site.category, () => []).add(site);
-    }
-    for (final site in customSitesController.sites) {
-      grouped.putIfAbsent(SiteCategory.personalizados, () => []).add(site);
-    }
-    final categories = SiteCategory.values
-        .where((category) => grouped.containsKey(category))
-        .toList(growable: false);
     final text = mainText(context);
 
     return Scaffold(
@@ -89,17 +110,35 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
           ),
         ],
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 18),
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          return _CategorySection(
-            category: category,
-            sites: grouped[category]!,
-          );
-        },
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: _showInitialLoader
+            ? Center(
+                key: const ValueKey<String>('all-sites-m3e-loader'),
+                child: ExpressiveLoadingIndicator(
+                  color: accentColor(context),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 56,
+                    height: 56,
+                  ),
+                  semanticsLabel: 'A carregar os sites',
+                ),
+              )
+            : ListView.separated(
+                key: const ValueKey<String>('all-sites-content'),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                itemCount: _categories.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 18),
+                itemBuilder: (context, index) {
+                  final category = _categories[index];
+                  return _CategorySection(
+                    category: category,
+                    sites: _groupedSites[category]!,
+                  );
+                },
+              ),
       ),
     );
   }
