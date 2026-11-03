@@ -13,6 +13,9 @@ import '../widgets/drawer_menu.dart';
 import '../widgets/m3_switch.dart';
 import '../widgets/search_engine_picker.dart';
 import '../data_transfer.dart';
+import '../auth_service.dart';
+import 'auth_screen.dart';
+import 'profile_screen.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -27,7 +30,39 @@ class SettingsScreen extends StatelessWidget {
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: pageBg(context),
-        appBar: AppBar(toolbarHeight: 64, title: const Text('Configurações')),
+        appBar: AppBar(
+            toolbarHeight: 64,
+            title: const Text('Configurações'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: ValueListenableBuilder<LooplyUser?>(
+                  valueListenable: authController,
+                  builder: (context, user, _) => Material(
+                    color: pillColor(context),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () {
+                        final page = user == null ? const AuthScreen() : const ProfileScreen();
+                        Navigator.of(context).push<void>(_AccountSlideRoute(page));
+                      },
+                      child: SizedBox(
+                        width: 42,
+                        height: 42,
+                        child: ClipOval(
+                          child: user?.photoUrl != null
+                              ? Image.network(user!.photoUrl!, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Icon(Symbols.person_rounded, color: mainText(context), size: 22))
+                              : Icon(Symbols.person_rounded, color: mainText(context), size: 22),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
@@ -394,4 +429,19 @@ class _SettingsTile extends StatelessWidget {
       ),
     );
   }
+}
+
+
+class _AccountSlideRoute extends PageRouteBuilder<void> {
+  _AccountSlideRoute(Widget page)
+      : super(
+          pageBuilder: (context, animation, secondaryAnimation) => page,
+          transitionDuration: const Duration(milliseconds: 420),
+          reverseTransitionDuration: const Duration(milliseconds: 390),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final slide = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic));
+            return SlideTransition(position: slide, child: child);
+          },
+        );
 }

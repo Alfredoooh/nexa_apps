@@ -1151,6 +1151,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
 
     final drawerWidth = _drawerWidth(context);
+    final drawerGestureEnabled = _selectedTab == 0 &&
+        _activeBrowserTabId == null && !_showingTabsGrid;
     final drawerPanel = LooplyDrawer(
       width: drawerWidth,
       onClose: _closeShellDrawer,
@@ -1174,10 +1176,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onHorizontalDragStart: _onDrawerDragStart,
-                onHorizontalDragUpdate: (details) =>
-                    _onDrawerDragUpdate(details, drawerWidth),
-                onHorizontalDragEnd: _onDrawerDragEnd,
+                onHorizontalDragStart: drawerGestureEnabled ? _onDrawerDragStart : null,
+                onHorizontalDragUpdate: drawerGestureEnabled
+                    ? (details) => _onDrawerDragUpdate(details, drawerWidth)
+                    : null,
+                onHorizontalDragEnd: drawerGestureEnabled ? _onDrawerDragEnd : null,
                 child: Transform.translate(
                   offset: Offset(drawerWidth * progress, 0),
                   child: child!,

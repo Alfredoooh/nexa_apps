@@ -94,3 +94,5 @@ flutter:
     - assets/images/quick_sites/youtube.webp
     - assets/images/quick_sites/zapier.webp
     - assets/images/quick_sites/zoom.webp
+    - assets/images/share/whatsapp.png
+    - assets/images/share/telegram.png

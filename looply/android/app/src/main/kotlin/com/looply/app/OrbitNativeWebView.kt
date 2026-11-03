@@ -1,6 +1,8 @@
 package com.looply.app
 
 import android.content.Context
+import android.app.DownloadManager
+import android.os.Environment
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -19,6 +21,9 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.URLUtil
+import org.json.JSONObject
+import org.json.JSONTokener
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -63,6 +68,9 @@ internal class OrbitNativeWebViewPlatformView(
     private var cacheEnabled = options["cacheEnabled"] as? Boolean ?: true
     private var adBlockEnabled = LooplyNativeAdBlockState.enabled
     private var touchStartY = 0f
+    private var touchStartX = 0f
+    private var desktopMode = false
+    private val mobileUserAgent = WebSettings.getDefaultUserAgent(context)
     private var pullTriggered = false
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
 
@@ -185,6 +193,7 @@ internal class OrbitNativeWebViewPlatformView(
         webView.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    touchStartX = event.x
                     touchStartY = event.y
                     pullTriggered = false
                 }
@@ -202,6 +211,65 @@ internal class OrbitNativeWebViewPlatformView(
                 }
             }
             false
+        }
+
+        webView.setOnLongClickListener {
+            val hit = webView.hitTestResult
+            val hitType = hit.type
+            val fallback = hit.extra.orEmpty()
+            val isImageHit = hitType == WebView.HitTestResult.IMAGE_TYPE ||
+                hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+            val isLinkHit = hitType == WebView.HitTestResult.SRC_ANCHOR_TYPE ||
+                hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+            if (!isImageHit && !isLinkHit) {
+                return@setOnLongClickListener false
+            }
+
+            val x = (touchStartX / webView.scale).coerceAtLeast(0f)
+            val y = (touchStartY / webView.scale).coerceAtLeast(0f)
+            val script = """(function(){
+                const el=document.elementFromPoint($x,$y);
+                const img=el&&(el.closest('img')||(el.tagName==='IMG'?el:null));
+                const a=el&&el.closest('a');
+                return JSON.stringify({
+                    imageUrl:img?(img.currentSrc||img.src||''):'',
+                    linkUrl:a?(a.href||''):'',
+                    linkText:a?((a.innerText||a.getAttribute('aria-label')||'').trim().slice(0,180)):'',
+                    imageWidth:img?(img.naturalWidth||img.width||0):0,
+                    imageHeight:img?(img.naturalHeight||img.height||0):0
+                });
+            })()""".trimIndent()
+            webView.evaluateJavascript(script) { raw ->
+                try {
+                    val jsonText = JSONTokener(raw ?: "").nextValue() as? String
+                    val data = if (jsonText.isNullOrBlank()) JSONObject() else JSONObject(jsonText)
+                    val imageUrl = data.optString("imageUrl").ifBlank {
+                        if (isImageHit) fallback else ""
+                    }
+                    val linkUrl = data.optString("linkUrl").ifBlank {
+                        if (isLinkHit && !isImageHit) fallback else ""
+                    }
+                    val type = if (imageUrl.isNotBlank()) "image" else if (linkUrl.isNotBlank()) "link" else ""
+                    if (type.isNotBlank()) {
+                        sendEvent("onLongPress", mapOf(
+                            "type" to type,
+                            "imageUrl" to imageUrl,
+                            "linkUrl" to linkUrl,
+                            "linkText" to data.optString("linkText"),
+                            "imageWidth" to data.optInt("imageWidth"),
+                            "imageHeight" to data.optInt("imageHeight"),
+                        ))
+                    }
+                } catch (_: Exception) {
+                    val type = if (isImageHit) "image" else "link"
+                    sendEvent("onLongPress", mapOf(
+                        "type" to type,
+                        "imageUrl" to if (isImageHit) fallback else "",
+                        "linkUrl" to if (isLinkHit && !isImageHit) fallback else "",
+                    ))
+                }
+            }
+            true
         }
 
         OrbitNativeWebViewRegistry.register(this)
@@ -249,6 +317,72 @@ internal class OrbitNativeWebViewPlatformView(
             "findAll" -> { webView.findAllAsync(call.argument<String>("query").orEmpty()); result.success(true) }
             "findNext" -> { webView.findNext(call.argument<Boolean>("forward") ?: true); result.success(true) }
             "clearMatches" -> { webView.clearMatches(); result.success(true) }
+            "setZoom" -> {
+                val scale = (call.argument<Double>("scale") ?: 1.0).coerceIn(0.5, 2.0)
+                webView.settings.textZoom = (scale * 100.0).toInt()
+                val encoded = scale.toString()
+                webView.evaluateJavascript("document.documentElement.style.zoom='$encoded';", null)
+                result.success(true)
+            }
+            "setDesktopMode" -> {
+                desktopMode = call.argument<Boolean>("enabled") ?: false
+                applyWebSettings()
+                val current = webView.url
+                if (!current.isNullOrBlank()) webView.loadUrl(current)
+                result.success(true)
+            }
+            "getSiteInfo" -> {
+                val pageUrl = webView.url.orEmpty()
+                val cookies = CookieManager.getInstance().getCookie(pageUrl).orEmpty()
+                val cookieNames = cookies.split(';')
+                    .map { it.trim().substringBefore('=').trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                val script = """(function(){let memory=0,storage=0;try{if(performance&&performance.memory)memory=performance.memory.usedJSHeapSize||0}catch(e){};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);storage+=((k||'').length+(localStorage.getItem(k)||'').length)*2}for(let i=0;i<sessionStorage.length;i++){const k=sessionStorage.key(i);storage+=((k||'').length+(sessionStorage.getItem(k)||'').length)*2}}catch(e){};return JSON.stringify({memoryBytes:memory,storageBytes:storage});})()"""
+                webView.evaluateJavascript(script) { raw ->
+                    val memoryInfo = try {
+                        val jsonText = JSONTokener(raw ?: "").nextValue() as? String
+                        if (jsonText.isNullOrBlank()) JSONObject() else JSONObject(jsonText)
+                    } catch (_: Exception) { JSONObject() }
+                    result.success(mapOf(
+                        "cookieCount" to cookieNames.size,
+                        "cookieNames" to cookieNames,
+                        "memoryBytes" to memoryInfo.optLong("memoryBytes", 0L),
+                        "storageBytes" to memoryInfo.optLong("storageBytes", 0L),
+                    ))
+                }
+            }
+            "clearSiteData" -> {
+                val pageUrl = webView.url.orEmpty()
+                val cookies = CookieManager.getInstance().getCookie(pageUrl).orEmpty()
+                cookies.split(';').map { it.trim().substringBefore('=').trim() }
+                    .filter { it.isNotBlank() }.distinct().forEach { name ->
+                        CookieManager.getInstance().setCookie(pageUrl, "$name=; Max-Age=0; Path=/; SameSite=Lax")
+                    }
+                CookieManager.getInstance().flush()
+                val script = """(function(){try{localStorage.clear()}catch(e){};try{sessionStorage.clear()}catch(e){};try{caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)))}catch(e){};try{indexedDB.databases().then(dbs=>dbs.forEach(db=>db.name&&indexedDB.deleteDatabase(db.name)))}catch(e){};return true;})()"""
+                webView.evaluateJavascript(script, null)
+                result.success(true)
+            }
+            "downloadUrl" -> {
+                val target = call.argument<String>("url")
+                if (target.isNullOrBlank()) {
+                    result.error("invalid_url", "O endereço de transferência está vazio.", null)
+                } else {
+                    try {
+                        val request = DownloadManager.Request(Uri.parse(target))
+                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, URLUtil.guessFileName(target, null, null))
+                        val cookie = CookieManager.getInstance().getCookie(target)
+                        if (!cookie.isNullOrBlank()) request.addRequestHeader("Cookie", cookie)
+                        request.addRequestHeader("User-Agent", webView.settings.userAgentString)
+                        (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+                        result.success(true)
+                    } catch (error: Exception) {
+                        result.error("download_failed", error.message, null)
+                    }
+                }
+            }
             "setSettings" -> {
                 cacheEnabled = call.argument<Boolean>("cacheEnabled") ?: cacheEnabled
                 adBlockEnabled = call.argument<Boolean>("adBlockEnabled") ?: adBlockEnabled
@@ -262,6 +396,16 @@ internal class OrbitNativeWebViewPlatformView(
     }
 
     private fun applyWebSettings() {
+        webView.settings.userAgentString = if (desktopMode) {
+            mobileUserAgent
+                .replace(Regex("Linux; Android [^)]+"), "X11; Linux x86_64")
+                .replace(" Mobile Safari/", " Safari/")
+                .replace("; wv", "")
+        } else {
+            mobileUserAgent
+        }
+        webView.settings.useWideViewPort = desktopMode
+        webView.settings.loadWithOverviewMode = desktopMode
         webView.settings.cacheMode = if (incognito || !cacheEnabled) {
             WebSettings.LOAD_NO_CACHE
         } else {

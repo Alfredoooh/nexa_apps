@@ -30,7 +30,9 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
     super.initState();
     _prepareSites();
     customSitesController.addListener(_onCustomSitesChanged);
-    _hideLoaderAfterMinimumDuration();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _finishInitialPreparation();
+    });
   }
 
   @override
@@ -54,8 +56,48 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
         .toList(growable: false);
   }
 
-  Future<void> _hideLoaderAfterMinimumDuration() async {
-    await Future<void>.delayed(_minimumLoaderDuration);
+  Future<void> _finishInitialPreparation() async {
+    final startedAt = DateTime.now();
+    final localImages = <Future<void>>[];
+    final networkImages = <Future<void>>[];
+    final uniqueSites = _groupedSites.values.expand((sites) => sites);
+
+    for (final site in uniqueSites) {
+      try {
+        if (site.iconBase64 != null && site.iconBase64!.isNotEmpty) {
+          localImages.add(
+            precacheImage(MemoryImage(base64Decode(site.iconBase64!)), context),
+          );
+        } else if (site.assetPath != null && site.assetPath!.isNotEmpty) {
+          localImages.add(precacheImage(AssetImage(site.assetPath!), context));
+        } else if (site.faviconUrl != null && site.faviconUrl!.isNotEmpty) {
+          // Os favicons externos recebem um limite individual. Se um domínio
+          // não responder, o tile já tem o fallback local e não fica vazio.
+          networkImages.add(
+            precacheImage(NetworkImage(site.faviconUrl!), context).timeout(
+              const Duration(seconds: 8),
+              onTimeout: () {},
+            ),
+          );
+        }
+      } catch (_) {
+        // Um ícone inválido não deve impedir que os restantes sejam preparados.
+      }
+    }
+
+    // Ícones locais e personalizados têm de estar prontos antes da lista surgir.
+    try {
+      await Future.wait(localImages, eagerError: false);
+    } catch (_) {}
+    // Espera os favicons de rede em paralelo; os que falharem usam o fallback.
+    if (networkImages.isNotEmpty) {
+      try {
+        await Future.wait(networkImages, eagerError: false);
+      } catch (_) {}
+    }
+
+    final remaining = _minimumLoaderDuration - DateTime.now().difference(startedAt);
+    if (remaining > Duration.zero) await Future<void>.delayed(remaining);
     if (!mounted) return;
     setState(() => _showInitialLoader = false);
   }
@@ -65,11 +107,18 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
     setState(_prepareSites);
   }
 
-  Future<void> _openAddSiteDialog() async {
-    await showDialog<void>(
+  Future<void> _openAddSiteModal() async {
+    await showModalBottomSheet<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => const _AddCustomSiteDialog(),
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      showDragHandle: false,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+        child: const _AddCustomSiteDialog(),
+      ),
     );
   }
 
@@ -95,17 +144,16 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
         title: const Text('Todos os sites'),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 12),
             child: IconButton(
               tooltip: 'Adicionar site',
               style: IconButton.styleFrom(
-                backgroundColor: pillColor(context),
                 foregroundColor: text,
                 fixedSize: const Size(42, 42),
-                shape: const CircleBorder(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const Icon(Symbols.edit_rounded, size: 20),
-              onPressed: _openAddSiteDialog,
+              icon: const Icon(Symbols.edit, size: 22),
+              onPressed: _openAddSiteModal,
             ),
           ),
         ],
@@ -338,15 +386,28 @@ class _AddCustomSiteDialogState extends State<_AddCustomSiteDialog> {
     final accent = accentColor(context);
     final panel = pillColor(context);
 
-    return AlertDialog(
-      backgroundColor: panel,
+    return Material(
+      color: panel,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-      title: Text('Adicionar site', style: TextStyle(color: text, fontWeight: FontWeight.w800)),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
+      clipBehavior: Clip.antiAlias,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .86),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(width: 38, height: 4, decoration: BoxDecoration(color: muted.withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+              ),
+              const SizedBox(height: 18),
+              Text('Adicionar site', style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 18)),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -423,22 +484,33 @@ class _AddCustomSiteDialogState extends State<_AddCustomSiteDialog> {
                 const SizedBox(height: 10),
                 Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
               ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                      child: const Text('Cancelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _saving ? null : _saveSite,
+                      child: _saving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Adicionar'),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: _saving ? null : _saveSite,
-          child: _saving
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Adicionar'),
-        ),
-      ],
     );
   }
 }

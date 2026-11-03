@@ -2,6 +2,7 @@ package com.looply.app
 
 import android.app.UiModeManager
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
@@ -95,6 +96,7 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "showNativePopup" -> showNativePopup(call, result)
+                    "shareLink" -> shareLink(call, result)
                     else -> result.notImplemented()
                 }
             }
@@ -277,7 +279,7 @@ class MainActivity : FlutterActivity() {
         val background = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.rgb(23, 24, 26)
+            else -> Color.rgb(20, 21, 23)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
         window.statusBarColor = background
@@ -301,6 +303,31 @@ class MainActivity : FlutterActivity() {
             }
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = flags
+        }
+    }
+
+    private fun shareLink(call: MethodCall, result: MethodChannel.Result) {
+        val url = call.argument<String>("url")?.trim().orEmpty()
+        if (url.isEmpty()) {
+            result.error("invalid_url", "Não existe uma ligação para partilhar.", null)
+            return
+        }
+        val requestedPackage = call.argument<String>("packageName")
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+            if (!requestedPackage.isNullOrBlank()) setPackage(requestedPackage)
+        }
+        try {
+            if (!requestedPackage.isNullOrBlank() && sendIntent.resolveActivity(packageManager) != null) {
+                startActivity(sendIntent)
+            } else {
+                sendIntent.setPackage(null)
+                startActivity(Intent.createChooser(sendIntent, "Partilhar ligação"))
+            }
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("share_failed", error.message, null)
         }
     }
 
