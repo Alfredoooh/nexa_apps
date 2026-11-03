@@ -23,7 +23,6 @@ concurrency:
 jobs:
   build:
     name: Build BrowseIt APK
-    # Secrets are unavailable to pull requests originating from forks.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -121,7 +120,6 @@ jobs:
           printf '%s' "$BROWSEIT_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
-          # Verify alias and certificate fingerprint. This prevents signing with the old key.
           KEY_INFO="$(keytool -list -v \
             -storetype JKS \
             -keystore "$KEYSTORE_PATH" \
@@ -129,7 +127,7 @@ jobs:
             -alias browseit)"
 
           ACTUAL_SHA1="$(printf '%s\n' "$KEY_INFO" | awk -F': ' '/SHA1:/{gsub(/[[:space:]]/, "", $2); print toupper($2); exit}')"
-          EXPECTED_SHA1="1D:83:DE:49:DF:50:68:B7:46:49:91:24:2E:76:E9:60:D0:CB:19:10"
+          EXPECTED_SHA1="D8:D2:AF:AC:01:42:68:F8:7C:42:C5:68:F6:59:DB:83:40:C9:68:6D"
 
           if [[ -z "$ACTUAL_SHA1" ]]; then
             echo "ERROR: Could not read SHA-1 fingerprint from BrowseIt keystore."
