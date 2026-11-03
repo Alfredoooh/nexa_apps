@@ -1,4 +1,4 @@
-name: Looply Android Build
+name: BrowseIt Android Build
 
 on:
   push:
@@ -17,12 +17,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: looply-android-${{ github.ref }}
+  group: browseit-android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Looply APK
+    name: Build BrowseIt APK
+    # Secrets are unavailable to pull requests originating from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -49,10 +51,8 @@ jobs:
 
           if [[ -f "pubspec.yaml" ]]; then
             echo "PROJECT_DIR=." >> "$GITHUB_ENV"
-
           elif [[ -f "looply/pubspec.yaml" ]]; then
             echo "PROJECT_DIR=looply" >> "$GITHUB_ENV"
-
           else
             echo "ERROR: pubspec.yaml not found."
             exit 1
@@ -78,12 +78,9 @@ jobs:
           fi
 
           sed -i \
-            "s#^distributionUrl=.*#distributionUrl=https\\\\://services.gradle.org/distributions/gradle-${TARGET_VERSION}-bin.zip#" \
+            "s#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-${TARGET_VERSION}-bin.zip#" \
             "$WRAPPER"
           sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
-
-          # Este projeto usa um gradlew bootstrapper customizado com a versao
-          # hardcoded em VERSION="..." (nao le o gradle-wrapper.properties).
           sed -i "s#^VERSION=\"8.13\"#VERSION=\"${TARGET_VERSION}\"#" "$GRADLEW"
 
           echo "=== gradle-wrapper.properties ==="
@@ -91,15 +88,8 @@ jobs:
           echo "=== gradlew VERSION ==="
           grep '^VERSION=' "$GRADLEW"
 
-          if ! grep -q "gradle-${TARGET_VERSION}-bin.zip" "$WRAPPER"; then
-            echo "ERROR: distributionUrl not updated."
-            exit 1
-          fi
-
-          if ! grep -q "VERSION=\"${TARGET_VERSION}\"" "$GRADLEW"; then
-            echo "ERROR: gradlew VERSION not updated."
-            exit 1
-          fi
+          grep -q "gradle-${TARGET_VERSION}-bin.zip" "$WRAPPER"
+          grep -q "VERSION=\"${TARGET_VERSION}\"" "$GRADLEW"
 
       - name: Display build environment
         run: |
@@ -107,12 +97,47 @@ jobs:
           java -version
 
       - name: Get Flutter dependencies
+        shell: bash
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           flutter pub get
 
-      - name: Build Looply APK
+      - name: Configure BrowseIt release keystore
+        shell: bash
+        env:
+          BROWSEIT_KEYSTORE_BASE64: ${{ secrets.BROWSEIT_KEYSTORE_BASE64 }}
+          BROWSEIT_STORE_PASSWORD: ${{ secrets.BROWSEIT_STORE_PASSWORD }}
+          BROWSEIT_KEY_PASSWORD: ${{ secrets.BROWSEIT_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          : "${BROWSEIT_KEYSTORE_BASE64:?Missing GitHub Actions secret BROWSEIT_KEYSTORE_BASE64}"
+          : "${BROWSEIT_STORE_PASSWORD:?Missing GitHub Actions secret BROWSEIT_STORE_PASSWORD}"
+          : "${BROWSEIT_KEY_PASSWORD:?Missing GitHub Actions secret BROWSEIT_KEY_PASSWORD}"
+
+          KEYSTORE_PATH="$GITHUB_WORKSPACE/$PROJECT_DIR/android/app/browseit-release.keystore"
+          mkdir -p "$(dirname "$KEYSTORE_PATH")"
+          printf '%s' "$BROWSEIT_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+
+          # Verify that the configured store password and alias open the supplied key.
+          keytool -list \
+            -storetype JKS \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass:env BROWSEIT_STORE_PASSWORD \
+            -alias browseit >/dev/null
+
+          {
+            echo "BROWSEIT_KEYSTORE_PATH=$KEYSTORE_PATH"
+            echo "BROWSEIT_STORE_PASSWORD=$BROWSEIT_STORE_PASSWORD"
+            echo "BROWSEIT_KEY_PASSWORD=$BROWSEIT_KEY_PASSWORD"
+            echo "BROWSEIT_KEY_ALIAS=browseit"
+          } >> "$GITHUB_ENV"
+
+          echo "BrowseIt keystore loaded and alias verified."
+
+      - name: Build BrowseIt APK
         shell: bash
         run: |
           set -euo pipefail
@@ -129,15 +154,23 @@ jobs:
           APKS=("$APK_DIR"/app-*-release.apk)
 
           if [[ ${#APKS[@]} -eq 0 ]]; then
-            echo "ERROR: No Looply APKs were generated."
+            echo "ERROR: No BrowseIt APKs were generated."
             exit 1
           fi
 
-          echo "APKs successfully generated:"
+          echo "BrowseIt APKs successfully generated:"
           ls -lh "${APKS[@]}"
+
+      - name: Remove temporary keystore from runner
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "$GITHUB_WORKSPACE/$PROJECT_DIR/android/app/browseit-release.keystore"
 
       - name: Rename APKs with run number
         id: rename
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -149,7 +182,7 @@ jobs:
           for apk in "$APK_DIR"/app-*-release.apk; do
             name="$(basename "$apk")"
             arch="$(echo "$name" | sed -E 's/^app-(.*)-release\.apk$/\1/')"
-            new_name="looply-${arch}-build${{ github.run_number }}.apk"
+            new_name="browseit-${arch}-build${{ github.run_number }}.apk"
             cp "$apk" "$OUT_DIR/$new_name"
           done
 
@@ -159,32 +192,34 @@ jobs:
 
       - name: Publish release with APK assets
         id: release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-build
-          name: "Looply build #${{ github.run_number }}"
+          name: "BrowseIt build #${{ github.run_number }}"
           body: |
             Build automático do commit ${{ github.sha }} (branch `${{ github.ref_name }}`).
 
             Escolhe o APK pela arquitetura do teu telemóvel:
-            - `arm64-v8a` — cobre praticamente todos os Android modernos (recomendado).
-            - `armeabi-v7a` — para aparelhos antigos de 32-bit.
-            - `x86_64` — só para emuladores/Chromebooks Intel, não instala em celular normal.
+            - `arm64-v8a` — recomendado para a maioria dos Android modernos.
+            - `armeabi-v7a` — para aparelhos Android de 32-bit.
+            - `x86_64` — para emuladores/Chromebooks Intel.
           files: ${{ steps.rename.outputs.asset_dir }}/*.apk
           fail_on_unmatched_files: true
           make_latest: true
 
       - name: Write download links to summary
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "## APKs disponíveis para download" >> "$GITHUB_STEP_SUMMARY"
+          echo "## BrowseIt APKs disponíveis para download" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Arquitetura | Link direto |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
 
-          for apk in "${{ steps.rename.outputs.asset_dir }}"/*.apk; do
+          for apk in "$PROJECT_DIR"/build/app/outputs/flutter-apk/release-assets/*.apk; do
             name="$(basename "$apk")"
             url="https://github.com/${{ github.repository }}/releases/download/latest-build/${name}"
             echo "| $name | [Baixar]($url) |" >> "$GITHUB_STEP_SUMMARY"

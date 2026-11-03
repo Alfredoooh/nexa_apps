@@ -1,7 +1,7 @@
 plugins {
-id "com.android.application"
-id "org.jetbrains.kotlin.android"
-id "dev.flutter.flutter-gradle-plugin"
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
 def browseItWebClientId = (project.findProperty("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: System.getenv("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: "").toString()
@@ -10,52 +10,89 @@ def browseItStorePassword = (project.findProperty("BROWSEIT_STORE_PASSWORD") ?: 
 def browseItKeyPassword = (project.findProperty("BROWSEIT_KEY_PASSWORD") ?: System.getenv("BROWSEIT_KEY_PASSWORD") ?: "").toString()
 def browseItKeyAlias = (project.findProperty("BROWSEIT_KEY_ALIAS") ?: System.getenv("BROWSEIT_KEY_ALIAS") ?: "browseit").toString()
 
+def browseItSigningConfigured =
+        !browseItStoreFile.isBlank() &&
+        !browseItStorePassword.isBlank() &&
+        !browseItKeyPassword.isBlank() &&
+        !browseItKeyAlias.isBlank() &&
+        project.file(browseItStoreFile).isFile()
+
 android {
-namespace = "com.looply.browser.app"
-compileSdk = flutter.compileSdkVersion
-ndkVersion = flutter.ndkVersion
+    namespace = "com.looply.browser.app"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
-compileOptions {
-sourceCompatibility = JavaVersion.VERSION_17
-targetCompatibility = JavaVersion.VERSION_17
-}
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
-kotlinOptions {
-jvmTarget = JavaVersion.VERSION_17.toString()
-}
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
 
-defaultConfig {
-applicationId = "com.looply.browser.app"
-minSdk = flutter.minSdkVersion
-targetSdk = flutter.targetSdkVersion
-versionCode = flutter.versionCode
-versionName = flutter.versionName
-buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${browseItWebClientId}\""
-}
+    defaultConfig {
+        applicationId = "com.looply.browser.app"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${browseItWebClientId}\""
+    }
 
-buildFeatures {
-    buildConfig true
-}
+    buildFeatures {
+        buildConfig true
+    }
 
-signingConfigs {
-    browseitRelease {
-        if (!browseItStoreFile.isBlank()) {
-            storeFile file(browseItStoreFile)
-            storePassword browseItStorePassword
-            keyAlias browseItKeyAlias
-            keyPassword browseItKeyPassword
+    signingConfigs {
+        browseitRelease {
+            if (browseItSigningConfigured) {
+                storeFile file(browseItStoreFile)
+                storeType = "JKS"
+                storePassword browseItStorePassword
+                keyAlias browseItKeyAlias
+                keyPassword browseItKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // The release variant is configured with the BrowseIt keystore.
+            // A verification task below prevents silently shipping a debug-signed APK.
+            signingConfig = browseItSigningConfigured ? signingConfigs.browseitRelease : signingConfigs.debug
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
 
-buildTypes {
-release {
-signingConfig = browseItStoreFile.isBlank() ? signingConfigs.debug : signingConfigs.browseitRelease
-minifyEnabled = true
-shrinkResources = true
-proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+// Do not allow a release build to fall back silently to the debug certificate.
+tasks.register("verifyBrowseItReleaseSigning") {
+    doLast {
+        def missing = []
+        if (browseItStoreFile.isBlank()) missing << "BROWSEIT_KEYSTORE_PATH"
+        if (browseItStorePassword.isBlank()) missing << "BROWSEIT_STORE_PASSWORD"
+        if (browseItKeyPassword.isBlank()) missing << "BROWSEIT_KEY_PASSWORD"
+        if (browseItKeyAlias.isBlank()) missing << "BROWSEIT_KEY_ALIAS"
+        if (!browseItStoreFile.isBlank() && !project.file(browseItStoreFile).isFile()) {
+            missing << "keystore file not found at ${browseItStoreFile}"
+        }
+
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                    "BrowseIt RELEASE signing is not configured. Missing/invalid: ${missing.join(', ')}. " +
+                    "Configure the uploaded BrowseIt keystore and its GitHub Actions secrets before building a release."
+            )
+        }
+    }
 }
-}
+
+tasks.configureEach { task ->
+    if (task.name.toLowerCase().contains("release") && task.name != "verifyBrowseItReleaseSigning") {
+        task.dependsOn(tasks.named("verifyBrowseItReleaseSigning"))
+    }
 }
 
 dependencies {
@@ -66,5 +103,5 @@ dependencies {
 }
 
 flutter {
-source = "../.."
+    source = "../.."
 }
