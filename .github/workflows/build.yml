@@ -121,12 +121,29 @@ jobs:
           printf '%s' "$BROWSEIT_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
 
-          # Verify that the configured store password and alias open the supplied key.
-          keytool -list \
+          # Verify alias and certificate fingerprint. This prevents signing with the old key.
+          KEY_INFO="$(keytool -list -v \
             -storetype JKS \
             -keystore "$KEYSTORE_PATH" \
             -storepass:env BROWSEIT_STORE_PASSWORD \
-            -alias browseit >/dev/null
+            -alias browseit)"
+
+          ACTUAL_SHA1="$(printf '%s\n' "$KEY_INFO" | awk -F': ' '/SHA1:/{gsub(/[[:space:]]/, "", $2); print toupper($2); exit}')"
+          EXPECTED_SHA1="1D:83:DE:49:DF:50:68:B7:46:49:91:24:2E:76:E9:60:D0:CB:19:10"
+
+          if [[ -z "$ACTUAL_SHA1" ]]; then
+            echo "ERROR: Could not read SHA-1 fingerprint from BrowseIt keystore."
+            exit 1
+          fi
+
+          if [[ "$ACTUAL_SHA1" != "$EXPECTED_SHA1" ]]; then
+            echo "ERROR: Wrong BrowseIt keystore certificate."
+            echo "Expected SHA-1: $EXPECTED_SHA1"
+            echo "Found SHA-1:    $ACTUAL_SHA1"
+            exit 1
+          fi
+
+          echo "BrowseIt release certificate SHA-1 verified."
 
           {
             echo "BROWSEIT_KEYSTORE_PATH=$KEYSTORE_PATH"
