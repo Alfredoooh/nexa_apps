@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Paleta escura neutra (sem o azulado anterior) — cinzas verdadeiros,
 // não totalmente pretos, mantendo contraste confortável.
 const Color looplyPrimary = Color(0xFF1A73E8);
-const Color looplyBgDark = Color(0xFF17181A);
+const Color looplyBgDark = Color(0xFF141517);
 const Color looplyBgLight = Color(0xFFFFFFFF);
 const Color looplyPanelDark = Color(0xFF212325);
 const Color looplyPanel2Dark = Color(0xFF2B2D30);
