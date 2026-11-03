@@ -192,7 +192,7 @@ internal class OrbitNativeWebViewPlatformView(
                     val distance = event.y - touchStartY
                     if (!pullTriggered && view.scrollY <= 0 && distance > touchSlop * 3) {
                         pullTriggered = true
-                        view.reload()
+                        webView.reload()
                         return@setOnTouchListener true
                     }
                 }
