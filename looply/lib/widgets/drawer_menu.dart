@@ -10,6 +10,7 @@ import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
 import '../session_store.dart';
+import '../auth_service.dart';
 
 /// Ponte entre os botões da interface e o drawer push/drag do shell.
 /// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
@@ -275,6 +276,8 @@ class _DrawerOption extends StatelessWidget {
 
 // Botão de Configurações com o avatar embutido no canto direito do
 // próprio botão — sem ícone de engrenagem e sem o texto "Utilizador".
+// Mostra a foto da conta logada; sem sessão, cai no asset local
+// images/avatar.png em vez do ícone genérico de pessoa.
 class _SettingsButtonWithAvatar extends StatelessWidget {
   const _SettingsButtonWithAvatar({required this.onTap});
   final VoidCallback onTap;
@@ -292,10 +295,38 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
           child: Row(children: [
             Expanded(child: Text('Configurações', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
-            Container(
-              width: 32, height: 32, alignment: Alignment.center,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: isDark ? pillColor(context) : Colors.white),
-              child: Icon(Symbols.person_rounded, size: 20, color: mutedText(context)),
+            ValueListenableBuilder<LooplyUser?>(
+              valueListenable: authController,
+              builder: (context, user, _) => Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? pillColor(context) : Colors.white,
+                ),
+                child: ClipOval(
+                  child: user?.photoUrl != null
+                      ? Image.network(
+                          user!.photoUrl!,
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.asset(
+                            'images/avatar.png',
+                            width: 32,
+                            height: 32,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          'images/avatar.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                        ),
+                ),
+              ),
             ),
           ]),
         ),

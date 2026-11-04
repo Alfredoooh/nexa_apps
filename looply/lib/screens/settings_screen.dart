@@ -14,8 +14,7 @@ import '../widgets/m3_switch.dart';
 import '../widgets/search_engine_picker.dart';
 import '../data_transfer.dart';
 import '../auth_service.dart';
-import 'auth_screen.dart';
-import 'profile_screen.dart';
+import 'app_info_screen.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -24,172 +23,146 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: Theme.of(context).brightness == Brightness.dark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
           : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
       child: Scaffold(
         backgroundColor: pageBg(context),
-        appBar: AppBar(
-            toolbarHeight: 64,
-            title: const Text('Configurações'),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: ValueListenableBuilder<LooplyUser?>(
-                  valueListenable: authController,
-                  builder: (context, user, _) => Material(
-                    color: pillColor(context),
-                    shape: const CircleBorder(),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () {
-                        final page = user == null ? const AuthScreen() : const ProfileScreen();
-                        Navigator.of(context).push<void>(_AccountSlideRoute(page));
-                      },
-                      child: SizedBox(
-                        width: 42,
-                        height: 42,
-                        child: ClipOval(
-                          child: user?.photoUrl != null
-                              ? Image.network(user!.photoUrl!, fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Icon(Symbols.person_rounded, color: mainText(context), size: 22))
-                              : Icon(Symbols.person_rounded, color: mainText(context), size: 22),
+        extendBodyBehindAppBar: true,
+        body: Stack(
+          children: [
+            ListView(
+              padding: EdgeInsets.fromLTRB(16, topInset + 72, 16, 24),
+              children: [
+                _SettingsSection(
+                  title: 'Geral',
+                  children: [
+                    _SettingsTile(
+                      icon: Symbols.dark_mode_rounded,
+                      label: 'Tema',
+                      trailing: ValueListenableBuilder<ThemeMode>(
+                        valueListenable: themeController,
+                        builder: (_, mode, __) => ValueListenableBuilder<bool>(
+                          valueListenable: themeController.pureDark,
+                          builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
                         ),
                       ),
+                      onTap: () => showThemeSheet(context),
                     ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          children: [
-            ValueListenableBuilder<LooplyUser?>(
-              valueListenable: authController,
-              builder: (context, user, _) => _AccountSummaryHeader(user: user),
-            ),
-            const SizedBox(height: 22),
-            _SettingsSection(
-              title: 'Aparência e idioma',
-              children: [
-                _SettingsTile(
-                  icon: Symbols.dark_mode_rounded,
-                  label: 'Tema',
-                  trailing: ValueListenableBuilder<ThemeMode>(
-                    valueListenable: themeController,
-                    builder: (_, mode, __) => ValueListenableBuilder<bool>(
-                      valueListenable: themeController.pureDark,
-                      builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
+                    ValueListenableBuilder<SearchEngine>(
+                      valueListenable: activeSearchEngine,
+                      builder: (context, engine, _) => _SettingsTile(
+                        icon: Symbols.travel_explore_rounded,
+                        label: 'Máquina de pesquisa',
+                        trailing: _SettingsValue(engine.name),
+                        onTap: () => showSearchEnginePicker(context),
+                      ),
                     ),
-                  ),
-                  onTap: () => showThemeSheet(context),
+                    _SettingsTile(
+                      icon: Symbols.language_rounded,
+                      label: 'Idioma',
+                      trailing: const _SettingsValue('Português'),
+                      onTap: () => _showLanguageInfo(context),
+                    ),
+                    const _DefaultBrowserSettingsTile(),
+                  ],
                 ),
-                _SettingsTile(
-                  icon: Symbols.language_rounded,
-                  label: 'Idioma',
-                  trailing: const _SettingsValue('Português'),
-                  onTap: () => _showLanguageInfo(context),
+                const SizedBox(height: 20),
+                _SettingsSection(
+                  title: 'Navegação e segurança',
+                  children: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: adBlockEnabled,
+                      builder: (context, enabled, _) => _SettingsTile(
+                        icon: Symbols.shield_rounded,
+                        label: 'Bloqueador de anúncios',
+                        subtitle: enabled ? 'Ativado' : 'Desativado',
+                        trailing: M3ExpressiveSwitch(
+                          value: enabled,
+                          onChanged: (value) => adBlockEnabled.value = value,
+                        ),
+                        showChevron: false,
+                        onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
+                      ),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: navigationAcceleratorEnabled,
+                      builder: (context, enabled, _) => _SettingsTile(
+                        icon: Symbols.speed_rounded,
+                        label: 'Acelerador de navegação',
+                        subtitle: enabled
+                            ? 'Pré-ligação e cache ativos'
+                            : 'Pré-ligação e cache desativados',
+                        trailing: M3ExpressiveSwitch(
+                          value: enabled,
+                          onChanged: (value) => navigationAcceleratorEnabled.value = value,
+                        ),
+                        showChevron: false,
+                        onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _SettingsSection(
+                  title: 'Biblioteca',
+                  children: [
+                    AnimatedBuilder(
+                      animation: activityController,
+                      builder: (context, _) => _SettingsTile(
+                        icon: Symbols.history_rounded,
+                        label: 'Histórico de navegação',
+                        subtitle: '${activityController.entries.length} registos guardados',
+                        onTap: () => _openLibraryPage(context, const HistoryScreen()),
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: downloadsController,
+                      builder: (context, _) => _SettingsTile(
+                        icon: Symbols.download_rounded,
+                        label: 'Downloads',
+                        subtitle: '${downloadsController.entries.length} pedidos registados',
+                        onTap: () => _openLibraryPage(context, const DownloadsScreen()),
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: bookmarksController,
+                      builder: (context, _) => _SettingsTile(
+                        icon: Symbols.bookmarks_rounded,
+                        label: 'Marcadores',
+                        subtitle: '${bookmarksController.entries.length} páginas guardadas',
+                        onTap: () => _openLibraryPage(context, const BookmarksScreen()),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _SettingsSection(
+                  title: 'Dados',
+                  children: [
+                    _SettingsTile(
+                      icon: Symbols.upload_rounded,
+                      label: 'Exportar dados',
+                      subtitle: 'Guardar histórico e definições num ficheiro JSON',
+                      onTap: () => _exportData(context),
+                    ),
+                    _SettingsTile(
+                      icon: Symbols.download_rounded,
+                      label: 'Importar dados',
+                      subtitle: 'Restaurar um backup JSON do BrowseIt',
+                      onTap: () => _importData(context),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            _SettingsSection(
-              title: 'Navegação',
-              children: [
-                ValueListenableBuilder<SearchEngine>(
-                  valueListenable: activeSearchEngine,
-                  builder: (context, engine, _) => _SettingsTile(
-                    icon: Symbols.travel_explore_rounded,
-                    label: 'Máquina de pesquisa',
-                    trailing: _SettingsValue(engine.name),
-                    onTap: () => showSearchEnginePicker(context),
-                  ),
-                ),
-                const _DefaultBrowserSettingsTile(),
-                ValueListenableBuilder<bool>(
-                  valueListenable: adBlockEnabled,
-                  builder: (context, enabled, _) => _SettingsTile(
-                    icon: Symbols.shield_rounded,
-                    label: 'Bloqueador de anúncios',
-                    subtitle: enabled ? 'Ativado' : 'Desativado',
-                    trailing: M3ExpressiveSwitch(
-                      value: enabled,
-                      onChanged: (value) => adBlockEnabled.value = value,
-                    ),
-                    showChevron: false,
-                    onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
-                  ),
-                ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: navigationAcceleratorEnabled,
-                  builder: (context, enabled, _) => _SettingsTile(
-                    icon: Symbols.speed_rounded,
-                    label: 'Acelerador de navegação',
-                    subtitle: enabled
-                        ? 'Pré-ligação e cache ativos'
-                        : 'Pré-ligação e cache desativados',
-                    trailing: M3ExpressiveSwitch(
-                      value: enabled,
-                      onChanged: (value) => navigationAcceleratorEnabled.value = value,
-                    ),
-                    showChevron: false,
-                    onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SettingsSection(
-              title: 'Biblioteca',
-              children: [
-                AnimatedBuilder(
-                  animation: activityController,
-                  builder: (context, _) => _SettingsTile(
-                    icon: Symbols.history_rounded,
-                    label: 'Histórico de navegação',
-                    subtitle: '${activityController.entries.length} registos guardados',
-                    onTap: () => _openLibraryPage(context, const HistoryScreen()),
-                  ),
-                ),
-                AnimatedBuilder(
-                  animation: downloadsController,
-                  builder: (context, _) => _SettingsTile(
-                    icon: Symbols.download_rounded,
-                    label: 'Downloads',
-                    subtitle: '${downloadsController.entries.length} pedidos registados',
-                    onTap: () => _openLibraryPage(context, const DownloadsScreen()),
-                  ),
-                ),
-                AnimatedBuilder(
-                  animation: bookmarksController,
-                  builder: (context, _) => _SettingsTile(
-                    icon: Symbols.bookmarks_rounded,
-                    label: 'Marcadores',
-                    subtitle: '${bookmarksController.entries.length} páginas guardadas',
-                    onTap: () => _openLibraryPage(context, const BookmarksScreen()),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SettingsSection(
-              title: 'Dados',
-              children: [
-                _SettingsTile(
-                  icon: Symbols.upload_rounded,
-                  label: 'Exportar dados',
-                  subtitle: 'Guardar histórico e definições num ficheiro JSON',
-                  onTap: () => _exportData(context),
-                ),
-                _SettingsTile(
-                  icon: Symbols.download_rounded,
-                  label: 'Importar dados',
-                  subtitle: 'Restaurar um backup JSON do BrowseIt',
-                  onTap: () => _importData(context),
-                ),
-              ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _SettingsFadeAppBar(topInset: topInset),
             ),
           ],
         ),
@@ -264,63 +237,80 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _AccountSummaryHeader extends StatelessWidget {
-  const _AccountSummaryHeader({required this.user});
-
-  final LooplyUser? user;
+// Appbar flutuante da Settings: dois botões circulares (voltar e
+// informações), título central, e o mesmo gradiente sólido-no-topo /
+// transparente-na-base usado nas outras telas internas.
+class _SettingsFadeAppBar extends StatelessWidget {
+  const _SettingsFadeAppBar({required this.topInset});
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
+    final bg = pageBg(context);
     final text = mainText(context);
     final muted = mutedText(context);
-    final name = user?.displayName?.trim().isNotEmpty == true ? user!.displayName! : 'Utilizador BrowseIt';
-    final subtitle = user?.email ?? 'Sem sessão iniciada';
-
-    return Material(
-      color: settingsCardColor(context),
-      borderRadius: BorderRadius.circular(22),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          final page = user == null ? const AuthScreen() : const ProfileScreen();
-          Navigator.of(context).push<void>(_AccountSlideRoute(page));
-        },
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0.0)],
+          stops: const [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: pillColor(context),
-                foregroundImage: user?.photoUrl == null ? null : NetworkImage(user!.photoUrl!),
-                child: user?.photoUrl == null
-                    ? Icon(Symbols.person_rounded, size: 24, color: muted)
-                    : null,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: text, fontSize: 15.5, fontWeight: FontWeight.w800),
+              Semantics(
+                button: true,
+                label: 'Voltar',
+                child: Material(
+                  color: pillColor(context),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 19, color: muted),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: muted, fontSize: 12),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Configurações',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Semantics(
+                button: true,
+                label: 'Informações do app',
+                child: Material(
+                  color: pillColor(context),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push<void>(
+                      CupertinoPageRoute<void>(builder: (_) => const AppInfoScreen()),
+                    ),
+                    child: SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Icon(Symbols.info_rounded, size: 20, color: muted),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -501,22 +491,6 @@ class _SettingsTile extends StatelessWidget {
     );
   }
 }
-
-
-class _AccountSlideRoute extends PageRouteBuilder<void> {
-  _AccountSlideRoute(Widget page)
-      : super(
-          pageBuilder: (context, animation, secondaryAnimation) => page,
-          transitionDuration: const Duration(milliseconds: 420),
-          reverseTransitionDuration: const Duration(milliseconds: 390),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final slide = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic));
-            return SlideTransition(position: slide, child: child);
-          },
-        );
-}
-
 
 class _DefaultBrowserSettingsTile extends StatefulWidget {
   const _DefaultBrowserSettingsTile();

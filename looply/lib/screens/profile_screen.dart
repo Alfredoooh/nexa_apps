@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../auth_service.dart';
 import '../theme.dart';
+import '../widgets/m3_switch.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -12,16 +13,18 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Estado local dos switches. Trocar por persistência real
-  // (ex: SharedPreferences, backend, etc) quando ligares a lógica.
+  // Cada toggle, quando ativo, passa a guardar o respetivo dado na conta
+  // da pessoa autenticada. Estado local por agora — troca por persistência
+  // real (backend/SharedPreferences) quando ligares a lógica de cada um.
   bool _saveHistory = false;
   bool _syncBookmarks = true;
   bool _saveAddresses = false;
+  bool _syncAppSettings = false;
 
   Future<void> _confirmSignOut(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => _SignOutDialog(),
+      builder: (dialogContext) => const _SignOutDialog(),
     );
     if (confirmed == true && context.mounted) {
       await authController.signOut();
@@ -31,144 +34,152 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final topInset = MediaQuery.of(context).padding.top;
+
     return Scaffold(
-      backgroundColor: pageBg(context),
-      appBar: AppBar(title: const Text('Perfil')),
+      backgroundColor: bg,
       body: ValueListenableBuilder<LooplyUser?>(
         valueListenable: authController,
         builder: (context, user, _) {
           if (user == null) {
-            return Center(
-              child: FilledButton.icon(
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Symbols.login_rounded),
-                label: const Text('Iniciar sessão'),
-              ),
+            return Stack(
+              children: [
+                Center(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Symbols.login_rounded),
+                    label: const Text('Iniciar sessão'),
+                  ),
+                ),
+                Positioned(top: 0, left: 0, right: 0, child: _ProfileFadeAppBar(topInset: topInset)),
+              ],
             );
           }
           final text = mainText(context);
           final muted = mutedText(context);
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+          return Stack(
             children: [
-              Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    CircleAvatar(
-                      radius: 46,
-                      backgroundColor: pillColor(context),
-                      foregroundImage: user.photoUrl == null ? null : NetworkImage(user.photoUrl!),
-                      child: user.photoUrl == null
-                          ? Icon(Symbols.person_rounded, size: 40, color: muted)
-                          : null,
-                    ),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: accentColor(context),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: pageBg(context), width: 3),
+              ListView(
+                padding: EdgeInsets.fromLTRB(20, topInset + 76, 20, 110),
+                children: [
+                  Center(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                          radius: 46,
+                          backgroundColor: pillColor(context),
+                          foregroundImage: user.photoUrl != null
+                              ? NetworkImage(user.photoUrl!)
+                              : const AssetImage('images/avatar.png') as ImageProvider,
+                          child: null,
                         ),
-                        child: const Icon(Symbols.verified_rounded, size: 14, color: Colors.white),
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: accentColor(context),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: bg, width: 3),
+                            ),
+                            child: const Icon(Symbols.verified_rounded, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    user.displayName?.trim().isNotEmpty == true ? user.displayName! : 'Utilizador BrowseIt',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(user.email, textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
+                  const SizedBox(height: 24),
+                  Material(
+                    color: settingsCardColor(context),
+                    borderRadius: BorderRadius.circular(22),
+                    clipBehavior: Clip.antiAlias,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      child: Row(
+                        children: [
+                          Icon(Symbols.verified_user_rounded, color: accentColor(context), size: 19),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Sessão iniciada com ${user.provider == 'google' ? 'Google' : 'email'}',
+                              style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                user.displayName?.trim().isNotEmpty == true ? user.displayName! : 'Utilizador BrowseIt',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3),
-              ),
-              const SizedBox(height: 4),
-              Text(user.email, textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: settingsCardColor(context),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: accentColor(context).withOpacity(0.14),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Symbols.verified_user_rounded, color: accentColor(context), size: 18),
+                  ),
+                  const SizedBox(height: 20),
+                  // Secção única — sem categorias separadas (Atividade/Conta/etc).
+                  // Mesma geometria agrupada dos cards da Settings: primeiro
+                  // card mais curvo em cima, últimos mais curvo embaixo,
+                  // intermédios discretos.
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ProfileToggleTile(
+                          icon: Symbols.history_rounded,
+                          title: 'Histórico',
+                          subtitle: _saveHistory
+                              ? 'A guardar o histórico na tua conta'
+                              : 'O histórico não está a ser guardado',
+                          value: _saveHistory,
+                          onChanged: (v) => setState(() => _saveHistory = v),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(22), bottom: Radius.circular(8)),
+                        ),
+                        const SizedBox(height: 2),
+                        _ProfileToggleTile(
+                          icon: Symbols.bookmark_rounded,
+                          title: 'Marcadores',
+                          subtitle: _syncBookmarks
+                              ? 'Sincronizados entre dispositivos'
+                              : 'Guardados apenas neste dispositivo',
+                          value: _syncBookmarks,
+                          onChanged: (v) => setState(() => _syncBookmarks = v),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        const SizedBox(height: 2),
+                        _ProfileToggleTile(
+                          icon: Symbols.location_on_rounded,
+                          title: 'Moradas',
+                          subtitle: _saveAddresses
+                              ? 'Guardadas para preencher formulários'
+                              : 'Não guardadas',
+                          value: _saveAddresses,
+                          onChanged: (v) => setState(() => _saveAddresses = v),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        const SizedBox(height: 2),
+                        _ProfileToggleTile(
+                          icon: Symbols.settings_rounded,
+                          title: 'Configurações do app',
+                          subtitle: _syncAppSettings
+                              ? 'Sincronizadas com a tua conta'
+                              : 'Guardadas apenas neste dispositivo',
+                          value: _syncAppSettings,
+                          onChanged: (v) => setState(() => _syncAppSettings = v),
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(22)),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Sessão iniciada com ${user.provider == 'google' ? 'Google' : 'email'}',
-                        style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 28),
-              _SectionLabel('Atividade'),
-              const SizedBox(height: 10),
-              _SwitchSettingCard(
-                icon: Symbols.history_rounded,
-                title: 'Histórico',
-                subtitle: _saveHistory
-                    ? 'A guardar o histórico na tua conta'
-                    : 'O histórico não está a ser guardado',
-                value: _saveHistory,
-                onChanged: (v) => setState(() => _saveHistory = v),
-              ),
-              const SizedBox(height: 10),
-              _SwitchSettingCard(
-                icon: Symbols.bookmark_rounded,
-                title: 'Marcadores',
-                subtitle: _syncBookmarks
-                    ? 'Sincronizados entre dispositivos'
-                    : 'Guardados apenas neste dispositivo',
-                value: _syncBookmarks,
-                onChanged: (v) => setState(() => _syncBookmarks = v),
-              ),
-              const SizedBox(height: 22),
-              _SectionLabel('Conta'),
-              const SizedBox(height: 10),
-              _SwitchSettingCard(
-                icon: Symbols.location_on_rounded,
-                title: 'Moradas',
-                subtitle: _saveAddresses
-                    ? 'Guardadas para preencher formulários'
-                    : 'Não guardadas',
-                value: _saveAddresses,
-                onChanged: (v) => setState(() => _saveAddresses = v),
-              ),
-              const SizedBox(height: 10),
-              _NavSettingCard(
-                icon: Symbols.settings_rounded,
-                title: 'Configurações do app',
-                subtitle: 'Aparência, privacidade e mais',
-                onTap: () {
-                  // Navegar para o ecrã de configurações do app.
-                },
-              ),
-              const SizedBox(height: 28),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  side: BorderSide(color: Colors.red.withOpacity(0.4)),
-                  foregroundColor: Colors.red,
-                ),
-                onPressed: () => _confirmSignOut(context),
-                icon: const Icon(Symbols.logout_rounded),
-                label: const Text('Terminar sessão', style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
+              Positioned(top: 0, left: 0, right: 0, child: _ProfileFadeAppBar(topInset: topInset)),
+              Positioned(bottom: 0, left: 0, right: 0, child: _ProfileFadeBottomBar(onSignOut: () => _confirmSignOut(context))),
             ],
           );
         },
@@ -177,87 +188,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.label);
-  final String label;
+// Appbar flutuante da Profile: um botão circular de voltar, título
+// central, e o mesmo gradiente sólido-no-topo / transparente-na-base.
+class _ProfileFadeAppBar extends StatelessWidget {
+  const _ProfileFadeAppBar({required this.topInset});
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: mutedText(context),
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
-        ),
-      ),
-    );
-  }
-}
-
-class _SwitchSettingCard extends StatelessWidget {
-  const _SwitchSettingCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
+    final bg = pageBg(context);
     final text = mainText(context);
     final muted = mutedText(context);
-    final accent = accentColor(context);
-    return Material(
-      color: settingsCardColor(context),
-      borderRadius: BorderRadius.circular(20),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => onChanged(!value),
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0.0)],
+          stops: const [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: accent, size: 19),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: muted, fontSize: 11.5),
+              Semantics(
+                button: true,
+                label: 'Voltar',
+                child: Material(
+                  color: pillColor(context),
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 19, color: muted),
                     ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Switch.adaptive(
-                value: value,
-                onChanged: onChanged,
-                activeColor: accent,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Perfil',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+                ),
               ),
+              const SizedBox(width: 42), // balanceia o botão de voltar, título fica centrado
             ],
           ),
         ),
@@ -266,18 +250,63 @@ class _SwitchSettingCard extends StatelessWidget {
   }
 }
 
-class _NavSettingCard extends StatelessWidget {
-  const _NavSettingCard({
+// Bottombar flutuante com terminar sessão: invertido do appbar — topo
+// transparente, esvaindo para sólido na base, onde o botão assenta.
+class _ProfileFadeBottomBar extends StatelessWidget {
+  const _ProfileFadeBottomBar({required this.onSignOut});
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 24, 20, bottomInset + 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg.withOpacity(0.0), bg, bg],
+          stops: const [0.0, 0.45, 1.0],
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+            backgroundColor: Colors.red.shade400.withOpacity(0.9),
+            foregroundColor: Colors.white,
+          ),
+          onPressed: onSignOut,
+          icon: const Icon(Symbols.logout_rounded),
+          label: const Text('Terminar sessão', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ),
+    );
+  }
+}
+
+// Mesmo estilo de card da Settings (settingsCardColor, mesmas curvas
+// agrupadas), mas sem badge circular atrás do ícone, e com o
+// M3ExpressiveSwitch real da Settings em vez de Switch.adaptive.
+class _ProfileToggleTile extends StatelessWidget {
+  const _ProfileToggleTile({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    required this.value,
+    required this.onChanged,
+    required this.borderRadius,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -286,35 +315,42 @@ class _NavSettingCard extends StatelessWidget {
     final accent = accentColor(context);
     return Material(
       color: settingsCardColor(context),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.14),
-                  shape: BoxShape.circle,
+        onTap: () => onChanged(!value),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 68),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(icon, color: accent, size: 20),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(title, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: muted, fontSize: 11.5),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Icon(icon, color: accent, size: 19),
-              ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: TextStyle(color: muted, fontSize: 11.5)),
-                  ],
+                const SizedBox(width: 8),
+                M3ExpressiveSwitch(
+                  value: value,
+                  onChanged: onChanged,
                 ),
-              ),
-              Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -342,10 +378,10 @@ class _SignOutDialog extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.12),
+                color: Colors.red.shade400.withOpacity(0.14),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Symbols.logout_rounded, color: Colors.red, size: 26),
+              child: Icon(Symbols.logout_rounded, color: Colors.red.shade400, size: 26),
             ),
             const SizedBox(height: 18),
             Text(
@@ -378,7 +414,7 @@ class _SignOutDialog extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 13),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      backgroundColor: Colors.red,
+                      backgroundColor: Colors.red.shade400.withOpacity(0.9),
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () => Navigator.of(context).pop(true),
