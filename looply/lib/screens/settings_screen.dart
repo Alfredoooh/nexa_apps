@@ -66,8 +66,13 @@ class SettingsScreen extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
+            ValueListenableBuilder<LooplyUser?>(
+              valueListenable: authController,
+              builder: (context, user, _) => _AccountSummaryHeader(user: user),
+            ),
+            const SizedBox(height: 22),
             _SettingsSection(
-              title: 'Geral',
+              title: 'Aparência e idioma',
               children: [
                 _SettingsTile(
                   icon: Symbols.dark_mode_rounded,
@@ -81,6 +86,18 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   onTap: () => showThemeSheet(context),
                 ),
+                _SettingsTile(
+                  icon: Symbols.language_rounded,
+                  label: 'Idioma',
+                  trailing: const _SettingsValue('Português'),
+                  onTap: () => _showLanguageInfo(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: 'Navegação',
+              children: [
                 ValueListenableBuilder<SearchEngine>(
                   valueListenable: activeSearchEngine,
                   builder: (context, engine, _) => _SettingsTile(
@@ -90,19 +107,7 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => showSearchEnginePicker(context),
                   ),
                 ),
-                _SettingsTile(
-                  icon: Symbols.language_rounded,
-                  label: 'Idioma',
-                  trailing: const _SettingsValue('Português'),
-                  onTap: () => _showLanguageInfo(context),
-                ),
                 const _DefaultBrowserSettingsTile(),
-              ],
-            ),
-            const SizedBox(height: 20),
-            _SettingsSection(
-              title: 'Navegação e segurança',
-              children: [
                 ValueListenableBuilder<bool>(
                   valueListenable: adBlockEnabled,
                   builder: (context, enabled, _) => _SettingsTile(
@@ -255,6 +260,71 @@ class SettingsScreen extends StatelessWidget {
           ),
           ),
         ),
+    );
+  }
+}
+
+class _AccountSummaryHeader extends StatelessWidget {
+  const _AccountSummaryHeader({required this.user});
+
+  final LooplyUser? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final name = user?.displayName?.trim().isNotEmpty == true ? user!.displayName! : 'Utilizador BrowseIt';
+    final subtitle = user?.email ?? 'Sem sessão iniciada';
+
+    return Material(
+      color: settingsCardColor(context),
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          final page = user == null ? const AuthScreen() : const ProfileScreen();
+          Navigator.of(context).push<void>(_AccountSlideRoute(page));
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: pillColor(context),
+                foregroundImage: user?.photoUrl == null ? null : NetworkImage(user!.photoUrl!),
+                child: user?.photoUrl == null
+                    ? Icon(Symbols.person_rounded, size: 24, color: muted)
+                    : null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: text, fontSize: 15.5, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -513,7 +583,8 @@ class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile
         subtitle: snapshot.data == true ? 'BrowseIt é o navegador padrão' : 'Definir BrowseIt como navegador padrão',
         trailing: snapshot.data == true
             ? Icon(Symbols.check_circle_rounded, color: accentColor(context), size: 21)
-            : Icon(Symbols.chevron_right_rounded, color: mutedText(context), size: 20),
+            : null,
+        showChevron: true,
         onTap: _requestDefaultBrowser,
       ),
     );
