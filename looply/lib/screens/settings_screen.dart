@@ -15,6 +15,8 @@ import '../widgets/search_engine_picker.dart';
 import '../data_transfer.dart';
 import '../auth_service.dart';
 import 'app_info_screen.dart';
+import 'auth_screen.dart';
+import 'profile_screen.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -36,6 +38,11 @@ class SettingsScreen extends StatelessWidget {
             ListView(
               padding: EdgeInsets.fromLTRB(16, topInset + 72, 16, 24),
               children: [
+                ValueListenableBuilder<LooplyUser?>(
+                  valueListenable: authController,
+                  builder: (context, user, _) => _AccountSummaryCard(user: user),
+                ),
+                const SizedBox(height: 20),
                 _SettingsSection(
                   title: 'Geral',
                   children: [
@@ -233,6 +240,75 @@ class SettingsScreen extends StatelessWidget {
           ),
           ),
         ),
+    );
+  }
+}
+
+// Card de conta no topo da Settings — é o único caminho para o ecrã
+// de Perfil (sem sessão, vai para o ecrã de autenticação).
+class _AccountSummaryCard extends StatelessWidget {
+  const _AccountSummaryCard({required this.user});
+
+  final LooplyUser? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final name = user?.displayName?.trim().isNotEmpty == true ? user!.displayName! : 'Utilizador BrowseIt';
+    final subtitle = user?.email ?? 'Toca para iniciar sessão';
+
+    return Material(
+      color: settingsCardColor(context),
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          final page = user == null ? const AuthScreen() : const ProfileScreen();
+          Navigator.of(context).push<void>(
+            CupertinoPageRoute<void>(builder: (_) => page),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: pillColor(context),
+                foregroundImage: user?.photoUrl != null
+                    ? NetworkImage(user!.photoUrl!)
+                    : const AssetImage('images/avatar.png') as ImageProvider,
+                child: null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: text, fontSize: 15.5, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

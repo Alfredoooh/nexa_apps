@@ -74,6 +74,7 @@ class LooplyHomeAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = pageBg(context);
+    final text = mainText(context);
     final topInset = MediaQuery.of(context).padding.top;
 
     return Container(
@@ -87,7 +88,7 @@ class LooplyHomeAppBar extends StatelessWidget {
         ),
       ),
       child: SizedBox(
-        height: 56,
+        height: 64,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
@@ -99,10 +100,14 @@ class LooplyHomeAppBar extends StatelessWidget {
               ),
               Expanded(
                 child: Center(
+                  // ColorFilter força o SVG a usar a cor do texto do tema
+                  // (branco no escuro, preto no claro), independentemente
+                  // de que cores o próprio ficheiro .svg tenha desenhadas.
                   child: SvgPicture.asset(
                     'assets/images/logo_text.svg',
-                    height: 22,
+                    height: 34,
                     fit: BoxFit.contain,
+                    colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
                   ),
                 ),
               ),
