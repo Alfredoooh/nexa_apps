@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -26,66 +27,130 @@ class HomeScreen extends StatelessWidget {
     // drawer interno e preserva o Container Transform de ecrã inteiro.
     return Scaffold(
       backgroundColor: pageBg(context),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
-          children: [
-            LooplyBigSearchBox(onOpenDrawer: onOpenDrawer),
-            const SizedBox(height: 25),
-            const SizedBox(height: 18),
-            const QuickSiteGridCard(),
-            const SizedBox(height: 10),
-            ValueListenableBuilder<LooplyUser?>(
-              valueListenable: authController,
-              builder: (context, user, _) => user == null
-                  ? const _LoginButton()
-                  : const SizedBox.shrink(),
+      body: CustomScrollView(
+        slivers: [
+          LooplyHomeAppBar(onOpenDrawer: onOpenDrawer),
+          SliverSafeArea(
+            top: false,
+            sliver: SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  const SizedBox(height: 18),
+                  const QuickSiteGridCard(),
+                  const SizedBox(height: 10),
+                  ValueListenableBuilder<LooplyUser?>(
+                    valueListenable: authController,
+                    builder: (context, user, _) => user == null
+                        ? const _LoginButton()
+                        : const SizedBox.shrink(),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Navegação simples, rápida e privada.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: muted, fontSize: 12),
+                  ),
+                ]),
+              ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              'Navegação simples, rápida e privada.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: muted, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LooplyHomeAppBar extends StatelessWidget {
+  const LooplyHomeAppBar({super.key, this.onOpenDrawer});
+
+  final VoidCallback? onOpenDrawer;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return SliverAppBar(
+      pinned: true,
+      floating: false,
+      snap: false,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      automaticallyImplyLeading: false,
+      toolbarHeight: 56,
+      expandedHeight: topInset + 56,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                bg,
+                bg,
+                bg.withOpacity(0.0),
+              ],
+              stops: const [0.0, 0.55, 1.0],
+            ),
+          ),
+        ),
+      ),
+      title: Padding(
+        padding: EdgeInsets.only(top: topInset > 0 ? 0 : 0),
+        child: Row(
+          children: [
+            _CircleIconButton(
+              icon: Icons.menu_rounded,
+              tooltip: 'Abrir menu',
+              onTap: onOpenDrawer ?? () => showLooplyDrawer(context),
+            ),
+            const Spacer(),
+            _CircleIconButton(
+              icon: Symbols.search_rounded,
+              tooltip: 'Pesquisar',
+              onTap: () => Navigator.of(context).push<void>(
+                CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
+              ),
             ),
           ],
         ),
       ),
     );
   }
-
 }
 
-class LooplyBigSearchBox extends StatelessWidget {
-  const LooplyBigSearchBox({super.key, this.onOpenDrawer});
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
-  final VoidCallback? onOpenDrawer;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final muted = mutedText(context);
-    return Container(
-      height: 54,
-      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(28)),
-      child: Row(children: [
-        const SizedBox(width: 3),
-        IconButton(
-          tooltip: 'Abrir menu',
-          style: IconButton.styleFrom(foregroundColor: muted, fixedSize: const Size(46, 46)),
-          icon: const Icon(Icons.menu_rounded, size: 23),
-          onPressed: onOpenDrawer ?? () => showLooplyDrawer(context),
-        ),
-        Expanded(
-          child: Semantics(
-            button: true,
-            label: 'Pesquisar ou escrever um endereço',
-            child: InkWell(
-              borderRadius: BorderRadius.circular(28),
-              onTap: () => Navigator.of(context).push<void>(CupertinoPageRoute<void>(builder: (_) => const SearchScreen())),
-              child: Align(alignment: Alignment.centerLeft, child: Text('Pesquisar ou escrever um URL', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 15))),
-            ),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Material(
+        color: pillColor(context),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, size: 22, color: muted),
           ),
         ),
-        const SizedBox(width: 15),
-      ]),
+      ),
     );
   }
 }
