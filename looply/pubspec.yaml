@@ -21,6 +21,7 @@ dependencies:
   material3_expressive_loading_indicator: ^0.1.2
   path_provider: ^2.1.5
   file_picker: ^8.1.7
+  flutter_svg: ^2.0.10+1
 
 dev_dependencies:
   flutter_test:
@@ -33,6 +34,7 @@ flutter:
     - assets/images/looply_original_icon.png
     - assets/images/looply_icon.png
     - assets/images/looply_mark.png
+    - assets/images/logo_text.svg
     - assets/images/quick_sites/adobe.webp
     - assets/images/quick_sites/airbnb.webp
     - assets/images/quick_sites/airtable.webp

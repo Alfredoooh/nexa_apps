@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
@@ -22,38 +22,43 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = mutedText(context);
+    final bg = pageBg(context);
+    final topInset = MediaQuery.of(context).padding.top;
+
     // Mantém a estrutura de página original da Home (Scaffold + SafeArea).
     // O drawer push/drag pertence ao shell; o callback evita criar um
     // drawer interno e preserva o Container Transform de ecrã inteiro.
     return Scaffold(
-      backgroundColor: pageBg(context),
-      body: CustomScrollView(
-        slivers: [
-          LooplyHomeAppBar(onOpenDrawer: onOpenDrawer),
-          SliverSafeArea(
-            top: false,
-            sliver: SliverPadding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 28),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  const SizedBox(height: 18),
-                  const QuickSiteGridCard(),
-                  const SizedBox(height: 10),
-                  ValueListenableBuilder<LooplyUser?>(
-                    valueListenable: authController,
-                    builder: (context, user, _) => user == null
-                        ? const _LoginButton()
-                        : const SizedBox.shrink(),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Navegação simples, rápida e privada.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: muted, fontSize: 12),
-                  ),
-                ]),
-              ),
+      backgroundColor: bg,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(12, topInset > 0 ? 68 : 72, 12, 28),
+              children: [
+                const SizedBox(height: 18),
+                const QuickSiteGridCard(),
+                const SizedBox(height: 10),
+                ValueListenableBuilder<LooplyUser?>(
+                  valueListenable: authController,
+                  builder: (context, user, _) => user == null
+                      ? const _LoginButton()
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Navegação simples, rápida e privada.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: muted, fontSize: 12),
+                ),
+              ],
             ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: LooplyHomeAppBar(onOpenDrawer: onOpenDrawer),
           ),
         ],
       ),
@@ -71,50 +76,45 @@ class LooplyHomeAppBar extends StatelessWidget {
     final bg = pageBg(context);
     final topInset = MediaQuery.of(context).padding.top;
 
-    return SliverAppBar(
-      pinned: true,
-      floating: false,
-      snap: false,
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      surfaceTintColor: Colors.transparent,
-      automaticallyImplyLeading: false,
-      toolbarHeight: 56,
-      expandedHeight: topInset + 56,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                bg,
-                bg,
-                bg.withOpacity(0.0),
-              ],
-              stops: const [0.0, 0.55, 1.0],
-            ),
-          ),
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0.0)],
+          stops: const [0.0, 0.55, 1.0],
         ),
       ),
-      title: Padding(
-        padding: EdgeInsets.only(top: topInset > 0 ? 0 : 0),
-        child: Row(
-          children: [
-            _CircleIconButton(
-              icon: Icons.menu_rounded,
-              tooltip: 'Abrir menu',
-              onTap: onOpenDrawer ?? () => showLooplyDrawer(context),
-            ),
-            const Spacer(),
-            _CircleIconButton(
-              icon: Symbols.search_rounded,
-              tooltip: 'Pesquisar',
-              onTap: () => Navigator.of(context).push<void>(
-                CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
+      child: SizedBox(
+        height: 56,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              _CircleIconButton(
+                icon: Icons.menu_rounded,
+                tooltip: 'Abrir menu',
+                onTap: onOpenDrawer ?? () => showLooplyDrawer(context),
               ),
-            ),
-          ],
+              Expanded(
+                child: Center(
+                  child: SvgPicture.asset(
+                    'assets/images/logo_text.svg',
+                    height: 22,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              _CircleIconButton(
+                icon: Symbols.search_rounded,
+                tooltip: 'Pesquisar',
+                onTap: () => Navigator.of(context).push<void>(
+                  CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
