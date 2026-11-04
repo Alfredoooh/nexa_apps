@@ -13,6 +13,7 @@ dependencies:
   flutter_inappwebview: any
   cupertino_icons: ^1.0.8
   animations: any
+  package_info_plus: ^8.1.2
   http: ^1.2.0
   cached_network_image: any
   shared_preferences: ^2.3.3
