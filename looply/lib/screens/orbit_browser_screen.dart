@@ -14,6 +14,7 @@ import '../browser_security.dart';
 import '../browser_library.dart';
 import '../shell/shell_tab_request.dart';
 import '../shell/browser_navigation.dart';
+import '../shell/fade_page_route.dart';
 import '../theme.dart';
 import 'history_screen.dart';
 import 'downloads_screen.dart';
@@ -170,6 +171,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   final TextEditingController _findController = TextEditingController();
   final FocusNode _findFocusNode = FocusNode();
   bool _isFindInPage = false;
+  bool _isExpandingToSearch = false;
 
   bool _isLoading = true;
   bool _showProgress = true;
@@ -435,6 +437,25 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     setState(() => _isFindInPage = false);
   }
 
+  Future<void> _openSearchWithExpandAnimation() async {
+    if (_isExpandingToSearch) return;
+    setState(() => _isExpandingToSearch = true);
+
+    // Dá tempo da animação de expansão do pill (e do fade do leading/actions)
+    // terminar antes de empurrar a tela de pesquisa, para que a transição
+    // pareça contínua: o pill cresce, os botões somem, e então a busca
+    // aparece com fade.
+    await Future<void>.delayed(const Duration(milliseconds: 190));
+    if (!mounted) return;
+
+    await Navigator.of(context).push<void>(
+      FadePageRoute<void>(builder: (_) => const SearchScreen()),
+    );
+
+    if (!mounted) return;
+    setState(() => _isExpandingToSearch = false);
+  }
+
   Future<void> _runShortcut(_OrbitMenuAction action) async {
     if (!mounted) return;
     switch (action) {
@@ -464,9 +485,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         await _controller?.reload();
         break;
       case _OrbitMenuAction.openSearch:
-        Navigator.of(context).push(
-          CupertinoPageRoute(builder: (_) => const SearchScreen()),
-        );
+        unawaited(_openSearchWithExpandAnimation());
         break;
       case _OrbitMenuAction.findInPage:
         _enterFindInPage();
@@ -625,11 +644,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: pillColor(context),
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(26),
-        ),
+        backgroundColor: panelColor(context),
         title: Text(
           'Informações do site',
           style: TextStyle(color: mainText(context)),
@@ -661,7 +676,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       ),
     );
   }
-
+  
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -702,10 +717,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           appBar: AppBar(
             backgroundColor: bg,
             elevation: 0,
-            leading: IconButton(
-              tooltip: 'Início',
-              icon: Icon(Symbols.home_rounded, color: text),
-              onPressed: () => ShellTabRequest.instance.request(0),
+            leading: AnimatedOpacity(
+              opacity: _isExpandingToSearch ? 0 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: IgnorePointer(
+                ignoring: _isExpandingToSearch,
+                child: IconButton(
+                  tooltip: 'Início',
+                  icon: Icon(Symbols.home_rounded, color: text),
+                  onPressed: () => ShellTabRequest.instance.request(0),
+                ),
+              ),
             ),
             titleSpacing: 0,
             title: _isFindInPage
@@ -749,51 +771,90 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       ),
                     ],
                   )
-                : InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        CupertinoPageRoute(builder: (_) => const SearchScreen()),
-                      );
-                    },
-                    child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: pillColor(context),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Symbols.search_rounded, color: muted, size: 19),
-                          const SizedBox(width: 9),
-                          Expanded(
-                            child: Text(
-                              _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Largura disponível no title quando leading e actions
+                      // ainda estão visíveis (estado "fechado").
+                      final collapsedWidth = constraints.maxWidth;
+                      // Ao expandir, o pill cresce até tomar o espaço extra
+                      // que leading (56) e actions (~96) ocupavam, imitando
+                      // a largura do input da tela de pesquisa.
+                      const leadingWidth = 56.0;
+                      const actionsWidth = 96.0;
+                      final expandedWidth =
+                          collapsedWidth + leadingWidth + actionsWidth;
+
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween<double>(
+                          begin: 0,
+                          end: _isExpandingToSearch ? 1 : 0,
+                        ),
+                        duration: const Duration(milliseconds: 190),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, t, child) {
+                          final width =
+                              collapsedWidth + (expandedWidth - collapsedWidth) * t;
+                          return SizedBox(
+                            width: width,
+                            child: child,
+                          );
+                        },
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(22),
+                          onTap: _openSearchWithExpandAnimation,
+                          child: Container(
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: pillColor(context),
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Symbols.search_rounded, color: muted, size: 19),
+                                const SizedBox(width: 9),
+                                Expanded(
+                                  child: Text(
+                                    _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
             actions: _isFindInPage
                 ? const []
                 : [
-                    AnimatedBuilder(
-                      animation: tabsController,
-                      builder: (context, _) => IconButton(
-                        tooltip: 'Abas',
-                        icon: _TabsCountIcon(count: tabsController.count, color: text),
-                        onPressed: _openTabsGrid,
+                    AnimatedOpacity(
+                      opacity: _isExpandingToSearch ? 0 : 1,
+                      duration: const Duration(milliseconds: 150),
+                      child: IgnorePointer(
+                        ignoring: _isExpandingToSearch,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedBuilder(
+                              animation: tabsController,
+                              builder: (context, _) => IconButton(
+                                tooltip: 'Abas',
+                                icon: _TabsCountIcon(count: tabsController.count, color: text),
+                                onPressed: _openTabsGrid,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Mais opções',
+                              icon: Icon(Symbols.more_vert_rounded, color: text),
+                              onPressed: _showBrowserOptionsSheet,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Mais opções',
-                      icon: Icon(Symbols.more_vert_rounded, color: text),
-                      onPressed: _showBrowserOptionsSheet,
                     ),
                   ],
           ),

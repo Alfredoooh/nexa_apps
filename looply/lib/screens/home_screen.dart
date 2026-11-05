@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../shell/browser_navigation.dart';
+import '../shell/fade_page_route.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart';
 import 'all_sites_screen.dart';
@@ -115,7 +116,7 @@ class LooplyHomeAppBar extends StatelessWidget {
                 icon: Symbols.search_rounded,
                 tooltip: 'Pesquisar',
                 onTap: () => Navigator.of(context).push<void>(
-                  CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
+                  FadePageRoute<void>(builder: (_) => const SearchScreen()),
                 ),
               ),
             ],
