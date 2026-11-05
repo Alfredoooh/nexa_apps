@@ -10,7 +10,6 @@ import '../browser_library.dart';
 import '../theme.dart';
 import '../widgets/stats_chart.dart';
 import '../shell/browser_navigation.dart';
-import 'game_webview_screen.dart';
 import 'history_screen.dart';
 
 class ActivityScreen extends StatefulWidget {
@@ -124,20 +123,12 @@ class ActivityTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final isGame = entry.kind == ActivityKind.game;
     return Material(
       color: settingsCardColor(context),
       borderRadius: borderRadius ?? BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          if (isGame) {
-            final game = looplyGames.firstWhere((g) => g.url == entry.url, orElse: () => looplyGames.first);
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => GameWebViewScreen(game: game)));
-          } else {
-            openOrbitTab(context, entry.url, title: entry.title);
-          }
-        },
+        onTap: () => openOrbitTab(context, entry.url, title: entry.title),
         borderRadius: borderRadius ?? BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -145,8 +136,8 @@ class ActivityTile extends StatelessWidget {
             AnimatedBuilder(
               animation: browserFaviconCache,
               builder: (context, _) {
-                final encoded = isGame ? null : browserFaviconCache.forUrl(entry.url);
-                Widget icon = Icon(isGame ? Symbols.sports_esports_rounded : Symbols.public_rounded, color: accentColor(context), size: 19);
+                final encoded = browserFaviconCache.forUrl(entry.url);
+                Widget icon = Icon(Symbols.public_rounded, color: accentColor(context), size: 19);
                 if (encoded != null) {
                   try {
                     icon = Image.memory(

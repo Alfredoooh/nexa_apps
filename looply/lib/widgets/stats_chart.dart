@@ -209,7 +209,8 @@ class _AdGaugePainter extends CustomPainter {
       oldDelegate.valueColor != valueColor;
 }
 
-/// Dois mini-cards distintos para os totais de sites e jogos.
+/// Total de sites visitados. O card de jogos foi removido junto com o
+/// recurso de jogos do app; passa a ocupar a largura toda sozinho.
 class ActivitySummaryCard extends StatelessWidget {
   const ActivitySummaryCard({super.key});
 
@@ -217,26 +218,11 @@ class ActivitySummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final entries = activityController.entries;
     final sites = entries.where((entry) => entry.kind == ActivityKind.site).length;
-    final games = entries.where((entry) => entry.kind == ActivityKind.game).length;
 
-    return Row(
-      children: [
-        Expanded(
-          child: _ActivityMiniCard(
-            icon: Symbols.public_rounded,
-            label: 'Sites visitados',
-            value: sites,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ActivityMiniCard(
-            icon: Symbols.sports_esports_rounded,
-            label: 'Jogos jogados',
-            value: games,
-          ),
-        ),
-      ],
+    return _ActivityMiniCard(
+      icon: Symbols.public_rounded,
+      label: 'Sites visitados',
+      value: sites,
     );
   }
 }
