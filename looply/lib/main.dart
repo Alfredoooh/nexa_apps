@@ -13,7 +13,6 @@ import 'auth_service.dart';
 import 'cloud_sync.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
-import 'screens/discover_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
 import 'widgets/drawer_menu.dart';
@@ -125,10 +124,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final GlobalKey _repaintKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
-  // As páginas principais são Início, Descobrir e Atividade.
-  final List<String> _screenKeys = const ['home_screen', 'discover_screen', 'activity_screen'];
-  final List<String> _screenLabels = const ['Início', 'Descobrir', 'Atividade'];
-  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.explore_rounded, Symbols.history_rounded];
+  // As páginas principais são Início e Atividade.
+  final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
+  final List<String> _screenLabels = const ['Início', 'Atividade'];
+  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
   late final AnimationController _drawerController;
@@ -989,10 +988,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     if (targetTab != null && targetTab.kind == TabKind.appScreen) {
       var index = _screenKeys.indexOf(targetTab.url);
-      // Compatibilidade com separadores de ecrã 'Jogos' gravados por versões
-      // anteriores: encaminha-os para Descobrir, sem voltar a expor Jogos na
-      // navegação principal.
-      if (index < 0 && targetTab.url == 'games_screen') index = 1;
+      // Compatibilidade com separadores de ecrã 'Jogos' e 'Descobrir' gravados
+      // por versões anteriores: encaminha-os para o Início, já que nenhum dos
+      // dois continua exposto na navegação principal.
+      if (index < 0 &&
+          (targetTab.url == 'games_screen' || targetTab.url == 'discover_screen')) {
+        index = 0;
+      }
       if (index >= 0) _selectedTab = index;
     }
     unawaited(SessionStore.instance.saveLastActivity({
@@ -1067,7 +1069,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     // continua independente e inalterado.
     final shellPages = <Widget>[
       HomeScreen(onOpenDrawer: _openShellDrawer),
-      const DiscoverScreen(),
       const ActivityScreen(),
     ];
     final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
@@ -1090,6 +1091,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
+        extendBody: true,
         body: Stack(
           children: [
             // Página de trás: ao entrar no Orbit é empurrada para baixo e
@@ -1199,14 +1201,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: _LooplyBottomBar(
-            selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
+            // Início e Atividade mapeiam 1:1 para _selectedTab (0 e 1).
+            // Abas é a posição 2 na UI mas não corresponde a nenhum
+            // _selectedTab — é tratada à parte no onSelect abaixo.
+            selectedIndex: switch (_selectedTab) { 1 => 1, _ => 0 },
             tabCount: tabsController.count,
             onSelect: (index) {
               if (index == 2) {
                 _openTabsGrid();
               } else {
-                final pageIndex = switch (index) { 0 => 0, 1 => 1, _ => 2 };
-                unawaited(_navigateToShellScreen(pageIndex));
+                unawaited(_navigateToShellScreen(index));
               }
             },
           ),
@@ -1302,6 +1306,9 @@ class _TabsCountIcon extends StatelessWidget {
   );
 }
 
+// Bottombar flutuante com o mesmo efeito de esmaecer do appbar, mas
+// invertido: transparente no topo da barra, sólido na base — onde a
+// barra encosta no fundo do ecrã.
 class _LooplyBottomBar extends StatelessWidget {
   const _LooplyBottomBar({
     required this.selectedIndex,
@@ -1315,79 +1322,85 @@ class _LooplyBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final background = browserBottomBarColor(context);
+    final bg = browserBottomBarColor(context);
     final foreground = mutedText(context);
     final selected = mainText(context);
     final indicator = Theme.of(context).brightness == Brightness.dark
         ? inputBarTone(context)
         : accentColor(context).withOpacity(.15);
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return SafeArea(
-      top: false,
-      child: Container(
+    return Container(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg.withOpacity(0.0), bg, bg],
+          stops: const [0.0, 0.45, 1.0],
+        ),
+      ),
+      child: SizedBox(
         height: 64,
-        color: background,
-        padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final slotWidth = constraints.maxWidth / 4;
-            final left = selectedIndex * slotWidth + 3;
-            return Stack(
-              children: [
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeInOutCubic,
-                  left: left,
-                  top: 3,
-                  width: slotWidth - 6,
-                  height: 48,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: indicator,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                Row(
-                  children: [
-                    _BottomBarItem(
-                      icon: Symbols.home_rounded,
-                      selectedIcon: Symbols.home_rounded,
-                      tooltip: 'Início',
-                      selected: selectedIndex == 0,
-                      color: selectedIndex == 0 ? selected : foreground,
-                      onTap: () => onSelect(0),
-                    ),
-                    _BottomBarItem(
-                      icon: Symbols.explore_rounded,
-                      selectedIcon: Symbols.explore_rounded,
-                      tooltip: 'Descobrir',
-                      selected: selectedIndex == 1,
-                      color: selectedIndex == 1 ? selected : foreground,
-                      onTap: () => onSelect(1),
-                    ),
-                    Expanded(
-                      child: Center(
-                        child: IconButton(
-                          tooltip: 'Abas',
-                          onPressed: () => onSelect(2),
-                          icon: _TabsCountIcon(count: tabCount, color: foreground),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slotWidth = constraints.maxWidth / 3;
+              final left = selectedIndex * slotWidth + 3;
+              return Stack(
+                children: [
+                  // O indicador só acompanha Início/Atividade; a posição de
+                  // Abas (índice 2) não tem _selectedTab correspondente,
+                  // então não recebe o realce deslizante.
+                  if (selectedIndex <= 1)
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeInOutCubic,
+                      left: left,
+                      top: 3,
+                      width: slotWidth - 6,
+                      height: 48,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: indicator,
+                          borderRadius: BorderRadius.circular(999),
                         ),
                       ),
                     ),
-                    _BottomBarItem(
-                      icon: Symbols.history_rounded,
-                      selectedIcon: Symbols.history_rounded,
-                      tooltip: 'Atividade',
-                      selected: selectedIndex == 3,
-                      color: selectedIndex == 3 ? selected : foreground,
-                      onTap: () => onSelect(3),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
+                  Row(
+                    children: [
+                      _BottomBarItem(
+                        icon: Symbols.home_rounded,
+                        selectedIcon: Symbols.home_rounded,
+                        tooltip: 'Início',
+                        selected: selectedIndex == 0,
+                        color: selectedIndex == 0 ? selected : foreground,
+                        onTap: () => onSelect(0),
+                      ),
+                      _BottomBarItem(
+                        icon: Symbols.history_rounded,
+                        selectedIcon: Symbols.history_rounded,
+                        tooltip: 'Atividade',
+                        selected: selectedIndex == 1,
+                        color: selectedIndex == 1 ? selected : foreground,
+                        onTap: () => onSelect(1),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: IconButton(
+                            tooltip: 'Abas',
+                            onPressed: () => onSelect(2),
+                            icon: _TabsCountIcon(count: tabCount, color: foreground),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

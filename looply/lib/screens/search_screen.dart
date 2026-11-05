@@ -24,8 +24,8 @@ class _SearchScreenState extends State<SearchScreen> {
   late final FocusNode _focusNode;
   Timer? _debounce;
   List<String> _suggestions = <String>[];
-  final Map<String, String?> _personPhotoCache = <String, String?>{};
-  final Map<String, Future<String?>> _personPhotoRequests = <String, Future<String?>>{};
+  final Map<String, String?> _entityPhotoCache = <String, String?>{};
+  final Map<String, Future<String?>> _entityPhotoRequests = <String, Future<String?>>{};
   int _requestSequence = 0;
 
   static const Map<String, String> _menuLabels = <String, String>{
@@ -206,31 +206,31 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  // Tenta obter uma imagem para qualquer sugestão que não seja uma URL —
+  // pessoa, fruta, clube, ou qualquer outra entidade que o Wikidata/Wikimedia
+  // tenha associada a uma imagem (P18), exatamente como a Wikipedia mostra.
   void _resolveSuggestionPhotos(List<String> suggestions) {
-    // Só consultamos a base pública para sugestões com aparência de nome próprio.
-    // O resultado só recebe uma fotografia se Wikidata classificar a entidade
-    // como humano e existir uma imagem P18 no Wikimedia Commons.
     final candidates = suggestions.where((value) {
       final trimmed = value.trim();
-      if (_looksLikeUrl(trimmed) || trimmed.length < 4) return false;
-      final words = trimmed.split(RegExp(r'\s+'));
-      final looksLikePersonName = words.length >= 2 ||
-          (trimmed.isNotEmpty && trimmed[0].toUpperCase() == trimmed[0]);
-      return looksLikePersonName;
-    }).take(3).toList(growable: false);
+      return !_looksLikeUrl(trimmed) && trimmed.length >= 3;
+    }).take(6).toList(growable: false);
     for (final candidate in candidates) {
-      if (_personPhotoCache.containsKey(candidate) || _personPhotoRequests.containsKey(candidate)) continue;
-      final request = _lookupWikidataPersonPhoto(candidate);
-      _personPhotoRequests[candidate] = request;
+      if (_entityPhotoCache.containsKey(candidate) || _entityPhotoRequests.containsKey(candidate)) continue;
+      final request = _lookupWikidataEntityPhoto(candidate);
+      _entityPhotoRequests[candidate] = request;
       request.then((photoUrl) {
-        _personPhotoRequests.remove(candidate);
-        _personPhotoCache[candidate] = photoUrl;
+        _entityPhotoRequests.remove(candidate);
+        _entityPhotoCache[candidate] = photoUrl;
         if (mounted && _suggestions.contains(candidate)) setState(() {});
       });
     }
   }
 
-  Future<String?> _lookupWikidataPersonPhoto(String name) async {
+  // Procura a imagem (P18) de qualquer entidade Wikidata que corresponda ao
+  // termo — pessoa, fruta, clube, cidade, o que for — sem restringir a
+  // seres humanos. É o mesmo tipo de imagem que a Wikipedia já mostra ao
+  // lado dos artigos.
+  Future<String?> _lookupWikidataEntityPhoto(String name) async {
     try {
       final searchUri = Uri.https('www.wikidata.org', '/w/api.php', <String, String>{
         'action': 'wbsearchentities',
@@ -251,7 +251,10 @@ class _SearchScreenState extends State<SearchScreen> {
         final label = item['label']?.toString().trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
         return label == normalizedName;
       });
-      final ids = matchingResults
+      // Se nada bater exatamente com o texto digitado, aceita os melhores
+      // resultados da pesquisa mesmo assim — cobre nomes incompletos ainda
+      // a ser digitados, tal como a pessoa está a escrever.
+      final ids = (matchingResults.isNotEmpty ? matchingResults : results.whereType<Map>())
           .map((item) => item['id']?.toString() ?? '')
           .where((id) => RegExp(r'^Q\d+$').hasMatch(id))
           .take(3)
@@ -276,14 +279,8 @@ class _SearchScreenState extends State<SearchScreen> {
         if (entity is! Map) continue;
         final claims = entity['claims'];
         if (claims is! Map) continue;
-        final instanceClaims = claims['P31'];
-        final isHuman = instanceClaims is List && instanceClaims.any((claim) {
-          final value = claim is Map ? claim['mainsnak'] : null;
-          final data = value is Map ? value['datavalue'] : null;
-          final entityValue = data is Map ? data['value'] : null;
-          return entityValue is Map && entityValue['id'] == 'Q5';
-        });
-        if (!isHuman) continue;
+        // Sem filtro de "é humano": qualquer entidade com imagem (P18)
+        // serve — pessoa, fruta, clube, cidade, o que o Wikidata tiver.
         final imageClaims = claims['P18'];
         if (imageClaims is List && imageClaims.isNotEmpty) {
           final first = imageClaims.first;
@@ -334,13 +331,13 @@ class _SearchScreenState extends State<SearchScreen> {
         return _SuggestionImage(url: favicon, fallback: Symbols.public_rounded, muted: muted);
       }
     }
-    final photo = _personPhotoCache[suggestion];
-    if (photo != null) return _SuggestionImage(url: photo, fallback: Icons.person_rounded, muted: muted);
+    final photo = _entityPhotoCache[suggestion];
+    if (photo != null) return _SuggestionImage(url: photo, fallback: Symbols.search_rounded, muted: muted);
     return Container(
-      width: 36,
-      height: 36,
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-      child: Icon(Symbols.search_rounded, color: muted, size: 18),
+      child: Icon(Symbols.search_rounded, color: muted, size: 17),
     );
   }
 
@@ -359,19 +356,21 @@ class _SearchScreenState extends State<SearchScreen> {
         body: SafeArea(
           child: Column(children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 9),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
               child: Container(
-                height: 54,
+                height: 44,
                 decoration: BoxDecoration(
                   color: pillColor(context),
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: Row(
                   children: [
+                    const SizedBox(width: 2),
                     IconButton(
                       tooltip: 'Voltar',
-                      constraints: const BoxConstraints.tightFor(width: 46, height: 46),
-                      icon: Icon(Symbols.arrow_back_rounded, color: muted, size: 21),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+                      icon: Icon(Symbols.arrow_back_rounded, color: muted, size: 19),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     Expanded(
@@ -380,25 +379,27 @@ class _SearchScreenState extends State<SearchScreen> {
                         focusNode: _focusNode,
                         textInputAction: TextInputAction.search,
                         textAlignVertical: TextAlignVertical.center,
-                        style: TextStyle(color: text, fontSize: 16),
+                        style: TextStyle(color: text, fontSize: 15),
                         cursorColor: accentColor(context),
                         onSubmitted: _submitSearch,
                         decoration: InputDecoration(
                           hintText: 'Pesquisar ou escrever um URL',
-                          hintStyle: TextStyle(color: muted, fontSize: 14.5),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          hintStyle: TextStyle(color: muted, fontSize: 14),
+                          contentPadding: EdgeInsets.zero,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
                           isDense: true,
+                          isCollapsed: true,
                         ),
                       ),
                     ),
                     if (_controller.text.isNotEmpty)
                       IconButton(
                         tooltip: 'Limpar',
-                        constraints: const BoxConstraints.tightFor(width: 38, height: 46),
-                        icon: Icon(Symbols.close_rounded, color: muted, size: 19),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 32, height: 38),
+                        icon: Icon(Symbols.close_rounded, color: muted, size: 17),
                         onPressed: () {
                           _controller.clear();
                           _focusNode.requestFocus();
@@ -416,7 +417,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ],
                       onSelected: _handleMenuSelection,
                     ),
-                    const SizedBox(width: 3),
+                    const SizedBox(width: 2),
                   ],
                 ),
               ),
@@ -489,17 +490,17 @@ class _SuggestionImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipOval(
         child: Container(
-          width: 36,
-          height: 36,
+          width: 34,
+          height: 34,
           color: pillColor(context),
           child: Image.network(
             url,
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             fit: BoxFit.cover,
             cacheWidth: 96,
             cacheHeight: 96,
-            errorBuilder: (_, __, ___) => Icon(fallback, color: muted, size: 18),
+            errorBuilder: (_, __, ___) => Icon(fallback, color: muted, size: 17),
           ),
         ),
       );
