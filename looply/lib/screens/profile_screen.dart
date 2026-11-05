@@ -21,10 +21,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _saveAddresses = false;
   bool _syncAppSettings = false;
 
+  // Mesmo tipo de diálogo simples usado na Settings (ex: "Importar dados"):
+  // AlertDialog padrão, sem ícone nem estilo customizado.
   Future<void> _confirmSignOut(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => const _SignOutDialog(),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Terminar sessão'),
+        content: const Text('Vais precisar de iniciar sessão novamente para aceder à tua conta.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Terminar sessão')),
+        ],
+      ),
     );
     if (confirmed == true && context.mounted) {
       await authController.signOut();
@@ -352,78 +361,6 @@ class _ProfileToggleTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SignOutDialog extends StatelessWidget {
-  const _SignOutDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
-    return Dialog(
-      backgroundColor: settingsCardColor(context),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.red.shade400.withOpacity(0.14),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Symbols.logout_rounded, color: Colors.red.shade400, size: 26),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Terminar sessão?',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Vais precisar de iniciar sessão novamente para aceder à tua conta.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: muted, fontSize: 13.5, height: 1.4),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      backgroundColor: Colors.red.shade400.withOpacity(0.9),
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Sair', style: TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );
