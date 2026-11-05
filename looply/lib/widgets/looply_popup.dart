@@ -16,9 +16,9 @@ class LooplyPopupAction<T> {
   final IconData icon;
 }
 
-/// No Android, os menus são desenhados em Kotlin com componentes nativos.
-/// O popup mantém a âncora do botão, mas abre lateralmente e usa animação
-/// de escala/alpha nativa; o Flutter apenas envia os itens e os ícones.
+/// No Android, os menus são desenhados com um PopupMenu nativo real
+/// (androidx.appcompat.widget.PopupMenu), com a animação, elevação e ripple
+/// do próprio sistema. O Flutter apenas envia os itens e os ícones.
 class LooplyPopupMenuButton<T> extends StatelessWidget {
   const LooplyPopupMenuButton({
     super.key,
@@ -28,6 +28,8 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
     this.icon = Symbols.more_vert_rounded,
     this.iconColor,
     this.menuWidth = 252,
+    this.includeAiToggle = false,
+    this.onAiToggleChanged,
   });
 
   final List<LooplyPopupAction<T>> actions;
@@ -36,6 +38,13 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
   final double menuWidth;
+
+  /// Quando ativo, o popup inclui um item fixo no topo ("Pesquisa com IA")
+  /// com um interruptor. No Android esse interruptor é nativo (SwitchCompat
+  /// dentro de um actionView do PopupMenu); no fallback Flutter é desenhado
+  /// com o mesmo componente usado na tela de Definições.
+  final bool includeAiToggle;
+  final ValueChanged<bool>? onAiToggleChanged;
 
   static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
 
@@ -71,6 +80,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
             },
             'width': menuWidth,
             'items': nativeItems,
+            'includeAiToggle': includeAiToggle,
           },
         );
         if (selected != null) onSelected(selected as T);
@@ -92,20 +102,26 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
         MediaQuery.sizeOf(buttonContext).width - anchor.right,
         MediaQuery.sizeOf(buttonContext).height - anchor.bottom,
       ),
-      items: actions
-          .map(
-            (action) => PopupMenuItem<T>(
-              value: action.value,
-              child: Row(
-                children: [
-                  Icon(action.icon, size: 20, color: mutedText(buttonContext)),
-                  const SizedBox(width: 12),
-                  Flexible(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                ],
-              ),
+      items: [
+        if (includeAiToggle)
+          PopupMenuItem<T>(
+            enabled: false,
+            padding: EdgeInsets.zero,
+            child: _AiToggleRow<T>(onChanged: onAiToggleChanged),
+          ),
+        ...actions.map(
+          (action) => PopupMenuItem<T>(
+            value: action.value,
+            child: Row(
+              children: [
+                Icon(action.icon, size: 20, color: mutedText(buttonContext)),
+                const SizedBox(width: 12),
+                Flexible(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+              ],
             ),
-          )
-          .toList(growable: false),
+          ),
+        ),
+      ],
     );
     if (selected != null) onSelected(selected);
   }
@@ -168,4 +184,50 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
           onPressed: () => _show(buttonContext),
         ),
       );
+}
+
+/// Linha com o interruptor "Pesquisa com IA", usada apenas no fallback
+/// Flutter (plataformas sem o PopupMenu nativo do Kotlin).
+class _AiToggleRow<T> extends StatefulWidget {
+  const _AiToggleRow({this.onChanged});
+
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  State<_AiToggleRow<T>> createState() => _AiToggleRowState<T>();
+}
+
+class _AiToggleRowState<T> extends State<_AiToggleRow<T>> {
+  bool _value = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    return InkWell(
+      onTap: () {
+        setState(() => _value = !_value);
+        widget.onChanged?.call(_value);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            Icon(Symbols.auto_awesome_rounded, size: 20, color: muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Pesquisa com IA', style: TextStyle(color: text, fontSize: 14)),
+            ),
+            Switch.adaptive(
+              value: _value,
+              onChanged: (value) {
+                setState(() => _value = value);
+                widget.onChanged?.call(value);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

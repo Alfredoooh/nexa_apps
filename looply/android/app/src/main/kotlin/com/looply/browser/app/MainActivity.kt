@@ -28,26 +28,23 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.ContextThemeWrapper
 import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MenuItem
+import android.view.SubMenu
 import android.view.ViewGroup
-import android.view.animation.AlphaAnimation
-import android.view.animation.AnimationSet
-import android.view.animation.DecelerateInterpolator
-import android.view.animation.ScaleAnimation
 import android.view.View
-import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.PopupWindow
-import android.widget.ScrollView
 import android.widget.TextView
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
-import android.graphics.BitmapFactory
-import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
-import android.text.TextUtils
+import androidx.appcompat.view.menu.MenuBuilder
+import androidx.appcompat.widget.PopupMenu
+import androidx.appcompat.widget.SwitchCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
@@ -67,6 +64,7 @@ class MainActivity : FlutterActivity() {
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val PREF_AD_BLOCK_ENABLED = "flutter.looply_ad_block_enabled"
         private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
+        private const val PREF_AI_SEARCH_ENABLED = "looply_ai_search_enabled"
     }
 
 
@@ -81,10 +79,14 @@ class MainActivity : FlutterActivity() {
     private val webPermissionPreferences by lazy {
         getSharedPreferences("browseit_web_permissions", Context.MODE_PRIVATE)
     }
+    private val nativeUiPreferences by lazy {
+        getSharedPreferences("looply_native_ui", Context.MODE_PRIVATE)
+    }
     private val runtimePermissionRequestCode = 7401
     private val nativeStatsLock = Any()
     private var pendingNativeBlocks = 0
     private var nativeStatsChannel: MethodChannel? = null
+    private var nativeUiChannel: MethodChannel? = null
     private lateinit var appPreferences: SharedPreferences
     private val flushNativeBlocksRunnable = Runnable { flushNativeBlockCount() }
     private val adBlockPreferenceListener =
@@ -117,8 +119,8 @@ class MainActivity : FlutterActivity() {
             "looply/orbit_native_webview",
             OrbitNativeWebViewFactory(flutterEngine.dartExecutor.binaryMessenger, ::recordNativeBlockedRequest),
         )
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-            .setMethodCallHandler { call, result ->
+        nativeUiChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        nativeUiChannel?.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "setAppThemeMode" -> {
                         val mode = call.argument<String>("mode") ?: "system"
@@ -130,6 +132,7 @@ class MainActivity : FlutterActivity() {
                     "showNativePopup" -> showNativePopup(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
+                    "getAiSearchEnabled" -> result.success(readAiSearchEnabled())
                     else -> result.notImplemented()
                 }
             }
@@ -181,6 +184,7 @@ class MainActivity : FlutterActivity() {
             appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
         }
         nativeStatsChannel = null
+        nativeUiChannel = null
         defaultBrowserIntentChannel = null
         defaultBrowserBridgeReady = false
         nativeAuthScope.cancel()
@@ -328,6 +332,19 @@ class MainActivity : FlutterActivity() {
             .getBoolean("flutter.looply_theme_pure_dark", false)
     }
 
+    private fun readAiSearchEnabled(): Boolean {
+        return nativeUiPreferences.getBoolean(PREF_AI_SEARCH_ENABLED, false)
+    }
+
+    private fun writeAiSearchEnabled(enabled: Boolean) {
+        nativeUiPreferences.edit().putBoolean(PREF_AI_SEARCH_ENABLED, enabled).apply()
+        try {
+            nativeUiChannel?.invokeMethod("aiSearchEnabledChanged", enabled)
+        } catch (_: RuntimeException) {
+            // A tela Flutter pode não estar anexada no momento da alteração.
+        }
+    }
+
     private fun applyApplicationNightMode(mode: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         val nightMode = when (mode) {
@@ -371,100 +388,87 @@ class MainActivity : FlutterActivity() {
                     flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
                 }
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags = if (dark) {
-                    flags and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
-                } else {
-                    flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-                }
-            }
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = flags
+        } else {
+            window.insetsController?.let { controller ->
+                if (dark) {
+                    controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+                    controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
+                } else {
+                    controller.setSystemBarsAppearance(
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                    )
+                    controller.setSystemBarsAppearance(
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                    )
+                }
+            }
         }
     }
 
     private fun startGoogleSignIn(call: MethodCall, result: MethodChannel.Result) {
-        val serverClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
-        if (serverClientId.isBlank() || serverClientId.contains("PASTE_WEB_CLIENT_ID_HERE", ignoreCase = true)) {
-            result.error(
-                "google_web_client_id_missing",
-                "Falta configurar o OAuth Client ID do tipo Web em BROWSEIT_GOOGLE_WEB_CLIENT_ID. O Client ID Android não substitui o Web Client ID usado como audience do ID token.",
-                null,
-            )
-            return
-        }
-
-        val suppliedNonce = call.argument<String>("nonce")?.trim().orEmpty()
-        val nonce = suppliedNonce.ifBlank { createSecureNonce() }
         nativeAuthScope.launch {
             try {
-                val manager = CredentialManager.create(this@MainActivity)
-
-                suspend fun requestGoogleCredential(onlyAuthorized: Boolean) = manager.getCredential(
-                    context = this@MainActivity,
-                    request = GetCredentialRequest.Builder()
-                        .addCredentialOption(
-                            GetGoogleIdOption.Builder()
-                                .setFilterByAuthorizedAccounts(onlyAuthorized)
-                                .setServerClientId(serverClientId)
-                                .setNonce(nonce)
-                                .setAutoSelectEnabled(onlyAuthorized)
-                                .build(),
-                        )
-                        .build(),
-                )
-
-                val response = try {
-                    requestGoogleCredential(true)
-                } catch (_: NoCredentialException) {
-                    requestGoogleCredential(false)
-                }
-
+                val nonce = generateNonce()
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                    .setNonce(nonce)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                val credentialManager = CredentialManager.create(this@MainActivity)
+                val response = credentialManager.getCredential(this@MainActivity, request)
                 val credential = response.credential
-                if (credential !is CustomCredential ||
-                    credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                if (credential is CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
                 ) {
-                    result.error("google_credential_unexpected", "O Google não devolveu uma credencial de ID token compatível.", null)
-                    return@launch
+                    val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    result.success(
+                        mapOf(
+                            "idToken" to googleCredential.idToken,
+                            "nonce" to nonce,
+                        ),
+                    )
+                } else {
+                    result.error("invalid_credential", "A credencial devolvida não é do Google.", null)
                 }
-
-                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                result.success(
-                    mapOf(
-                        "idToken" to googleCredential.idToken,
-                        "email" to googleCredential.id,
-                        "displayName" to googleCredential.displayName,
-                        "photoUrl" to googleCredential.profilePictureUri?.toString(),
-                        "nonce" to nonce,
-                    ),
-                )
+            } catch (_: NoCredentialException) {
+                result.error("no_credential", "Nenhuma conta Google disponível neste dispositivo.", null)
             } catch (error: Exception) {
-                val name = error.javaClass.simpleName
-                val code = if (name.contains("Cancellation", true)) "google_cancelled" else "google_sign_in_failed"
-                result.error(code, error.message ?: "Não foi possível iniciar sessão com Google.", null)
+                result.error("google_sign_in_failed", error.message, null)
             }
         }
     }
 
-    private fun createSecureNonce(): String {
+    private fun generateNonce(): String {
         val bytes = ByteArray(32)
         SecureRandom().nextBytes(bytes)
         return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
     private fun isDefaultBrowser(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
-        } else {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://browseit.invalid"))
-            val resolved = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            resolved?.activityInfo?.packageName == packageName
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val roleManager = getSystemService(RoleManager::class.java)
+                roleManager?.isRoleHeld(RoleManager.ROLE_BROWSER) == true
+            } else {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+                val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                resolveInfo?.activityInfo?.packageName == packageName
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
     private fun requestDefaultBrowser(): Boolean {
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val roleManager = getSystemService(RoleManager::class.java) ?: return false
                 if (!roleManager.isRoleAvailable(RoleManager.ROLE_BROWSER)) return false
                 if (roleManager.isRoleHeld(RoleManager.ROLE_BROWSER)) return true
@@ -625,6 +629,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Menu popup 100% nativo do Android: usa androidx.appcompat.widget.PopupMenu,
+     * o mesmo componente usado nos menus de overflow do sistema. A animação de
+     * abertura/fecho, a elevação e o ripple dos itens vêm todos do próprio
+     * Android — nada disso é desenhado manualmente pelo Flutter ou pela app.
+     *
+     * O primeiro item ("Pesquisa com IA") usa um actionView customizado com um
+     * SwitchCompat, a forma suportada pelo Android de colocar um controlo
+     * interativo dentro de um item de menu nativo.
+     */
     private fun showNativePopup(call: MethodCall, result: MethodChannel.Result) {
         val items = call.argument<List<Map<String, Any?>>>("items")
         val anchor = call.argument<Map<String, Any>>("anchor")
@@ -632,184 +646,136 @@ class MainActivity : FlutterActivity() {
             result.error("invalid_popup", "Os itens ou a âncora do menu são inválidos.", null)
             return
         }
+        val includeAiToggle = call.argument<Boolean>("includeAiToggle") ?: false
 
-        val content = findViewById<FrameLayout>(android.R.id.content)
+        val content = findViewById<ViewGroup>(android.R.id.content)
         val flutterView = findFlutterView(content) ?: content
         val flutterLocation = IntArray(2)
-        val contentLocation = IntArray(2)
         flutterView.getLocationOnScreen(flutterLocation)
-        content.getLocationOnScreen(contentLocation)
 
         val density = resources.displayMetrics.density
         fun dp(value: Number): Int = (value.toDouble() * density).roundToInt()
         val anchorLeft = flutterLocation[0] + dp(anchor["left"] as? Number ?: 0)
         val anchorTop = flutterLocation[1] + dp(anchor["top"] as? Number ?: 0)
         val anchorRight = flutterLocation[0] + dp(anchor["right"] as? Number ?: 0)
-
-        val screenWidth = resources.displayMetrics.widthPixels
-        val availableContentHeight = (content.height - dp(16)).coerceAtLeast(dp(180))
-        val requestedWidth = call.argument<Number>("width")?.toDouble() ?: 252.0
-        val popupWidth = dp(requestedWidth).coerceAtMost(screenWidth - dp(16)).coerceAtLeast(dp(190))
-        val rowHeight = dp(48)
-        val desiredHeight = rowHeight * items.size
-        val popupHeight = desiredHeight.coerceAtMost(availableContentHeight)
+        val anchorBottom = flutterLocation[1] + dp(anchor["bottom"] as? Number ?: 0)
+        val anchorWidth = (anchorRight - anchorLeft).coerceAtLeast(dp(24))
+        val anchorHeight = (anchorBottom - anchorTop).coerceAtLeast(dp(24))
 
         val dark = isAppDarkTheme()
-        val pureBlack = isAppPureBlackTheme()
-        val backgroundColor = when {
-            dark && pureBlack -> Color.rgb(25, 25, 25)
-            dark -> Color.rgb(43, 45, 48)
-            else -> Color.rgb(255, 255, 255)
+        val themeRes = if (dark) R.style.LooplyPopupMenu_Dark else R.style.LooplyPopupMenu_Light
+        val themedContext = ContextThemeWrapper(this, themeRes)
+
+        // Âncora invisível posicionada exatamente sobre o botão que originou o
+        // pedido, para que o PopupMenu nativo abra encostado ao mesmo sítio
+        // onde o LooplyPopupMenuButton do Flutter estava.
+        val anchorView = View(themedContext)
+        val anchorParams = FrameLayoutParamsAt(anchorLeft - flutterLocation[0], anchorTop - flutterLocation[1], anchorWidth, anchorHeight)
+        content.addView(anchorView, anchorParams)
+
+        val popupMenu = PopupMenu(themedContext, anchorView, Gravity.END)
+        val menu = popupMenu.menu
+
+        var completed = false
+        fun finish(value: Any?) {
+            if (completed) return
+            completed = true
+            content.removeView(anchorView)
+            result.success(value)
         }
+
+        if (includeAiToggle) {
+            val aiItem = menu.add(0, 1, 0, "Pesquisa com IA")
+            inflateSwitchActionView(themedContext, aiItem, dark)
+        }
+
+        items.forEachIndexed { index, item ->
+            val menuItem = menu.add(0, index + 100, index + 1, item["label"]?.toString().orEmpty())
+            val iconBytes = item["icon"] as? ByteArray
+            if (iconBytes != null) {
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
+                if (bitmap != null) {
+                    val drawable = android.graphics.drawable.BitmapDrawable(resources, bitmap)
+                    menuItem.icon = drawable
+                }
+            }
+        }
+        // Os ícones dos itens de texto só aparecem no overflow menu quando
+        // forçados via reflection em versões antigas de appcompat; em vez de
+        // depender disso, o MenuBuilder expõe diretamente esta flag pública.
+        try {
+            (menu as? MenuBuilder)?.setOptionalIconsVisible(true)
+        } catch (_: Exception) {
+            // Caso a versão de appcompat não exponha o método, os itens
+            // continuam a funcionar, apenas sem ícone à esquerda do texto.
+        }
+
+        popupMenu.setOnMenuItemClickListener { clicked ->
+            when {
+                clicked.itemId == 1 -> {
+                    // O próprio clique no item alterna o switch; o listener do
+                    // switch (definido em inflateSwitchActionView) trata da
+                    // persistência. Aqui apenas evitamos fechar prematuramente
+                    // sem reportar nada ao Flutter.
+                    val switchView = clicked.actionView?.findViewById<SwitchCompat>(R.id.popup_switch_item_toggle)
+                    switchView?.toggle()
+                    false
+                }
+                clicked.itemId >= 100 -> {
+                    val chosen = items[clicked.itemId - 100]
+                    finish(chosen["value"])
+                    true
+                }
+                else -> false
+            }
+        }
+        popupMenu.setOnDismissListener {
+            finish(null)
+        }
+
+        try {
+            popupMenu.show()
+        } catch (error: RuntimeException) {
+            finish(null)
+        }
+    }
+
+    private fun inflateSwitchActionView(themedContext: Context, item: MenuItem, dark: Boolean) {
+        val inflater = LayoutInflater.from(themedContext)
+        val view = inflater.inflate(R.layout.popup_menu_switch_item, null, false)
+        val icon = view.findViewById<ImageView>(R.id.popup_switch_item_icon)
+        val label = view.findViewById<TextView>(R.id.popup_switch_item_label)
+        val toggle = view.findViewById<SwitchCompat>(R.id.popup_switch_item_toggle)
+
         val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
         val iconTint = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
 
-        fun newPopupBackground() = GradientDrawable().apply {
-            setColor(backgroundColor)
-            cornerRadius = dp(19).toFloat()
+        label.text = "Pesquisa com IA"
+        label.setTextColor(textColor)
+        icon.setImageResource(android.R.drawable.ic_menu_search)
+        icon.setColorFilter(iconTint)
+        toggle.isChecked = readAiSearchEnabled()
+        toggle.setOnCheckedChangeListener { _, isChecked ->
+            writeAiSearchEnabled(isChecked)
         }
-        val list = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val scroll = ScrollView(this).apply {
-            isFillViewport = false
-            clipToOutline = true
-            background = newPopupBackground()
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(
-                list,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                ),
-            )
-        }
+        // O clique em qualquer parte da linha também alterna o switch,
+        // replicando o comportamento dos itens equivalentes na tela de
+        // Definições (toque na linha inteira, não só no controlo).
+        view.setOnClickListener { toggle.toggle() }
 
-        lateinit var popup: PopupWindow
-        var completed = false
-        items.forEach { item ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), 0, dp(16), 0)
-                isClickable = true
-                isFocusable = true
-                minimumHeight = rowHeight
+        item.actionView = view
+        item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    }
+
+    private fun FrameLayoutParamsAt(x: Int, y: Int, width: Int, height: Int): ViewGroup.LayoutParams {
+        return if (android.R.id.content != 0) {
+            android.widget.FrameLayout.LayoutParams(width, height).apply {
+                leftMargin = x
+                topMargin = y
+                gravity = Gravity.TOP or Gravity.START
             }
-
-            val iconBytes = item["icon"] as? ByteArray
-            if (iconBytes != null) {
-                val bitmap = BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)
-                if (bitmap != null) {
-                    val image = ImageView(this).apply {
-                        // Mantém o tamanho visual dos símbolos Flutter; apenas
-                        // o peso é controlado na rasterização, não na dimensão.
-                        layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
-                            marginEnd = dp(14)
-                        }
-                        scaleType = ImageView.ScaleType.FIT_CENTER
-                        setImageBitmap(bitmap)
-                        setColorFilter(iconTint)
-                    }
-                    row.addView(image)
-                } else {
-                    row.addView(View(this), LinearLayout.LayoutParams(dp(20), dp(20)).apply {
-                        marginEnd = dp(14)
-                    })
-                }
-            } else {
-                row.addView(View(this), LinearLayout.LayoutParams(dp(20), dp(20)).apply {
-                    marginEnd = dp(14)
-                })
-            }
-
-            val label = TextView(this).apply {
-                text = item["label"]?.toString().orEmpty()
-                setTextColor(textColor)
-                textSize = 14f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER_VERTICAL
-                includeFontPadding = false
-            }
-            row.addView(
-                label,
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f),
-            )
-            row.setOnClickListener {
-                if (!completed) {
-                    completed = true
-                    result.success(item["value"])
-                }
-                popup.dismiss()
-            }
-            list.addView(
-                row,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    rowHeight,
-                ),
-            )
-
-        }
-
-        popup = PopupWindow(scroll, popupWidth, popupHeight, true).apply {
-            setBackgroundDrawable(newPopupBackground())
-            isOutsideTouchable = true
-            isFocusable = true
-            isClippingEnabled = true
-            elevation = dp(12).toFloat()
-            setOnDismissListener {
-                if (!completed) {
-                    completed = true
-                    result.success(null)
-                }
-            }
-        }
-
-        // O menu sobrepõe o controlo que o abriu e cresce a partir da âncora.
-        // O menu cobre a região do botão que o abriu: a âncora fica por
-        // baixo do popup, em vez de deixar um intervalo lateral visível.
-        val opensRight = anchorLeft < popupWidth + dp(16)
-        val rawPopupX = if (opensRight) {
-            anchorRight - dp(16)
         } else {
-            anchorRight - popupWidth + dp(16)
-        }
-        val popupXOnScreen = rawPopupX.coerceIn(
-            dp(8),
-            (screenWidth - popupWidth - dp(8)).coerceAtLeast(dp(8)),
-        )
-
-        val minY = contentLocation[1] + dp(8)
-        val maxY = (contentLocation[1] + content.height - popupHeight - dp(8)).coerceAtLeast(minY)
-        val popupYOnScreen = (anchorTop - dp(4)).coerceIn(minY, maxY)
-        val popupX = popupXOnScreen - contentLocation[0]
-        val popupY = popupYOnScreen - contentLocation[1]
-
-        try {
-            popup.showAtLocation(content, Gravity.TOP or Gravity.LEFT, popupX, popupY)
-            val pivotX = if (opensRight) 0.0f else 1.0f
-            val animation = AnimationSet(true).apply {
-                interpolator = DecelerateInterpolator(1.8f)
-                duration = 190
-                addAnimation(
-                    ScaleAnimation(
-                        .92f, 1f, .94f, 1f,
-                        ScaleAnimation.RELATIVE_TO_SELF, pivotX,
-                        ScaleAnimation.RELATIVE_TO_SELF, .5f,
-                    ),
-                )
-                addAnimation(AlphaAnimation(0f, 1f))
-            }
-            scroll.startAnimation(animation)
-        } catch (error: RuntimeException) {
-            if (!completed) {
-                completed = true
-                result.error("popup_failed", error.message, null)
-            }
-            popup.dismiss()
+            ViewGroup.LayoutParams(width, height)
         }
     }
 

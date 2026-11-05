@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
+import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -910,17 +910,40 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       children: [
         ColoredBox(color: bg),
         if (!_renderProcessCrashed)
-          AndroidView(
+          // Hybrid Composition explícito: a WebView Android é inserida
+          // diretamente na hierarquia de Views da janela, em vez de ser
+          // desenhada para uma textura off-screen (Virtual Display, o modo
+          // usado implicitamente por um AndroidView simples). É essa textura
+          // intermediária que produzia o aspeto desfocado reportado.
+          PlatformViewLink(
             key: _webViewKey,
             viewType: 'looply/orbit_native_webview',
-            layoutDirection: TextDirection.ltr,
-            creationParams: <String, Object>{
-              'isIncognito': widget.isIncognito,
-              'cacheEnabled': navigationAcceleratorEnabled.value,
-              'adBlockEnabled': adBlockEnabled.value,
+            surfaceFactory: (context, controller) {
+              return AndroidViewSurface(
+                controller: controller as AndroidViewController,
+                gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+                hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+              );
             },
-            creationParamsCodec: const StandardMessageCodec(),
-            onPlatformViewCreated: _onNativePlatformViewCreated,
+            onCreatePlatformView: (params) {
+              return PlatformViewsService.initExpensiveAndroidView(
+                id: params.id,
+                viewType: params.viewType,
+                layoutDirection: TextDirection.ltr,
+                creationParams: <String, Object>{
+                  'isIncognito': widget.isIncognito,
+                  'cacheEnabled': navigationAcceleratorEnabled.value,
+                  'adBlockEnabled': adBlockEnabled.value,
+                },
+                creationParamsCodec: const StandardMessageCodec(),
+                onFocus: () {
+                  params.onFocusChanged(true);
+                },
+              )
+                ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+                ..addOnPlatformViewCreatedListener(_onNativePlatformViewCreated)
+                ..create();
+            },
           ),
         if (_renderProcessCrashed || _loadError != null)
           _buildWebViewErrorOverlay(context, bg),

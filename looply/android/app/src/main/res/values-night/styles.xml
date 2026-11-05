@@ -12,4 +12,17 @@
         <item name="android:navigationBarColor">@color/looply_splash_background</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <!-- Variante escura do tema do PopupMenu nativo. -->
+    <style name="LooplyPopupMenu.Dark" parent="@style/Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_menu_background_dark</item>
+        <item name="android:popupElevation">8dp</item>
+        <item name="overlapAnchor">false</item>
+    </style>
+
+    <style name="LooplyPopupMenuItemText.Dark" parent="@android:style/TextAppearance.Widget.PopupMenu.Large">
+        <item name="android:textColor">#FFE6E6E8</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
 </resources>

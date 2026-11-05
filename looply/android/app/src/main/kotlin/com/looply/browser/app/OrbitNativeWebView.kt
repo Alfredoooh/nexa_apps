@@ -73,7 +73,12 @@ internal class OrbitNativeWebViewPlatformView(
 
     private val webView = WebView(context).apply {
         setBackgroundColor(Color.TRANSPARENT)
-        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        // Em Hybrid Composition (ver orbit_browser_screen.dart) a View Android
+        // é desenhada diretamente na hierarquia de janela, sem passar por uma
+        // textura/Virtual Display intermediária. Forçar aqui um hardware layer
+        // extra duplicava a composição e era a causa do aspecto desfocado;
+        // o WebView já tem a sua própria aceleração de hardware internamente.
+        setLayerType(View.LAYER_TYPE_NONE, null)
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -89,6 +94,12 @@ internal class OrbitNativeWebViewPlatformView(
             loadsImagesAutomatically = true
             allowFileAccess = false
             allowContentAccess = false
+            // useWideViewPort + loadWithOverviewMode fazem a página calcular o
+            // layout para a largura real do ecrã, em vez de escalar um layout
+            // desktop para caber — é essa escala que produzia a sensação de
+            // texto e imagens pouco nítidos em muitos sites.
+            useWideViewPort = true
+            loadWithOverviewMode = true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = true
         }
     }

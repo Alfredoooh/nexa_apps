@@ -28,6 +28,9 @@ class _SearchScreenState extends State<SearchScreen> {
   final Map<String, Future<String?>> _entityPhotoRequests = <String, Future<String?>>{};
   int _requestSequence = 0;
 
+  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
+  bool _aiSearchEnabled = false;
+
   static const Map<String, String> _menuLabels = <String, String>{
     'voice': 'Pesquisa por voz',
     'image': 'Pesquisa por imagem',
@@ -45,6 +48,8 @@ class _SearchScreenState extends State<SearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
+    _nativeUi.setMethodCallHandler(_handleNativeUiCall);
+    unawaited(_loadAiSearchState());
   }
 
   @override
@@ -53,7 +58,29 @@ class _SearchScreenState extends State<SearchScreen> {
     _controller.removeListener(_onQueryChanged);
     _controller.dispose();
     _focusNode.dispose();
+    _nativeUi.setMethodCallHandler(null);
     super.dispose();
+  }
+
+  // Lê o estado persistido do interruptor "Pesquisa com IA". O valor fica
+  // disponível para uso futuro; por agora não altera nenhum comportamento.
+  Future<void> _loadAiSearchState() async {
+    try {
+      final enabled = await _nativeUi.invokeMethod<bool>('getAiSearchEnabled');
+      if (mounted && enabled != null) setState(() => _aiSearchEnabled = enabled);
+    } on MissingPluginException {
+      // Fora do Android o interruptor nativo não existe; mantém o valor local.
+    } on PlatformException {
+      // Mantém o valor atual se a leitura falhar por qualquer razão.
+    }
+  }
+
+  Future<dynamic> _handleNativeUiCall(MethodCall call) async {
+    if (call.method == 'aiSearchEnabledChanged') {
+      final enabled = call.arguments as bool? ?? false;
+      if (mounted) setState(() => _aiSearchEnabled = enabled);
+    }
+    return null;
   }
 
   void _onQueryChanged() {
@@ -408,6 +435,12 @@ class _SearchScreenState extends State<SearchScreen> {
                     LooplyPopupMenuButton<String>(
                       tooltip: 'Mais opções de pesquisa',
                       iconColor: muted,
+                      includeAiToggle: true,
+                      onAiToggleChanged: (value) {
+                        setState(() => _aiSearchEnabled = value);
+                        // Sem efeito por agora — apenas guarda a preferência
+                        // (via canal nativo no Android) para uso futuro.
+                      },
                       actions: const <LooplyPopupAction<String>>[
                         LooplyPopupAction(value: 'voice', label: 'Pesquisa por voz', icon: Icons.mic_none_rounded),
                         LooplyPopupAction(value: 'image', label: 'Pesquisa por imagem', icon: Icons.image_search_rounded),
