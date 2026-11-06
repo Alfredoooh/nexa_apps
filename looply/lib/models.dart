@@ -6,11 +6,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'session_store.dart';
+import 'widgets/phosphor_svg_icon.dart';
 
 const Set<String> adBlockDomains = {
   'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
@@ -803,7 +803,7 @@ class TabsController extends ChangeNotifier {
     }
     final tab = BrowserTab(
       id: 'tab_${_counter++}', kind: TabKind.orbitBrowser, url: 'https://www.wikipedia.org',
-      appScreenLabel: 'Orbit Browser', appScreenIcon: Symbols.language_rounded, thumbnail: thumbnail,
+      appScreenLabel: 'Orbit Browser', appScreenIcon: PhosphorIcons.globe, thumbnail: thumbnail,
     );
     _tabs.insert(0, tab);
     _activeTabId = tab.id;

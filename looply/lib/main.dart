@@ -6,7 +6,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import 'models.dart';
 import 'auth_service.dart';
@@ -15,12 +14,13 @@ import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
-import 'widgets/drawer_menu.dart' as drawer_menu;
+import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
 import 'localization.dart';
+import 'widgets/phosphor_svg_icon.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,7 +138,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   // As páginas principais são Início e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
   List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
-  final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.history_rounded];
+  final List<IconData> _screenIcons = const [PhosphorIcons.house, PhosphorIcons.clockCounterClockwise];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
   late final AnimationController _drawerController;
@@ -1385,16 +1385,16 @@ class _LooplyBottomBar extends StatelessWidget {
                   Row(
                     children: [
                       _BottomBarItem(
-                        icon: Symbols.home_rounded,
-                        selectedIcon: Symbols.home_rounded,
+                        icon: PhosphorIcons.house,
+                        selectedIcon: PhosphorIcons.house,
                         tooltip: 'Início',
                         selected: selectedIndex == 0,
                         color: selectedIndex == 0 ? selected : foreground,
                         onTap: () => onSelect(0),
                       ),
                       _BottomBarItem(
-                        icon: Symbols.history_rounded,
-                        selectedIcon: Symbols.history_rounded,
+                        icon: PhosphorIcons.clockCounterClockwise,
+                        selectedIcon: PhosphorIcons.clockCounterClockwise,
                         tooltip: 'Atividade',
                         selected: selectedIndex == 1,
                         color: selectedIndex == 1 ? selected : foreground,
@@ -1444,7 +1444,7 @@ class _BottomBarItem extends StatelessWidget {
           child: IconButton(
             tooltip: tooltip,
             onPressed: onTap,
-            icon: Icon(selected ? selectedIcon : icon, color: color, size: 24, fill: selected ? 1 : 0),
+            icon: PhosphorSvgIcon(selected ? selectedIcon : icon, color: color, size: 24, fill: selected ? 1 : 0),
           ),
         ),
       );

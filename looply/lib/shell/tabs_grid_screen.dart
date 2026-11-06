@@ -3,13 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../browser_library.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/looply_popup.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class TabsGridScreen extends StatefulWidget {
   const TabsGridScreen({
@@ -145,7 +145,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                                 tooltip: appText('back'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
-                                icon: Icon(Symbols.arrow_back_rounded, size: 22, color: text),
+                                icon: PhosphorSvgIcon(PhosphorIcons.arrowLeft, size: 22, color: text),
                                 onPressed: widget.onClose,
                               ),
                             ),
@@ -156,7 +156,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                                 tooltip: appText('home'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
-                                icon: Icon(Symbols.home_rounded, size: 20, color: text),
+                                icon: PhosphorSvgIcon(PhosphorIcons.house, size: 20, color: text),
                                 onPressed: widget.onHome,
                               ),
                             ),
@@ -173,12 +173,12 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
                           visualDensity: VisualDensity.compact,
                           onPressed: _selectedIds.isEmpty ? null : _removeSelected,
-                          icon: Icon(Symbols.delete_outline_rounded, color: _selectedIds.isEmpty ? muted : text),
+                          icon: PhosphorSvgIcon(PhosphorIcons.trash, color: _selectedIds.isEmpty ? muted : text),
                         ),
                         IconButton(
                           tooltip: appText('finish_selection'),
                           visualDensity: VisualDensity.compact,
-                          icon: Icon(Symbols.check_rounded, color: text),
+                          icon: PhosphorSvgIcon(PhosphorIcons.check, color: text),
                           onPressed: _toggleSelectionMode,
                         ),
                       ] else
@@ -187,10 +187,10 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           iconColor: text,
                           menuWidth: 286,
                           actions: <LooplyPopupAction<String>>[
-                            LooplyPopupAction(value: 'incognito', icon: Symbols.visibility_off_rounded, label: appText('open_private_tab')),
-                            LooplyPopupAction(value: 'new', icon: Symbols.add_rounded, label: appText('new_tab')),
-                            LooplyPopupAction(value: 'select', icon: Symbols.checklist_rounded, label: appText('select_tabs')),
-                            LooplyPopupAction(value: 'close_all', icon: Symbols.delete_sweep_rounded, label: appText('close_all_tabs')),
+                            LooplyPopupAction(value: 'incognito', icon: PhosphorIcons.eyeSlash, label: appText('open_private_tab')),
+                            LooplyPopupAction(value: 'new', icon: PhosphorIcons.plus, label: appText('new_tab')),
+                            LooplyPopupAction(value: 'select', icon: PhosphorIcons.listChecks, label: appText('select_tabs')),
+                            LooplyPopupAction(value: 'close_all', icon: PhosphorIcons.trash, label: appText('close_all_tabs')),
                           ],
                           onSelected: _handleMenu,
                         ),
@@ -202,7 +202,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                   child: tabs.isEmpty
                       ? Center(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Symbols.tab_rounded, size: 44, color: muted),
+                            PhosphorSvgIcon(PhosphorIcons.browser, size: 44, color: muted),
                             const SizedBox(height: 10),
                             Text(appText('no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
                           ]),
@@ -260,7 +260,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                 shape: const CircleBorder(),
                 elevation: 4,
                 onPressed: widget.onNewTab,
-                child: const Icon(Symbols.add_rounded, size: 27),
+                child: const PhosphorSvgIcon(PhosphorIcons.plus, size: 27),
               ),
             ),
           ],
@@ -452,7 +452,7 @@ class TabGridCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(10, 8, 6, 7),
               child: Row(children: [
                 if (isApp)
-                  Icon(tab.appScreenIcon ?? Symbols.apps_rounded, size: 17, color: muted)
+                  PhosphorSvgIcon(tab.appScreenIcon ?? PhosphorIcons.squaresFour, size: 17, color: muted)
                 else
                   AnimatedBuilder(
                     animation: browserFaviconCache,
@@ -461,16 +461,16 @@ class TabGridCard extends StatelessWidget {
                       if (encoded != null) {
                         try {
                           return Image.memory(base64Decode(encoded), width: 18, height: 18, fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: muted, size: 17));
+                            errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: muted, size: 17));
                         } catch (_) {}
                       }
-                      return Icon(Symbols.public_rounded, color: muted, size: 17);
+                      return PhosphorSvgIcon(PhosphorIcons.globe, color: muted, size: 17);
                     },
                   ),
                 const SizedBox(width: 7),
                 Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w600))),
                 if (selectionMode)
-                  Icon(selected ? Symbols.check_circle_rounded : Symbols.radio_button_unchecked_rounded, color: selected ? accentColor(context) : muted, size: 20)
+                  PhosphorSvgIcon(selected ? PhosphorIcons.checkCircle : PhosphorIcons.circle, color: selected ? accentColor(context) : muted, size: 20)
                 else if (onClose != null)
                   SizedBox(
                     width: 28, height: 28,
@@ -478,7 +478,7 @@ class TabGridCard extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       tooltip: appText('close_tab'),
                       style: IconButton.styleFrom(backgroundColor: pillColor(context), foregroundColor: muted),
-                      icon: const Icon(Symbols.close_rounded, size: 15),
+                      icon: const PhosphorSvgIcon(PhosphorIcons.x, size: 15),
                       onPressed: onClose,
                     ),
                   ),
@@ -495,8 +495,8 @@ class TabGridCard extends StatelessWidget {
                     color: bg,
                     child: tab.thumbnail != null
                         ? Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true,
-                            errorBuilder: (_, __, ___) => Center(child: Icon(Symbols.public_rounded, size: 32, color: muted.withOpacity(.55))))
-                        : Center(child: Icon(isApp ? (tab.appScreenIcon ?? Symbols.apps_rounded) : Symbols.public_rounded, size: 34, color: muted.withOpacity(.40))),
+                            errorBuilder: (_, __, ___) => Center(child: PhosphorSvgIcon(PhosphorIcons.globe, size: 32, color: muted.withOpacity(.55))))
+                        : Center(child: PhosphorSvgIcon(isApp ? (tab.appScreenIcon ?? PhosphorIcons.squaresFour) : PhosphorIcons.globe, size: 34, color: muted.withOpacity(.40))),
                   ),
                 ),
               ),
