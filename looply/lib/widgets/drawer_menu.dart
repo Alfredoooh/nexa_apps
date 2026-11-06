@@ -190,11 +190,12 @@ class _DrawerHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
       child: Row(children: [
         SvgPicture.asset(
-          'assets/images/logo.svg',
+          'assets/images/logo_text.svg',
           width: 38,
           height: 38,
           fit: BoxFit.contain,
           colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
+          placeholderBuilder: (_) => SizedBox(width: 38, height: 38),
         ),
         const SizedBox(width: 10),
         Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
@@ -318,14 +319,14 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
                           height: 32,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Image.asset(
-                            'images/avatar.png',
+                            'assets/images/avatar.png',
                             width: 32,
                             height: 32,
                             fit: BoxFit.cover,
                           ),
                         )
                       : Image.asset(
-                          'images/avatar.png',
+                          'assets/images/avatar.png',
                           width: 32,
                           height: 32,
                           fit: BoxFit.cover,
