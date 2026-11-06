@@ -15,7 +15,7 @@ import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
-import 'widgets/drawer_menu.dart';
+import 'widgets/drawer_menu.dart' as drawer_menu;
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
@@ -188,8 +188,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 500),
       reverseDuration: const Duration(milliseconds: 460),
     );
-    LooplyDrawerBridge.open = _openShellDrawer;
-    LooplyDrawerBridge.close = _closeShellDrawer;
+    drawer_menu.LooplyDrawerBridge.open = _openShellDrawer;
+    drawer_menu.LooplyDrawerBridge.close = _closeShellDrawer;
     _browserSlideController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 420),
@@ -252,8 +252,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphController.dispose();
     _browserSlideController.dispose();
     _drawerController.dispose();
-    LooplyDrawerBridge.open = null;
-    LooplyDrawerBridge.close = null;
+    drawer_menu.LooplyDrawerBridge.open = null;
+    drawer_menu.LooplyDrawerBridge.close = null;
     super.dispose();
   }
 
@@ -306,7 +306,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final pageKey = saved['page']?.toString() ?? '';
-        unawaited(restoreDrawerPageActivity(
+        unawaited(drawer_menu.restoreDrawerPageActivity(
           context,
           pageKey: pageKey,
           returnTo: returnTo,
@@ -1235,7 +1235,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final drawerWidth = _drawerWidth(context);
     final drawerGestureEnabled = _selectedTab == 0 &&
         _activeBrowserTabId == null && !_showingTabsGrid;
-    final drawerPanel = LooplyDrawer(
+    final drawerPanel = drawer_menu.LooplyDrawer(
       width: drawerWidth,
       onClose: _closeShellDrawer,
     );
