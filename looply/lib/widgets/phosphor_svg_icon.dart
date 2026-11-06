@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'phosphor_svg_fallback_data.dart';
+
+/// Stable identifiers for BrowseIt's local Phosphor-style SVG icon set.
+/// These IconData instances are keys only; all visible icons are painted from SVG.
 class PhosphorIcons {
   static const IconData arrowClockwise = IconData(0xF0001, fontFamily: 'BrowseItSvg');
   static const IconData arrowLeft = IconData(0xF0002, fontFamily: 'BrowseItSvg');
@@ -58,11 +62,6 @@ class PhosphorIcons {
   static const IconData x = IconData(0xF0036, fontFamily: 'BrowseItSvg');
 }
 
-/// IconData here is only a typed identifier. Every visible glyph is loaded
-/// from a local SVG asset; no icon font is painted by this widget.
-/// SVG-only icon renderer used throughout BrowseIt.
-/// IconData is retained only as a stable key for the existing UI model; the
-/// visible icon is always loaded from assets/icons/phosphor.
 class PhosphorSvgIcon extends StatelessWidget {
   const PhosphorSvgIcon(
     this.icon, {
@@ -151,25 +150,43 @@ class PhosphorSvgIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final slug = _assets[icon.codePoint] ?? 'question';
-    final visualWeight = (fill ?? 0) >= .5 || (weight ?? 400) >= 600
-        ? 'fill'
-        : 'regular';
+    final variant = (fill ?? 0) >= .5 || (weight ?? 400) >= 600 ? 'fill' : 'regular';
     final iconSize = size ?? 24;
-    final asset = 'assets/icons/phosphor/$visualWeight/$slug.svg';
+    final svgAsset = 'assets/icons/phosphor/$variant/$slug.svg';
+    final tint = color ?? IconTheme.of(context).color ?? Theme.of(context).iconTheme.color ?? Colors.black;
 
-    Widget picture = SvgPicture.asset(
-      asset,
-      width: iconSize,
-      height: iconSize,
-      fit: BoxFit.contain,
-      colorFilter: ColorFilter.mode(color ?? IconTheme.of(context).color ?? Theme.of(context).iconTheme.color ?? Colors.black, BlendMode.srcIn),
-      semanticsLabel: semanticLabel,
-      placeholderBuilder: (_) => SizedBox(width: iconSize, height: iconSize),
-    );
+    SvgPicture svgFromString(String source) => SvgPicture.string(
+          source,
+          width: iconSize,
+          height: iconSize,
+          fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+          semanticsLabel: semanticLabel,
+        );
+
     return Semantics(
       label: semanticLabel,
       image: semanticLabel != null,
-      child: SizedBox(width: iconSize, height: iconSize, child: picture),
+      child: SizedBox(
+        width: iconSize,
+        height: iconSize,
+        child: SvgPicture.asset(
+          svgAsset,
+          width: iconSize,
+          height: iconSize,
+          fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+          semanticsLabel: semanticLabel,
+          placeholderBuilder: (_) => SizedBox(width: iconSize, height: iconSize),
+          errorBuilder: (context, error, stackTrace) {
+            final fallback = phosphorSvgFallbackData['$variant:$slug'] ??
+                phosphorSvgFallbackData['$variant:question'];
+            debugPrint('BrowseIt SVG asset fallback: $svgAsset ($error)');
+            if (fallback == null) return SizedBox(width: iconSize, height: iconSize);
+            return svgFromString(fallback);
+          },
+        ),
+      ),
     );
   }
 }

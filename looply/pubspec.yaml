@@ -33,6 +33,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icons/phosphor/
+    - assets/icons/phosphor/fill/
+    - assets/icons/phosphor/regular/
     - assets/images/avatar.png
     - assets/images/looply_original_icon.png
     - assets/images/looply_icon.png

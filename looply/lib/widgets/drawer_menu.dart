@@ -34,81 +34,94 @@ class LooplyDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final drawerBackground = pageBg(context);
-    return Drawer(
-      width: width,
-      backgroundColor: drawerBackground,
+
+    // Superfície explícita para o drawer não herdar o surface tint cinzento
+    // padrão do Material 3. O painel mantém a mesma largura e o mesmo layout.
+    return Material(
+      color: drawerBackground,
+      surfaceTintColor: Colors.transparent,
       elevation: 16,
+      shadowColor: Colors.black.withOpacity(.18),
       clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      child: SafeArea(
-        // A barra de estado herda a mesma SystemUiOverlayStyle do Scaffold
-        // principal. Não há AnnotatedRegion local a mudar a cor ao abrir o drawer.
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-          child: Column(
-            children: [
-              _DrawerHeader(),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    _DrawerOption(
-                      icon: PhosphorIcons.moon,
-                      label: appText('change_theme'),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
-                      onTap: () {
-                        final navigator = Navigator.of(context);
-                        onClose();
-                        Future<void>.delayed(const Duration(milliseconds: 470), () {
-                          if (navigator.mounted) showThemeSheet(navigator.context);
-                        });
-                      },
+      child: SizedBox(
+        width: width,
+        child: ColoredBox(
+          color: drawerBackground,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+              child: Column(
+                children: [
+                  _DrawerHeader(),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        _DrawerOption(
+                          icon: PhosphorIcons.moon,
+                          label: appText('change_theme'),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24),
+                            bottom: Radius.circular(8),
+                          ),
+                          onTap: () {
+                            final navigator = Navigator.of(context);
+                            onClose();
+                            Future<void>.delayed(const Duration(milliseconds: 470), () {
+                              if (navigator.mounted) showThemeSheet(navigator.context);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 2),
+                        AnimatedBuilder(
+                          animation: activityController,
+                          builder: (context, _) => _DrawerOption(
+                            icon: PhosphorIcons.clockCounterClockwise,
+                            label: appText('history'),
+                            borderRadius: BorderRadius.circular(8),
+                            badge: activityController.entries.length,
+                            onTap: () => _openDrawerPage(context, const HistoryScreen()),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        AnimatedBuilder(
+                          animation: downloadsController,
+                          builder: (context, _) => _DrawerOption(
+                            icon: PhosphorIcons.downloadSimple,
+                            label: appText('downloads'),
+                            borderRadius: BorderRadius.circular(8),
+                            badge: downloadsController.entries.length,
+                            onTap: () => _openDrawerPage(context, const DownloadsScreen()),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        AnimatedBuilder(
+                          animation: bookmarksController,
+                          builder: (context, _) => _DrawerOption(
+                            icon: PhosphorIcons.bookmarkSimple,
+                            label: appText('bookmarks'),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(8),
+                              bottom: Radius.circular(20),
+                            ),
+                            badge: bookmarksController.entries.length,
+                            onTap: () => _openDrawerPage(context, const BookmarksScreen()),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    AnimatedBuilder(
-                      animation: activityController,
-                      builder: (context, _) => _DrawerOption(
-                        icon: PhosphorIcons.clockCounterClockwise,
-                        label: appText('history'),
-                        borderRadius: BorderRadius.circular(8),
-                        badge: activityController.entries.length,
-                        onTap: () => _openDrawerPage(context, const HistoryScreen()),
-                      ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                    child: _SettingsButtonWithAvatar(
+                      onTap: () => _openDrawerPage(context, const SettingsScreen()),
                     ),
-                    const SizedBox(height: 2),
-                    AnimatedBuilder(
-                      animation: downloadsController,
-                      builder: (context, _) => _DrawerOption(
-                        icon: PhosphorIcons.downloadSimple,
-                        label: appText('downloads'),
-                        borderRadius: BorderRadius.circular(8),
-                        badge: downloadsController.entries.length,
-                        onTap: () => _openDrawerPage(context, const DownloadsScreen()),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    AnimatedBuilder(
-                      animation: bookmarksController,
-                      builder: (context, _) => _DrawerOption(
-                        icon: PhosphorIcons.bookmarkSimple,
-                        label: appText('bookmarks'),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
-                        badge: bookmarksController.entries.length,
-                        onTap: () => _openDrawerPage(context, const BookmarksScreen()),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                child: _SettingsButtonWithAvatar(
-                  onTap: () => _openDrawerPage(context, const SettingsScreen()),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -190,12 +203,12 @@ class _DrawerHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
       child: Row(children: [
         SvgPicture.asset(
-          'assets/images/logo_text.svg',
-          width: 38,
-          height: 38,
+          'assets/images/logo.svg',
+          width: 34,
+          height: 34,
           fit: BoxFit.contain,
-          colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
-          placeholderBuilder: (_) => SizedBox(width: 38, height: 38),
+          errorBuilder: (context, error, stackTrace) =>
+              PhosphorSvgIcon(PhosphorIcons.browser, size: 34, color: text),
         ),
         const SizedBox(width: 10),
         Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
@@ -319,14 +332,14 @@ class _SettingsButtonWithAvatar extends StatelessWidget {
                           height: 32,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Image.asset(
-                            'assets/images/avatar.png',
+                            'images/avatar.png',
                             width: 32,
                             height: 32,
                             fit: BoxFit.cover,
                           ),
                         )
                       : Image.asset(
-                          'assets/images/avatar.png',
+                          'images/avatar.png',
                           width: 32,
                           height: 32,
                           fit: BoxFit.cover,
