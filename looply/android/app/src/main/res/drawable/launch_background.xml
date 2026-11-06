@@ -3,9 +3,5 @@
     <item>
         <color android:color="@color/looply_splash_background" />
     </item>
-    <item>
-        <bitmap
-            android:src="@drawable/launch_logo"
-            android:gravity="center" />
-    </item>
+    <item android:drawable="@drawable/launch_logo" android:gravity="center" />
 </layer-list>

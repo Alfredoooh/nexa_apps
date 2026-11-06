@@ -36,6 +36,7 @@ import android.view.SubMenu
 import android.view.ViewGroup
 import android.view.View
 import android.widget.ImageView
+import android.widget.FrameLayout
 import android.widget.PopupWindow
 import android.widget.TextView
 import android.content.res.Configuration
@@ -48,6 +49,8 @@ import androidx.appcompat.widget.SwitchCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.renderer.FlutterRenderer
+import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.pichillilorenzo.flutter_inappwebview_android.webview.in_app_webview.InAppWebView
@@ -69,6 +72,22 @@ class MainActivity : FlutterActivity() {
 
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var flutterRenderer: FlutterRenderer? = null
+    private var hasFlutterUiDisplayed = false
+    private var shimmerSplashOverlay: ShimmerSplashView? = null
+    private val splashHideRunnable = Runnable { hideShimmerSplash() }
+    private val splashFallbackRunnable = Runnable { hideShimmerSplash() }
+    private val flutterUiDisplayListener = object : FlutterUiDisplayListener {
+        override fun onFlutterUiDisplayed() {
+            hasFlutterUiDisplayed = true
+            // No Android 12+, o splash do sistema fica acima do conteúdo até
+            // ao primeiro frame. Manter a camada por mais 700 ms garante que
+            // o shimmer apareça depois de o splash nativo sair.
+            mainHandler.postDelayed(splashHideRunnable, 700L)
+        }
+
+        override fun onFlutterUiNoLongerDisplayed() = Unit
+    }
     private val nativeAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val pendingExternalUrls = java.util.ArrayDeque<String>()
     private var defaultBrowserIntentChannel: MethodChannel? = null
@@ -111,9 +130,14 @@ class MainActivity : FlutterActivity() {
         LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
         appPreferences.registerOnSharedPreferenceChangeListener(adBlockPreferenceListener)
         applyWindowTheme(savedMode, savedPureBlack)
+        if (savedInstanceState == null) {
+            showShimmerSplash(savedMode, savedPureBlack)
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        flutterRenderer = flutterEngine.renderer
+        flutterRenderer?.addIsDisplayingFlutterUiListener(flutterUiDisplayListener)
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.platformViewsController.registry.registerViewFactory(
             "looply/orbit_native_webview",
@@ -179,6 +203,15 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(flushNativeBlocksRunnable)
+        mainHandler.removeCallbacks(splashHideRunnable)
+        mainHandler.removeCallbacks(splashFallbackRunnable)
+        shimmerSplashOverlay?.let { overlay ->
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+            overlay.dispose()
+        }
+        shimmerSplashOverlay = null
+        flutterRenderer?.removeIsDisplayingFlutterUiListener(flutterUiDisplayListener)
+        flutterRenderer = null
         if (::appPreferences.isInitialized) {
             flushNativeBlockCount()
             appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
@@ -200,6 +233,57 @@ class MainActivity : FlutterActivity() {
         } else {
             pendingExternalUrls.addLast(url)
         }
+    }
+
+    private fun showShimmerSplash(mode: String, pureBlack: Boolean) {
+        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
+        if (shimmerSplashOverlay != null) return
+
+        val dark = when (mode) {
+            "dark" -> true
+            "light" -> false
+            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        }
+        val overlay = ShimmerSplashView(this, dark, pureBlack)
+        shimmerSplashOverlay = overlay
+        content.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        overlay.bringToFront()
+        mainHandler.removeCallbacks(splashHideRunnable)
+        mainHandler.removeCallbacks(splashFallbackRunnable)
+        // Evita deixar a camada presa caso uma falha externa impeça o primeiro
+        // frame Flutter de ser apresentado.
+        mainHandler.postDelayed(splashFallbackRunnable, 12000L)
+        if (hasFlutterUiDisplayed) {
+            mainHandler.postDelayed(splashHideRunnable, 700L)
+        }
+    }
+
+    private fun hideShimmerSplash() {
+        mainHandler.removeCallbacks(splashHideRunnable)
+        mainHandler.removeCallbacks(splashFallbackRunnable)
+        val overlay = shimmerSplashOverlay ?: return
+        shimmerSplashOverlay = null
+
+        if (overlay.parent == null) {
+            overlay.dispose()
+            return
+        }
+
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(160L)
+            .withEndAction {
+                (overlay.parent as? ViewGroup)?.removeView(overlay)
+                overlay.dispose()
+            }
+            .start()
     }
 
     private fun extractBrowsableUrl(source: Intent?): String? {
