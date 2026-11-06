@@ -32,6 +32,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/apps/ai_search/index.html
+    - assets/apps/ai_search/
     - assets/icons/phosphor/
     - assets/icons/phosphor/fill/
     - assets/icons/phosphor/regular/

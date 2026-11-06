@@ -77,12 +77,22 @@ class MainActivity : FlutterActivity() {
     private var shimmerSplashOverlay: ShimmerSplashView? = null
     private val splashHideRunnable = Runnable { hideShimmerSplash() }
     private val splashFallbackRunnable = Runnable { hideShimmerSplash() }
+    // Duração mínima garantida do shimmer, contada a partir do onCreate.
+    // Mesmo que o Flutter termine de inicializar antes disso (aparelhos
+    // rápidos), o shimmer continua visível até completar este tempo, para
+    // que o efeito seja sempre perceptível e nunca pareça "piscar uma vez".
+    private val minShimmerDurationMs = 3000L
+    private var shimmerStartUptimeMs = 0L
     private val flutterUiDisplayListener = object : FlutterUiDisplayListener {
         override fun onFlutterUiDisplayed() {
             hasFlutterUiDisplayed = true
-            // Mantém o shimmer sobre o primeiro frame Flutter enquanto o
-            // splash transparente do sistema termina a transição de saída.
-            mainHandler.postDelayed(splashHideRunnable, 700L)
+            // Mantém o shimmer visível até cumprir o tempo mínimo garantido
+            // e, só depois disso, mais 700ms para a transição de saída do
+            // splash transparente do sistema terminar sem sobreposição.
+            val elapsed = android.os.SystemClock.uptimeMillis() - shimmerStartUptimeMs
+            val remaining = (minShimmerDurationMs - elapsed).coerceAtLeast(0L)
+            mainHandler.removeCallbacks(splashHideRunnable)
+            mainHandler.postDelayed(splashHideRunnable, remaining + 700L)
         }
 
         override fun onFlutterUiNoLongerDisplayed() = Unit
@@ -251,6 +261,7 @@ class MainActivity : FlutterActivity() {
         }
         val overlay = ShimmerSplashView(this, dark, pureBlack)
         shimmerSplashOverlay = overlay
+        shimmerStartUptimeMs = android.os.SystemClock.uptimeMillis()
         content.addView(
             overlay,
             FrameLayout.LayoutParams(
@@ -262,10 +273,12 @@ class MainActivity : FlutterActivity() {
         mainHandler.removeCallbacks(splashHideRunnable)
         mainHandler.removeCallbacks(splashFallbackRunnable)
         // Evita deixar a camada presa caso uma falha externa impeça o primeiro
-        // frame Flutter de ser apresentado.
-        mainHandler.postDelayed(splashFallbackRunnable, 12000L)
+        // frame Flutter de ser apresentado. Sempre maior que o mínimo garantido.
+        mainHandler.postDelayed(splashFallbackRunnable, minShimmerDurationMs + 12000L)
         if (hasFlutterUiDisplayed) {
-            mainHandler.postDelayed(splashHideRunnable, 700L)
+            val elapsed = android.os.SystemClock.uptimeMillis() - shimmerStartUptimeMs
+            val remaining = (minShimmerDurationMs - elapsed).coerceAtLeast(0L)
+            mainHandler.postDelayed(splashHideRunnable, remaining + 700L)
         }
     }
 
