@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../models.dart';
 import '../shell/browser_navigation.dart';
 import '../shell/fade_page_route.dart';
@@ -96,7 +97,7 @@ class LooplyHomeAppBar extends StatelessWidget {
             children: [
               _CircleIconButton(
                 icon: Icons.menu_rounded,
-                tooltip: 'Abrir menu',
+                tooltip: appText('open_menu'),
                 onTap: onOpenDrawer ?? () => showLooplyDrawer(context),
               ),
               Expanded(
@@ -114,7 +115,7 @@ class LooplyHomeAppBar extends StatelessWidget {
               ),
               _CircleIconButton(
                 icon: Symbols.search_rounded,
-                tooltip: 'Pesquisar',
+                tooltip: appText('search'),
                 onTap: () => Navigator.of(context).push<void>(
                   FadePageRoute<void>(builder: (_) => const SearchScreen()),
                 ),
@@ -194,7 +195,7 @@ class _MoreSitesTile extends StatelessWidget {
     final accent = accentColor(context);
     return Semantics(
       button: true,
-      label: 'Mais sites',
+      label: appText('more_sites'),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.of(context).push<void>(
@@ -216,7 +217,7 @@ class _MoreSitesTile extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
-                'Mais',
+                appText('more'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 10, color: text),
@@ -291,7 +292,7 @@ class _LoginButton extends StatelessWidget {
             children: [
               Icon(Symbols.login_rounded, color: text, size: 18),
               const SizedBox(width: 8),
-              Text('Log in / Sign in', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+              Text(appText('sign_in'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
           ),
         ),

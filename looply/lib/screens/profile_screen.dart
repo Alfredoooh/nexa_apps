@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../auth_service.dart';
 import '../theme.dart';
 import '../widgets/m3_switch.dart';
+import '../widgets/looply_dialog.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,19 +23,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _saveAddresses = false;
   bool _syncAppSettings = false;
 
-  // Mesmo tipo de diálogo simples usado na Settings (ex: "Importar dados"):
-  // AlertDialog padrão, sem ícone nem estilo customizado.
+  // Confirmação desenhada em Flutter; não usa AlertDialog nativo.
   Future<void> _confirmSignOut(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showLooplyDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Terminar sessão'),
-        content: const Text('Vais precisar de iniciar sessão novamente para aceder à tua conta.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Terminar sessão')),
-        ],
-      ),
+      title: appText('sign_out'),
+      icon: Symbols.logout_rounded,
+      content: Text(appText('sign_out_confirm')),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('sign_out'), value: true, isDestructive: true),
+      ],
     );
     if (confirmed == true && context.mounted) {
       await authController.signOut();
@@ -58,7 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: FilledButton.icon(
                     onPressed: () => Navigator.of(context).maybePop(),
                     icon: const Icon(Symbols.login_rounded),
-                    label: const Text('Iniciar sessão'),
+                    label: Text(appText('sign_in')),
                   ),
                 ),
                 Positioned(top: 0, left: 0, right: 0, child: _ProfileFadeAppBar(topInset: topInset)),
@@ -102,7 +102,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    user.displayName?.trim().isNotEmpty == true ? user.displayName! : 'Utilizador BrowseIt',
+                    user.displayName?.trim().isNotEmpty == true ? user.displayName! : appText('user_browseit'),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3),
                   ),
@@ -121,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Sessão iniciada com ${user.provider == 'google' ? 'Google' : 'email'}',
+                              appText('signed_in_with').replaceAll('{provider}', user.provider == 'google' ? 'Google' : 'email'),
                               style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -141,10 +141,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         _ProfileToggleTile(
                           icon: Symbols.history_rounded,
-                          title: 'Histórico',
+                          title: appText('history'),
                           subtitle: _saveHistory
-                              ? 'A guardar o histórico na tua conta'
-                              : 'O histórico não está a ser guardado',
+                              ? appText('save_history_account')
+                              : appText('history_not_saved'),
                           value: _saveHistory,
                           onChanged: (v) => setState(() => _saveHistory = v),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(22), bottom: Radius.circular(8)),
@@ -152,10 +152,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
                           icon: Symbols.bookmark_rounded,
-                          title: 'Marcadores',
+                          title: appText('bookmarks'),
                           subtitle: _syncBookmarks
-                              ? 'Sincronizados entre dispositivos'
-                              : 'Guardados apenas neste dispositivo',
+                              ? appText('synced_across_devices')
+                              : appText('device_only'),
                           value: _syncBookmarks,
                           onChanged: (v) => setState(() => _syncBookmarks = v),
                           borderRadius: BorderRadius.circular(8),
@@ -163,10 +163,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
                           icon: Symbols.location_on_rounded,
-                          title: 'Moradas',
+                          title: appText('addresses'),
                           subtitle: _saveAddresses
-                              ? 'Guardadas para preencher formulários'
-                              : 'Não guardadas',
+                              ? appText('addresses_saved')
+                              : appText('not_saved'),
                           value: _saveAddresses,
                           onChanged: (v) => setState(() => _saveAddresses = v),
                           borderRadius: BorderRadius.circular(8),
@@ -174,10 +174,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
                           icon: Symbols.settings_rounded,
-                          title: 'Configurações do app',
+                          title: appText('settings'),
                           subtitle: _syncAppSettings
-                              ? 'Sincronizadas com a tua conta'
-                              : 'Guardadas apenas neste dispositivo',
+                              ? appText('synced_across_devices')
+                              : appText('device_only'),
                           value: _syncAppSettings,
                           onChanged: (v) => setState(() => _syncAppSettings = v),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(22)),
@@ -226,7 +226,7 @@ class _ProfileFadeAppBar extends StatelessWidget {
             children: [
               Semantics(
                 button: true,
-                label: 'Voltar',
+                label: appText('back'),
                 child: Material(
                   color: pillColor(context),
                   shape: const CircleBorder(),
@@ -244,7 +244,7 @@ class _ProfileFadeAppBar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Perfil',
+                  appText('profile'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
@@ -290,7 +290,7 @@ class _ProfileFadeBottomBar extends StatelessWidget {
           ),
           onPressed: onSignOut,
           icon: const Icon(Symbols.logout_rounded),
-          label: const Text('Terminar sessão', style: TextStyle(fontWeight: FontWeight.w700)),
+          label: Text(appText('sign_out'), style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../auth_service.dart';
+import '../localization.dart';
 import '../theme.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -143,12 +144,12 @@ class _AuthScreenState extends State<AuthScreen> {
         elevation: 0,
         titleSpacing: 4,
         leading: IconButton(
-          tooltip: 'Fechar',
+          tooltip: appText('close'),
           onPressed: () => Navigator.of(context).maybePop(),
           icon: Icon(Symbols.close_rounded, color: text, size: 23),
         ),
         title: Text(
-          'Log in / Sign in',
+          appText('auth_title'),
           style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
@@ -184,7 +185,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Bem-vindo ao BrowseIt',
+                      appText('welcome'),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: text,
@@ -194,7 +195,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Inicia sessão para manter os teus dados associados à tua conta.',
+                      appText('sign_in_intro'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: muted, fontSize: 13, height: 1.45),
                     ),
@@ -210,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: TextStyle(color: text, fontSize: 14),
                       decoration: _inputDecoration(
                         context,
-                        label: 'Email',
+                        label: appText('email'),
                         icon: Symbols.mail_outline_rounded,
                       ),
                     ),
@@ -228,10 +229,10 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: TextStyle(color: text, fontSize: 14),
                       decoration: _inputDecoration(
                         context,
-                        label: 'Palavra-passe',
+                        label: appText('password'),
                         icon: Symbols.lock_rounded,
                         suffixIcon: IconButton(
-                          tooltip: _obscurePassword ? 'Mostrar palavra-passe' : 'Ocultar palavra-passe',
+                          tooltip: _obscurePassword ? appText('show_password') : appText('hide_password'),
                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           icon: Icon(
                             _obscurePassword
@@ -296,7 +297,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           height: 20,
                           fit: BoxFit.contain,
                         ),
-                        label: const Text('Continuar com Google'),
+                        label: Text(appText('continue_google')),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: text,
                           side: BorderSide(color: lineColor(context)),
@@ -309,7 +310,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'A autenticação por email depende de um serviço de contas configurado. O Google abre o seletor nativo quando a configuração OAuth estiver concluída.',
+                      appText('auth_info'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: muted.withOpacity(.9), fontSize: 11, height: 1.45),
                     ),

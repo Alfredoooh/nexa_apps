@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
@@ -51,7 +52,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       backgroundColor: pageBg(context),
       appBar: AppBar(
         toolbarHeight: 64,
-        title: const Text('Atividade'),
+        title: Text(appText('activity')),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
@@ -64,7 +65,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Recente',
+                  appText('recent'),
                   style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800),
                 ),
               ),
@@ -73,7 +74,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   onPressed: () => Navigator.of(context).push(
                     CupertinoPageRoute(builder: (_) => const HistoryScreen()),
                   ),
-                  child: const Text('Ver tudo'),
+                  child: Text(appText('view_all')),
                 ),
             ],
           ),
@@ -86,7 +87,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   Icon(Symbols.history_rounded, size: 38, color: muted),
                   const SizedBox(height: 9),
                   Text(
-                    'Sem atividade recente',
+                    appText('no_recent_activity'),
                     style: TextStyle(color: muted, fontWeight: FontWeight.w600),
                   ),
                 ],
@@ -116,19 +117,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
 }
 
 class ActivityTile extends StatelessWidget {
-  const ActivityTile({super.key, required this.entry, this.borderRadius});
+  const ActivityTile({super.key, required this.entry, this.borderRadius, this.selected = false, this.onTap, this.onLongPress});
   final ActivityEntry entry;
   final BorderRadius? borderRadius;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
     return Material(
-      color: settingsCardColor(context),
+      color: selected ? accentColor(context).withOpacity(.13) : settingsCardColor(context),
       borderRadius: borderRadius ?? BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => openOrbitTab(context, entry.url, title: entry.title),
+        onTap: onTap ?? () => openOrbitTab(context, entry.url, title: entry.title),
+        onLongPress: onLongPress,
         borderRadius: borderRadius ?? BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -165,7 +170,11 @@ class ActivityTile extends StatelessWidget {
                 Text(formatActivityTime(entry.timestamp), style: TextStyle(color: muted, fontSize: 11)),
               ]),
             ),
-            Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+            Icon(
+              selected ? Symbols.check_circle_rounded : Symbols.chevron_right_rounded,
+              color: selected ? accentColor(context) : muted,
+              size: 19,
+            ),
           ]),
         ),
       ),
@@ -175,8 +184,8 @@ class ActivityTile extends StatelessWidget {
 
 String formatActivityTime(DateTime dt) {
   final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return 'agora mesmo';
-  if (diff.inMinutes < 60) return 'há ${diff.inMinutes} min';
-  if (diff.inHours < 24) return 'há ${diff.inHours} h';
-  return 'há ${diff.inDays} dias';
+  if (diff.inMinutes < 1) return appText('time_now');
+  if (diff.inMinutes < 60) return appText('time_minutes').replaceAll('{count}', diff.inMinutes.toString());
+  if (diff.inHours < 24) return appText('time_hours').replaceAll('{count}', diff.inHours.toString());
+  return appText('time_days').replaceAll('{count}', diff.inDays.toString());
 }

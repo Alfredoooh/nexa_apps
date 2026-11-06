@@ -12,6 +12,7 @@ import '../shell/browser_navigation.dart';
 import '../shell/shell_tab_request.dart';
 import '../widgets/looply_popup.dart';
 import '../widgets/search_engine_picker.dart';
+import '../localization.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -28,8 +29,6 @@ class _SearchScreenState extends State<SearchScreen> {
   final Map<String, Future<String?>> _entityPhotoRequests = <String, Future<String?>>{};
   int _requestSequence = 0;
 
-  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
-  bool _aiSearchEnabled = false;
 
   static const Map<String, String> _menuLabels = <String, String>{
     'voice': 'Pesquisa por voz',
@@ -45,49 +44,34 @@ class _SearchScreenState extends State<SearchScreen> {
     _controller = TextEditingController();
     _focusNode = FocusNode();
     _controller.addListener(_onQueryChanged);
+    aiSearchModeEnabled.addListener(_onAiModeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
     });
-    _nativeUi.setMethodCallHandler(_handleNativeUiCall);
-    unawaited(_loadAiSearchState());
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
     _controller.removeListener(_onQueryChanged);
+    aiSearchModeEnabled.removeListener(_onAiModeChanged);
     _controller.dispose();
     _focusNode.dispose();
-    _nativeUi.setMethodCallHandler(null);
     super.dispose();
   }
 
-  // Lê o estado persistido do interruptor "Pesquisa com IA". O valor fica
-  // disponível para uso futuro; por agora não altera nenhum comportamento.
-  Future<void> _loadAiSearchState() async {
-    try {
-      final enabled = await _nativeUi.invokeMethod<bool>('getAiSearchEnabled');
-      if (mounted && enabled != null) setState(() => _aiSearchEnabled = enabled);
-    } on MissingPluginException {
-      // Fora do Android o interruptor nativo não existe; mantém o valor local.
-    } on PlatformException {
-      // Mantém o valor atual se a leitura falhar por qualquer razão.
-    }
-  }
-
-  Future<dynamic> _handleNativeUiCall(MethodCall call) async {
-    if (call.method == 'aiSearchEnabledChanged') {
-      final enabled = call.arguments as bool? ?? false;
-      if (mounted) setState(() => _aiSearchEnabled = enabled);
-    }
-    return null;
+  void _onAiModeChanged() {
+    _debounce?.cancel();
+    _requestSequence++;
+    if (!mounted) return;
+    setState(() => _suggestions = <String>[]);
   }
 
   void _onQueryChanged() {
     if (mounted) setState(() {});
     final query = _controller.text.trim();
     _debounce?.cancel();
-    if (query.isEmpty) {
+    if (aiSearchModeEnabled.value || query.isEmpty) {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = <String>[]);
       return;
     }
@@ -95,6 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _fetchSuggestions(String query) async {
+    if (aiSearchModeEnabled.value) return;
     final sequence = ++_requestSequence;
     try {
       final uri = Uri.https('suggestqueries.google.com', '/complete/search', <String, String>{
@@ -149,6 +134,14 @@ class _SearchScreenState extends State<SearchScreen> {
     FocusScope.of(context).unfocus();
     final isUrl = _looksLikeUrl(value);
     if (!isUrl) searchHistoryController.add(value);
+    if (!isUrl && aiSearchModeEnabled.value) {
+      final aiUrl = 'looply://ai-search?q=${Uri.encodeComponent(value)}';
+      final tab = tabsController.createBrowserTab(aiUrl);
+      tabsController.activate(tab.id);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ShellTabRequest.instance.requestBrowser(tab.id);
+      return;
+    }
     final url = isUrl ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     unawaited(BrowserPreconnectHints.preconnect(url));
     openOrbitTab(context, url, title: value);
@@ -168,10 +161,10 @@ class _SearchScreenState extends State<SearchScreen> {
         ShellTabRequest.instance.requestBrowser(tab.id);
         break;
       case 'voice':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesquisa por voz ainda não está disponível.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('voice_unavailable'))));
         break;
       case 'image':
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pesquisa por imagem ainda não está disponível.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('image_unavailable'))));
         break;
     }
   }
@@ -198,12 +191,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedText(context).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                  child: Align(alignment: Alignment.centerLeft, child: Text('Pesquisas recentes', style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800))),
+                  child: Align(alignment: Alignment.centerLeft, child: Text(appText('recent_searches'), style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800))),
                 ),
                 if (searchHistoryController.queries.isEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
-                    child: Text('Ainda não existem pesquisas guardadas.', style: TextStyle(color: mutedText(context))),
+                    child: Text(appText('no_saved_searches'), style: TextStyle(color: mutedText(context))),
                   )
                 else
                   ConstrainedBox(
@@ -394,7 +387,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   children: [
                     const SizedBox(width: 2),
                     IconButton(
-                      tooltip: 'Voltar',
+                      tooltip: appText('back'),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints.tightFor(width: 38, height: 38),
                       icon: Icon(Symbols.arrow_back_rounded, color: muted, size: 19),
@@ -410,7 +403,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         cursorColor: accentColor(context),
                         onSubmitted: _submitSearch,
                         decoration: InputDecoration(
-                          hintText: 'Pesquisar ou escrever um URL',
+                          hintText: appText('search_hint'),
                           hintStyle: TextStyle(color: muted, fontSize: 14),
                           contentPadding: EdgeInsets.zero,
                           border: InputBorder.none,
@@ -423,7 +416,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     if (_controller.text.isNotEmpty)
                       IconButton(
-                        tooltip: 'Limpar',
+                        tooltip: appText('clear'),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(width: 32, height: 38),
                         icon: Icon(Symbols.close_rounded, color: muted, size: 17),
@@ -432,23 +425,24 @@ class _SearchScreenState extends State<SearchScreen> {
                           _focusNode.requestFocus();
                         },
                       ),
-                    LooplyPopupMenuButton<String>(
-                      tooltip: 'Mais opções de pesquisa',
-                      iconColor: muted,
-                      includeAiToggle: true,
-                      onAiToggleChanged: (value) {
-                        setState(() => _aiSearchEnabled = value);
-                        // Sem efeito por agora — apenas guarda a preferência
-                        // (via canal nativo no Android) para uso futuro.
-                      },
-                      actions: const <LooplyPopupAction<String>>[
-                        LooplyPopupAction(value: 'voice', label: 'Pesquisa por voz', icon: Icons.mic_none_rounded),
-                        LooplyPopupAction(value: 'image', label: 'Pesquisa por imagem', icon: Icons.image_search_rounded),
-                        LooplyPopupAction(value: 'private', label: 'Novo separador anónimo', icon: Icons.visibility_off_rounded),
-                        LooplyPopupAction(value: 'history', label: 'Histórico de pesquisas', icon: Symbols.history_rounded),
-                        LooplyPopupAction(value: 'engine', label: 'Máquina de pesquisa', icon: Symbols.travel_explore_rounded),
-                      ],
-                      onSelected: _handleMenuSelection,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: aiSearchModeEnabled,
+                      builder: (context, aiEnabled, _) => LooplyPopupMenuButton<String>(
+                        tooltip: appText('more_options'),
+                        iconColor: muted,
+                        includeAiToggle: true,
+                        aiToggleLabel: appText('ai_mode'),
+                        aiToggleValue: aiEnabled,
+                        onAiToggleChanged: (value) => aiSearchModeEnabled.value = value,
+                        actions: <LooplyPopupAction<String>>[
+                        LooplyPopupAction(value: 'voice', label: appText('voice_search'), icon: Icons.mic_none_rounded),
+                        LooplyPopupAction(value: 'image', label: appText('image_search'), icon: Icons.image_search_rounded),
+                        LooplyPopupAction(value: 'private', label: appText('new_private_tab'), icon: Icons.visibility_off_rounded),
+                        LooplyPopupAction(value: 'history', label: appText('search_history'), icon: Symbols.history_rounded),
+                        LooplyPopupAction(value: 'engine', label: appText('search_engine'), icon: Symbols.travel_explore_rounded),
+                        ],
+                        onSelected: _handleMenuSelection,
+                      ),
                     ),
                     const SizedBox(width: 2),
                   ],
@@ -468,14 +462,14 @@ class _SearchScreenState extends State<SearchScreen> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
-                              child: Text('Pesquisas recentes', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                              child: Text(appText('recent_searches'), style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
                             ),
                             for (final query in queries)
                               ListTile(
                                 leading: Icon(Symbols.history_rounded, color: muted, size: 20),
                                 title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                                 trailing: IconButton(
-                                  tooltip: 'Preencher pesquisa',
+                                  tooltip: appText('fill_search'),
                                   icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
                                   onPressed: () => _fillSuggestion(query),
                                 ),
@@ -496,7 +490,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               leading: _suggestionLeading(suggestion, muted),
                               title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                               trailing: IconButton(
-                                tooltip: 'Preencher pesquisa',
+                                tooltip: appText('fill_search'),
                                 icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
                                 onPressed: () => _fillSuggestion(suggestion),
                               ),

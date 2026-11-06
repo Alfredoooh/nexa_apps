@@ -6,6 +6,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../browser_library.dart';
 import '../shell/browser_navigation.dart';
 import '../theme.dart';
+import '../widgets/looply_dialog.dart';
+import '../localization.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -38,11 +40,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        title: const Text('Marcadores'),
+        title: Text(appText('bookmarks')),
         actions: [
           if (entries.isNotEmpty)
             IconButton(
-              tooltip: 'Limpar marcadores',
+              tooltip: appText('clear_bookmarks'),
               icon: Icon(Symbols.delete_sweep_rounded, color: text),
               onPressed: () => _confirmClear(context),
             ),
@@ -52,9 +54,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Symbols.bookmarks_rounded, size: 48, color: muted),
               const SizedBox(height: 12),
-              Text('Ainda não há marcadores', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
+              Text(appText('no_bookmarks'), style: TextStyle(color: text, fontWeight: FontWeight.w700)),
               const SizedBox(height: 5),
-              Text('Guarda páginas pelo menu do Orbit Browser.', style: TextStyle(color: muted, fontSize: 12)),
+              Text(appText('bookmark_help'), style: TextStyle(color: muted, fontSize: 12)),
             ]))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
@@ -87,7 +89,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                           Text(entry.url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 11)),
                         ])),
                         IconButton(
-                          tooltip: 'Remover marcador',
+                          tooltip: appText('remove'),
                           onPressed: () => bookmarksController.remove(entry.id),
                           icon: Icon(Symbols.close_rounded, color: muted, size: 20),
                         ),
@@ -101,16 +103,15 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _confirmClear(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showLooplyDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Limpar marcadores?'),
-        content: const Text('Esta ação remove todos os marcadores guardados.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Limpar')),
-        ],
-      ),
+      title: appText('clear_bookmarks_question'),
+      icon: Symbols.delete_sweep_rounded,
+      content: Text(appText('clear_bookmarks_confirm')),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('clear'), value: true, isDestructive: true),
+      ],
     );
     if (confirmed == true) bookmarksController.clear();
   }

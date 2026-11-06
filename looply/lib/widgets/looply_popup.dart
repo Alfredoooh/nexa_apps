@@ -1,9 +1,4 @@
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
@@ -16,9 +11,8 @@ class LooplyPopupAction<T> {
   final IconData icon;
 }
 
-/// No Android, os menus são desenhados com um PopupMenu nativo real
-/// (androidx.appcompat.widget.PopupMenu), com a animação, elevação e ripple
-/// do próprio sistema. O Flutter apenas envia os itens e os ícones.
+/// Menu flutuante totalmente desenhado em Flutter. Não depende de PopupMenu
+/// Kotlin nem de canais nativos, e conserva a posição do botão acionador.
 class LooplyPopupMenuButton<T> extends StatelessWidget {
   const LooplyPopupMenuButton({
     super.key,
@@ -29,6 +23,8 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
     this.iconColor,
     this.menuWidth = 252,
     this.includeAiToggle = false,
+    this.aiToggleValue = false,
+    this.aiToggleLabel = 'Modo IA',
     this.onAiToggleChanged,
   });
 
@@ -38,142 +34,135 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
   final double menuWidth;
-
-  /// Quando ativo, o popup inclui um item fixo no topo ("Pesquisa com IA")
-  /// com um interruptor. No Android esse interruptor é nativo (SwitchCompat
-  /// dentro de um actionView do PopupMenu); no fallback Flutter é desenhado
-  /// com o mesmo componente usado na tela de Definições.
   final bool includeAiToggle;
+  final bool aiToggleValue;
+  final String aiToggleLabel;
   final ValueChanged<bool>? onAiToggleChanged;
 
-  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
-
   Future<void> _show(BuildContext buttonContext) async {
-    final renderObject = buttonContext.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize || actions.isEmpty) return;
+    if (actions.isEmpty && !includeAiToggle) return;
+    final object = buttonContext.findRenderObject();
+    if (object is! RenderBox || !object.hasSize) return;
 
-    final topLeft = renderObject.localToGlobal(Offset.zero);
-    final anchor = topLeft & renderObject.size;
+    final origin = object.localToGlobal(Offset.zero);
+    final anchor = origin & object.size;
+    final screen = MediaQuery.sizeOf(buttonContext);
+    final width = menuWidth.clamp(210.0, screen.width - 24.0).toDouble();
+    final estimatedHeight = (actions.length * 48.0) + (includeAiToggle ? 58.0 : 0.0) + 16.0;
+    final left = (anchor.right - width).clamp(12.0, screen.width - width - 12.0).toDouble();
+    final preferredTop = anchor.bottom + 7;
+    final top = preferredTop + estimatedHeight > screen.height - 16
+        ? (anchor.top - estimatedHeight - 7).clamp(12.0, screen.height - estimatedHeight - 12.0).toDouble()
+        : preferredTop;
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        final iconColor = mutedText(buttonContext);
-        final nativeItems = <Map<String, Object>>[];
-        for (final action in actions) {
-          final iconBytes = await _renderRoundedIcon(action.icon, iconColor);
-          nativeItems.add(<String, Object>{
-            'label': action.label,
-            'value': action.value as Object,
-            if (iconBytes != null) 'icon': iconBytes,
-          });
-        }
-        final selected = await _nativeUi.invokeMethod<dynamic>(
-          'showNativePopup',
-          <String, Object>{
-            'anchor': <String, double>{
-              'left': anchor.left,
-              'top': anchor.top,
-              'right': anchor.right,
-              'bottom': anchor.bottom,
-              'width': anchor.width,
-              'height': anchor.height,
-            },
-            'width': menuWidth,
-            'items': nativeItems,
-            'includeAiToggle': includeAiToggle,
-          },
-        );
-        if (selected != null) onSelected(selected as T);
-      } on PlatformException {
-        // Não substitui o menu Android por um popup Flutter: mantém apenas
-        // o comportamento nativo quando o canal da plataforma está disponível.
-      } on MissingPluginException {
-        // Não existe PopupMenu Kotlin noutras plataformas.
-      }
-      return;
-    }
-
-    // Fallback nativo da plataforma para builds que não sejam Android.
-    final selected = await showMenu<T>(
+    final selected = await showGeneralDialog<T>(
       context: buttonContext,
-      position: RelativeRect.fromLTRB(
-        anchor.left,
-        anchor.top,
-        MediaQuery.sizeOf(buttonContext).width - anchor.right,
-        MediaQuery.sizeOf(buttonContext).height - anchor.bottom,
-      ),
-      items: [
-        if (includeAiToggle)
-          PopupMenuItem<T>(
-            enabled: false,
-            padding: EdgeInsets.zero,
-            child: _AiToggleRow<T>(onChanged: onAiToggleChanged),
+      barrierDismissible: true,
+      barrierLabel: 'Fechar menu',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        final surface = panelColor(dialogContext);
+        final outline = lineColor(dialogContext);
+        final muted = mutedText(dialogContext);
+        final text = mainText(dialogContext);
+        var localAiValue = aiToggleValue;
+        return StatefulBuilder(
+          builder: (context, setLocalState) => Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(dialogContext).pop(),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+              Positioned(
+                left: left,
+                top: top,
+                width: width,
+                child: Material(
+                  color: surface,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 14,
+                  borderRadius: BorderRadius.circular(19),
+                  clipBehavior: Clip.antiAlias,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: outline.withOpacity(.9), width: .8),
+                      borderRadius: BorderRadius.circular(19),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: screen.height * .68),
+                      child: SingleChildScrollView(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          if (includeAiToggle) ...[
+                            InkWell(
+                              onTap: () {
+                                localAiValue = !localAiValue;
+                                setLocalState(() {});
+                                onAiToggleChanged?.call(localAiValue);
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(15, 7, 10, 7),
+                                child: Row(children: [
+                                  Icon(Symbols.auto_awesome_rounded, size: 20, color: accentColor(context)),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(aiToggleLabel, style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600))),
+                                  Switch.adaptive(
+                                    value: localAiValue,
+                                    onChanged: (value) {
+                                      localAiValue = value;
+                                      setLocalState(() {});
+                                      onAiToggleChanged?.call(value);
+                                    },
+                                  ),
+                                ]),
+                              ),
+                            ),
+                            if (actions.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Divider(height: 9, color: muted.withOpacity(.16)),
+                              ),
+                          ],
+                          for (final action in actions)
+                            InkWell(
+                              onTap: () => Navigator.of(dialogContext).pop(action.value),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                                child: Row(children: [
+                                  Icon(action.icon, size: 20, color: muted),
+                                  const SizedBox(width: 13),
+                                  Expanded(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500))),
+                                ]),
+                              ),
+                            ),
+                        ]),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ...actions.map(
-          (action) => PopupMenuItem<T>(
-            value: action.value,
-            child: Row(
-              children: [
-                Icon(action.icon, size: 20, color: mutedText(buttonContext)),
-                const SizedBox(width: 12),
-                Flexible(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            alignment: Alignment.topRight,
+            scale: Tween<double>(begin: .96, end: 1).animate(curved),
+            child: child,
           ),
-        ),
-      ],
+        );
+      },
     );
     if (selected != null) onSelected(selected);
-  }
-
-
-  Future<Uint8List?> _renderRoundedIcon(IconData icon, Color color) async {
-    // 20 logical px coincide com o tamanho de ícone usado nos controlos Flutter.
-    // A imagem é enviada em alta densidade e apresentada pelo Android num slot de 20 dp.
-    const logicalSize = 20.0;
-    const pixelRatio = 3.0;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          color: color,
-          fontSize: logicalSize,
-          height: 1,
-          fontWeight: FontWeight.w400,
-          fontVariations: const <ui.FontVariation>[
-            ui.FontVariation('wght', 400),
-            ui.FontVariation('GRAD', -25),
-            ui.FontVariation('FILL', 0),
-          ],
-          fontFamily: icon.fontFamily,
-          fontFamilyFallback: icon.fontFamilyFallback,
-          package: icon.fontPackage,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder)..scale(pixelRatio);
-    painter.paint(
-      canvas,
-      Offset(
-        (logicalSize - painter.width) / 2,
-        (logicalSize - painter.height) / 2,
-      ),
-    );
-    final picture = recorder.endRecording();
-    final image = await picture.toImage(
-      (logicalSize * pixelRatio).round(),
-      (logicalSize * pixelRatio).round(),
-    );
-    try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } finally {
-      image.dispose();
-      picture.dispose();
-    }
   }
 
   @override
@@ -184,50 +173,4 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
           onPressed: () => _show(buttonContext),
         ),
       );
-}
-
-/// Linha com o interruptor "Pesquisa com IA", usada apenas no fallback
-/// Flutter (plataformas sem o PopupMenu nativo do Kotlin).
-class _AiToggleRow<T> extends StatefulWidget {
-  const _AiToggleRow({this.onChanged});
-
-  final ValueChanged<bool>? onChanged;
-
-  @override
-  State<_AiToggleRow<T>> createState() => _AiToggleRowState<T>();
-}
-
-class _AiToggleRowState<T> extends State<_AiToggleRow<T>> {
-  bool _value = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
-    return InkWell(
-      onTap: () {
-        setState(() => _value = !_value);
-        widget.onChanged?.call(_value);
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            Icon(Symbols.auto_awesome_rounded, size: 20, color: muted),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text('Pesquisa com IA', style: TextStyle(color: text, fontSize: 14)),
-            ),
-            Switch.adaptive(
-              value: _value,
-              onChanged: (value) {
-                setState(() => _value = value);
-                widget.onChanged?.call(value);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

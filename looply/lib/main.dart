@@ -20,6 +20,7 @@ import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
+import 'localization.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ Future<void> main() async {
   // Restaurar preferências e dados locais antes de construir a primeira tela:
   // evita mostrar temporariamente o tema padrão ou uma grelha sem separadores.
   await themeController.restore();
+  await appLanguageController.restore();
   await tabsController.restore();
   await activityController.restore();
   await searchHistoryController.restore();
@@ -49,18 +51,27 @@ class LooplyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeController,
-      builder: (context, mode, _) => ValueListenableBuilder<bool>(
-        valueListenable: themeController.pureDark,
-        builder: (context, pureBlack, __) => MaterialApp(
-          title: 'BrowseIt',
-          debugShowCheckedModeBanner: false,
-          themeMode: mode,
-          themeAnimationDuration: Duration.zero,
-          theme: buildLooplyTheme(Brightness.light),
-          darkTheme: buildLooplyTheme(Brightness.dark, pureBlack: pureBlack),
-          home: const LooplyShell(),
+    return ValueListenableBuilder<AppLanguage>(
+      valueListenable: appLanguageController,
+      builder: (context, language, _) => ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeController,
+        builder: (context, mode, __) => ValueListenableBuilder<bool>(
+          valueListenable: themeController.pureDark,
+          builder: (context, pureBlack, ___) => MaterialApp(
+            title: 'BrowseIt',
+            debugShowCheckedModeBanner: false,
+            builder: (context, child) => Directionality(
+              textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+              child: child ?? const SizedBox.shrink(),
+            ),
+            locale: language.locale,
+            supportedLocales: supportedAppLanguages.map((item) => item.locale).toList(growable: false),
+            themeMode: mode,
+            themeAnimationDuration: Duration.zero,
+            theme: buildLooplyTheme(Brightness.light),
+            darkTheme: buildLooplyTheme(Brightness.dark, pureBlack: pureBlack),
+            home: const LooplyShell(),
+          ),
         ),
       ),
     );
@@ -117,16 +128,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   String? _activeBrowserTabId;
   final Map<String, GlobalKey> _browserViewportKeys = {};
   final Map<String, Completer<void>> _browserFirstLoads = {};
-  // Sinaliza quando a plataforma nativa da WebView já foi criada. A entrada
-  // do browser só começa depois deste ponto, evitando animar enquanto o
-  // Android ainda está a anexar a PlatformView (causa comum de pequenos saltos).
+  // Sinaliza quando o widget InAppWebView está anexado à árvore. A entrada
+  // do browser só começa depois deste ponto, evitando iniciar a transição
+  // enquanto o plugin ainda prepara a primeira composição da página.
   final Map<String, Completer<void>> _browserPlatformReady = {};
   final GlobalKey _repaintKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
   // As páginas principais são Início e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
-  final List<String> _screenLabels = const ['Início', 'Atividade'];
+  List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
   final List<IconData> _screenIcons = const [Symbols.home_rounded, Symbols.history_rounded];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
@@ -154,6 +165,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _cloudSyncSources = <Listenable>[
       themeController,
       themeController.pureDark,
+      appLanguageController,
       tabsController,
       activityController,
       searchHistoryController,
@@ -412,23 +424,25 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
   }
 
-  void _openShellDrawer() {
-    if (!mounted || _drawerController.value >= 1) return;
+  void _animateDrawerTo(double target, {double velocity = 0, double drawerWidth = 304}) {
+    if (!mounted) return;
+    final distance = (target - _drawerController.value).abs();
+    if (distance <= .001) return;
+    _drawerController.stop();
+    final speed = velocity.abs();
+    final milliseconds = speed > 80
+        ? (distance * drawerWidth / speed * 1000).round().clamp(105, 260).toInt()
+        : (distance * 245).round().clamp(105, 245).toInt();
     unawaited(_drawerController.animateTo(
-      1,
-      duration: const Duration(milliseconds: 500),
+      target,
+      duration: Duration(milliseconds: milliseconds),
       curve: Curves.easeOutCubic,
     ));
   }
 
-  void _closeShellDrawer() {
-    if (!mounted || _drawerController.value <= 0) return;
-    unawaited(_drawerController.animateBack(
-      0,
-      duration: const Duration(milliseconds: 460),
-      curve: Curves.easeInCubic,
-    ));
-  }
+  void _openShellDrawer() => _animateDrawerTo(1);
+
+  void _closeShellDrawer() => _animateDrawerTo(0);
 
   void _onDrawerDragStart(DragStartDetails details) {
     _drawerController.stop();
@@ -442,17 +456,17 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
             .toDouble();
   }
 
-  void _onDrawerDragEnd(DragEndDetails details) {
+  void _onDrawerDragEnd(DragEndDetails details, double drawerWidth) {
     final velocity = details.velocity.pixelsPerSecond.dx;
-    if (velocity > 360) {
-      _openShellDrawer();
-    } else if (velocity < -360) {
-      _closeShellDrawer();
-    } else if (_drawerController.value >= .38) {
-      _openShellDrawer();
-    } else {
-      _closeShellDrawer();
-    }
+    final progress = _drawerController.value;
+    final target = velocity > 420
+        ? 1.0
+        : velocity < -420
+            ? 0.0
+            : progress >= .42
+                ? 1.0
+                : 0.0;
+    _animateDrawerTo(target, velocity: velocity, drawerWidth: drawerWidth);
   }
 
   double _drawerWidth(BuildContext context) {
@@ -1248,7 +1262,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 onHorizontalDragUpdate: drawerGestureEnabled
                     ? (details) => _onDrawerDragUpdate(details, drawerWidth)
                     : null,
-                onHorizontalDragEnd: drawerGestureEnabled ? _onDrawerDragEnd : null,
+                onHorizontalDragEnd: drawerGestureEnabled ? (details) => _onDrawerDragEnd(details, drawerWidth) : null,
                 child: Transform.translate(
                   offset: Offset(drawerWidth * progress, 0),
                   child: child!,
@@ -1267,7 +1281,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                   onHorizontalDragStart: _onDrawerDragStart,
                   onHorizontalDragUpdate: (details) =>
                       _onDrawerDragUpdate(details, drawerWidth),
-                  onHorizontalDragEnd: _onDrawerDragEnd,
+                  onHorizontalDragEnd: (details) => _onDrawerDragEnd(details, drawerWidth),
                   child: ColoredBox(
                     color: Colors.black.withOpacity(.07 * progress),
                   ),

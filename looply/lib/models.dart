@@ -48,9 +48,13 @@ const Set<String> adBlockDomains = {
   'mouseflow.com', 'smartlook.com', 'clarity.ms',
 };
 
-// Settings-backed runtime switches.
+// Preferências persistentes do motor do navegador e da aparência dos sites.
 final ValueNotifier<bool> adBlockEnabled = ValueNotifier<bool>(true);
 final ValueNotifier<bool> navigationAcceleratorEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> forceDarkWebsitesEnabled = ValueNotifier<bool>(false);
+final ValueNotifier<bool> siteThemeFollowsAppEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> adaptiveToolbarColorEnabled = ValueNotifier<bool>(false);
+final ValueNotifier<bool> aiSearchModeEnabled = ValueNotifier<bool>(false);
 
 bool _runtimePreferenceListenersAttached = false;
 
@@ -59,10 +63,21 @@ Future<void> restoreRuntimeSettings() async {
     final prefs = await SharedPreferences.getInstance();
     adBlockEnabled.value = prefs.getBool('looply_ad_block_enabled') ?? true;
     navigationAcceleratorEnabled.value = prefs.getBool('looply_navigation_accelerator_enabled') ?? true;
+    forceDarkWebsitesEnabled.value = prefs.getBool('looply_force_dark_websites') ?? false;
+    siteThemeFollowsAppEnabled.value = prefs.getBool('looply_site_theme_follows_app') ?? true;
+    adaptiveToolbarColorEnabled.value = prefs.getBool('looply_adaptive_toolbar_color') ?? false;
+    aiSearchModeEnabled.value = prefs.getBool('looply_ai_search_mode') ?? false;
     if (_runtimePreferenceListenersAttached) return;
     _runtimePreferenceListenersAttached = true;
-    adBlockEnabled.addListener(() => unawaited(prefs.setBool('looply_ad_block_enabled', adBlockEnabled.value)));
-    navigationAcceleratorEnabled.addListener(() => unawaited(prefs.setBool('looply_navigation_accelerator_enabled', navigationAcceleratorEnabled.value)));
+    void persist(String key, ValueNotifier<bool> notifier) {
+      notifier.addListener(() => unawaited(prefs.setBool(key, notifier.value)));
+    }
+    persist('looply_ad_block_enabled', adBlockEnabled);
+    persist('looply_navigation_accelerator_enabled', navigationAcceleratorEnabled);
+    persist('looply_force_dark_websites', forceDarkWebsitesEnabled);
+    persist('looply_site_theme_follows_app', siteThemeFollowsAppEnabled);
+    persist('looply_adaptive_toolbar_color', adaptiveToolbarColorEnabled);
+    persist('looply_ai_search_mode', aiSearchModeEnabled);
   } catch (_) {}
 }
 
@@ -534,6 +549,9 @@ class ActivityEntry {
   final DateTime timestamp;
 }
 
+String _activityEntryKey(ActivityEntry entry) =>
+    '${entry.kind.name}|${entry.url}|${entry.timestamp.microsecondsSinceEpoch}';
+
 class ActivityController extends ChangeNotifier {
   static const String _storageKey = 'looply_browsing_history_v1';
   final List<ActivityEntry> _entries = [];
@@ -578,6 +596,14 @@ class ActivityController extends ChangeNotifier {
     }
     _entries.add(ActivityEntry(kind: kind, title: title, url: url, timestamp: now));
     if (_entries.length > 200) _entries.removeAt(0);
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  void removeEntries(Iterable<ActivityEntry> entries) {
+    final keys = entries.map(_activityEntryKey).toSet();
+    if (keys.isEmpty) return;
+    _entries.removeWhere((entry) => keys.contains(_activityEntryKey(entry)));
     notifyListeners();
     unawaited(_persist());
   }
@@ -685,7 +711,9 @@ class TabsController extends ChangeNotifier {
         }
         if (kind == null || kind == TabKind.appScreen) continue;
         final uri = Uri.tryParse(url);
-        if (uri == null || uri.host.isEmpty || (uri.scheme != 'http' && uri.scheme != 'https')) continue;
+        final isInternalAiSearch = uri != null && uri.scheme == 'looply' && uri.host == 'ai-search';
+        final isWebUrl = uri != null && uri.host.isNotEmpty && (uri.scheme == 'http' || uri.scheme == 'https');
+        if (!isInternalAiSearch && !isWebUrl) continue;
         final suffix = int.tryParse(id.startsWith('tab_') ? id.substring(4) : '');
         if (suffix != null && suffix > greatestId) greatestId = suffix;
         Uint8List? thumbnail;

@@ -3,10 +3,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../localization.dart';
 import '../theme.dart';
 
 // Tela simples de informações do app, aberta a partir do botão de
-// informação na appbar da Settings. Usa o mesmo appbar com gradiente
+// informação na appbar da Settings. Usa o mesmo appbar com fade
 // sólido-em-cima / transparente-embaixo das outras telas internas.
 class AppInfoScreen extends StatelessWidget {
   const AppInfoScreen({super.key});
@@ -43,7 +44,7 @@ class AppInfoScreen extends StatelessWidget {
                 builder: (context, snapshot) {
                   final version = snapshot.data == null
                       ? '...'
-                      : 'Versão ${snapshot.data!.version} (${snapshot.data!.buildNumber})';
+                      : '${appText('version')} ${snapshot.data!.version} (${snapshot.data!.buildNumber})';
                   return Text(version, textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13));
                 },
               ),
@@ -55,7 +56,7 @@ class AppInfoScreen extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'BrowseIt é um navegador simples, rápido e privado. Esta tela reúne informação sobre a versão instalada e os créditos do projeto.',
+                    appText('about_app_text'),
                     style: TextStyle(color: text, fontSize: 13.5, height: 1.45),
                   ),
                 ),
@@ -70,10 +71,10 @@ class AppInfoScreen extends StatelessWidget {
               topInset: topInset,
               leading: _CircleBarButton(
                 icon: Icons.arrow_back_ios_new_rounded,
-                tooltip: 'Voltar',
+                tooltip: appText('back'),
                 onTap: () => Navigator.of(context).maybePop(),
               ),
-              title: 'Informações do app',
+              title: appText('app_info'),
             ),
           ),
         ],

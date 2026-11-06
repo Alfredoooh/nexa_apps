@@ -9,6 +9,10 @@ import 'bookmarks_screen.dart';
 import 'downloads_screen.dart';
 import 'history_screen.dart';
 import '../theme.dart';
+import '../localization.dart';
+import 'language_screen.dart';
+import '../widgets/looply_popup.dart';
+import '../widgets/looply_dialog.dart';
 import '../widgets/drawer_menu.dart';
 import '../widgets/m3_switch.dart';
 import '../widgets/search_engine_picker.dart';
@@ -44,11 +48,11 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 _SettingsSection(
-                  title: 'Geral',
+                  title: appText('general'),
                   children: [
                     _SettingsTile(
                       icon: Symbols.dark_mode_rounded,
-                      label: 'Tema',
+                      label: appText('theme'),
                       trailing: ValueListenableBuilder<ThemeMode>(
                         valueListenable: themeController,
                         builder: (_, mode, __) => ValueListenableBuilder<bool>(
@@ -62,30 +66,30 @@ class SettingsScreen extends StatelessWidget {
                       valueListenable: activeSearchEngine,
                       builder: (context, engine, _) => _SettingsTile(
                         icon: Symbols.travel_explore_rounded,
-                        label: 'Máquina de pesquisa',
+                        label: appText('search_engine'),
                         trailing: _SettingsValue(engine.name),
                         onTap: () => showSearchEnginePicker(context),
                       ),
                     ),
                     _SettingsTile(
                       icon: Symbols.language_rounded,
-                      label: 'Idioma',
-                      trailing: const _SettingsValue('Português'),
-                      onTap: () => _showLanguageInfo(context),
+                      label: appText('language'),
+                      trailing: ValueListenableBuilder<AppLanguage>(valueListenable: appLanguageController, builder: (_, language, __) => _SettingsValue(language.nativeName)),
+                      onTap: () => Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => const LanguageScreen())),
                     ),
                     const _DefaultBrowserSettingsTile(),
                   ],
                 ),
                 const SizedBox(height: 20),
                 _SettingsSection(
-                  title: 'Navegação e segurança',
+                  title: appText('navigation_security'),
                   children: [
                     ValueListenableBuilder<bool>(
                       valueListenable: adBlockEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
                         icon: Symbols.shield_rounded,
-                        label: 'Bloqueador de anúncios',
-                        subtitle: enabled ? 'Ativado' : 'Desativado',
+                        label: appText('ad_blocker'),
+                        subtitle: enabled ? appText('enabled') : appText('disabled'),
                         trailing: M3ExpressiveSwitch(
                           value: enabled,
                           onChanged: (value) => adBlockEnabled.value = value,
@@ -98,10 +102,10 @@ class SettingsScreen extends StatelessWidget {
                       valueListenable: navigationAcceleratorEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
                         icon: Symbols.speed_rounded,
-                        label: 'Acelerador de navegação',
+                        label: appText('navigation_accelerator'),
                         subtitle: enabled
-                            ? 'Pré-ligação e cache ativos'
-                            : 'Pré-ligação e cache desativados',
+                            ? appText('acceleration_on')
+                            : appText('acceleration_off'),
                         trailing: M3ExpressiveSwitch(
                           value: enabled,
                           onChanged: (value) => navigationAcceleratorEnabled.value = value,
@@ -110,18 +114,46 @@ class SettingsScreen extends StatelessWidget {
                         onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
                       ),
                     ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: forceDarkWebsitesEnabled,
+                      builder: (context, enabled, _) => _SettingsTile(
+                        icon: Symbols.dark_mode_rounded,
+                        label: appText('force_dark'),
+                        subtitle: appText('force_dark_subtitle'),
+                        trailing: M3ExpressiveSwitch(
+                          value: enabled,
+                          onChanged: (value) => forceDarkWebsitesEnabled.value = value,
+                        ),
+                        showChevron: false,
+                        onTap: () => forceDarkWebsitesEnabled.value = !forceDarkWebsitesEnabled.value,
+                      ),
+                    ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: adaptiveToolbarColorEnabled,
+                      builder: (context, enabled, _) => _SettingsTile(
+                        icon: Symbols.palette_rounded,
+                        label: appText('adaptive_toolbar'),
+                        subtitle: appText('adaptive_toolbar_subtitle'),
+                        trailing: M3ExpressiveSwitch(
+                          value: enabled,
+                          onChanged: (value) => adaptiveToolbarColorEnabled.value = value,
+                        ),
+                        showChevron: false,
+                        onTap: () => adaptiveToolbarColorEnabled.value = !adaptiveToolbarColorEnabled.value,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
                 _SettingsSection(
-                  title: 'Biblioteca',
+                  title: appText('library'),
                   children: [
                     AnimatedBuilder(
                       animation: activityController,
                       builder: (context, _) => _SettingsTile(
                         icon: Symbols.history_rounded,
-                        label: 'Histórico de navegação',
-                        subtitle: '${activityController.entries.length} registos guardados',
+                        label: appText('history'),
+                        subtitle: appText('history_entries_count').replaceAll('{count}', activityController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const HistoryScreen()),
                       ),
                     ),
@@ -129,8 +161,8 @@ class SettingsScreen extends StatelessWidget {
                       animation: downloadsController,
                       builder: (context, _) => _SettingsTile(
                         icon: Symbols.download_rounded,
-                        label: 'Downloads',
-                        subtitle: '${downloadsController.entries.length} pedidos registados',
+                        label: appText('downloads'),
+                        subtitle: appText('downloads_count').replaceAll('{count}', downloadsController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const DownloadsScreen()),
                       ),
                     ),
@@ -138,8 +170,8 @@ class SettingsScreen extends StatelessWidget {
                       animation: bookmarksController,
                       builder: (context, _) => _SettingsTile(
                         icon: Symbols.bookmarks_rounded,
-                        label: 'Marcadores',
-                        subtitle: '${bookmarksController.entries.length} páginas guardadas',
+                        label: appText('bookmarks'),
+                        subtitle: appText('bookmarks_count').replaceAll('{count}', bookmarksController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const BookmarksScreen()),
                       ),
                     ),
@@ -147,18 +179,18 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 _SettingsSection(
-                  title: 'Dados',
+                  title: appText('data'),
                   children: [
                     _SettingsTile(
                       icon: Symbols.upload_rounded,
-                      label: 'Exportar dados',
-                      subtitle: 'Guardar histórico e definições num ficheiro JSON',
+                      label: appText('export_data'),
+                      subtitle: appText('export_description'),
                       onTap: () => _exportData(context),
                     ),
                     _SettingsTile(
                       icon: Symbols.download_rounded,
-                      label: 'Importar dados',
-                      subtitle: 'Restaurar um backup JSON do BrowseIt',
+                      label: appText('import_data'),
+                      subtitle: appText('import_description'),
                       onTap: () => _importData(context),
                     ),
                   ],
@@ -181,36 +213,35 @@ class SettingsScreen extends StatelessWidget {
     try {
       final path = await LooplyDataTransfer.exportToFile();
       if (!context.mounted) return;
-      final message = path == null ? 'Exportação cancelada.' : 'Backup exportado com sucesso.';
+      final message = path == null ? appText('export_cancelled') : appText('export_success');
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível exportar: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('export_failed').replaceAll('{error}', error.toString()))));
     }
   }
 
   Future<void> _importData(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showLooplyDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Importar dados'),
-        content: const Text('Os dados atuais do BrowseIt serão substituídos pelos dados do backup. A sessão de autenticação será mantida.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: const Text('Continuar')),
-        ],
-      ),
+      title: appText('import_data'),
+      icon: Symbols.file_upload_rounded,
+      content: Text(appText('import_confirmation')),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('continue'), value: true, isPrimary: true),
+      ],
     );
     if (confirmed != true || !context.mounted) return;
     try {
       final imported = await LooplyDataTransfer.importFromFile();
       if (!context.mounted) return;
       if (imported) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados importados com sucesso.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('import_success'))));
       }
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não foi possível importar: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('import_failed').replaceAll('{error}', error.toString()))));
     }
   }
 
@@ -218,30 +249,9 @@ class SettingsScreen extends StatelessWidget {
     Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => page));
   }
 
-  String _themeLabel(ThemeMode mode, bool pureBlack) => switch (mode) { ThemeMode.light => 'Claro', ThemeMode.dark => pureBlack ? 'Escuro profundo' : 'Escuro', _ => 'Automático' };
+  String _themeLabel(ThemeMode mode, bool pureBlack) => switch (mode) { ThemeMode.light => appText('light'), ThemeMode.dark => pureBlack ? appText('deep_dark') : appText('dark'), _ => appText('automatic') };
 
 
-  void _showLanguageInfo(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      showDragHandle: false,
-      builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
-        valueListenable: themeController,
-        builder: (context, mode, _) => Material(
-          color: panelForMode(context, mode),
-          surfaceTintColor: Colors.transparent,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Text('O idioma disponível nesta versão é Português.', style: TextStyle(color: textForMode(context, mode), fontSize: 14)),
-          ),
-          ),
-        ),
-    );
-  }
 }
 
 // Card de conta no topo da Settings — é o único caminho para o ecrã
@@ -343,7 +353,7 @@ class _SettingsFadeAppBar extends StatelessWidget {
             children: [
               Semantics(
                 button: true,
-                label: 'Voltar',
+                label: appText('back'),
                 child: Material(
                   color: pillColor(context),
                   shape: const CircleBorder(),
@@ -361,30 +371,32 @@ class _SettingsFadeAppBar extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Configurações',
+                  appText('settings'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
-              const SizedBox(width: 12),
-              Semantics(
-                button: true,
-                label: 'Informações do app',
-                child: Material(
-                  color: pillColor(context),
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).push<void>(
-                      CupertinoPageRoute<void>(builder: (_) => const AppInfoScreen()),
-                    ),
-                    child: SizedBox(
-                      width: 42,
-                      height: 42,
-                      child: Icon(Symbols.info_rounded, size: 20, color: muted),
-                    ),
-                  ),
+              const SizedBox(width: 4),
+              ValueListenableBuilder<bool>(
+                valueListenable: aiSearchModeEnabled,
+                builder: (context, aiEnabled, _) => LooplyPopupMenuButton<String>(
+                  tooltip: appText('more_options'),
+                  icon: Symbols.more_vert_rounded,
+                  iconColor: muted,
+                  menuWidth: 270,
+                  includeAiToggle: true,
+                  aiToggleLabel: appText('ai_mode'),
+                  aiToggleValue: aiEnabled,
+                  onAiToggleChanged: (value) => aiSearchModeEnabled.value = value,
+                  actions: <LooplyPopupAction<String>>[
+                    LooplyPopupAction<String>(value: 'app_info', label: appText('app_info'), icon: Symbols.info_rounded),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'app_info') {
+                      Navigator.of(context).push<void>(CupertinoPageRoute<void>(builder: (_) => const AppInfoScreen()));
+                    }
+                  },
                 ),
               ),
             ],
@@ -629,8 +641,8 @@ class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile
       future: _status,
       builder: (context, snapshot) => _SettingsTile(
         icon: Symbols.public_rounded,
-        label: 'Navegador padrão',
-        subtitle: snapshot.data == true ? 'BrowseIt é o navegador padrão' : 'Definir BrowseIt como navegador padrão',
+        label: appText('default_browser'),
+        subtitle: snapshot.data == true ? appText('browser_default_yes') : appText('browser_default_no'),
         trailing: snapshot.data == true
             ? Icon(Symbols.check_circle_rounded, color: accentColor(context), size: 21)
             : null,

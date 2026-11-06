@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:material3_expressive_loading_indicator/material3_expressive_loading_indicator.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'home_screen.dart';
@@ -121,7 +122,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
         toolbarHeight: 64,
         automaticallyImplyLeading: false,
         leading: IconButton(
-          tooltip: 'Voltar',
+          tooltip: appText('back'),
           style: IconButton.styleFrom(
             foregroundColor: text,
             fixedSize: const Size(42, 42),
@@ -130,12 +131,12 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
           icon: const Icon(Symbols.arrow_back_rounded),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
-        title: const Text('Todos os sites'),
+        title: Text(appText('all_sites')),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: IconButton(
-              tooltip: 'Adicionar site',
+              tooltip: appText('add_site'),
               color: text,
               icon: const Icon(Symbols.edit_rounded, size: 22),
               onPressed: _openAddSiteModal,
@@ -156,7 +157,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
                     width: 56,
                     height: 56,
                   ),
-                  semanticsLabel: 'A carregar os sites',
+                  semanticsLabel: appText('loading_sites'),
                 ),
               )
             : ListView.separated(
@@ -262,7 +263,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
         _error = null;
       });
     } catch (_) {
-      if (mounted) setState(() => _error = 'Não foi possível abrir a galeria.');
+      if (mounted) setState(() => _error = appText('gallery_open_failed'));
     }
   }
 
@@ -320,15 +321,15 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
   Future<void> _saveSite() async {
     final uri = _normaliseUri();
     if (uri == null) {
-      setState(() => _error = 'Introduz um endereço HTTP ou HTTPS válido.');
+      setState(() => _error = appText('valid_http_url'));
       return;
     }
     if (!_automaticName && _nameController.text.trim().isEmpty) {
-      setState(() => _error = 'Escreve o nome do site ou ativa o nome automático.');
+      setState(() => _error = appText('site_name_required'));
       return;
     }
     if (!_automaticFavicon && _pickedIcon == null) {
-      setState(() => _error = 'Seleciona um ícone ou escolhe o favicon automático.');
+      setState(() => _error = appText('site_icon_required'));
       return;
     }
 
@@ -355,10 +356,10 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$name foi adicionado aos teus sites.')),
+        SnackBar(content: Text(appText('add_site_success').replaceAll('{name}', name))),
       );
     } catch (_) {
-      if (mounted) setState(() => _error = 'Não foi possível guardar este site.');
+      if (mounted) setState(() => _error = appText('save_site_failed'));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -391,7 +392,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
             ),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Adicionar site', style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800)),
+              child: Text(appText('add_site'), style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             const SizedBox(height: 12),
             Flexible(
@@ -404,8 +405,8 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 controller: _urlController,
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Link do site',
+                decoration: InputDecoration(
+                  labelText: appText('site_url'),
                   hintText: 'https://exemplo.com',
                   prefixIcon: Icon(Symbols.link_rounded),
                 ),
@@ -415,8 +416,8 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 contentPadding: EdgeInsets.zero,
                 value: _automaticName,
                 activeColor: accent,
-                title: Text('Carregar nome automaticamente', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600)),
-                subtitle: Text('Usa o título da página ou o domínio.', style: TextStyle(color: muted, fontSize: 11)),
+                title: Text(appText('auto_site_name'), style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w600)),
+                subtitle: Text(appText('auto_site_name_help'), style: TextStyle(color: muted, fontSize: 11)),
                 onChanged: (value) => setState(() => _automaticName = value),
               ),
               if (!_automaticName) ...[
@@ -424,14 +425,14 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 TextField(
                   controller: _nameController,
                   textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    labelText: 'Nome do site',
+                  decoration: InputDecoration(
+                    labelText: appText('site_name'),
                     prefixIcon: Icon(Symbols.edit_rounded),
                   ),
                 ),
               ],
               const SizedBox(height: 12),
-              Text('Ícone do site', style: TextStyle(color: text, fontWeight: FontWeight.w700, fontSize: 13)),
+              Text(appText('site_icon'), style: TextStyle(color: text, fontWeight: FontWeight.w700, fontSize: 13)),
               const SizedBox(height: 7),
               RadioListTile<bool>(
                 value: true,
@@ -439,7 +440,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 activeColor: accent,
-                title: Text('Adquirir favicon automaticamente', style: TextStyle(color: text, fontSize: 12)),
+                title: Text(appText('auto_favicon'), style: TextStyle(color: text, fontSize: 12)),
                 onChanged: (value) => setState(() => _automaticFavicon = value ?? true),
               ),
               RadioListTile<bool>(
@@ -448,14 +449,14 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 activeColor: accent,
-                title: Text('Carregar ícone do telemóvel', style: TextStyle(color: text, fontSize: 12)),
+                title: Text(appText('upload_site_icon'), style: TextStyle(color: text, fontSize: 12)),
                 onChanged: (value) => setState(() => _automaticFavicon = value ?? false),
               ),
               if (!_automaticFavicon)
                 OutlinedButton.icon(
                   onPressed: _saving ? null : _pickIcon,
                   icon: const Icon(Symbols.upload_rounded),
-                  label: const Text('Selecionar imagem'),
+                  label: Text(appText('select_image')),
                 ),
               if (_pickedIcon != null)
                 Padding(
@@ -466,7 +467,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                       child: Image.memory(_pickedIcon!, width: 48, height: 48, fit: BoxFit.contain),
                     ),
                     const SizedBox(width: 9),
-                    Text('Ícone selecionado', style: TextStyle(color: muted, fontSize: 12)),
+                    Text(appText('selected_icon'), style: TextStyle(color: muted, fontSize: 12)),
                   ]),
                 ),
               if (_error != null) ...[
@@ -483,14 +484,14 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
               children: [
                 TextButton(
                   onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
+                  child: Text(appText('cancel')),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _saving ? null : _saveSite,
                   child: _saving
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Adicionar'),
+                      : Text(appText('add')),
                 ),
               ],
             ),

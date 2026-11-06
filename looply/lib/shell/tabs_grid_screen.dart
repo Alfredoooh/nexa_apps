@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../browser_library.dart';
 import '../models.dart';
 import '../theme.dart';
@@ -141,7 +142,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                               width: 36,
                               height: 36,
                               child: IconButton(
-                                tooltip: 'Voltar',
+                                tooltip: appText('back'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
                                 icon: Icon(Symbols.arrow_back_rounded, size: 22, color: text),
@@ -152,7 +153,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                               width: 36,
                               height: 36,
                               child: IconButton(
-                                tooltip: 'Página inicial',
+                                tooltip: appText('home'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
                                 icon: Icon(Symbols.home_rounded, size: 20, color: text),
@@ -175,21 +176,21 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           icon: Icon(Symbols.delete_outline_rounded, color: _selectedIds.isEmpty ? muted : text),
                         ),
                         IconButton(
-                          tooltip: 'Concluir seleção',
+                          tooltip: appText('finish_selection'),
                           visualDensity: VisualDensity.compact,
                           icon: Icon(Symbols.check_rounded, color: text),
                           onPressed: _toggleSelectionMode,
                         ),
                       ] else
                         LooplyPopupMenuButton<String>(
-                          tooltip: 'Mais opções',
+                          tooltip: appText('more_options'),
                           iconColor: text,
                           menuWidth: 286,
-                          actions: const <LooplyPopupAction<String>>[
-                            LooplyPopupAction(value: 'incognito', icon: Symbols.visibility_off_rounded, label: 'Abrir separador anónimo'),
-                            LooplyPopupAction(value: 'new', icon: Symbols.add_rounded, label: 'Abrir novo separador'),
-                            LooplyPopupAction(value: 'select', icon: Symbols.checklist_rounded, label: 'Selecionar separadores'),
-                            LooplyPopupAction(value: 'close_all', icon: Symbols.delete_sweep_rounded, label: 'Eliminar todos os separadores'),
+                          actions: <LooplyPopupAction<String>>[
+                            LooplyPopupAction(value: 'incognito', icon: Symbols.visibility_off_rounded, label: appText('open_private_tab')),
+                            LooplyPopupAction(value: 'new', icon: Symbols.add_rounded, label: appText('new_tab')),
+                            LooplyPopupAction(value: 'select', icon: Symbols.checklist_rounded, label: appText('select_tabs')),
+                            LooplyPopupAction(value: 'close_all', icon: Symbols.delete_sweep_rounded, label: appText('close_all_tabs')),
                           ],
                           onSelected: _handleMenu,
                         ),
@@ -203,7 +204,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
                             Icon(Symbols.tab_rounded, size: 44, color: muted),
                             const SizedBox(height: 10),
-                            Text('Nenhum separador aberto', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                            Text(appText('no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
                           ]),
                         )
                       : LayoutBuilder(
@@ -253,9 +254,10 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
               bottom: 18,
               child: FloatingActionButton(
                 heroTag: 'looply-tabs-new-tab-fab',
-                tooltip: 'Novo separador',
-                backgroundColor: accentColor(context),
+                tooltip: appText('new_tab'),
+                backgroundColor: looplyPrimary,
                 foregroundColor: Colors.white,
+                shape: const CircleBorder(),
                 elevation: 4,
                 onPressed: widget.onNewTab,
                 child: const Icon(Symbols.add_rounded, size: 27),
@@ -474,7 +476,7 @@ class TabGridCard extends StatelessWidget {
                     width: 28, height: 28,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      tooltip: 'Fechar aba',
+                      tooltip: appText('close_tab'),
                       style: IconButton.styleFrom(backgroundColor: pillColor(context), foregroundColor: muted),
                       icon: const Icon(Symbols.close_rounded, size: 15),
                       onPressed: onClose,
