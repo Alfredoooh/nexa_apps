@@ -18,7 +18,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Pequena camada de splash mostrada por cima do primeiro frame do Flutter.
+ * Splash animado nativo mostrado imediatamente enquanto o Flutter prepara a tela.
  * O gradiente é recortado pela transparência do próprio logótipo, portanto
  * o shimmer percorre apenas os traços e nunca o fundo/contêiner.
  */
@@ -101,8 +101,12 @@ internal class ShimmerSplashView(
         val width = logoBounds.width()
         if (width <= 0f) return
 
+        // A faixa clara já começa parcialmente sobre o símbolo no primeiro
+        // frame; não há um intervalo inicial em que o logótipo fique plano.
+        val firstFramePosition = logoBounds.left - width * 0.20f
+        shimmerPosition = firstFramePosition
         shimmerAnimator = ValueAnimator.ofFloat(
-            logoBounds.left - width,
+            firstFramePosition,
             logoBounds.right,
         ).apply {
             duration = 1750L

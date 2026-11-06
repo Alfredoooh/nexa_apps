@@ -80,9 +80,8 @@ class MainActivity : FlutterActivity() {
     private val flutterUiDisplayListener = object : FlutterUiDisplayListener {
         override fun onFlutterUiDisplayed() {
             hasFlutterUiDisplayed = true
-            // No Android 12+, o splash do sistema fica acima do conteúdo até
-            // ao primeiro frame. Manter a camada por mais 700 ms garante que
-            // o shimmer apareça depois de o splash nativo sair.
+            // Mantém o shimmer sobre o primeiro frame Flutter enquanto o
+            // splash transparente do sistema termina a transição de saída.
             mainHandler.postDelayed(splashHideRunnable, 700L)
         }
 
@@ -126,13 +125,18 @@ class MainActivity : FlutterActivity() {
         applyApplicationNightMode(savedMode)
         extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
-        appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
-        appPreferences.registerOnSharedPreferenceChangeListener(adBlockPreferenceListener)
+
+        // O splash nativo do Android contém apenas o fundo. Colocar a camada
+        // animada antes de qualquer inicialização adicional garante que o
+        // primeiro conteúdo da Activity já seja o logótipo com shimmer.
         applyWindowTheme(savedMode, savedPureBlack)
         if (savedInstanceState == null) {
             showShimmerSplash(savedMode, savedPureBlack)
         }
+
+        appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
+        appPreferences.registerOnSharedPreferenceChangeListener(adBlockPreferenceListener)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
