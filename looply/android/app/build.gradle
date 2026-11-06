@@ -20,7 +20,16 @@ def browseItSigningConfigured =
 android {
     namespace = "com.looply.browser.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Fixada em vez de "flutter.ndkVersion": o projeto não tem nenhum código
+    // nativo C/C++ próprio (todo o lado nativo aqui é Kotlin puro), por isso
+    // não depende de uma versão específica do NDK. "flutter.ndkVersion" segue
+    // a versão mais recente embutida no Flutter SDK (28.2.13676358 no momento
+    // deste build), cujo download falhou no runner do GitHub Actions com
+    // "Error reading Zip content from a SeekableByteChannel" — um pacote
+    // corrompido/truncado do lado do servidor de SDKs, não um erro de código.
+    // 27.0.12077973 é uma versão LTS do NDK, amplamente usada e já presente
+    // no cache de imagens do GitHub Actions, evitando esse download.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
