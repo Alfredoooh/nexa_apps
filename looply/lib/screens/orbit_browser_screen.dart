@@ -9,7 +9,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../browser_security.dart';
@@ -25,6 +24,7 @@ import 'downloads_screen.dart';
 import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 /// Adaptador mínimo sobre flutter_inappwebview. Todas as plataformas usam
 /// o mesmo motor InAppWebView; não existe PlatformView/Kotlin WebView paralelo.
@@ -717,11 +717,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
                   child: Row(
                     children: [
-                      _BrowserQuickAction(icon: Symbols.arrow_back_rounded, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
-                      _BrowserQuickAction(icon: Symbols.arrow_forward_rounded, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
-                      _BrowserQuickAction(icon: Symbols.add_rounded, label: appText('new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
-                      _BrowserQuickAction(icon: Symbols.bookmarks_rounded, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
-                      _BrowserQuickAction(icon: Symbols.settings_rounded, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
+                      _BrowserQuickAction(icon: PhosphorIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
+                      _BrowserQuickAction(icon: PhosphorIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
+                      _BrowserQuickAction(icon: PhosphorIcons.plus, label: appText('new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
+                      _BrowserQuickAction(icon: PhosphorIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
+                      _BrowserQuickAction(icon: PhosphorIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
                     ],
                   ),
                 ),
@@ -731,15 +731,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
                     children: [
-                      _BrowserSheetListItem(icon: Symbols.history_rounded, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
-                      _BrowserSheetListItem(icon: Symbols.download_rounded, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
-                      _BrowserSheetListItem(icon: Symbols.search_rounded, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
-                      _BrowserSheetListItem(icon: Symbols.bookmark_add_rounded, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
-                      _BrowserSheetListItem(icon: Symbols.refresh_rounded, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
-                      _BrowserSheetListItem(icon: Symbols.content_copy_rounded, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
-                      _BrowserSheetListItem(icon: Icons.info_outline_rounded, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
-                      _BrowserSheetListItem(icon: Symbols.home_rounded, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.arrowClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.info, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.house, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
                     ],
                   ),
                 ),
@@ -788,7 +788,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     unawaited(showLooplyDialog<bool>(
       context: context,
       title: appText('site_info'),
-      icon: Icons.info_outline_rounded,
+      icon: PhosphorIcons.info,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -850,14 +850,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 child: _isAiSearchPage
                     ? _BrowserToolbarCircleButton(
                         tooltip: appText('home'),
-                        icon: Symbols.home_rounded,
+                        icon: PhosphorIcons.house,
                         foreground: toolbarText,
                         background: pillColor(context),
                         onPressed: () => ShellTabRequest.instance.request(0),
                       )
                     : IconButton(
                         tooltip: appText('home'),
-                        icon: Icon(Symbols.home_rounded, color: toolbarText),
+                        icon: PhosphorSvgIcon(PhosphorIcons.house, color: toolbarText),
                         onPressed: () => ShellTabRequest.instance.request(0),
                       ),
               ),
@@ -888,19 +888,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                         tooltip: appText('previous_result'),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _moveFindResult(false),
-                        icon: Icon(Symbols.keyboard_arrow_up_rounded, color: toolbarText),
+                        icon: PhosphorSvgIcon(PhosphorIcons.caretUp, color: toolbarText),
                       ),
                       IconButton(
                         tooltip: appText('next_result'),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _moveFindResult(true),
-                        icon: Icon(Symbols.keyboard_arrow_down_rounded, color: toolbarText),
+                        icon: PhosphorSvgIcon(PhosphorIcons.caretDown, color: toolbarText),
                       ),
                       IconButton(
                         tooltip: appText('close_search'),
                         visualDensity: VisualDensity.compact,
                         onPressed: _exitFindInPage,
-                        icon: Icon(Symbols.close_rounded, color: toolbarText),
+                        icon: PhosphorSvgIcon(PhosphorIcons.x, color: toolbarText),
                       ),
                     ],
                   )
@@ -944,7 +944,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(_isAiSearchPage ? Symbols.auto_awesome_rounded : Symbols.search_rounded, color: _isAiSearchPage ? toolbarText : muted, size: 19),
+                                PhosphorSvgIcon(_isAiSearchPage ? PhosphorIcons.sparkles : PhosphorIcons.magnifyingGlass, color: _isAiSearchPage ? toolbarText : muted, size: 19),
                                 const SizedBox(width: 9),
                                 Expanded(
                                   child: Text(
@@ -991,14 +991,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                             _isAiSearchPage
                                 ? _BrowserToolbarCircleButton(
                                     tooltip: appText('more_options'),
-                                    icon: Symbols.more_vert_rounded,
+                                    icon: PhosphorIcons.dotsThreeVertical,
                                     foreground: toolbarText,
                                     background: pillColor(context),
                                     onPressed: _showBrowserOptionsSheet,
                                   )
                                 : IconButton(
                                     tooltip: appText('more_options'),
-                                    icon: Icon(Symbols.more_vert_rounded, color: toolbarText),
+                                    icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
                                     onPressed: _showBrowserOptionsSheet,
                                   ),
                           ],
@@ -1370,8 +1370,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  _renderProcessCrashed ? Symbols.refresh_rounded : Symbols.wifi_off_rounded,
+                PhosphorSvgIcon(
+                  _renderProcessCrashed ? PhosphorIcons.arrowClockwise : PhosphorIcons.wifiSlash,
                   size: 42,
                   color: mutedText(context),
                 ),
@@ -1445,7 +1445,7 @@ class _BrowserToolbarCircleButton extends StatelessWidget {
                 width: 40,
                 height: 40,
                 child: Center(
-                  child: customChild ?? Icon(icon ?? Symbols.circle_rounded, size: 21, color: foreground),
+                  child: customChild ?? PhosphorSvgIcon(icon ?? PhosphorIcons.circle, size: 21, color: foreground),
                 ),
               ),
             ),
@@ -1482,7 +1482,7 @@ class _BrowserQuickAction extends StatelessWidget {
                   color: pillColor(context),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 23, color: enabled ? foreground : muted),
+                child: PhosphorSvgIcon(icon, size: 23, color: enabled ? foreground : muted),
               ),
               const SizedBox(height: 8),
               Text(label, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
@@ -1513,7 +1513,7 @@ class _BrowserSheetListItem extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              SizedBox(width: 42, child: Icon(icon, size: 23, color: mainText(context))),
+              SizedBox(width: 42, child: PhosphorSvgIcon(icon, size: 23, color: mainText(context))),
               const SizedBox(width: 12),
               Expanded(child: Text(label, style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w500))),
             ]),
@@ -1555,7 +1555,7 @@ class _OrbitShortcut extends StatelessWidget {
           shape: const CircleBorder(),
         ),
         onPressed: enabled ? onPressed : null,
-        icon: Icon(icon, size: 22),
+        icon: PhosphorSvgIcon(icon, size: 22),
       ),
     );
   }
@@ -1571,7 +1571,7 @@ class _OrbitMenuItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: mainText(context)),
+        PhosphorSvgIcon(icon, size: 20, color: mainText(context)),
         const SizedBox(width: 14),
         Expanded(
           child: Text(

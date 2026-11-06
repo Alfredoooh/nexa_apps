@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
+import 'phosphor_svg_icon.dart';
 
 class LooplyDialogAction<T> {
   const LooplyDialogAction({required this.label, required this.value, this.isPrimary = false, this.isDestructive = false});
@@ -60,7 +60,7 @@ Future<T?> showLooplyDialog<T>({
                               height: 36,
                               decoration: BoxDecoration(color: pillColor(dialogContext), shape: BoxShape.circle),
                               alignment: Alignment.center,
-                              child: Icon(icon, color: accentColor(dialogContext), size: 19),
+                              child: PhosphorSvgIcon(icon, color: accentColor(dialogContext), size: 19),
                             ),
                             const SizedBox(width: 10),
                           ],
@@ -69,7 +69,7 @@ Future<T?> showLooplyDialog<T>({
                             tooltip: 'Fechar',
                             visualDensity: VisualDensity.compact,
                             onPressed: () => Navigator.of(dialogContext).pop(),
-                            icon: Icon(Symbols.close_rounded, color: muted, size: 19),
+                            icon: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 19),
                           ),
                         ]),
                         const SizedBox(height: 8),
@@ -207,9 +207,9 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
         ),
         const SizedBox(height: 12),
         Row(children: [
-          const SizedBox(width: 28, height: 28, child: Icon(Symbols.add_rounded, size: 22)),
+          const SizedBox(width: 28, height: 28, child: PhosphorSvgIcon(PhosphorIcons.plus, size: 22)),
           const SizedBox(width: 14),
-          const SizedBox(width: 28, height: 28, child: Icon(Symbols.tune_rounded, size: 20)),
+          const SizedBox(width: 28, height: 28, child: PhosphorSvgIcon(PhosphorIcons.slidersHorizontal, size: 20)),
           const Spacer(),
           Material(
             color: _controller.text.trim().isNotEmpty ? accentColor(context) : pillColor(context),
@@ -220,7 +220,7 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
               child: SizedBox(
                 width: 32,
                 height: 32,
-                child: Icon(Symbols.arrow_upward_rounded, size: 19,
+                child: PhosphorSvgIcon(PhosphorIcons.arrowUp, size: 19,
                     color: _controller.text.trim().isNotEmpty ? Colors.white : muted),
               ),
             ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../browser_library.dart';
@@ -21,6 +20,7 @@ import '../auth_service.dart';
 import 'app_info_screen.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -51,7 +51,7 @@ class SettingsScreen extends StatelessWidget {
                   title: appText('general'),
                   children: [
                     _SettingsTile(
-                      icon: Symbols.dark_mode_rounded,
+                      icon: PhosphorIcons.moon,
                       label: appText('theme'),
                       trailing: ValueListenableBuilder<ThemeMode>(
                         valueListenable: themeController,
@@ -65,14 +65,14 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder<SearchEngine>(
                       valueListenable: activeSearchEngine,
                       builder: (context, engine, _) => _SettingsTile(
-                        icon: Symbols.travel_explore_rounded,
+                        icon: PhosphorIcons.compass,
                         label: appText('search_engine'),
                         trailing: _SettingsValue(engine.name),
                         onTap: () => showSearchEnginePicker(context),
                       ),
                     ),
                     _SettingsTile(
-                      icon: Symbols.language_rounded,
+                      icon: PhosphorIcons.globe,
                       label: appText('language'),
                       trailing: ValueListenableBuilder<AppLanguage>(valueListenable: appLanguageController, builder: (_, language, __) => _SettingsValue(language.nativeName)),
                       onTap: () => Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => const LanguageScreen())),
@@ -87,7 +87,7 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder<bool>(
                       valueListenable: adBlockEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
-                        icon: Symbols.shield_rounded,
+                        icon: PhosphorIcons.shield,
                         label: appText('ad_blocker'),
                         subtitle: enabled ? appText('enabled') : appText('disabled'),
                         trailing: M3ExpressiveSwitch(
@@ -101,7 +101,7 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder<bool>(
                       valueListenable: navigationAcceleratorEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
-                        icon: Symbols.speed_rounded,
+                        icon: PhosphorIcons.gauge,
                         label: appText('navigation_accelerator'),
                         subtitle: enabled
                             ? appText('acceleration_on')
@@ -117,7 +117,7 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder<bool>(
                       valueListenable: forceDarkWebsitesEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
-                        icon: Symbols.dark_mode_rounded,
+                        icon: PhosphorIcons.moon,
                         label: appText('force_dark'),
                         subtitle: appText('force_dark_subtitle'),
                         trailing: M3ExpressiveSwitch(
@@ -131,7 +131,7 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder<bool>(
                       valueListenable: adaptiveToolbarColorEnabled,
                       builder: (context, enabled, _) => _SettingsTile(
-                        icon: Symbols.palette_rounded,
+                        icon: PhosphorIcons.palette,
                         label: appText('adaptive_toolbar'),
                         subtitle: appText('adaptive_toolbar_subtitle'),
                         trailing: M3ExpressiveSwitch(
@@ -151,7 +151,7 @@ class SettingsScreen extends StatelessWidget {
                     AnimatedBuilder(
                       animation: activityController,
                       builder: (context, _) => _SettingsTile(
-                        icon: Symbols.history_rounded,
+                        icon: PhosphorIcons.clockCounterClockwise,
                         label: appText('history'),
                         subtitle: appText('history_entries_count').replaceAll('{count}', activityController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const HistoryScreen()),
@@ -160,7 +160,7 @@ class SettingsScreen extends StatelessWidget {
                     AnimatedBuilder(
                       animation: downloadsController,
                       builder: (context, _) => _SettingsTile(
-                        icon: Symbols.download_rounded,
+                        icon: PhosphorIcons.downloadSimple,
                         label: appText('downloads'),
                         subtitle: appText('downloads_count').replaceAll('{count}', downloadsController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const DownloadsScreen()),
@@ -169,7 +169,7 @@ class SettingsScreen extends StatelessWidget {
                     AnimatedBuilder(
                       animation: bookmarksController,
                       builder: (context, _) => _SettingsTile(
-                        icon: Symbols.bookmarks_rounded,
+                        icon: PhosphorIcons.bookmarksSimple,
                         label: appText('bookmarks'),
                         subtitle: appText('bookmarks_count').replaceAll('{count}', bookmarksController.entries.length.toString()),
                         onTap: () => _openLibraryPage(context, const BookmarksScreen()),
@@ -182,13 +182,13 @@ class SettingsScreen extends StatelessWidget {
                   title: appText('data'),
                   children: [
                     _SettingsTile(
-                      icon: Symbols.upload_rounded,
+                      icon: PhosphorIcons.uploadSimple,
                       label: appText('export_data'),
                       subtitle: appText('export_description'),
                       onTap: () => _exportData(context),
                     ),
                     _SettingsTile(
-                      icon: Symbols.download_rounded,
+                      icon: PhosphorIcons.downloadSimple,
                       label: appText('import_data'),
                       subtitle: appText('import_description'),
                       onTap: () => _importData(context),
@@ -225,7 +225,7 @@ class SettingsScreen extends StatelessWidget {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('import_data'),
-      icon: Symbols.file_upload_rounded,
+      icon: PhosphorIcons.fileArrowUp,
       content: Text(appText('import_confirmation')),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -314,7 +314,7 @@ class _AccountSummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Symbols.chevron_right_rounded, color: muted, size: 20),
+              PhosphorSvgIcon(PhosphorIcons.caretRight, color: muted, size: 20),
             ],
           ),
         ),
@@ -363,7 +363,7 @@ class _SettingsFadeAppBar extends StatelessWidget {
                     child: SizedBox(
                       width: 42,
                       height: 42,
-                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 19, color: muted),
+                      child: PhosphorSvgIcon(PhosphorIcons.caretLeft, size: 19, color: muted),
                     ),
                   ),
                 ),
@@ -382,7 +382,7 @@ class _SettingsFadeAppBar extends StatelessWidget {
                 valueListenable: aiSearchModeEnabled,
                 builder: (context, aiEnabled, _) => LooplyPopupMenuButton<String>(
                   tooltip: appText('more_options'),
-                  icon: Symbols.more_vert_rounded,
+                  icon: PhosphorIcons.dotsThreeVertical,
                   iconColor: muted,
                   menuWidth: 270,
                   includeAiToggle: true,
@@ -390,7 +390,7 @@ class _SettingsFadeAppBar extends StatelessWidget {
                   aiToggleValue: aiEnabled,
                   onAiToggleChanged: (value) => aiSearchModeEnabled.value = value,
                   actions: <LooplyPopupAction<String>>[
-                    LooplyPopupAction<String>(value: 'app_info', label: appText('app_info'), icon: Symbols.info_rounded),
+                    LooplyPopupAction<String>(value: 'app_info', label: appText('app_info'), icon: PhosphorIcons.info),
                   ],
                   onSelected: (value) {
                     if (value == 'app_info') {
@@ -521,7 +521,7 @@ class _SettingsTile extends StatelessWidget {
                     color: iconBadge,
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 19),
+                  child: PhosphorSvgIcon(icon, color: iconColor, size: 19),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -569,7 +569,7 @@ class _SettingsTile extends StatelessWidget {
                 ],
                 if (showChevron) ...[
                   const SizedBox(width: 6),
-                  Icon(Symbols.chevron_right_rounded, color: muted, size: 18),
+                  PhosphorSvgIcon(PhosphorIcons.caretRight, color: muted, size: 18),
                 ],
               ],
             ),
@@ -640,11 +640,11 @@ class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile
     return FutureBuilder<bool>(
       future: _status,
       builder: (context, snapshot) => _SettingsTile(
-        icon: Symbols.public_rounded,
+        icon: PhosphorIcons.globe,
         label: appText('default_browser'),
         subtitle: snapshot.data == true ? appText('browser_default_yes') : appText('browser_default_no'),
         trailing: snapshot.data == true
-            ? Icon(Symbols.check_circle_rounded, color: accentColor(context), size: 21)
+            ? PhosphorSvgIcon(PhosphorIcons.checkCircle, color: accentColor(context), size: 21)
             : null,
         showChevron: true,
         onTap: _requestDefaultBrowser,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme.dart';
+import 'phosphor_svg_icon.dart';
 
 class LooplyPopupAction<T> {
   const LooplyPopupAction({required this.value, required this.label, required this.icon});
@@ -19,7 +19,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
     required this.actions,
     required this.onSelected,
     this.tooltip = 'Mais opções',
-    this.icon = Symbols.more_vert_rounded,
+    this.icon = PhosphorIcons.dotsThreeVertical,
     this.iconColor,
     this.menuWidth = 252,
     this.includeAiToggle = false,
@@ -107,7 +107,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(15, 7, 10, 7),
                                 child: Row(children: [
-                                  Icon(Symbols.auto_awesome_rounded, size: 20, color: accentColor(context)),
+                                  PhosphorSvgIcon(PhosphorIcons.sparkles, size: 20, color: accentColor(context)),
                                   const SizedBox(width: 12),
                                   Expanded(child: Text(aiToggleLabel, style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600))),
                                   Switch.adaptive(
@@ -133,7 +133,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
                                 child: Row(children: [
-                                  Icon(action.icon, size: 20, color: muted),
+                                  PhosphorSvgIcon(action.icon, size: 20, color: muted),
                                   const SizedBox(width: 13),
                                   Expanded(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis,
                                       style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500))),
@@ -169,7 +169,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
   Widget build(BuildContext context) => Builder(
         builder: (buttonContext) => IconButton(
           tooltip: tooltip,
-          icon: Icon(icon, color: iconColor ?? mainText(buttonContext)),
+          icon: PhosphorSvgIcon(icon, color: iconColor ?? mainText(buttonContext)),
           onPressed: () => _show(buttonContext),
         ),
       );

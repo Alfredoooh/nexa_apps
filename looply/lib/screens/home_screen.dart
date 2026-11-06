@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -15,6 +14,7 @@ import 'all_sites_screen.dart';
 import 'search_screen.dart';
 import 'auth_screen.dart';
 import '../auth_service.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -96,7 +96,7 @@ class LooplyHomeAppBar extends StatelessWidget {
           child: Row(
             children: [
               _CircleIconButton(
-                icon: Icons.menu_rounded,
+                icon: PhosphorIcons.list,
                 tooltip: appText('open_menu'),
                 onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
@@ -114,7 +114,7 @@ class LooplyHomeAppBar extends StatelessWidget {
                 ),
               ),
               _CircleIconButton(
-                icon: Symbols.search_rounded,
+                icon: PhosphorIcons.magnifyingGlass,
                 tooltip: appText('search'),
                 onTap: () => Navigator.of(context).push<void>(
                   FadePageRoute<void>(builder: (_) => const SearchScreen()),
@@ -154,7 +154,7 @@ class _CircleIconButton extends StatelessWidget {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, size: 22, color: muted),
+            child: PhosphorSvgIcon(icon, size: 22, color: muted),
           ),
         ),
       ),
@@ -212,7 +212,7 @@ class _MoreSitesTile extends StatelessWidget {
                 child: SizedBox(
                   width: 40,
                   height: 40,
-                  child: Icon(Symbols.add_rounded, size: 22, color: accent),
+                  child: PhosphorSvgIcon(PhosphorIcons.plus, size: 22, color: accent),
                 ),
               ),
               const SizedBox(height: 5),
@@ -290,7 +290,7 @@ class _LoginButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Symbols.login_rounded, color: text, size: 18),
+              PhosphorSvgIcon(PhosphorIcons.signIn, color: text, size: 18),
               const SizedBox(width: 8),
               Text(appText('sign_in'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
@@ -348,7 +348,7 @@ Widget _siteIcon(QuickSite site, Color fallbackColor) {
       return Image.memory(
         base64Decode(site.iconBase64!),
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+        errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
       );
     } catch (_) {
       // Se um ícone importado ficar inválido, tenta o favicon do site.
@@ -358,17 +358,17 @@ Widget _siteIcon(QuickSite site, Color fallbackColor) {
     return Image.network(
       site.faviconUrl!,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
     );
   }
   if (site.assetPath != null) {
     return Image.asset(
       site.assetPath!,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Icon(Icons.public_rounded, color: fallbackColor, size: 18),
+      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
     );
   }
-  return Icon(Icons.public_rounded, color: fallbackColor, size: 18);
+  return PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18);
 }
 
 // Abre sites como páginas Orbit persistentes dentro do IndexedStack.

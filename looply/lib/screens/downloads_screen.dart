@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../browser_library.dart';
 import '../shell/browser_navigation.dart';
 import '../theme.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -30,12 +30,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         title: Text(appText('downloads')),
         actions: [
           if (entries.isNotEmpty)
-            IconButton(tooltip: appText('clear_list'), icon: Icon(Symbols.delete_sweep_rounded, color: text), onPressed: downloadsController.clear),
+            IconButton(tooltip: appText('clear_list'), icon: PhosphorSvgIcon(PhosphorIcons.trash, color: text), onPressed: downloadsController.clear),
         ],
       ),
       body: entries.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Symbols.download_rounded, size: 48, color: muted),
+              PhosphorSvgIcon(PhosphorIcons.downloadSimple, size: 48, color: muted),
               const SizedBox(height: 12),
               Text(appText('no_downloads'), style: TextStyle(color: text, fontWeight: FontWeight.w700)),
               const SizedBox(height: 5),
@@ -56,7 +56,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       child: Row(children: [
-                        Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: Icon(Symbols.download_rounded, color: accentColor(context), size: 20)),
+                        Container(width: 40, height: 40, decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)), child: PhosphorSvgIcon(PhosphorIcons.downloadSimple, color: accentColor(context), size: 20)),
                         const SizedBox(width: 12),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(entry.filename, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 14)),
@@ -65,7 +65,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           const SizedBox(height: 4),
                           Text('${appText('download_received')} · ${_date(entry.createdAt)}', style: TextStyle(color: muted, fontSize: 10)),
                         ])),
-                        IconButton(tooltip: appText('remove'), onPressed: () => downloadsController.remove(entry.id), icon: Icon(Symbols.close_rounded, color: muted, size: 19)),
+                        IconButton(tooltip: appText('remove'), onPressed: () => downloadsController.remove(entry.id), icon: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 19)),
                       ]),
                     ),
                   ),

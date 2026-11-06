@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -12,6 +11,7 @@ import '../theme.dart';
 import '../widgets/stats_chart.dart';
 import '../shell/browser_navigation.dart';
 import 'history_screen.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
@@ -84,7 +84,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               padding: const EdgeInsets.symmetric(vertical: 30),
               child: Column(
                 children: [
-                  Icon(Symbols.history_rounded, size: 38, color: muted),
+                  PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, size: 38, color: muted),
                   const SizedBox(height: 9),
                   Text(
                     appText('no_recent_activity'),
@@ -142,7 +142,7 @@ class ActivityTile extends StatelessWidget {
               animation: browserFaviconCache,
               builder: (context, _) {
                 final encoded = browserFaviconCache.forUrl(entry.url);
-                Widget icon = Icon(Symbols.public_rounded, color: accentColor(context), size: 19);
+                Widget icon = PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 19);
                 if (encoded != null) {
                   try {
                     icon = Image.memory(
@@ -150,7 +150,7 @@ class ActivityTile extends StatelessWidget {
                       width: 22,
                       height: 22,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: accentColor(context), size: 19),
+                      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 19),
                     );
                   } catch (_) {}
                 }
@@ -170,8 +170,8 @@ class ActivityTile extends StatelessWidget {
                 Text(formatActivityTime(entry.timestamp), style: TextStyle(color: muted, fontSize: 11)),
               ]),
             ),
-            Icon(
-              selected ? Symbols.check_circle_rounded : Symbols.chevron_right_rounded,
+            PhosphorSvgIcon(
+              selected ? PhosphorIcons.checkCircle : PhosphorIcons.caretRight,
               color: selected ? accentColor(context) : muted,
               size: 19,
             ),

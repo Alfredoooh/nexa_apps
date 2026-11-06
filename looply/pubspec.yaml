@@ -32,6 +32,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/icons/phosphor/
     - assets/images/looply_original_icon.png
     - assets/images/looply_icon.png
     - assets/images/looply_mark.png

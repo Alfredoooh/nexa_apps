@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
 import 'activity_screen.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -53,7 +53,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('delete_history_selected'),
-      icon: Symbols.delete_outline_rounded,
+      icon: PhosphorIcons.trash,
       content: Text(appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString())),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -88,7 +88,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             entries.isEmpty
                 ? Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Symbols.history_rounded, size: 48, color: muted),
+                      PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, size: 48, color: muted),
                       const SizedBox(height: 12),
                       Text(appText('no_history'), style: TextStyle(color: text, fontWeight: FontWeight.w700)),
                     ]),
@@ -136,7 +136,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: Row(children: [
                       _CircularHistoryButton(
                         tooltip: appText('back'),
-                        icon: Symbols.arrow_back_rounded,
+                        icon: PhosphorIcons.arrowLeft,
                         onTap: () => Navigator.of(context).maybePop(),
                       ),
                       const SizedBox(width: 12),
@@ -149,7 +149,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       if (selectedCount > 0)
                         _CircularHistoryButton(
                           tooltip: '${appText('delete')} ($selectedCount)',
-                          icon: Symbols.delete_outline_rounded,
+                          icon: PhosphorIcons.trash,
                           foreground: const Color(0xFFFF453A),
                           onTap: _deleteSelected,
                         ),
@@ -184,7 +184,7 @@ class _CircularHistoryButton extends StatelessWidget {
             child: SizedBox(
               width: 42,
               height: 42,
-              child: Icon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: PhosphorSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
             ),
           ),
         ),

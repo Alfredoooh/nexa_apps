@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../auth_service.dart';
 import '../localization.dart';
 import '../theme.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -105,7 +105,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, size: 20, color: muted),
+      prefixIcon: PhosphorSvgIcon(icon, size: 20, color: muted),
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: pillColor(context),
@@ -146,7 +146,7 @@ class _AuthScreenState extends State<AuthScreen> {
         leading: IconButton(
           tooltip: appText('close'),
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: Icon(Symbols.close_rounded, color: text, size: 23),
+          icon: PhosphorSvgIcon(PhosphorIcons.x, color: text, size: 23),
         ),
         title: Text(
           appText('auth_title'),
@@ -212,7 +212,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       decoration: _inputDecoration(
                         context,
                         label: appText('email'),
-                        icon: Symbols.mail_outline_rounded,
+                        icon: PhosphorIcons.envelopeSimple,
                       ),
                     ),
                     const SizedBox(height: 13),
@@ -230,14 +230,14 @@ class _AuthScreenState extends State<AuthScreen> {
                       decoration: _inputDecoration(
                         context,
                         label: appText('password'),
-                        icon: Symbols.lock_rounded,
+                        icon: PhosphorIcons.lockSimple,
                         suffixIcon: IconButton(
                           tooltip: _obscurePassword ? appText('show_password') : appText('hide_password'),
                           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          icon: Icon(
+                          icon: PhosphorSvgIcon(
                             _obscurePassword
-                                ? Symbols.visibility_rounded
-                                : Symbols.visibility_off_rounded,
+                                ? PhosphorIcons.eye
+                                : PhosphorIcons.eyeSlash,
                             size: 20,
                             color: muted,
                           ),

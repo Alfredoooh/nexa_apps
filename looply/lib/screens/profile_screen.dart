@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../auth_service.dart';
 import '../theme.dart';
 import '../widgets/m3_switch.dart';
 import '../widgets/looply_dialog.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -28,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('sign_out'),
-      icon: Symbols.logout_rounded,
+      icon: PhosphorIcons.signOut,
       content: Text(appText('sign_out_confirm')),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -57,7 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Center(
                   child: FilledButton.icon(
                     onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Symbols.login_rounded),
+                    icon: const PhosphorSvgIcon(PhosphorIcons.signIn),
                     label: Text(appText('sign_in')),
                   ),
                 ),
@@ -94,7 +94,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               shape: BoxShape.circle,
                               border: Border.all(color: bg, width: 3),
                             ),
-                            child: const Icon(Symbols.verified_rounded, size: 14, color: Colors.white),
+                            child: const PhosphorSvgIcon(PhosphorIcons.sealCheck, size: 14, color: Colors.white),
                           ),
                         ),
                       ],
@@ -117,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                       child: Row(
                         children: [
-                          Icon(Symbols.verified_user_rounded, color: accentColor(context), size: 19),
+                          PhosphorSvgIcon(PhosphorIcons.shieldCheck, color: accentColor(context), size: 19),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -140,7 +140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _ProfileToggleTile(
-                          icon: Symbols.history_rounded,
+                          icon: PhosphorIcons.clockCounterClockwise,
                           title: appText('history'),
                           subtitle: _saveHistory
                               ? appText('save_history_account')
@@ -151,7 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
-                          icon: Symbols.bookmark_rounded,
+                          icon: PhosphorIcons.bookmarkSimple,
                           title: appText('bookmarks'),
                           subtitle: _syncBookmarks
                               ? appText('synced_across_devices')
@@ -162,7 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
-                          icon: Symbols.location_on_rounded,
+                          icon: PhosphorIcons.mapPin,
                           title: appText('addresses'),
                           subtitle: _saveAddresses
                               ? appText('addresses_saved')
@@ -173,7 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
-                          icon: Symbols.settings_rounded,
+                          icon: PhosphorIcons.gear,
                           title: appText('settings'),
                           subtitle: _syncAppSettings
                               ? appText('synced_across_devices')
@@ -236,7 +236,7 @@ class _ProfileFadeAppBar extends StatelessWidget {
                     child: SizedBox(
                       width: 42,
                       height: 42,
-                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 19, color: muted),
+                      child: PhosphorSvgIcon(PhosphorIcons.caretLeft, size: 19, color: muted),
                     ),
                   ),
                 ),
@@ -289,7 +289,7 @@ class _ProfileFadeBottomBar extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           onPressed: onSignOut,
-          icon: const Icon(Symbols.logout_rounded),
+          icon: const PhosphorSvgIcon(PhosphorIcons.signOut),
           label: Text(appText('sign_out'), style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
@@ -334,7 +334,7 @@ class _ProfileToggleTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(icon, color: accent, size: 20),
+                PhosphorSvgIcon(icon, color: accent, size: 20),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

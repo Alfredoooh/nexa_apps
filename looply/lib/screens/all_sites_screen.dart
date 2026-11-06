@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:material3_expressive_loading_indicator/material3_expressive_loading_indicator.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'home_screen.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class AllSitesScreen extends StatefulWidget {
   const AllSitesScreen({super.key});
@@ -128,7 +128,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
             fixedSize: const Size(42, 42),
             shape: const CircleBorder(),
           ),
-          icon: const Icon(Symbols.arrow_back_rounded),
+          icon: const PhosphorSvgIcon(PhosphorIcons.arrowLeft),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(appText('all_sites')),
@@ -138,7 +138,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
             child: IconButton(
               tooltip: appText('add_site'),
               color: text,
-              icon: const Icon(Symbols.edit_rounded, size: 22),
+              icon: const PhosphorSvgIcon(PhosphorIcons.pencilSimple, size: 22),
               onPressed: _openAddSiteModal,
             ),
           ),
@@ -408,7 +408,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                 decoration: InputDecoration(
                   labelText: appText('site_url'),
                   hintText: 'https://exemplo.com',
-                  prefixIcon: Icon(Symbols.link_rounded),
+                  prefixIcon: PhosphorSvgIcon(PhosphorIcons.link),
                 ),
               ),
               const SizedBox(height: 12),
@@ -427,7 +427,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
                   textInputAction: TextInputAction.done,
                   decoration: InputDecoration(
                     labelText: appText('site_name'),
-                    prefixIcon: Icon(Symbols.edit_rounded),
+                    prefixIcon: PhosphorSvgIcon(PhosphorIcons.pencilSimple),
                   ),
                 ),
               ],
@@ -455,7 +455,7 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
               if (!_automaticFavicon)
                 OutlinedButton.icon(
                   onPressed: _saving ? null : _pickIcon,
-                  icon: const Icon(Symbols.upload_rounded),
+                  icon: const PhosphorSvgIcon(PhosphorIcons.uploadSimple),
                   label: Text(appText('select_image')),
                 ),
               if (_pickedIcon != null)

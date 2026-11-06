@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../models.dart';
 import '../theme.dart';
@@ -13,6 +12,7 @@ import '../shell/shell_tab_request.dart';
 import '../widgets/looply_popup.dart';
 import '../widgets/search_engine_picker.dart';
 import '../localization.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -207,9 +207,9 @@ class _SearchScreenState extends State<SearchScreen> {
                       itemBuilder: (context, index) {
                         final query = searchHistoryController.queries[index];
                         return ListTile(
-                          leading: Icon(Symbols.history_rounded, color: mutedText(context)),
+                          leading: PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, color: mutedText(context)),
                           title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context))),
-                          trailing: Icon(Symbols.north_west_rounded, size: 18, color: mutedText(context)),
+                          trailing: PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, size: 18, color: mutedText(context)),
                           onTap: () {
                             Navigator.of(sheetContext).pop();
                             _submitSearch(query);
@@ -348,16 +348,16 @@ class _SearchScreenState extends State<SearchScreen> {
       final uri = Uri.tryParse(_normalizeUrl(suggestion));
       if (uri != null && uri.host.isNotEmpty) {
         final favicon = 'https://www.google.com/s2/favicons?domain=${Uri.encodeComponent(uri.host)}&sz=64';
-        return _SuggestionImage(url: favicon, fallback: Symbols.public_rounded, muted: muted);
+        return _SuggestionImage(url: favicon, fallback: PhosphorIcons.globe, muted: muted);
       }
     }
     final photo = _entityPhotoCache[suggestion];
-    if (photo != null) return _SuggestionImage(url: photo, fallback: Symbols.search_rounded, muted: muted);
+    if (photo != null) return _SuggestionImage(url: photo, fallback: PhosphorIcons.magnifyingGlass, muted: muted);
     return Container(
       width: 34,
       height: 34,
       decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-      child: Icon(Symbols.search_rounded, color: muted, size: 17),
+      child: PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 17),
     );
   }
 
@@ -390,7 +390,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       tooltip: appText('back'),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-                      icon: Icon(Symbols.arrow_back_rounded, color: muted, size: 19),
+                      icon: PhosphorSvgIcon(PhosphorIcons.arrowLeft, color: muted, size: 19),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     Expanded(
@@ -419,7 +419,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         tooltip: appText('clear'),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(width: 32, height: 38),
-                        icon: Icon(Symbols.close_rounded, color: muted, size: 17),
+                        icon: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 17),
                         onPressed: () {
                           _controller.clear();
                           _focusNode.requestFocus();
@@ -435,11 +435,11 @@ class _SearchScreenState extends State<SearchScreen> {
                         aiToggleValue: aiEnabled,
                         onAiToggleChanged: (value) => aiSearchModeEnabled.value = value,
                         actions: <LooplyPopupAction<String>>[
-                        LooplyPopupAction(value: 'voice', label: appText('voice_search'), icon: Icons.mic_none_rounded),
-                        LooplyPopupAction(value: 'image', label: appText('image_search'), icon: Icons.image_search_rounded),
-                        LooplyPopupAction(value: 'private', label: appText('new_private_tab'), icon: Icons.visibility_off_rounded),
-                        LooplyPopupAction(value: 'history', label: appText('search_history'), icon: Symbols.history_rounded),
-                        LooplyPopupAction(value: 'engine', label: appText('search_engine'), icon: Symbols.travel_explore_rounded),
+                        LooplyPopupAction(value: 'voice', label: appText('voice_search'), icon: PhosphorIcons.microphone),
+                        LooplyPopupAction(value: 'image', label: appText('image_search'), icon: PhosphorIcons.image),
+                        LooplyPopupAction(value: 'private', label: appText('new_private_tab'), icon: PhosphorIcons.eyeSlash),
+                        LooplyPopupAction(value: 'history', label: appText('search_history'), icon: PhosphorIcons.clockCounterClockwise),
+                        LooplyPopupAction(value: 'engine', label: appText('search_engine'), icon: PhosphorIcons.compass),
                         ],
                         onSelected: _handleMenuSelection,
                       ),
@@ -466,11 +466,11 @@ class _SearchScreenState extends State<SearchScreen> {
                             ),
                             for (final query in queries)
                               ListTile(
-                                leading: Icon(Symbols.history_rounded, color: muted, size: 20),
+                                leading: PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, color: muted, size: 20),
                                 title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                                 trailing: IconButton(
                                   tooltip: appText('fill_search'),
-                                  icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
+                                  icon: PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, color: muted, size: 19),
                                   onPressed: () => _fillSuggestion(query),
                                 ),
                                 onTap: () => _submitSearch(query),
@@ -491,7 +491,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                               trailing: IconButton(
                                 tooltip: appText('fill_search'),
-                                icon: Icon(Icons.north_west_rounded, color: muted, size: 19),
+                                icon: PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, color: muted, size: 19),
                                 onPressed: () => _fillSuggestion(suggestion),
                               ),
                               onTap: () => _submitSearch(suggestion),
@@ -527,7 +527,7 @@ class _SuggestionImage extends StatelessWidget {
             fit: BoxFit.cover,
             cacheWidth: 96,
             cacheHeight: 96,
-            errorBuilder: (_, __, ___) => Icon(fallback, color: muted, size: 17),
+            errorBuilder: (_, __, ___) => PhosphorSvgIcon(fallback, color: muted, size: 17),
           ),
         ),
       );
