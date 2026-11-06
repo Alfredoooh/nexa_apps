@@ -11,7 +11,7 @@ const Map<String, String> jaCoreTranslations = <String, String>{
 
 const Map<String, String> jaExtraTranslations = <String, String>{
     'change_theme': 'テーマを変更', 'default_browser': '既定のブラウザ', 'browser_default_yes': 'BrowseIt は既定のブラウザです',
-    'browser_default_no': 'BrowseIt を既定のブラウザに設定', 'search_hint': '検索または URL を入力', 'clear': 'クリア',
+    'browser_default_no': 'BrowseIt を既定のブラウザに設定', 'search_hint': '検索または URL を入力',
     'voice_search': '音声検索', 'image_search': '画像検索', 'new_private_tab': '新しいシークレットタブ', 'search_history': '検索履歴',
     'recent_searches': '最近の検索', 'no_saved_searches': '保存された検索はありません。', 'search_in_page': 'ページ内検索',
     'previous_result': '前の結果', 'next_result': '次の結果', 'close_search': '検索を閉じる', 'tabs': 'タブ',
@@ -44,7 +44,6 @@ const Map<String, String> jaScreenTranslations = <String, String>{
     'site_name_required': 'サイト名を入力するか、自動取得を有効にしてください。',
     'site_icon_required': 'アイコンを選択するか、自動取得を選んでください。',
     'save_site_failed': 'サイトを保存できませんでした。',
-    'app_info': 'アプリ情報',
     'time_now': 'たった今',
     'time_minutes': '{count} 分前',
     'time_hours': '{count} 時間前',

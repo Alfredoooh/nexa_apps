@@ -14,7 +14,7 @@ const Map<String, String> enCoreTranslations = <String, String>{
 
 const Map<String, String> enExtraTranslations = <String, String>{
     'change_theme': 'Change theme', 'default_browser': 'Default browser', 'browser_default_yes': 'BrowseIt is your default browser',
-    'browser_default_no': 'Set BrowseIt as your default browser', 'search_hint': 'Search or enter a URL', 'clear': 'Clear',
+    'browser_default_no': 'Set BrowseIt as your default browser', 'search_hint': 'Search or enter a URL',
     'voice_search': 'Voice search', 'image_search': 'Image search', 'new_private_tab': 'New private tab',
     'search_history': 'Search history', 'recent_searches': 'Recent searches', 'no_saved_searches': 'No searches saved yet.',
     'search_in_page': 'Find in page', 'previous_result': 'Previous result', 'next_result': 'Next result',
@@ -48,7 +48,6 @@ const Map<String, String> enScreenTranslations = <String, String>{
     'site_name_required': 'Enter a site name or enable automatic naming.',
     'site_icon_required': 'Select an icon or choose automatic favicon.',
     'save_site_failed': 'Could not save this website.',
-    'app_info': 'App information',
     'time_now': 'just now',
     'time_minutes': '{count} min ago',
     'time_hours': '{count} hr ago',

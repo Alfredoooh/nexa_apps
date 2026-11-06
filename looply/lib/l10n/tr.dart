@@ -11,7 +11,7 @@ const Map<String, String> trCoreTranslations = <String, String>{
 
 const Map<String, String> trExtraTranslations = <String, String>{
     'change_theme': 'Temayı değiştir', 'default_browser': 'Varsayılan tarayıcı', 'browser_default_yes': 'BrowseIt varsayılan tarayıcınız',
-    'browser_default_no': 'BrowseIt uygulamasını varsayılan yap', 'search_hint': 'Ara veya URL yaz', 'clear': 'Temizle',
+    'browser_default_no': 'BrowseIt uygulamasını varsayılan yap', 'search_hint': 'Ara veya URL yaz',
     'voice_search': 'Sesli arama', 'image_search': 'Görselle arama', 'new_private_tab': 'Yeni gizli sekme', 'search_history': 'Arama geçmişi',
     'recent_searches': 'Son aramalar', 'no_saved_searches': 'Henüz kayıtlı arama yok.', 'search_in_page': 'Sayfada ara',
     'previous_result': 'Önceki sonuç', 'next_result': 'Sonraki sonuç', 'close_search': 'Aramayı kapat', 'tabs': 'Sekmeler',
@@ -43,7 +43,6 @@ const Map<String, String> trScreenTranslations = <String, String>{
     'site_name_required': 'Bir site adı girin veya otomatik adı etkinleştirin.',
     'site_icon_required': 'Bir simge seçin veya otomatik faviconu kullanın.',
     'save_site_failed': 'Bu site kaydedilemedi.',
-    'app_info': 'Uygulama bilgileri',
     'time_now': 'şimdi',
     'time_minutes': '{count} dk önce',
     'time_hours': '{count} sa önce',

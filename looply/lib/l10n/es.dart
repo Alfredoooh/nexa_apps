@@ -14,7 +14,7 @@ const Map<String, String> esCoreTranslations = <String, String>{
 
 const Map<String, String> esExtraTranslations = <String, String>{
     'change_theme': 'Cambiar tema', 'default_browser': 'Navegador predeterminado', 'browser_default_yes': 'BrowseIt es tu navegador predeterminado',
-    'browser_default_no': 'Establecer BrowseIt como navegador predeterminado', 'search_hint': 'Buscar o escribir una URL', 'clear': 'Limpiar',
+    'browser_default_no': 'Establecer BrowseIt como navegador predeterminado', 'search_hint': 'Buscar o escribir una URL',
     'voice_search': 'Búsqueda por voz', 'image_search': 'Búsqueda por imagen', 'new_private_tab': 'Nueva pestaña privada',
     'search_history': 'Historial de búsqueda', 'recent_searches': 'Búsquedas recientes', 'no_saved_searches': 'Aún no hay búsquedas guardadas.',
     'search_in_page': 'Buscar en la página', 'previous_result': 'Resultado anterior', 'next_result': 'Siguiente resultado',
@@ -48,7 +48,6 @@ const Map<String, String> esScreenTranslations = <String, String>{
     'site_name_required': 'Escribe el nombre del sitio o activa el nombre automático.',
     'site_icon_required': 'Selecciona un icono o elige el favicon automático.',
     'save_site_failed': 'No se pudo guardar este sitio.',
-    'app_info': 'Información de la app',
     'time_now': 'ahora mismo',
     'time_minutes': 'hace {count} min',
     'time_hours': 'hace {count} h',

@@ -12,7 +12,7 @@ const Map<String, String> ruCoreTranslations = <String, String>{
 
 const Map<String, String> ruExtraTranslations = <String, String>{
     'change_theme': 'Изменить тему', 'default_browser': 'Браузер по умолчанию', 'browser_default_yes': 'BrowseIt — браузер по умолчанию',
-    'browser_default_no': 'Сделать BrowseIt браузером по умолчанию', 'search_hint': 'Поиск или ввод URL', 'clear': 'Очистить',
+    'browser_default_no': 'Сделать BrowseIt браузером по умолчанию', 'search_hint': 'Поиск или ввод URL',
     'voice_search': 'Голосовой поиск', 'image_search': 'Поиск по изображению', 'new_private_tab': 'Новая приватная вкладка',
     'search_history': 'История поиска', 'recent_searches': 'Недавние запросы', 'no_saved_searches': 'Сохранённых запросов пока нет.',
     'search_in_page': 'Найти на странице', 'previous_result': 'Предыдущий результат', 'next_result': 'Следующий результат',
@@ -46,7 +46,6 @@ const Map<String, String> ruScreenTranslations = <String, String>{
     'site_name_required': 'Введите название сайта или включите автоматическое имя.',
     'site_icon_required': 'Выберите значок или автоматический favicon.',
     'save_site_failed': 'Не удалось сохранить этот сайт.',
-    'app_info': 'Информация о приложении',
     'time_now': 'только что',
     'time_minutes': '{count} мин. назад',
     'time_hours': '{count} ч. назад',

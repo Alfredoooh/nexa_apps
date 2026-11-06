@@ -11,7 +11,7 @@ const Map<String, String> zhCoreTranslations = <String, String>{
 
 const Map<String, String> zhExtraTranslations = <String, String>{
     'change_theme': '更改主题', 'default_browser': '默认浏览器', 'browser_default_yes': 'BrowseIt 已是默认浏览器',
-    'browser_default_no': '设为默认浏览器', 'search_hint': '搜索或输入网址', 'clear': '清除', 'voice_search': '语音搜索',
+    'browser_default_no': '设为默认浏览器', 'search_hint': '搜索或输入网址', 'voice_search': '语音搜索',
     'image_search': '图片搜索', 'new_private_tab': '新建无痕标签页', 'search_history': '搜索历史', 'recent_searches': '最近搜索',
     'no_saved_searches': '尚无已保存的搜索。', 'search_in_page': '在页面中查找', 'previous_result': '上一个结果',
     'next_result': '下一个结果', 'close_search': '关闭搜索', 'tabs': '标签页', 'research_ai': 'AI 搜索',
@@ -42,7 +42,6 @@ const Map<String, String> zhScreenTranslations = <String, String>{
     'site_name_required': '请输入网站名称或启用自动命名。',
     'site_icon_required': '请选择图标或使用自动网站图标。',
     'save_site_failed': '无法保存此网站。',
-    'app_info': '应用信息',
     'time_now': '刚刚',
     'time_minutes': '{count} 分钟前',
     'time_hours': '{count} 小时前',

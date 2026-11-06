@@ -11,7 +11,7 @@ const Map<String, String> hiCoreTranslations = <String, String>{
 
 const Map<String, String> hiExtraTranslations = <String, String>{
     'change_theme': 'थीम बदलें', 'default_browser': 'डिफ़ॉल्ट ब्राउज़र', 'browser_default_yes': 'BrowseIt आपका डिफ़ॉल्ट ब्राउज़र है',
-    'browser_default_no': 'BrowseIt को डिफ़ॉल्ट ब्राउज़र बनाएं', 'search_hint': 'खोजें या URL लिखें', 'clear': 'साफ़ करें',
+    'browser_default_no': 'BrowseIt को डिफ़ॉल्ट ब्राउज़र बनाएं', 'search_hint': 'खोजें या URL लिखें',
     'voice_search': 'आवाज़ से खोजें', 'image_search': 'छवि खोज', 'new_private_tab': 'नया निजी टैब', 'search_history': 'खोज इतिहास',
     'recent_searches': 'हाल की खोजें', 'no_saved_searches': 'अभी कोई खोज सहेजी नहीं गई।', 'search_in_page': 'पेज में खोजें',
     'previous_result': 'पिछला परिणाम', 'next_result': 'अगला परिणाम', 'close_search': 'खोज बंद करें', 'tabs': 'टैब',
@@ -42,7 +42,6 @@ const Map<String, String> hiScreenTranslations = <String, String>{
     'site_name_required': 'साइट का नाम लिखें या स्वचालित नाम सक्षम करें।',
     'site_icon_required': 'आइकन चुनें या स्वचालित फ़ेविकॉन चुनें।',
     'save_site_failed': 'यह वेबसाइट सहेजी नहीं जा सकी।',
-    'app_info': 'ऐप की जानकारी',
     'time_now': 'अभी',
     'time_minutes': '{count} मिनट पहले',
     'time_hours': '{count} घंटे पहले',

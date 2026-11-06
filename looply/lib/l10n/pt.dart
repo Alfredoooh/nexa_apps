@@ -15,7 +15,7 @@ const Map<String, String> ptCoreTranslations = <String, String>{
 const Map<String, String> ptExtraTranslations = <String, String>{
     'change_theme': 'Alterar tema', 'default_browser': 'Navegador padrão', 'browser_default_yes': 'BrowseIt é o navegador padrão',
     'browser_default_no': 'Definir BrowseIt como navegador padrão', 'search_hint': 'Pesquisar ou escrever um URL',
-    'clear': 'Limpar', 'voice_search': 'Pesquisa por voz', 'image_search': 'Pesquisa por imagem',
+ 'voice_search': 'Pesquisa por voz', 'image_search': 'Pesquisa por imagem',
     'new_private_tab': 'Novo separador anónimo', 'search_history': 'Histórico de pesquisas', 'recent_searches': 'Pesquisas recentes',
     'no_saved_searches': 'Ainda não existem pesquisas guardadas.', 'search_in_page': 'Pesquisar na página',
     'previous_result': 'Resultado anterior', 'next_result': 'Próximo resultado', 'close_search': 'Fechar pesquisa',
@@ -49,7 +49,6 @@ const Map<String, String> ptScreenTranslations = <String, String>{
     'site_name_required': 'Escreve o nome do site ou ativa o nome automático.',
     'site_icon_required': 'Seleciona um ícone ou escolhe o favicon automático.',
     'save_site_failed': 'Não foi possível guardar este site.',
-    'app_info': 'Informações do app',
     'time_now': 'agora mesmo',
     'time_minutes': 'há {count} min',
     'time_hours': 'há {count} h',

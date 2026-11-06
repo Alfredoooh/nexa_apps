@@ -13,7 +13,7 @@ const Map<String, String> arCoreTranslations = <String, String>{
 
 const Map<String, String> arExtraTranslations = <String, String>{
     'change_theme': 'تغيير المظهر', 'default_browser': 'المتصفح الافتراضي', 'browser_default_yes': 'BrowseIt هو متصفحك الافتراضي',
-    'browser_default_no': 'تعيين BrowseIt كمتصفح افتراضي', 'search_hint': 'ابحث أو أدخل عنوان URL', 'clear': 'مسح',
+    'browser_default_no': 'تعيين BrowseIt كمتصفح افتراضي', 'search_hint': 'ابحث أو أدخل عنوان URL',
     'voice_search': 'بحث صوتي', 'image_search': 'بحث بالصور', 'new_private_tab': 'علامة تبويب خاصة جديدة',
     'search_history': 'سجل البحث', 'recent_searches': 'عمليات البحث الأخيرة', 'no_saved_searches': 'لا توجد عمليات بحث محفوظة بعد.',
     'search_in_page': 'بحث في الصفحة', 'previous_result': 'النتيجة السابقة', 'next_result': 'النتيجة التالية',
@@ -47,7 +47,6 @@ const Map<String, String> arScreenTranslations = <String, String>{
     'site_name_required': 'أدخل اسم الموقع أو فعّل التسمية التلقائية.',
     'site_icon_required': 'اختر أيقونة أو استخدم الأيقونة التلقائية.',
     'save_site_failed': 'تعذر حفظ هذا الموقع.',
-    'app_info': 'معلومات التطبيق',
     'time_now': 'الآن',
     'time_minutes': 'قبل {count} دقيقة',
     'time_hours': 'قبل {count} ساعة',

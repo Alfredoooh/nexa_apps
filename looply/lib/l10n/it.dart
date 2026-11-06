@@ -14,7 +14,7 @@ const Map<String, String> itCoreTranslations = <String, String>{
 
 const Map<String, String> itExtraTranslations = <String, String>{
     'change_theme': 'Cambia tema', 'default_browser': 'Browser predefinito', 'browser_default_yes': 'BrowseIt è il browser predefinito',
-    'browser_default_no': 'Imposta BrowseIt come browser predefinito', 'search_hint': 'Cerca o inserisci un URL', 'clear': 'Pulisci',
+    'browser_default_no': 'Imposta BrowseIt come browser predefinito', 'search_hint': 'Cerca o inserisci un URL',
     'voice_search': 'Ricerca vocale', 'image_search': 'Ricerca per immagini', 'new_private_tab': 'Nuova scheda privata',
     'search_history': 'Cronologia ricerche', 'recent_searches': 'Ricerche recenti', 'no_saved_searches': 'Nessuna ricerca salvata.',
     'search_in_page': 'Cerca nella pagina', 'previous_result': 'Risultato precedente', 'next_result': 'Risultato successivo',
@@ -48,7 +48,6 @@ const Map<String, String> itScreenTranslations = <String, String>{
     'site_name_required': 'Inserisci un nome o attiva il nome automatico.',
     'site_icon_required': 'Seleziona un’icona o il favicon automatico.',
     'save_site_failed': 'Impossibile salvare questo sito.',
-    'app_info': 'Informazioni sull’app',
     'time_now': 'proprio ora',
     'time_minutes': '{count} min fa',
     'time_hours': '{count} h fa',

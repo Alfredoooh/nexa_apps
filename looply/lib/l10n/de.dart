@@ -14,7 +14,7 @@ const Map<String, String> deCoreTranslations = <String, String>{
 
 const Map<String, String> deExtraTranslations = <String, String>{
     'change_theme': 'Design ändern', 'default_browser': 'Standardbrowser', 'browser_default_yes': 'BrowseIt ist dein Standardbrowser',
-    'browser_default_no': 'BrowseIt als Standardbrowser festlegen', 'search_hint': 'Suchen oder URL eingeben', 'clear': 'Leeren',
+    'browser_default_no': 'BrowseIt als Standardbrowser festlegen', 'search_hint': 'Suchen oder URL eingeben',
     'voice_search': 'Sprachsuche', 'image_search': 'Bildersuche', 'new_private_tab': 'Neuer privater Tab',
     'search_history': 'Suchverlauf', 'recent_searches': 'Letzte Suchanfragen', 'no_saved_searches': 'Noch keine Suchanfragen gespeichert.',
     'search_in_page': 'Auf Seite suchen', 'previous_result': 'Vorheriges Ergebnis', 'next_result': 'Nächstes Ergebnis',
@@ -48,7 +48,6 @@ const Map<String, String> deScreenTranslations = <String, String>{
     'site_name_required': 'Gib einen Namen ein oder aktiviere die automatische Benennung.',
     'site_icon_required': 'Wähle ein Symbol oder das automatische Favicon.',
     'save_site_failed': 'Diese Website konnte nicht gespeichert werden.',
-    'app_info': 'App-Informationen',
     'time_now': 'gerade eben',
     'time_minutes': 'vor {count} Min.',
     'time_hours': 'vor {count} Std.',

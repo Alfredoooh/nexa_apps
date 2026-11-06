@@ -14,7 +14,7 @@ const Map<String, String> frCoreTranslations = <String, String>{
 
 const Map<String, String> frExtraTranslations = <String, String>{
     'change_theme': 'Changer le thème', 'default_browser': 'Navigateur par défaut', 'browser_default_yes': 'BrowseIt est votre navigateur par défaut',
-    'browser_default_no': 'Définir BrowseIt comme navigateur par défaut', 'search_hint': 'Rechercher ou saisir une URL', 'clear': 'Effacer',
+    'browser_default_no': 'Définir BrowseIt comme navigateur par défaut', 'search_hint': 'Rechercher ou saisir une URL',
     'voice_search': 'Recherche vocale', 'image_search': 'Recherche par image', 'new_private_tab': 'Nouvel onglet privé',
     'search_history': 'Historique de recherche', 'recent_searches': 'Recherches récentes', 'no_saved_searches': 'Aucune recherche enregistrée.',
     'search_in_page': 'Rechercher dans la page', 'previous_result': 'Résultat précédent', 'next_result': 'Résultat suivant',
@@ -48,7 +48,6 @@ const Map<String, String> frScreenTranslations = <String, String>{
     'site_name_required': 'Saisissez un nom ou activez le nom automatique.',
     'site_icon_required': 'Sélectionnez une icône ou le favicon automatique.',
     'save_site_failed': 'Impossible d’enregistrer ce site.',
-    'app_info': 'Informations sur l’application',
     'time_now': 'à l’instant',
     'time_minutes': 'il y a {count} min',
     'time_hours': 'il y a {count} h',
