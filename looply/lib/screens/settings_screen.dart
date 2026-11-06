@@ -13,7 +13,7 @@ import '../localization.dart';
 import 'language_screen.dart';
 import '../widgets/looply_popup.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/drawer_menu.dart';
+import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../widgets/m3_switch.dart';
 import '../widgets/search_engine_picker.dart';
 import '../data_transfer.dart';
@@ -60,7 +60,7 @@ class SettingsScreen extends StatelessWidget {
                           builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
                         ),
                       ),
-                      onTap: () => showThemeSheet(context),
+                      onTap: () => drawer_menu.showThemeSheet(context),
                     ),
                     ValueListenableBuilder<SearchEngine>(
                       valueListenable: activeSearchEngine,

@@ -10,7 +10,7 @@ import '../models.dart';
 import '../shell/browser_navigation.dart';
 import '../shell/fade_page_route.dart';
 import '../theme.dart';
-import '../widgets/drawer_menu.dart';
+import '../widgets/drawer_menu.dart' as drawer_menu;
 import 'all_sites_screen.dart';
 import 'search_screen.dart';
 import 'auth_screen.dart';
@@ -98,7 +98,7 @@ class LooplyHomeAppBar extends StatelessWidget {
               _CircleIconButton(
                 icon: Icons.menu_rounded,
                 tooltip: appText('open_menu'),
-                onTap: onOpenDrawer ?? () => showLooplyDrawer(context),
+                onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
               Expanded(
                 child: Center(

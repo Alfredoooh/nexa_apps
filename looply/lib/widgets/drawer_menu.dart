@@ -1,509 +1,398 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../localization.dart';
-import '../browser_library.dart';
+import '../screens/history_screen.dart';
+import '../screens/downloads_screen.dart';
+import '../screens/bookmarks_screen.dart';
+import '../screens/settings_screen.dart';
 import '../models.dart';
+import '../browser_library.dart';
 import '../theme.dart';
-import '../widgets/looply_popup.dart';
+import '../session_store.dart';
+import '../auth_service.dart';
+import '../localization.dart';
 
-class TabsGridScreen extends StatefulWidget {
-  const TabsGridScreen({
-    super.key,
-    required this.onSelectTab,
-    required this.onClose,
-    required this.onHome,
-    required this.onNewTab,
-    required this.onNewIncognitoTab,
-    required this.onCloseAllTabs,
-    required this.previewKeys,
-    required this.cardKeys,
-  });
-
-  final ValueChanged<BrowserTab> onSelectTab;
-  final VoidCallback onClose;
-  final VoidCallback onHome;
-  final VoidCallback onNewTab;
-  final VoidCallback onNewIncognitoTab;
-  final VoidCallback onCloseAllTabs;
-  final Map<String, GlobalKey> previewKeys;
-  final Map<String, GlobalKey> cardKeys;
-
-  @override
-  State<TabsGridScreen> createState() => _TabsGridScreenState();
+/// Ponte entre os botões da interface e o drawer push/drag do shell.
+/// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
+class LooplyDrawerBridge {
+  static VoidCallback? open;
+  static VoidCallback? close;
 }
 
-class _TabsGridScreenState extends State<TabsGridScreen> {
-  bool _selectionMode = false;
-  final Set<String> _selectedIds = <String>{};
+void showLooplyDrawer(BuildContext context) {
+  LooplyDrawerBridge.open?.call();
+}
 
-  @override
-  void initState() {
-    super.initState();
-    tabsController.addListener(_onChanged);
-    browserFaviconCache.addListener(_onChanged);
-    for (final tab in tabsController.tabs) {
-      if (tab.kind != TabKind.appScreen) unawaited(browserFaviconCache.fetchForUrl(tab.url));
-    }
-  }
+class LooplyDrawer extends StatelessWidget {
+  const LooplyDrawer({super.key, required this.onClose, this.width = 304});
 
-  @override
-  void dispose() {
-    tabsController.removeListener(_onChanged);
-    browserFaviconCache.removeListener(_onChanged);
-    super.dispose();
-  }
-
-  void _onChanged() {
-    if (!mounted) return;
-    final live = tabsController.tabs.map((tab) => tab.id).toSet();
-    _selectedIds.removeWhere((id) => !live.contains(id));
-    setState(() {});
-  }
-
-  void _toggleSelectionMode() {
-    setState(() {
-      _selectionMode = !_selectionMode;
-      if (!_selectionMode) _selectedIds.clear();
-    });
-  }
-
-  void _handleMenu(String action) {
-    switch (action) {
-      case 'incognito':
-        widget.onNewIncognitoTab();
-        break;
-      case 'new':
-        widget.onNewTab();
-        break;
-      case 'select':
-        _toggleSelectionMode();
-        break;
-      case 'close_all':
-        _selectedIds.clear();
-        setState(() => _selectionMode = false);
-        widget.onCloseAllTabs();
-        break;
-    }
-  }
-
-  void _openOrSelect(BrowserTab tab) {
-    if (_selectionMode) {
-      setState(() {
-        if (!_selectedIds.add(tab.id)) _selectedIds.remove(tab.id);
-      });
-    } else {
-      widget.onSelectTab(tab);
-    }
-  }
-
-  void _removeSelected() {
-    if (_selectedIds.isEmpty) return;
-    tabsController.closeTabs(_selectedIds.toList(growable: false));
-    setState(() {
-      _selectedIds.clear();
-      _selectionMode = false;
-    });
-  }
+  final VoidCallback onClose;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = softColor(context);
-    final text = mainText(context);
-    final muted = mutedText(context);
-    final tabs = tabsController.tabs;
-
-    return Material(
-      color: bg,
+    final drawerBackground = pageBg(context);
+    return Drawer(
+      width: width,
+      backgroundColor: drawerBackground,
+      elevation: 16,
+      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                Container(
-                  color: bg,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-                    child: Row(
-                    children: [
-                      // Voltar e Home partilham uma única cápsula contínua.
-                      Material(
-                        color: pillColor(context),
-                        borderRadius: BorderRadius.circular(99),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: IconButton(
-                                tooltip: appText('back'),
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                icon: Icon(Symbols.arrow_back_rounded, size: 22, color: text),
-                                onPressed: widget.onClose,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: IconButton(
-                                tooltip: appText('home'),
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                icon: Icon(Symbols.home_rounded, size: 20, color: text),
-                                onPressed: widget.onHome,
-                              ),
-                            ),
-                          ]),
-                        ),
-                      ),
-                      const Spacer(),
-                      // Contador quadrado alinhado à direita, junto ao menu,
-                      // em vez de ficar solto no centro da AppBar.
-                      _TabsCountBadge(count: tabs.length, color: text),
-                      const SizedBox(width: 6),
-                      if (_selectionMode) ...[
-                        IconButton(
-                          tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _selectedIds.isEmpty ? null : _removeSelected,
-                          icon: Icon(Symbols.delete_outline_rounded, color: _selectedIds.isEmpty ? muted : text),
-                        ),
-                        IconButton(
-                          tooltip: appText('finish_selection'),
-                          visualDensity: VisualDensity.compact,
-                          icon: Icon(Symbols.check_rounded, color: text),
-                          onPressed: _toggleSelectionMode,
-                        ),
-                      ] else
-                        LooplyPopupMenuButton<String>(
-                          tooltip: appText('more_options'),
-                          iconColor: text,
-                          menuWidth: 286,
-                          actions: <LooplyPopupAction<String>>[
-                            LooplyPopupAction(value: 'incognito', icon: Symbols.visibility_off_rounded, label: appText('open_private_tab')),
-                            LooplyPopupAction(value: 'new', icon: Symbols.add_rounded, label: appText('new_tab')),
-                            LooplyPopupAction(value: 'select', icon: Symbols.checklist_rounded, label: appText('select_tabs')),
-                            LooplyPopupAction(value: 'close_all', icon: Symbols.delete_sweep_rounded, label: appText('close_all_tabs')),
-                          ],
-                          onSelected: _handleMenu,
-                        ),
-                    ],
+        // A barra de estado herda a mesma SystemUiOverlayStyle do Scaffold
+        // principal. Não há AnnotatedRegion local a mudar a cor ao abrir o drawer.
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+          child: Column(
+            children: [
+              _DrawerHeader(),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _DrawerOption(
+                      icon: Symbols.dark_mode_rounded,
+                      label: appText('change_theme'),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
+                      onTap: () {
+                        final navigator = Navigator.of(context);
+                        onClose();
+                        Future<void>.delayed(const Duration(milliseconds: 470), () {
+                          if (navigator.mounted) showThemeSheet(navigator.context);
+                        });
+                      },
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    AnimatedBuilder(
+                      animation: activityController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.history_rounded,
+                        label: appText('history'),
+                        borderRadius: BorderRadius.circular(8),
+                        badge: activityController.entries.length,
+                        onTap: () => _openDrawerPage(context, const HistoryScreen()),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    AnimatedBuilder(
+                      animation: downloadsController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.download_rounded,
+                        label: appText('downloads'),
+                        borderRadius: BorderRadius.circular(8),
+                        badge: downloadsController.entries.length,
+                        onTap: () => _openDrawerPage(context, const DownloadsScreen()),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    AnimatedBuilder(
+                      animation: bookmarksController,
+                      builder: (context, _) => _DrawerOption(
+                        icon: Symbols.bookmark_rounded,
+                        label: appText('bookmarks'),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(20)),
+                        badge: bookmarksController.entries.length,
+                        onTap: () => _openDrawerPage(context, const BookmarksScreen()),
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: tabs.isEmpty
-                      ? Center(
-                          child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Symbols.tab_rounded, size: 44, color: muted),
-                            const SizedBox(height: 10),
-                            Text(appText('no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                          ]),
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns = constraints.maxWidth >= 700 ? 3 : 2;
-                            const horizontalPadding = 14.0;
-                            const gap = 12.0;
-                            const verticalPadding = 12.0;
-                            final availableWidth = constraints.maxWidth - horizontalPadding * 2;
-                            final cardWidth = (availableWidth - gap * (columns - 1)) / columns;
-                            final cardHeight = cardWidth / .77;
-                            final rows = (tabs.length / columns).ceil();
-                            final contentHeight = verticalPadding * 2 + rows * cardHeight + (rows - 1) * gap;
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                child: _SettingsButtonWithAvatar(
+                  onTap: () => _openDrawerPage(context, const SettingsScreen()),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-                            return SingleChildScrollView(
-                              padding: const EdgeInsets.only(bottom: 100),
-                              child: SizedBox(
-                                height: contentHeight,
-                                width: constraints.maxWidth,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    for (var index = 0; index < tabs.length; index++)
-                                      _positionedTab(
-                                        context: context,
-                                        tab: tabs[index],
-                                        index: index,
-                                        columns: columns,
-                                        cardWidth: cardWidth,
-                                        cardHeight: cardHeight,
-                                        gap: gap,
-                                        horizontalPadding: horizontalPadding,
-                                        verticalPadding: verticalPadding,
-                                        selected: _selectedIds.contains(tabs[index].id),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+  Future<void> _openDrawerPage(BuildContext context, Widget page) async {
+    final navigator = Navigator.of(context);
+    final previous = await SessionStore.instance.getLastActivity() ??
+        <String, dynamic>{'type': 'shell', 'screenIndex': 0};
+    final routeKey = _drawerRouteKey(page);
+    if (routeKey != null) {
+      await SessionStore.instance.saveLastActivity({
+        'type': 'drawer_page',
+        'page': routeKey,
+        'returnTo': previous,
+      });
+    }
+    if (!context.mounted || !navigator.mounted) return;
+
+    onClose();
+    // Espera o movimento push terminar antes de apresentar a página.
+    await Future<void>.delayed(const Duration(milliseconds: 470));
+    if (!navigator.mounted) return;
+    await navigator.push<void>(CupertinoPageRoute<void>(builder: (_) => page));
+    if (routeKey != null) {
+      await SessionStore.instance.saveLastActivity(previous);
+    }
+  }
+}
+
+
+String? _drawerRouteKey(Widget page) {
+  if (page is HistoryScreen) return 'history';
+  if (page is DownloadsScreen) return 'downloads';
+  if (page is BookmarksScreen) return 'bookmarks';
+  if (page is SettingsScreen) return 'settings';
+  return null;
+}
+
+Widget? _drawerPageForKey(String key) {
+  switch (key) {
+    case 'history':
+      return const HistoryScreen();
+    case 'downloads':
+      return const DownloadsScreen();
+    case 'bookmarks':
+      return const BookmarksScreen();
+    case 'settings':
+      return const SettingsScreen();
+    default:
+      return null;
+  }
+}
+
+/// Reabre uma tela do Drawer que era a atividade visível quando o app foi
+/// encerrado. O destino anterior volta a ser gravado quando o utilizador sai.
+Future<void> restoreDrawerPageActivity(
+  BuildContext context, {
+  required String pageKey,
+  required Map<String, dynamic> returnTo,
+}) async {
+  final page = _drawerPageForKey(pageKey);
+  if (page == null || !context.mounted) {
+    await SessionStore.instance.saveLastActivity(returnTo);
+    return;
+  }
+  await Navigator.of(context).push<void>(
+    CupertinoPageRoute<void>(builder: (_) => page),
+  );
+  await SessionStore.instance.saveLastActivity(returnTo);
+}
+
+class _DrawerHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+      child: Row(children: [
+        SvgPicture.asset(
+          'assets/images/logo.svg',
+          width: 38,
+          height: 38,
+          fit: BoxFit.contain,
+          colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
+        ),
+        const SizedBox(width: 10),
+        Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+}
+
+class _DrawerOption extends StatelessWidget {
+  const _DrawerOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badge = 0,
+    required this.borderRadius,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final int badge;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    // Mesma geometria agrupada dos cartões da tela Configurações:
+    // primeiro cartão com topo mais curvo, cartões centrais discretos,
+    // último cartão com base mais curvada.
+    final radius = borderRadius;
+    return Material(
+      color: settingsCardColor(context),
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Padding(
+          // Mesmos insets, altura natural e caixa de ícone dos _SettingsTile.
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+              child: Icon(icon, color: accentColor(context), size: 19),
             ),
-            Positioned(
-              right: 18,
-              bottom: 18,
-              child: FloatingActionButton(
-                heroTag: 'looply-tabs-new-tab-fab',
-                tooltip: appText('new_tab'),
-                backgroundColor: looplyPrimary,
-                foregroundColor: Colors.white,
-                shape: const CircleBorder(),
-                elevation: 4,
-                onPressed: widget.onNewTab,
-                child: const Icon(Symbols.add_rounded, size: 27),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
-          ],
+            if (badge > 0)
+              Container(
+                height: 20,
+                constraints: const BoxConstraints(minWidth: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accentColor(context),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  badge > 999 ? '999+' : '$badge',
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+          ]),
         ),
       ),
     );
   }
-
-  Widget _positionedTab({
-    required BuildContext context,
-    required BrowserTab tab,
-    required int index,
-    required int columns,
-    required double cardWidth,
-    required double cardHeight,
-    required double gap,
-    required double horizontalPadding,
-    required double verticalPadding,
-    required bool selected,
-  }) {
-    final left = horizontalPadding + (index % columns) * (cardWidth + gap);
-    final top = verticalPadding + (index ~/ columns) * (cardHeight + gap);
-    final previewKey = widget.previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-    final cardKey = widget.cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-
-    Widget card({required bool forFeedback}) => TabGridCard(
-      key: ValueKey('${tab.id}${forFeedback ? '-drag' : ''}'),
-      tab: tab,
-      previewKey: forFeedback ? GlobalKey() : previewKey,
-      cardKey: forFeedback ? GlobalKey() : cardKey,
-      selected: selected,
-      selectionMode: _selectionMode,
-      onTap: () => _openOrSelect(tab),
-      onClose: tab.kind != TabKind.appScreen ? () => tabsController.closeTab(tab.id) : null,
-    );
-
-    Widget draggable = DragTarget<String>(
-      onWillAcceptWithDetails: (details) => !_selectionMode && details.data != tab.id,
-      onAcceptWithDetails: (details) {
-        HapticFeedback.selectionClick();
-        tabsController.reorderById(details.data, tab.id);
-      },
-      builder: (context, candidates, rejected) => _PressScale(
-        child: LongPressDraggable<String>(
-          data: tab.id,
-          maxSimultaneousDrags: _selectionMode ? 0 : 1,
-          hapticFeedbackOnStart: true,
-          feedback: Material(
-            color: Colors.transparent,
-            child: SizedBox(
-              width: cardWidth,
-              height: cardHeight,
-              child: Transform.scale(scale: .94, child: card(forFeedback: true)),
-            ),
-          ),
-          childWhenDragging: Opacity(opacity: .25, child: card(forFeedback: false)),
-          child: card(forFeedback: false),
-        ),
-      ),
-    );
-
-    return AnimatedPositioned(
-      key: ValueKey('position-${tab.id}'),
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeInOutCubic,
-      left: left,
-      top: top,
-      width: cardWidth,
-      height: cardHeight,
-      child: draggable,
-    );
-  }
 }
 
-class _PressScale extends StatefulWidget {
-  const _PressScale({required this.child});
-  final Widget child;
-  @override
-  State<_PressScale> createState() => _PressScaleState();
-}
-
-class _PressScaleState extends State<_PressScale> {
-  Timer? _pressTimer;
-  bool _pressed = false;
-
-  void _begin() {
-    _pressTimer?.cancel();
-    _pressTimer = Timer(const Duration(milliseconds: 170), () {
-      if (mounted) setState(() => _pressed = true);
-    });
-  }
-
-  void _end() {
-    _pressTimer?.cancel();
-    if (_pressed && mounted) setState(() => _pressed = false);
-  }
-
-  @override
-  void dispose() {
-    _pressTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Listener(
-    onPointerDown: (_) => _begin(),
-    onPointerUp: (_) => _end(),
-    onPointerCancel: (_) => _end(),
-    child: AnimatedScale(
-      scale: _pressed ? .94 : 1,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutBack,
-      child: widget.child,
-    ),
-  );
-}
-
-class _TabsCountBadge extends StatelessWidget {
-  const _TabsCountBadge({required this.count, required this.color});
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 24,
-    height: 24,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      border: Border.all(color: color.withOpacity(.88), width: 1.6),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
-        ),
-      ),
-    ),
-  );
-}
-
-class TabGridCard extends StatelessWidget {
-  const TabGridCard({
-    super.key,
-    required this.tab,
-    required this.onTap,
-    required this.previewKey,
-    required this.cardKey,
-    this.onClose,
-    this.selected = false,
-    this.selectionMode = false,
-  });
-
-  final BrowserTab tab;
+// Botão de Configurações com o avatar embutido no canto direito do
+// próprio botão — sem ícone de engrenagem e sem o texto "Utilizador".
+// Mostra a foto da conta logada; sem sessão, cai no asset local
+// images/avatar.png em vez do ícone genérico de pessoa.
+class _SettingsButtonWithAvatar extends StatelessWidget {
+  const _SettingsButtonWithAvatar({required this.onTap});
   final VoidCallback onTap;
-  final GlobalKey previewKey;
-  final GlobalKey cardKey;
-  final VoidCallback? onClose;
-  final bool selected;
-  final bool selectionMode;
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final panel = panelColor(context);
-    final bg = softColor(context);
-    final muted = mutedText(context);
     final text = mainText(context);
-    final isApp = tab.kind == TabKind.appScreen;
-    final host = Uri.tryParse(tab.url)?.host ?? '';
-    final label = isApp
-        ? (tab.appScreenLabel ?? 'BrowseIt')
-        : ((tab.title?.trim().isNotEmpty ?? false) ? tab.title! : (host.isEmpty ? tab.url : host));
-
     return Material(
-      key: cardKey,
-      color: accentColor(context).withOpacity(.15),
-      borderRadius: BorderRadius.circular(20),
+      color: pillColor(context),
+      borderRadius: BorderRadius.circular(36),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 6, 7),
-              child: Row(children: [
-                if (isApp)
-                  Icon(tab.appScreenIcon ?? Symbols.apps_rounded, size: 17, color: muted)
-                else
-                  AnimatedBuilder(
-                    animation: browserFaviconCache,
-                    builder: (context, _) {
-                      final encoded = browserFaviconCache.forUrl(tab.url);
-                      if (encoded != null) {
-                        try {
-                          return Image.memory(base64Decode(encoded), width: 18, height: 18, fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: muted, size: 17));
-                        } catch (_) {}
-                      }
-                      return Icon(Symbols.public_rounded, color: muted, size: 17);
-                    },
-                  ),
-                const SizedBox(width: 7),
-                Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w600))),
-                if (selectionMode)
-                  Icon(selected ? Symbols.check_circle_rounded : Symbols.radio_button_unchecked_rounded, color: selected ? accentColor(context) : muted, size: 20)
-                else if (onClose != null)
-                  SizedBox(
-                    width: 28, height: 28,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      tooltip: appText('close_tab'),
-                      style: IconButton.styleFrom(backgroundColor: pillColor(context), foregroundColor: muted),
-                      icon: const Icon(Symbols.close_rounded, size: 15),
-                      onPressed: onClose,
-                    ),
-                  ),
-              ]),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                child: ClipRRect(
-                  key: previewKey,
-                  borderRadius: BorderRadius.circular(13),
-                  child: Container(
-                    width: double.infinity,
-                    color: bg,
-                    child: tab.thumbnail != null
-                        ? Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true,
-                            errorBuilder: (_, __, ___) => Center(child: Icon(Symbols.public_rounded, size: 32, color: muted.withOpacity(.55))))
-                        : Center(child: Icon(isApp ? (tab.appScreenIcon ?? Symbols.apps_rounded) : Symbols.public_rounded, size: 34, color: muted.withOpacity(.40))),
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
+          child: Row(children: [
+            Expanded(child: Text(appText('settings'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
+            ValueListenableBuilder<LooplyUser?>(
+              valueListenable: authController,
+              builder: (context, user, _) => Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isDark ? pillColor(context) : Colors.white,
+                ),
+                child: ClipOval(
+                  child: user?.photoUrl != null
+                      ? Image.network(
+                          user!.photoUrl!,
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.asset(
+                            'images/avatar.png',
+                            width: 32,
+                            height: 32,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          'images/avatar.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
             ),
-          ],
+          ]),
         ),
       ),
     );
   }
+}
+
+void showThemeSheet(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    showDragHandle: false,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
+      builder: (context, mode, _) => ValueListenableBuilder<bool>(
+        valueListenable: themeController.pureDark,
+        builder: (context, pureBlack, __) {
+          final surface = panelForMode(context, mode);
+          final text = textForMode(context, mode);
+          final accent = accentForMode(context, mode);
+          Widget option({required String label, required bool selected, required VoidCallback onTap}) =>
+              ListTile(
+                dense: true,
+                leading: Icon(
+                  selected ? Symbols.radio_button_checked_rounded : Symbols.radio_button_unchecked_rounded,
+                  color: selected ? accent : mutedForMode(context, mode),
+                ),
+                title: Text(label, style: TextStyle(color: text)),
+                onTap: onTap,
+              );
+
+          return Material(
+            color: surface,
+            surfaceTintColor: Colors.transparent,
+            clipBehavior: Clip.antiAlias,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const SizedBox(height: 12),
+                  Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
+                  Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: Alignment.centerLeft, child: Text(appText('theme'), style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+                  option(label: appText('light'), selected: mode == ThemeMode.light, onTap: () => themeController.setMode(ThemeMode.light)),
+                  if (mode == ThemeMode.dark) ...[
+                    option(label: appText('dark'), selected: !pureBlack, onTap: () => themeController.setMode(ThemeMode.dark)),
+                    option(label: appText('deep_dark'), selected: pureBlack, onTap: () => themeController.setPureDark(true)),
+                  ] else
+                    option(label: appText('dark'), selected: false, onTap: () => themeController.setMode(ThemeMode.dark)),
+                  option(label: appText('automatic'), selected: mode == ThemeMode.system, onTap: () => themeController.setMode(ThemeMode.system)),
+                ]),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
 }

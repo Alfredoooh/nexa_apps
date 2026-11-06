@@ -82,8 +82,7 @@ class _OrbitWebViewController {
         cacheEnabled: cacheEnabled,
         cacheMode: cacheEnabled ? CacheMode.LOAD_DEFAULT : CacheMode.LOAD_NO_CACHE,
         contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled),
-        darkMode: forceDark || (followAppTheme && appIsDark),
-        algorithmicDarkeningAllowed: forceDark,
+        algorithmicDarkeningAllowed: forceDark || (followAppTheme && appIsDark),
       ),
     );
   }
@@ -287,7 +286,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final appIsDark = Theme.of(context).brightness == Brightness.dark;
     final forceDark = forceDarkWebsitesEnabled.value && !_isAiSearchPage;
     // Os sites seguem o modo efetivo do BrowseIt; não consultam o tema do SO.
-    const followsApp = true;
+    final followsApp = siteThemeFollowsAppEnabled.value;
     try {
       await controller.setSettings(
         cacheEnabled: navigationAcceleratorEnabled.value,
@@ -616,7 +615,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         await Clipboard.setData(ClipboardData(text: _currentUrl));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text(appText('copied')),
               duration: Duration(seconds: 2),
             ),
@@ -789,7 +788,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     unawaited(showLooplyDialog<bool>(
       context: context,
       title: appText('site_info'),
-      icon: Symbols.info_outline_rounded,
+      icon: Icons.info_outline_rounded,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1078,8 +1077,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               cacheMode: navigationAcceleratorEnabled.value
                   ? CacheMode.LOAD_DEFAULT
                   : CacheMode.LOAD_NO_CACHE,
-              darkMode: (!_isAiSearchPage && forceDarkWebsitesEnabled.value) || Theme.of(context).brightness == Brightness.dark,
-              algorithmicDarkeningAllowed: !_isAiSearchPage && forceDarkWebsitesEnabled.value,
+              algorithmicDarkeningAllowed: !_isAiSearchPage &&
+                  (forceDarkWebsitesEnabled.value ||
+                      (siteThemeFollowsAppEnabled.value &&
+                          Theme.of(context).brightness == Brightness.dark)),
               offscreenPreRaster: true,
               hardwareAcceleration: true,
               incognito: widget.isIncognito,

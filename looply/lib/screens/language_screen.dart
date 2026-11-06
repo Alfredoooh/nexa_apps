@@ -49,7 +49,7 @@ class LanguageScreen extends StatelessWidget {
                   subtitle: Text(language.name, style: TextStyle(color: muted, fontSize: 12)),
                   trailing: isSelected
                       ? Icon(Symbols.check_circle_rounded, color: accentColor(context))
-                      : Icon(Symbols.circle_outlined, color: muted),
+                      : Icon(Icons.radio_button_unchecked_rounded, color: muted),
                 ),
               ),
             );
