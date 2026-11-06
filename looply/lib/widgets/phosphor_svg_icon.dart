@@ -66,7 +66,7 @@ class PhosphorSvgIcon extends StatelessWidget {
   const PhosphorSvgIcon(
     this.icon, {
     super.key,
-    this.size = 24,
+    this.size,
     this.color,
     this.fill,
     this.weight,
@@ -89,6 +89,10 @@ class PhosphorSvgIcon extends StatelessWidget {
   final String? semanticLabel;
   final TextDirection? textDirection;
   final bool? applyTextScaling;
+
+  // Mantém o tamanho externo esperado pelo layout, mas desenha o SVG um pouco
+  // menor. Isso reproduz a área visual mais contida dos Icon widgets do Flutter.
+  static const double _visualScale = 0.88;
 
   static const Map<int, String> _assets = <int, String>{
     0xF0001: 'arrow-clockwise',
@@ -151,14 +155,18 @@ class PhosphorSvgIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final slug = _assets[icon.codePoint] ?? 'question';
     final variant = (fill ?? 0) >= .5 || (weight ?? 400) >= 600 ? 'fill' : 'regular';
-    final iconSize = size ?? 24;
+    // Ao contrário do antigo valor fixo 24, herda o IconTheme local. Assim,
+    // IconButton, AppBar, ListTile e campos de texto controlam o tamanho como
+    // fariam com um Icon normal do Flutter.
+    final iconSize = size ?? IconTheme.of(context).size ?? 24.0;
+    final visualSize = iconSize * _visualScale;
     final svgAsset = 'assets/icons/phosphor/$variant/$slug.svg';
     final tint = color ?? IconTheme.of(context).color ?? Theme.of(context).iconTheme.color ?? Colors.black;
 
     SvgPicture svgFromString(String source) => SvgPicture.string(
           source,
-          width: iconSize,
-          height: iconSize,
+          width: visualSize,
+          height: visualSize,
           fit: BoxFit.contain,
           colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
           semanticsLabel: semanticLabel,
@@ -170,21 +178,23 @@ class PhosphorSvgIcon extends StatelessWidget {
       child: SizedBox(
         width: iconSize,
         height: iconSize,
-        child: SvgPicture.asset(
-          svgAsset,
-          width: iconSize,
-          height: iconSize,
-          fit: BoxFit.contain,
-          colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
-          semanticsLabel: semanticLabel,
-          placeholderBuilder: (_) => SizedBox(width: iconSize, height: iconSize),
-          errorBuilder: (context, error, stackTrace) {
-            final fallback = phosphorSvgFallbackData['$variant:$slug'] ??
-                phosphorSvgFallbackData['$variant:question'];
-            debugPrint('BrowseIt SVG asset fallback: $svgAsset ($error)');
-            if (fallback == null) return SizedBox(width: iconSize, height: iconSize);
-            return svgFromString(fallback);
-          },
+        child: Center(
+          child: SvgPicture.asset(
+            svgAsset,
+            width: visualSize,
+            height: visualSize,
+            fit: BoxFit.contain,
+            colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
+            semanticsLabel: semanticLabel,
+            placeholderBuilder: (_) => SizedBox(width: visualSize, height: visualSize),
+            errorBuilder: (context, error, stackTrace) {
+              final fallback = phosphorSvgFallbackData['$variant:$slug'] ??
+                  phosphorSvgFallbackData['$variant:question'];
+              debugPrint('BrowseIt SVG asset fallback: $svgAsset ($error)');
+              if (fallback == null) return SizedBox(width: visualSize, height: visualSize);
+              return svgFromString(fallback);
+            },
+          ),
         ),
       ),
     );
