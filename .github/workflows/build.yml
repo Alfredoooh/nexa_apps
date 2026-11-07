@@ -44,6 +44,8 @@ jobs:
 
           if [[ -f "settings.gradle" || -f "settings.gradle.kts" ]]; then
             echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          elif [[ -f "looply/android/settings.gradle" || -f "looply/android/settings.gradle.kts" ]]; then
+            echo "PROJECT_DIR=looply/android" >> "$GITHUB_ENV"
           elif [[ -f "browseit/settings.gradle" || -f "browseit/settings.gradle.kts" ]]; then
             echo "PROJECT_DIR=browseit" >> "$GITHUB_ENV"
           elif [[ -f "android/settings.gradle" || -f "android/settings.gradle.kts" ]]; then
@@ -52,6 +54,8 @@ jobs:
             echo "ERROR: settings.gradle(.kts) not found."
             exit 1
           fi
+
+          echo "Using PROJECT_DIR=$(grep PROJECT_DIR "$GITHUB_ENV" | tail -1)"
 
       - name: Grant execute permission to gradlew
         shell: bash
@@ -214,4 +218,4 @@ jobs:
             url="https://github.com/${{ github.repository }}/releases/download/latest-build/${name}"
             echo "| $name | [Baixar]($url) |" >> "$GITHUB_STEP_SUMMARY"
             echo "$name -> $url"
-          done
+          don
