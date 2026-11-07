@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fundo do tema de arranque (LaunchTheme) usado como windowBackground.
+  Em Android < 12 (sem Splash Screen API), este é o único splash nativo que
+  o sistema consegue mostrar antes do processo existir — por isso inclui o
+  mesmo ícone estático (sem shimmer, o sistema não anima shaders aqui) que o
+  ShimmerSplashView desenha a seguir, evitando qualquer "salto" visual entre
+  a tela do sistema e a primeira tela da Activity.
+  O tamanho de 184dp replica exatamente o `preferredLogoSize` definido em
+  ShimmerSplashView.kt, para que o ícone não mude de tamanho no instante em
+  que o Kotlin assume o desenho — qualquer alteração de tamanho lá deve ser
+  espelhada aqui.
+  Em Android 12+, o windowSplashScreenAnimatedIcon (ver values-v31/styles.xml)
+  sobrepõe-se a este drawable com um ícone transparente de 1dp, escondendo-o;
+  por isso este layer-list permanece inofensivo nessas versões.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/looply_splash_background" />
+    </item>
+    <item
+        android:width="184dp"
+        android:height="184dp"
+        android:gravity="center">
+        <drawable>@drawable/launch_logo</drawable>
+    </item>
+</layer-list>

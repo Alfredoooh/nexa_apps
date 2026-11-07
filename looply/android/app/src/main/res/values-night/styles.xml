@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="LooplyTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#FF141517</item>
+        <item name="android:navigationBarColor">#FF141517</item>
+        <item name="android:windowBackground">#FF141517</item>
+        <item name="android:colorAccent">#FF8AB4F8</item>
+        <item name="colorPrimary">#FF8AB4F8</item>
+        <item name="colorPrimaryVariant">#FF6695DB</item>
+        <item name="colorSecondary">#FF8AB4F8</item>
+        <item name="colorSecondaryVariant">#FF6695DB</item>
+    </style>
+
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/looply_splash_background</item>
+        <item name="android:navigationBarColor">@color/looply_splash_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/looply_splash_background</item>
+        <item name="android:statusBarColor">@color/looply_splash_background</item>
+        <item name="android:navigationBarColor">@color/looply_splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Variante escura do tema do PopupMenu nativo. -->
+    <style name="LooplyPopupMenu.Dark" parent="@style/Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_menu_background_dark</item>
+        <item name="android:popupElevation">8dp</item>
+        <item name="overlapAnchor">false</item>
+    </style>
+
+    <style name="LooplyPopupMenuItemText.Dark" parent="@android:style/TextAppearance.Widget.PopupMenu.Large">
+        <item name="android:textColor">#FFE6E6E8</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+</resources>
