@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 class AdBlockCalendarScreen extends StatefulWidget {
   const AdBlockCalendarScreen({super.key});
@@ -14,12 +16,6 @@ class AdBlockCalendarScreen extends StatefulWidget {
 class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime _selectedDate = DateTime.now();
-
-  static const Color _calendarSurface = Color(0xFF070809);
-  static const Color _rowSurface = Color(0xFF191B1E);
-  static const Color _red = Color(0xFFFF6B61);
-  static const Color _blue = Color(0xFF45B9F4);
-  static const Color _green = Color(0xFF7DDA91);
 
   void _changeMonth(int delta) {
     setState(() {
@@ -39,7 +35,12 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final stats = AdBlockStats.instance;
-    final pageMuted = mutedText(context);
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final accent = accentColor(context);
+    final card = settingsCardColor(context);
+    final pill = pillColor(context);
+
     final firstDay = DateTime(_month.year, _month.month, 1);
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
     final leading = firstDay.weekday - DateTime.monday;
@@ -51,17 +52,32 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
       'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
     ];
-    const weekdays = <String>['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    const weekdays = <String>['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+    // Cores de estado fixas (vermelho/azul/verde): não variam com o tema
+    // porque identificam o mesmo significado (sem uso / bloqueios / uso)
+    // em qualquer aparência, tal como na tela original.
+    const red = Color(0xFFFF6B61);
+    const blue = Color(0xFF45B9F4);
+    const green = Color(0xFF7DDA91);
 
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        title: const Text('Calendário de bloqueios'),
+        toolbarHeight: 64,
+        automaticallyImplyLeading: false,
         leading: IconButton(
-          tooltip: 'Voltar',
-          icon: const Icon(Symbols.arrow_left),
+          tooltip: appText('back'),
+          style: IconButton.styleFrom(
+            foregroundColor: text,
+            fixedSize: const Size(42, 42),
+            shape: const CircleBorder(),
+          ),
+          icon: const PhosphorSvgIcon(PhosphorIcons.arrowLeft),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
+        centerTitle: true,
+        title: Text('Calendário de bloqueios'),
       ),
       body: AnimatedBuilder(
         animation: Listenable.merge(<Listenable>[stats, activityController]),
@@ -89,70 +105,71 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
             daysInMonth,
             (index) => stats.countForDate(DateTime(_month.year, _month.month, index + 1)) > 0,
           ).where((used) => used).length;
+
           return ListView(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 28),
             children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(25, 23, 25, 22),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                 decoration: BoxDecoration(
-                  color: _calendarSurface,
-                  borderRadius: BorderRadius.circular(42),
+                  color: card,
+                  borderRadius: BorderRadius.circular(26),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Monthly usage',
+                            '${monthNames[_month.month - 1]} ${_month.year}',
                             style: TextStyle(
-                              color: Color(0xFFF2F2F3),
-                              fontSize: 22,
+                              color: text,
+                              fontSize: 19,
                               height: 1.1,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: -.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.3,
                             ),
                           ),
                         ),
-                        Material(
-                          color: const Color(0xFF17191C),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () => _changeMonth(1),
-                            child: const SizedBox(
-                              width: 42,
-                              height: 42,
-                              child: Icon(Symbols.arrow_forward_rounded, color: Color(0xFFD7D9DC), size: 20),
-                            ),
-                          ),
+                        _RoundIconButton(
+                          icon: Symbols.arrow_back_ios_new_rounded,
+                          background: pill,
+                          foreground: text,
+                          onTap: () => _changeMonth(-1),
+                        ),
+                        const SizedBox(width: 8),
+                        _RoundIconButton(
+                          icon: Symbols.arrow_forward_ios_rounded,
+                          background: pill,
+                          foreground: text,
+                          onTap: () => _changeMonth(1),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 29),
+                    const SizedBox(height: 22),
                     Row(
                       children: weekdays.map((day) => Expanded(
                         child: Center(
                           child: Text(
                             day,
-                            style: const TextStyle(
-                              color: Color(0xFF777A7F),
+                            style: TextStyle(
+                              color: muted,
                               fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
                       )).toList(),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: totalCells,
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 7,
-                        mainAxisSpacing: 11,
+                        mainAxisSpacing: 10,
                         crossAxisSpacing: 2,
                         childAspectRatio: .88,
                       ),
@@ -181,36 +198,39 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
-                                width: 39,
-                                height: 39,
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                width: 36,
+                                height: 36,
                                 decoration: BoxDecoration(
-                                  color: selected ? const Color(0xFF292C30) : Colors.transparent,
+                                  color: selected ? accent : Colors.transparent,
                                   shape: BoxShape.circle,
                                 ),
                                 alignment: Alignment.center,
                                 child: Text(
                                   '${date.day}',
                                   style: TextStyle(
-                                    color: isFuture
-                                        ? const Color(0xFF55585D)
-                                        : inMonth
-                                            ? const Color(0xFFF0F1F2)
-                                            : const Color(0xFF66696D),
+                                    color: selected
+                                        ? Colors.white
+                                        : isFuture
+                                            ? muted.withOpacity(.35)
+                                            : inMonth
+                                                ? text
+                                                : muted.withOpacity(.5),
                                     fontSize: 14,
-                                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 3),
+                              const SizedBox(height: 4),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _StatusDot(color: _red, active: noNavigation),
+                                  _StatusDot(color: red, active: noNavigation),
                                   const SizedBox(width: 3),
-                                  _StatusDot(color: _blue, active: blocked),
+                                  _StatusDot(color: blue, active: blocked),
                                   const SizedBox(width: 3),
-                                  _StatusDot(color: _green, active: navigated),
+                                  _StatusDot(color: green, active: navigated),
                                 ],
                               ),
                             ],
@@ -218,70 +238,85 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
                         );
                       },
                     ),
-                    const SizedBox(height: 29),
-                    Row(
-                      children: [
-                        Expanded(child: _CalendarMetric(label: 'Dias ativos', value: '$activeDays')),
-                        _VerticalMetricDivider(),
-                        Expanded(child: _CalendarMetric(label: 'Dias sem uso', value: '$noNavigationDays')),
-                        _VerticalMetricDivider(),
-                        Expanded(child: _CalendarMetric(label: 'Bloqueios', value: '$totalBlocked')),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    _UsageSummaryRow(
-                      color: _green,
-                      icon: Symbols.language_rounded,
-                      label: 'Dias com navegação',
-                      value: '$activeDays / $elapsedDays dias',
-                      trailing: '${elapsedDays == 0 ? 0 : (activeDays * 100 / elapsedDays).round()}%',
-                    ),
-                    const SizedBox(height: 10),
-                    _UsageSummaryRow(
-                      color: _blue,
-                      icon: Symbols.shield_rounded,
-                      label: 'Anúncios bloqueados',
-                      value: '$totalBlocked neste mês',
-                      trailing: '$daysWithBlocks dias',
-                    ),
-                    const SizedBox(height: 10),
-                    _UsageSummaryRow(
-                      color: _red,
-                      icon: Symbols.event_busy_rounded,
-                      label: 'Dias sem navegação',
-                      value: '$noNavigationDays dias',
-                      trailing: '${elapsedDays == 0 ? 0 : (noNavigationDays * 100 / elapsedDays).round()}%',
-                    ),
-                    const SizedBox(height: 18),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.only(top: 13),
-                      decoration: const BoxDecoration(
-                        border: Border(top: BorderSide(color: Color(0xFF26282C), width: .8)),
-                      ),
-                      child: Text(
-                        '${_shortDate(_selectedDate)} · ${selectedNavigation ? 'Houve navegação' : 'Sem navegação'} · $selectedBlocks anúncios bloqueados',
-                        style: const TextStyle(color: Color(0xFF85888D), fontSize: 11.5),
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 13),
-              Row(
-                children: [
-                  _LegendDot(color: _red, label: 'Sem navegação'),
-                  const SizedBox(width: 16),
-                  _LegendDot(color: _blue, label: 'Anúncios bloqueados'),
-                  const SizedBox(width: 16),
-                  _LegendDot(color: _green, label: 'Navegação'),
-                ],
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: card,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: _CalendarMetric(label: 'Dias ativos', value: '$activeDays', color: text, labelColor: muted)),
+                    _VerticalMetricDivider(color: muted),
+                    Expanded(child: _CalendarMetric(label: 'Dias sem uso', value: '$noNavigationDays', color: text, labelColor: muted)),
+                    _VerticalMetricDivider(color: muted),
+                    Expanded(child: _CalendarMetric(label: 'Bloqueios', value: '$totalBlocked', color: text, labelColor: muted)),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                '${monthNames[_month.month - 1]} ${_month.year}',
-                textAlign: TextAlign.end,
-                style: TextStyle(color: pageMuted.withOpacity(.7), fontSize: 11),
+              const SizedBox(height: 14),
+              _UsageSummaryRow(
+                color: green,
+                icon: Symbols.language_rounded,
+                label: 'Dias com navegação',
+                value: '$activeDays / $elapsedDays dias',
+                trailing: '${elapsedDays == 0 ? 0 : (activeDays * 100 / elapsedDays).round()}%',
+                card: card,
+                text: text,
+                muted: muted,
+              ),
+              const SizedBox(height: 10),
+              _UsageSummaryRow(
+                color: blue,
+                icon: Symbols.shield_rounded,
+                label: 'Anúncios bloqueados',
+                value: '$totalBlocked neste mês',
+                trailing: '$daysWithBlocks dias',
+                card: card,
+                text: text,
+                muted: muted,
+              ),
+              const SizedBox(height: 10),
+              _UsageSummaryRow(
+                color: red,
+                icon: Symbols.event_busy_rounded,
+                label: 'Dias sem navegação',
+                value: '$noNavigationDays dias',
+                trailing: '${elapsedDays == 0 ? 0 : (noNavigationDays * 100 / elapsedDays).round()}%',
+                card: card,
+                text: text,
+                muted: muted,
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: card,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_shortDate(_selectedDate)} · ${selectedNavigation ? 'Houve navegação' : 'Sem navegação'} · $selectedBlocks anúncios bloqueados',
+                      style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        _LegendDot(color: red, label: 'Sem navegação', textColor: muted),
+                        const SizedBox(width: 16),
+                        _LegendDot(color: blue, label: 'Bloqueios', textColor: muted),
+                        const SizedBox(width: 16),
+                        _LegendDot(color: green, label: 'Navegação', textColor: muted),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           );
@@ -289,6 +324,34 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
       ),
     );
   }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.icon,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+  final IconData icon;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: background,
+    shape: const CircleBorder(),
+    child: InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: SizedBox(
+        width: 38,
+        height: 38,
+        child: Icon(icon, color: foreground, size: 17),
+      ),
+    ),
+  );
 }
 
 class _StatusDot extends StatelessWidget {
@@ -301,77 +364,97 @@ class _StatusDot extends StatelessWidget {
     width: 5,
     height: 5,
     decoration: BoxDecoration(
-      color: color.withOpacity(active ? .96 : .20),
+      color: color.withOpacity(active ? .96 : .18),
       shape: BoxShape.circle,
     ),
   );
 }
 
 class _CalendarMetric extends StatelessWidget {
-  const _CalendarMetric({required this.label, required this.value});
+  const _CalendarMetric({required this.label, required this.value, required this.color, required this.labelColor});
   final String label;
   final String value;
+  final Color color;
+  final Color labelColor;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF777A7F), fontSize: 10.5)),
+      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: labelColor, fontSize: 10.5, fontWeight: FontWeight.w600)),
       const SizedBox(height: 5),
-      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFF0F1F2), fontSize: 14, fontWeight: FontWeight.w500)),
+      Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800)),
     ],
   );
 }
 
 class _VerticalMetricDivider extends StatelessWidget {
+  const _VerticalMetricDivider({required this.color});
+  final Color color;
+
   @override
   Widget build(BuildContext context) => Container(
     width: 1,
-    height: 44,
-    color: const Color(0xFF292B2F),
-    margin: const EdgeInsets.symmetric(horizontal: 5),
+    height: 32,
+    color: color.withOpacity(.18),
   );
 }
 
 class _UsageSummaryRow extends StatelessWidget {
-  const _UsageSummaryRow({required this.color, required this.icon, required this.label, required this.value, required this.trailing});
+  const _UsageSummaryRow({
+    required this.color,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.trailing,
+    required this.card,
+    required this.text,
+    required this.muted,
+  });
   final Color color;
   final IconData icon;
   final String label;
   final String value;
   final String trailing;
+  final Color card;
+  final Color text;
+  final Color muted;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-    decoration: BoxDecoration(color: _AdBlockCalendarScreenState._rowSurface, borderRadius: BorderRadius.circular(32)),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
     child: Row(
       children: [
-        Container(width: 42, height: 42, decoration: BoxDecoration(color: color, shape: BoxShape.circle), child: Icon(icon, color: const Color(0xFF101113), size: 21)),
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(color: color.withOpacity(.16), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 19),
+        ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF909399), fontSize: 12)),
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 3),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFE5E6E8), fontSize: 14, fontWeight: FontWeight.w500)),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
         ])),
         const SizedBox(width: 8),
-        Text(trailing, style: const TextStyle(color: Color(0xFF9A9DA2), fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(trailing, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w800)),
       ],
     ),
   );
 }
 
 class _LegendDot extends StatelessWidget {
-  const _LegendDot({required this.color, required this.label});
+  const _LegendDot({required this.color, required this.label, required this.textColor});
   final Color color;
   final String label;
+  final Color textColor;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 5),
-      Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF888B90), fontSize: 9.5))),
-    ]),
-  );
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+    const SizedBox(width: 5),
+    Text(label, style: TextStyle(color: textColor, fontSize: 10.5, fontWeight: FontWeight.w600)),
+  ]);
 }

@@ -111,6 +111,100 @@ class AdBlockStats extends ChangeNotifier {
   bool wasUsedOn(DateTime date) =>
       _usageDays.contains(dateKey(date)) || countForDate(date) > 0;
 
+  /// Rótulos e totais de anúncios bloqueados para os 7 dias mais recentes
+  /// (usado na vista "Day" do gráfico de barras da tela de Atividade).
+  List<MapEntry<String, int>> get dayView {
+    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final date = DateTime.now().subtract(Duration(days: 6 - index));
+      return MapEntry(labels[date.weekday % 7], countForDate(date));
+    }, growable: false);
+  }
+
+  /// Totais por semana (segunda a domingo) das últimas 7 semanas, incluindo
+  /// a semana atual (usado na vista "Week").
+  List<MapEntry<String, int>> get weekView {
+    final now = DateTime.now();
+    final currentMonday = now.subtract(Duration(days: now.weekday - 1));
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final mondayOfWeek = currentMonday.subtract(Duration(days: 7 * (6 - index)));
+      var total = 0;
+      for (var dayOffset = 0; dayOffset < 7; dayOffset++) {
+        total += countForDate(mondayOfWeek.add(Duration(days: dayOffset)));
+      }
+      return MapEntry('S${index + 1}', total);
+    }, growable: false);
+  }
+
+  /// Totais por mês dos últimos 7 meses, incluindo o mês atual
+  /// (usado na vista "Month").
+  List<MapEntry<String, int>> get monthView {
+    const labels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    final now = DateTime.now();
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final monthsAgo = 6 - index;
+      final targetMonthIndex = now.month - 1 - monthsAgo;
+      final year = now.year + (targetMonthIndex < 0 ? ((targetMonthIndex + 1) ~/ 12) - 1 : targetMonthIndex ~/ 12);
+      final month = ((targetMonthIndex % 12) + 12) % 12 + 1;
+      var total = 0;
+      for (final key in _dailyCounts.keys) {
+        final parts = key.split('-');
+        if (parts.length != 3) continue;
+        final keyYear = int.tryParse(parts[0]);
+        final keyMonth = int.tryParse(parts[1]);
+        if (keyYear == year && keyMonth == month) total += _dailyCounts[key] ?? 0;
+      }
+      return MapEntry(labels[month - 1], total);
+    }, growable: false);
+  }
+
+  /// Totais por ano dos últimos 5 anos (usado na vista "Year").
+  List<MapEntry<String, int>> get yearView {
+    final now = DateTime.now();
+    return List<MapEntry<String, int>>.generate(5, (index) {
+      final year = now.year - (4 - index);
+      var total = 0;
+      for (final key in _dailyCounts.keys) {
+        final parts = key.split('-');
+        if (parts.length != 3) continue;
+        if (int.tryParse(parts[0]) == year) total += _dailyCounts[key] ?? 0;
+      }
+      return MapEntry(year.toString(), total);
+    }, growable: false);
+  }
+
+  /// Uso (verdadeiro/falso) de cada dia da semana atual (segunda a domingo),
+  /// usado para marcar os "checks" do Day Streak. Dias futuros são sempre
+  /// falsos, mesmo que a semana ainda não tenha terminado.
+  List<bool> get currentWeekUsage {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return List<bool>.generate(7, (index) {
+      final day = monday.add(Duration(days: index));
+      final todayAtMidnight = DateTime(now.year, now.month, now.day);
+      final dayAtMidnight = DateTime(day.year, day.month, day.day);
+      if (dayAtMidnight.isAfter(todayAtMidnight)) return false;
+      return wasUsedOn(day);
+    }, growable: false);
+  }
+
+  /// Sequência atual de dias consecutivos de uso, terminando hoje ou ontem
+  /// (se hoje ainda não tiver uso registado, a sequência de ontem continua
+  /// a contar como "em curso" até à meia-noite).
+  int get currentStreak {
+    final now = DateTime.now();
+    var cursor = DateTime(now.year, now.month, now.day);
+    if (!wasUsedOn(cursor)) {
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    var streak = 0;
+    while (wasUsedOn(cursor)) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
   bool _nativeListenerAttached = false;
 
   void _attachNativeStatsListener() {
@@ -349,21 +443,34 @@ class SearchHistoryController extends ChangeNotifier {
 
 final SearchHistoryController searchHistoryController = SearchHistoryController();
 
-enum SiteCategory { destaque, produtividade, social, entretenimento, desenvolvimento, ia, apostas, compras, noticias, viagens, financas, personalizados }
+enum SiteCategory {
+  destaque,
+  produtividade,
+  social,
+  entretenimento,
+  desenvolvimento,
+  ia,
+  apostas,
+  compras,
+  noticias,
+  viagens,
+  financas,
+  personalizados,
+}
 
-String siteCategoryLabel(SiteCategory category) => switch (category) {
-  SiteCategory.destaque => 'Em destaque',
-  SiteCategory.produtividade => 'Produtividade',
-  SiteCategory.social => 'Redes sociais',
-  SiteCategory.entretenimento => 'Entretenimento',
-  SiteCategory.desenvolvimento => 'Desenvolvimento',
-  SiteCategory.ia => 'Inteligência artificial',
-  SiteCategory.apostas => 'Apostas desportivas',
-  SiteCategory.compras => 'Compras',
-  SiteCategory.noticias => 'Notícias e informação',
-  SiteCategory.viagens => 'Viagens',
-  SiteCategory.financas => 'Finanças e serviços',
-  SiteCategory.personalizados => 'Os meus sites',
+const Map<SiteCategory, String> siteCategoryLabels = {
+  SiteCategory.destaque: 'Destaques',
+  SiteCategory.produtividade: 'Produtividade',
+  SiteCategory.social: 'Redes sociais',
+  SiteCategory.entretenimento: 'Entretenimento',
+  SiteCategory.desenvolvimento: 'Desenvolvimento',
+  SiteCategory.ia: 'Inteligência artificial',
+  SiteCategory.apostas: 'Apostas desportivas',
+  SiteCategory.compras: 'Compras',
+  SiteCategory.noticias: 'Notícias e informação',
+  SiteCategory.viagens: 'Viagens',
+  SiteCategory.financas: 'Finanças e serviços',
+  SiteCategory.personalizados: 'Os meus sites',
 };
 
 class QuickSite {
@@ -502,22 +609,18 @@ class CustomSitesController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool containsUrl(String url) => _sites.any((site) => site.url == url);
-
   Future<void> add(QuickSite site) async {
     _sites.removeWhere((item) => item.url == site.url);
-    _sites.add(site);
+    _sites.insert(0, site);
     notifyListeners();
     await _persist();
   }
 
   Future<void> remove(String url) async {
-    _sites.removeWhere((site) => site.url == url);
+    _sites.removeWhere((item) => item.url == url);
     notifyListeners();
     await _persist();
   }
-
-  Future<void> flushPersistence() => _persist();
 
   Future<void> _persist() async {
     try {
@@ -529,14 +632,11 @@ class CustomSitesController extends ChangeNotifier {
         'faviconUrl': site.faviconUrl,
       }).toList();
       await prefs.setString(_storageKey, jsonEncode(payload));
-    } catch (_) {
-      // Não interrompe a interface se o armazenamento estiver indisponível.
-    }
+    } catch (_) {}
   }
 }
 
 final CustomSitesController customSitesController = CustomSitesController();
-
 
 enum ActivityKind { site, game }
 
@@ -633,18 +733,15 @@ class ActivityController extends ChangeNotifier {
 final ActivityController activityController = ActivityController();
 
 // A aba especial do Orbit Browser mantém uma única instância persistente,
-// usando a mesma OrbitBrowserScreen e os mesmos controlos de navegação
-// das restantes abas de browser.
-enum TabKind { browser, appScreen, orbitBrowser }
+// reutilizada em toda a navegação da aplicação (como um separador fixo).
+enum TabKind { orbitBrowser, browser, appScreen }
 
 class BrowserTab {
   BrowserTab({
     required this.id,
     required this.kind,
-    this.url = '',
+    required this.url,
     this.title,
-    this.appScreenLabel,
-    this.appScreenIcon,
     this.thumbnail,
     this.isIncognito = false,
     DateTime? lastActivity,
@@ -654,179 +751,128 @@ class BrowserTab {
   final TabKind kind;
   String url;
   String? title;
-  String? appScreenLabel;
-  IconData? appScreenIcon;
   Uint8List? thumbnail;
   final bool isIncognito;
-  bool canGoBack = false;
-  bool canGoForward = false;
   DateTime lastActivity;
-  void touch() => lastActivity = DateTime.now();
+
+  void touch() {
+    lastActivity = DateTime.now();
+  }
 }
-
-
-Future<Directory> _tabSnapshotDirectory() async {
-  final support = await getApplicationSupportDirectory();
-  final directory = Directory('${support.path}${Platform.pathSeparator}tab_snapshots');
-  if (!await directory.exists()) await directory.create(recursive: true);
-  return directory;
-}
-
-String _safeTabSnapshotName(String id) =>
-    '${id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png';
 
 class TabsController extends ChangeNotifier {
-  static const String _storageKey = 'looply_browser_tabs_v2';
-  static const String _activeStorageKey = 'looply_active_browser_tab_v2';
+  static const String _storageKey = 'looply_open_tabs_v1';
+  static const String _activeStorageKey = 'looply_active_tab_v1';
   final List<BrowserTab> _tabs = [];
-  final Set<Future<void>> _pendingSnapshotWrites = <Future<void>>{};
-  int _counter = 0;
   String? _activeTabId;
-  Timer? _persistTimer;
+  final List<Future<void>> _pendingSnapshotWrites = [];
+
   List<BrowserTab> get tabs => List.unmodifiable(_tabs);
-  int get count => _tabs.length;
   String? get activeTabId => _activeTabId;
+  BrowserTab? get activeTab {
+    if (_activeTabId == null) return null;
+    for (final tab in _tabs) {
+      if (tab.id == _activeTabId) return tab;
+    }
+    return null;
+  }
+
+  Future<Directory> _tabSnapshotDirectory() async {
+    final support = await getApplicationSupportDirectory();
+    final directory = Directory('${support.path}${Platform.pathSeparator}tab_snapshots');
+    if (!await directory.exists()) await directory.create(recursive: true);
+    return directory;
+  }
+
+  String _safeTabSnapshotName(String id) =>
+      '${id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png';
 
   Future<void> restore() async {
-    _tabs.clear();
-    _activeTabId = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      final decoded = raw == null || raw.isEmpty ? const <dynamic>[] : jsonDecode(raw);
-      if (decoded is! List) {
-        notifyListeners();
-        return;
-      }
-      var greatestId = -1;
-      for (final value in decoded) {
-        if (value is! Map) continue;
-        final id = value['id'];
-        final kindName = value['kind'];
-        final url = value['url'];
-        if (id is! String || url is! String || url.trim().isEmpty) continue;
-        TabKind? kind;
-        for (final candidate in TabKind.values) {
-          if (candidate.name == kindName) { kind = candidate; break; }
-        }
-        if (kind == null || kind == TabKind.appScreen) continue;
-        final uri = Uri.tryParse(url);
-        final isInternalAiSearch = uri != null && uri.scheme == 'looply' && uri.host == 'ai-search';
-        final isWebUrl = uri != null && uri.host.isNotEmpty && (uri.scheme == 'http' || uri.scheme == 'https');
-        if (!isInternalAiSearch && !isWebUrl) continue;
-        final suffix = int.tryParse(id.startsWith('tab_') ? id.substring(4) : '');
-        if (suffix != null && suffix > greatestId) greatestId = suffix;
-        Uint8List? thumbnail;
-        try {
-          final snapshotDirectory = await _tabSnapshotDirectory();
-          final snapshotFile = File('${snapshotDirectory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
-          if (await snapshotFile.exists()) thumbnail = await snapshotFile.readAsBytes();
-        } catch (_) {}
-        if (thumbnail == null) {
-          final encodedThumbnail = value['thumbnailBase64'];
-          if (encodedThumbnail is String && encodedThumbnail.isNotEmpty && encodedThumbnail.length <= 95000) {
-            try { thumbnail = base64Decode(encodedThumbnail); } catch (_) {}
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final directory = await _tabSnapshotDirectory();
+          for (final item in decoded) {
+            if (item is! Map) continue;
+            final id = item['id'];
+            final kindName = item['kind'];
+            final url = item['url'];
+            if (id is! String || kindName is! String || url is! String) continue;
+            TabKind? kind;
+            for (final candidate in TabKind.values) {
+              if (candidate.name == kindName) { kind = candidate; break; }
+            }
+            if (kind == null || kind == TabKind.appScreen) continue;
+            Uint8List? thumbnail;
+            final thumbnailFile = item['thumbnailFile'];
+            if (thumbnailFile is String) {
+              try {
+                final file = File('${directory.path}${Platform.pathSeparator}$thumbnailFile');
+                if (await file.exists()) thumbnail = await file.readAsBytes();
+              } catch (_) {}
+            }
+            if (thumbnail == null) {
+              final thumbnailBase64 = item['thumbnailBase64'];
+              if (thumbnailBase64 is String) {
+                try { thumbnail = base64Decode(thumbnailBase64); } catch (_) {}
+              }
+            }
+            final lastActivity = item['lastActivity'];
+            _tabs.add(BrowserTab(
+              id: id,
+              kind: kind,
+              url: url,
+              title: item['title'] is String ? item['title'] as String : null,
+              thumbnail: thumbnail,
+              lastActivity: lastActivity is String ? DateTime.tryParse(lastActivity) : null,
+            ));
           }
         }
-        _tabs.add(BrowserTab(
-          id: id,
-          kind: kind,
-          url: url,
-          title: value['title'] is String ? value['title'] as String : null,
-          thumbnail: thumbnail,
-          lastActivity: value['lastActivity'] is String
-              ? DateTime.tryParse(value['lastActivity'] as String)
-              : null,
-        ));
       }
-      _counter = greatestId + 1;
-      final savedActive = prefs.getString(_activeStorageKey);
-      _activeTabId = _tabs.any((tab) => tab.id == savedActive)
-          ? savedActive
-          : (_tabs.isNotEmpty ? _tabs.first.id : null);
-      notifyListeners();
+      final activeId = prefs.getString(_activeStorageKey);
+      if (activeId != null && _tabs.any((tab) => tab.id == activeId)) {
+        _activeTabId = activeId;
+      }
     } catch (_) {
-      // Se a sessão estiver corrompida, o Looply abre normalmente sem abas restauradas.
+      // Sessões corrompidas não impedem o arranque com abas vazias.
     }
+    notifyListeners();
+  }
+
+  String _generateTabId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${_tabs.length}_${identityHashCode(this)}';
+
+  BrowserTab createBrowserTab(String url, {String? title, bool isIncognito = false}) {
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.browser,
+      url: url,
+      title: title,
+      isIncognito: isIncognito,
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    if (!isIncognito) _schedulePersist();
+    return tab;
   }
 
   void activate(String id) {
-    if (!_tabs.any((tab) => tab.id == id)) return;
+    if (_activeTabId == id) return;
     _activeTabId = id;
-    final tab = _tabs.firstWhere((tab) => tab.id == id);
-    tab.touch();
+    final tab = getTab(id);
+    tab?.touch();
     notifyListeners();
-    _schedulePersist();
+    if (tab != null && !tab.isIncognito) _schedulePersist();
   }
 
-  BrowserTab createBrowserTab(String url, {bool isIncognito = false}) {
-    final tab = BrowserTab(id: 'tab_${_counter++}', kind: TabKind.browser, url: url, isIncognito: isIncognito);
-    _tabs.insert(0, tab);
-    _activeTabId = tab.id;
-    notifyListeners();
-    _schedulePersist();
-    return tab;
-  }
-
-  BrowserTab upsertAppScreenTab(String screenKey, String label, IconData icon, Uint8List? thumbnail) {
-    final index = _tabs.indexWhere((tab) => tab.kind == TabKind.appScreen && tab.url == screenKey);
-    if (index >= 0) {
-      final tab = _tabs.removeAt(index);
-      tab.thumbnail = thumbnail;
-      tab.touch();
-      _tabs.insert(0, tab);
-      notifyListeners();
-      return tab;
-    }
-    final tab = BrowserTab(
-      id: 'tab_${_counter++}', kind: TabKind.appScreen, url: screenKey,
-      appScreenLabel: label, appScreenIcon: icon, thumbnail: thumbnail,
-    );
-    _tabs.insert(0, tab);
-    notifyListeners();
-    return tab;
-  }
-
-  BrowserTab upsertOrbitBrowserTab(Uint8List? thumbnail) {
-    final index = _tabs.indexWhere((tab) => tab.kind == TabKind.orbitBrowser);
-    if (index >= 0) {
-      final tab = _tabs.removeAt(index);
-      if (thumbnail != null) {
-        tab.thumbnail = thumbnail;
-        if (!tab.isIncognito) _trackSnapshotWrite(tab.id, thumbnail);
-      }
-      tab.touch();
-      _tabs.insert(0, tab);
-      notifyListeners();
-      _schedulePersist();
-      return tab;
-    }
-    final tab = BrowserTab(
-      id: 'tab_${_counter++}', kind: TabKind.orbitBrowser, url: 'https://www.wikipedia.org',
-      appScreenLabel: 'Orbit Browser', appScreenIcon: PhosphorIcons.globe, thumbnail: thumbnail,
-    );
-    _tabs.insert(0, tab);
-    _activeTabId = tab.id;
-    notifyListeners();
-    _schedulePersist();
-    return tab;
-  }
-
-  void updateTab(
-    String id, {
-    String? url,
-    String? title,
-    bool? canGoBack,
-    bool? canGoForward,
-    Uint8List? thumbnail,
-  }) {
-    final index = _tabs.indexWhere((tab) => tab.id == id);
-    if (index < 0) return;
-    final tab = _tabs[index];
+  void updateTab(String id, {String? url, String? title, Uint8List? thumbnail}) {
+    final tab = getTab(id);
+    if (tab == null) return;
     if (url != null) tab.url = url;
     if (title != null) tab.title = title;
-    if (canGoBack != null) tab.canGoBack = canGoBack;
-    if (canGoForward != null) tab.canGoForward = canGoForward;
     if (thumbnail != null) {
       tab.thumbnail = thumbnail;
       if (!tab.isIncognito) {
