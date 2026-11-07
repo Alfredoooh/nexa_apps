@@ -26,7 +26,9 @@ class LooplyLogoView(context: Context) : View(context) {
         picture?.let { pic ->
             val save = canvas.save()
             canvas.scale(width / 240f, height / 48f)
-            canvas.drawPicture(pic, paint)
+            val layer = canvas.saveLayer(0f, 0f, 240f, 48f, paint)
+            canvas.drawPicture(pic)
+            canvas.restoreToCount(layer)
             canvas.restoreToCount(save)
         }
     }

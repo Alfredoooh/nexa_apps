@@ -64,6 +64,7 @@ import com.looply.browser.app.data.LooplyCloudSync
 import com.looply.browser.app.data.LooplyStore
 import com.looply.browser.app.data.LooplyTab
 import com.looply.browser.app.ui.LooplyIconView
+import com.looply.browser.app.ui.LooplyLogoView
 import com.looply.browser.app.ui.LooplyPalette
 import com.looply.browser.app.ui.assetImage
 import com.looply.browser.app.ui.cardText
@@ -228,8 +229,8 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(splashRemoval)
         currentWebView?.apply {
             stopLoading()
-            webChromeClient = null
-            webViewClient = null
+            webChromeClient = WebChromeClient()
+            webViewClient = WebViewClient()
             removeAllViews()
             destroy()
         }
@@ -463,7 +464,8 @@ class MainActivity : AppCompatActivity() {
         setOnClickListener { navigate("all_sites") }
         val dash = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(Color.TRANSPARENT); setStroke(dp(1.5f), palette.accent, dp(4f), dp(3f))
+            setColor(Color.TRANSPARENT)
+            setStroke(dp(1.5f), palette.accent)
         }
         addView(FrameLayout(this@MainActivity).apply {
             background = dash
@@ -494,7 +496,7 @@ class MainActivity : AppCompatActivity() {
         currentAddressPill = addressPill
         addressPill.addView(LooplyIconView(this, if (tab.url.startsWith("https")) "lock-simple" else "magnifying-glass").apply { tint = palette.muted },
             FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER_VERTICAL or Gravity.START).apply { leftMargin = dp(12) })
-        currentAddress = textView(this, tab.title.ifBlank { Uri.parse(tab.url).host ?: tab.url }, 14f, palette.text, Typeface.MEDIUM).apply {
+        currentAddress = textView(this, tab.title.ifBlank { Uri.parse(tab.url).host ?: tab.url }, 14f, palette.text, Typeface.NORMAL, useMediumFamily = true).apply {
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         }
         addressPill.addView(currentAddress, FrameLayout.LayoutParams(-1, -1).apply { leftMargin = dp(38); rightMargin = dp(8) })
@@ -518,83 +520,43 @@ class MainActivity : AppCompatActivity() {
 
         val web = WebView(this)
         currentWebView = web
-        configureWebView(web, tab)
-        root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
-        web.loadUrl(tab.url)
-        return root
-    }
-
-    private fun configureWebView(web: WebView, tab: LooplyTab) {
-        web.setBackgroundColor(palette.background)
-        web.overScrollMode = View.OVER_SCROLL_NEVER
-        web.isVerticalScrollBarEnabled = false
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
-            loadsImagesAutomatically = true
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
+            loadWithOverviewMode = true
             useWideViewPort = true
-            loadWithOverviewMode = false
-            builtInZoomControls = false
+            setSupportZoom(true)
+            builtInZoomControls = true
             displayZoomControls = false
-            cacheMode = if (store.getBoolean("flutter.looply_navigation_accelerator_enabled", true)) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            mediaPlaybackRequiresUserGesture = true
-            allowFileAccess = false
-            allowContentAccess = true
-            if (tab.incognito) {
-                cacheMode = WebSettings.LOAD_NO_CACHE
-                databaseEnabled = false
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                @Suppress("DEPRECATION")
-                forceDark = if (store.getBoolean("flutter.looply_force_dark_websites", false) ||
-                    (store.getBoolean("flutter.looply_site_theme_follows_app", true) && palette.dark)) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
-            }
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            userAgentString = userAgentString?.replace("; wv", "")
+            cacheMode = WebSettings.LOAD_DEFAULT
         }
-        CookieManager.getInstance().setAcceptCookie(!tab.incognito)
+        CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, !tab.incognito)
-        if (tab.incognito) {
-            web.clearCache(true)
-            web.clearHistory()
-        }
+        if (tab.incognito) web.clearCache(true)
         web.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                val uri = request.url
-                val scheme = uri.scheme.orEmpty()
-                if (scheme == "http" || scheme == "https") return false
-                return try { startActivity(Intent(Intent.ACTION_VIEW, uri)); true } catch (_: Exception) { true }
-            }
-
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                if (LooplyAdBlocker.shouldBlock(request)) return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-                return super.shouldInterceptRequest(view, request)
+                return if (LooplyAdBlocker.enabled && LooplyAdBlocker.shouldBlock(request.url.toString())) LooplyAdBlocker.blockedResponse() else null
             }
 
-            override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                currentAddress?.text = Uri.parse(url).host ?: url
                 currentProgress?.visibility = View.VISIBLE
-                currentProgress?.progress = 0
-                currentAddress?.text = Uri.parse(url.orEmpty()).host ?: url.orEmpty()
-                browserToolbarColor = null
-                applyBrowserChromeColor(palette.background)
-                tab.url = url ?: tab.url
-                tab.title = Uri.parse(tab.url).host ?: tab.title
             }
 
-            override fun onPageFinished(view: WebView, url: String?) {
+            override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 currentProgress?.visibility = View.GONE
-                tab.url = url ?: tab.url
-                tab.title = view.title?.takeIf { it.isNotBlank() } ?: (Uri.parse(tab.url).host ?: tab.url)
-                currentAddress?.text = tab.title
-                if (!tab.incognito) store.addHistory(tab.title, tab.url)
-                if (LooplyAdBlocker.enabled) view.evaluateJavascript(LooplyAdBlocker.COSMETIC_SCRIPT, null)
-                applyWebsiteAppearance(view)
-                if (store.getBoolean("flutter.looply_adaptive_toolbar_color", false) && !tab.incognito) refreshAdaptiveToolbarColor(view)
-                store.saveTabs(tabs, tab.id)
+                tab.url = url
+                if (!tab.incognito) store.addHistory(view.title ?: url, url)
+                persistTabs()
+            }
+
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                super.onReceivedError(view, request, error)
+                if (request.isForMainFrame) currentProgress?.visibility = View.GONE
             }
 
             override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
@@ -632,7 +594,7 @@ class MainActivity : AppCompatActivity() {
                     }.distinct()
                     if (requested.isEmpty()) { request.deny(); return@runOnUiThread }
                     val missing = requested.filter { ContextCompat.checkSelfPermission(this@MainActivity, it) != PackageManager.PERMISSION_GRANTED }
-                    if (missing.isEmpty()) request.grant(request.resources.toTypedArray()) else {
+                    if (missing.isEmpty()) request.grant(request.resources) else {
                         pendingWebPermission = request
                         ActivityCompat.requestPermissions(this@MainActivity, missing.toTypedArray(), 8162)
                     }
@@ -676,6 +638,9 @@ class MainActivity : AppCompatActivity() {
                 toast("Download iniciado")
             } catch (error: Exception) { toast("Não foi possível iniciar o download: ${error.message}") }
         })
+        root.addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        web.loadUrl(tab.url)
+        return root
     }
 
     private var pendingGeoCallback: GeolocationPermissions.Callback? = null
@@ -692,8 +657,8 @@ class MainActivity : AppCompatActivity() {
             web.stopLoading()
             web.onPause()
             (web.parent as? ViewGroup)?.removeView(web)
-            web.webChromeClient = null
-            web.webViewClient = null
+            web.webChromeClient = WebChromeClient()
+            web.webViewClient = WebViewClient()
             web.destroy()
         } catch (_: Exception) { }
     }
@@ -711,17 +676,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun normalizeUrl(raw: String): String {
-        val value = raw.trim()
-        if (value.isEmpty()) return "https://www.google.com"
-        if (value.startsWith("http://") || value.startsWith("https://")) return value
-        if (value.contains(' ') || !value.contains('.') || value.startsWith("?")) return searchUrl(value)
-        return "https://$value"
+        val trimmed = raw.trim()
+        return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "https://$trimmed"
     }
 
     private fun searchUrl(query: String): String {
-        val engine = lastSearchEngine
         val encoded = URLEncoder.encode(query, "UTF-8")
-        return when (engine) {
+        return when (lastSearchEngine) {
             "Bing" -> "https://www.bing.com/search?q=$encoded"
             "DuckDuckGo" -> "https://duckduckgo.com/?q=$encoded"
             "Yahoo" -> "https://search.yahoo.com/search?p=$encoded"
@@ -731,52 +692,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun persistTabs() = store.saveTabs(tabs, activeTab?.id)
+
     private fun saveLastPage(url: String, title: String) {
-        val json = JSONObject().put("url", url).put("title", title.ifBlank { url }).put("savedAt", java.time.Instant.now().toString())
-        store.putString("flutter.looply_last_page_session", json.toString())
+        store.putString("flutter.looply_last_page_url", url)
+        store.putString("flutter.looply_last_page_title", title.ifBlank { url })
     }
 
-    private fun persistTabs() { if (::store.isInitialized) store.saveTabs(tabs, activeTab?.id) }
-
     private fun showBrowserOptions() {
+        val tab = activeTab ?: return
         val sheet = BottomSheetDialog(this)
-        val content = linear(this, true).apply {
-            background = rounded(palette.panel, 24f, this@MainActivity)
-            setPadding(dp(12), dp(12), dp(12), dp(18))
-        }
-        val title = textView(this, "Opções do navegador", 16f, palette.text, Typeface.BOLD).apply { setPadding(dp(12), dp(8), dp(12), dp(12)) }
-        content.addView(title)
-        val options = listOf(
-            Triple("bookmark-simple", "Adicionar aos favoritos") { activeTab?.let { if (!it.incognito) { store.addBookmark(it.title, it.url); toast("Adicionado aos favoritos") } else toast("Favoritos não são guardados em navegação anónima") } },
-            Triple("copy", "Copiar endereço") { copyAddress() },
-            Triple("magnifying-glass", "Pesquisar nesta página") { searchInPage() },
-            Triple("share", "Partilhar página") { shareCurrentPage() },
-            Triple("clock-counter-clockwise", "Histórico") { sheet.dismiss(); navigate("history") },
-            Triple("bookmarks-simple", "Favoritos") { sheet.dismiss(); navigate("bookmarks") },
-            Triple("download-simple", "Downloads") { sheet.dismiss(); navigate("downloads") },
-            Triple("gear", "Definições") { sheet.dismiss(); navigate("settings") },
-            Triple("arrow-clockwise", "Recarregar") { currentWebView?.reload() },
-        )
-        options.forEach { (icon, text, action) ->
-            val item = linear(this).apply {
-                gravity = Gravity.CENTER_VERTICAL; isClickable = true; isFocusable = true
-                background = ripple(this@MainActivity, Color.TRANSPARENT, 12f)
-                setPadding(dp(12), 0, dp(12), 0); minimumHeight = dp(54)
-                addView(LooplyIconView(this@MainActivity, icon).apply { tint = palette.text }, LinearLayout.LayoutParams(dp(22), dp(22)))
-                addView(textView(this@MainActivity, text, 14f, palette.text).apply { setPadding(dp(16), 0, 0, 0) })
-                setOnClickListener { action(); if (sheet.isShowing && text !in setOf("Histórico", "Favoritos", "Downloads", "Definições")) sheet.dismiss() }
-            }
-            content.addView(item)
-        }
+        val content = linear(this, true).apply { setPadding(dp(8), dp(10), dp(8), dp(18)) }
+        content.addView(listRow("bookmark-simple", "Adicionar aos favoritos", null) { store.addBookmark(tab.title, tab.url); toast("Adicionado aos favoritos"); sheet.dismiss() })
+        content.addView(listRow("copy", "Copiar endereço", null) { copyAddress(tab.url); sheet.dismiss() })
+        content.addView(listRow("share", "Partilhar", null) { shareCurrentPage(); sheet.dismiss() })
+        content.addView(listRow("arrow-clockwise", "Recarregar", null) { currentWebView?.reload(); sheet.dismiss() })
+        content.addView(listRow("magnifying-glass", "Pesquisar na página", null) { searchInPage(); sheet.dismiss() })
         sheet.setContentView(content)
-        sheet.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         sheet.show()
     }
 
-    private fun copyAddress() {
-        val url = currentWebView?.url ?: activeTab?.url ?: return
-        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", url))
+    private fun copyAddress(url: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("url", url))
         toast("Endereço copiado")
     }
 
@@ -804,7 +742,7 @@ class MainActivity : AppCompatActivity() {
         val engineBar = linear(this).apply {
             gravity = Gravity.CENTER_VERTICAL; background = rounded(palette.pill, 18f, this@MainActivity); setPadding(dp(14), 0, dp(14), 0); minimumHeight = dp(50)
             addView(LooplyIconView(this@MainActivity, "magnifying-glass").apply { tint = palette.muted }, LinearLayout.LayoutParams(dp(20), dp(20)))
-            addView(textView(this@MainActivity, lastSearchEngine, 14f, palette.text, Typeface.MEDIUM).apply { setPadding(dp(10), 0, 0, 0) }, LinearLayout.LayoutParams(0, -1, 1f))
+            addView(textView(this@MainActivity, lastSearchEngine, 14f, palette.text, Typeface.NORMAL, useMediumFamily = true).apply { setPadding(dp(10), 0, 0, 0) }, LinearLayout.LayoutParams(0, -1, 1f))
             addView(LooplyIconView(this@MainActivity, "caret-down").apply { tint = palette.muted }, LinearLayout.LayoutParams(dp(18), dp(18)))
             setOnClickListener { chooseSearchEngine() }
         }
@@ -812,7 +750,8 @@ class MainActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             hint = "Pesquisar na Web ou inserir endereço"; setTextColor(palette.text); setHintTextColor(palette.muted); textSize = 15f
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
-            singleLine = true; imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO
+            setSingleLine(true)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO
             background = rounded(palette.pill, 18f, this@MainActivity); setPadding(dp(16), 0, dp(16), 0)
             setOnEditorActionListener { _, _, _ -> val q = text.toString(); if (q.isNotBlank()) openSearchQuery(q); true }
         }
@@ -920,7 +859,7 @@ class MainActivity : AppCompatActivity() {
             isClickable = true; isFocusable = true; setPadding(dp(18), 0, dp(18), 0); minimumHeight = dp(52)
             val logoGoogle = assetImage(this@MainActivity, "images/quick_sites/google.webp")
             addView(logoGoogle, LinearLayout.LayoutParams(dp(20), dp(20)))
-            addView(textView(this@MainActivity, "Continuar com Google", 14f, palette.text, Typeface.MEDIUM).apply { setPadding(dp(10), 0, 0, 0) })
+            addView(textView(this@MainActivity, "Continuar com Google", 14f, palette.text, Typeface.NORMAL, useMediumFamily = true).apply { setPadding(dp(10), 0, 0, 0) })
             setOnClickListener { signInGoogle() }
         }
         body.addView(google, LinearLayout.LayoutParams(-1, dp(52)))
@@ -931,321 +870,200 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun signInGoogle() {
-        val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
-        if (webClientId.isBlank()) { toast("Configura BROWSEIT_GOOGLE_WEB_CLIENT_ID para ativar o login Google."); return }
         lifecycleScope.launch {
             try {
-                val workerNonce = cloudSync.createChallenge()
-                val nonce = workerNonce ?: randomNonce()
-                val option = GetGoogleIdOption.Builder().setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(webClientId).setNonce(nonce).build()
-                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-                val response = CredentialManager.create(this@MainActivity).getCredential(this@MainActivity, request)
-                val credential = response.credential
-                if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                    throw IllegalStateException("A credencial devolvida não é do Google.")
-                }
-                val google = GoogleIdTokenCredential.createFrom(credential.data)
-                val token = google.idToken
-                if (token.isBlank()) throw IllegalStateException("A credencial Google recebida está incompleta.")
-                if (cloudSync.configured) cloudSync.authenticate(token, nonce)
-                val claims = decodeJwtClaims(token)
-                val email = google.id.ifBlank { claims.optString("email") }
-                if (email.isBlank()) throw IllegalStateException("A credencial Google não contém um email válido.")
-                store.putString("flutter.looply_auth_email", email)
-                store.putString("flutter.looply_auth_name", google.displayName ?: claims.optString("name"))
-                store.putString("flutter.looply_auth_photo", google.profilePictureUri?.toString() ?: claims.optString("picture"))
-                store.putString("flutter.looply_auth_provider", if (cloudSync.configured) "google" else "google-local")
-                if (cloudSync.configured) withContext(Dispatchers.IO) { runCatching { cloudSync.uploadBackup() } }
-                toast("Sessão iniciada")
-                showScreen("profile", false)
+                val nonce = cloudSync.createChallenge()
+                val rawNonce = nonce ?: UUID.randomUUID().toString()
+                val digest = java.security.MessageDigest.getInstance("SHA-256").digest(rawNonce.toByteArray())
+                val hashedNonce = digest.joinToString("") { "%02x".format(it) }
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                    .setNonce(hashedNonce)
+                    .build()
+                val request = GetCredentialRequest.Builder().addCredentialOption(googleIdOption).build()
+                val credentialManager = CredentialManager.create(this@MainActivity)
+                val result = credentialManager.getCredential(this@MainActivity, request)
+                val credential = result.credential
+                if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    withContext(Dispatchers.IO) {
+                        try { cloudSync.authenticate(googleIdTokenCredential.idToken, rawNonce) } catch (_: Exception) { }
+                    }
+                    store.putString("flutter.looply_auth_email", googleIdTokenCredential.id)
+                    withContext(Dispatchers.IO) { try { cloudSync.uploadBackup() } catch (_: Exception) { } }
+                    toast("Sessão iniciada como ${googleIdTokenCredential.id}")
+                    if (backStack.isNotEmpty()) onBackPressed() else showScreen("home", false)
+                } else toast("Não foi possível validar a credencial do Google.")
             } catch (error: GetCredentialException) {
-                toast(error.message ?: "Não foi possível concluir o login Google.")
+                toast("Não foi possível iniciar sessão: ${error.message}")
             } catch (error: Exception) {
-                toast(error.message ?: "Falha ao iniciar sessão com Google.")
+                toast("Ocorreu um erro ao iniciar sessão.")
             }
         }
     }
-
-    private fun randomNonce(): String {
-        val bytes = ByteArray(32); SecureRandom().nextBytes(bytes)
-        return android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
-    }
-
-    private fun decodeJwtClaims(token: String): JSONObject = try {
-        val parts = token.split('.')
-        if (parts.size < 2) JSONObject() else JSONObject(String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP), Charsets.UTF_8))
-    } catch (_: Exception) { JSONObject() }
 
     private fun buildProfile(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
         page.addView(buildFeatureHeader("Perfil") { onBackPressed() })
-        val scroll = ScrollView(this)
-        val body = linear(this, true).apply { setPadding(dp(20), dp(22), dp(20), dp(28)) }
-        val email = store.getString("flutter.looply_auth_email")
-        if (email.isBlank()) {
-            body.gravity = Gravity.CENTER
-            body.addView(emptyState("A tua conta", "Inicia sessão para aceder ao teu perfil."))
-            body.addView(textButton("Iniciar sessão", true) { navigate("auth") }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(20) })
+        val user = store.getString("flutter.looply_auth_email")
+        val body = linear(this, true).apply { setPadding(dp(18), dp(18), dp(18), dp(24)) }
+        if (user.isBlank()) {
+            body.addView(emptyState("Sem sessão iniciada", "Inicia sessão para sincronizares o teu perfil."))
+            body.addView(textButton("Iniciar sessão", true) { navigate("auth") }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(16) })
         } else {
-            val name = store.getString("flutter.looply_auth_name", "Utilizador Looply").ifBlank { "Utilizador Looply" }
-            val avatar = assetImage(this, "images/avatar.png").apply { background = rounded(palette.pill, 50f, this@MainActivity); clipToOutline = true }
-            body.addView(avatar, LinearLayout.LayoutParams(dp(92), dp(92)).apply { gravity = Gravity.CENTER })
-            body.addView(textView(this, name, 22f, palette.text, Typeface.BOLD).apply { gravity = Gravity.CENTER; setPadding(0, dp(18), 0, dp(4)) })
-            body.addView(textView(this, email, 13f, palette.muted).apply { gravity = Gravity.CENTER })
-            body.addView(settingCard("shield-check", "Sessão", "Ligada por ${store.getString("flutter.looply_auth_provider", "google").replace("google-local", "Google")}"), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
-            body.addView(textButton("Terminar sessão", false) { confirmSignOut() }, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(18) })
+            body.addView(cardText(this, user, "Sessão iniciada", palette))
+            body.addView(textButton("Terminar sessão", false) {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { try { cloudSync.signOut() } catch (_: Exception) { } }
+                    store.putString("flutter.looply_auth_email", "")
+                    toast("Sessão terminada")
+                    showScreen("profile", false)
+                }
+            }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(20) })
         }
-        scroll.addView(body)
-        page.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        page.addView(body)
         return page
     }
 
-    private fun confirmSignOut() {
-        MaterialAlertDialogBuilder(this).setTitle("Terminar sessão")
-            .setMessage("Tens a certeza de que pretendes terminar a sessão?")
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Terminar sessão") { _, _ ->
-                lifecycleScope.launch {
-                    runCatching { cloudSync.signOut() }
-                    listOf("flutter.looply_auth_email", "flutter.looply_auth_name", "flutter.looply_auth_photo", "flutter.looply_auth_provider").forEach { store.prefs.edit().remove(it).apply() }
-                    showScreen("profile", false)
-                }
-            }.show()
-    }
-
     // ---------------------------------------------------------------------
-    // Activity/history/bookmarks/downloads and settings.
+    // Activity, history, bookmarks, downloads.
     // ---------------------------------------------------------------------
     private fun buildActivity(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
-        page.addView(buildFeatureHeader("Atividade") { openDrawer() })
-        val body = linear(this, true).apply { setPadding(dp(18), dp(12), dp(18), dp(22)) }
-        val entries = store.readArray("looply_browsing_history_v1")
-        val today = java.time.LocalDate.now().toString()
-        var todayCount = 0
-        val hosts = linkedSetOf<String>()
-        for (i in 0 until entries.length()) {
-            val item = entries.optJSONObject(i) ?: continue
-            if (item.optString("timestamp").startsWith(today)) todayCount++
-            Uri.parse(item.optString("url")).host?.let(hosts::add)
-        }
-        val stats = linear(this).apply {
-            background = rounded(palette.pill, 22f, this@MainActivity); setPadding(dp(16), dp(16), dp(16), dp(16))
-            addView(metric("$todayCount", "Visitas hoje"), LinearLayout.LayoutParams(0, -2, 1f))
-            addView(metric("${hosts.size}", "Sites visitados"), LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        body.addView(stats)
-        body.addView(textView(this, "Atividade recente", 16f, palette.text, Typeface.BOLD).apply { setPadding(0, dp(24), 0, dp(12)) })
-        if (entries.length() == 0) body.addView(emptyState("Ainda sem atividade", "Os sites que visitares aparecerão aqui."))
-        for (i in entries.length() - 1 downTo maxOf(0, entries.length() - 25)) {
-            val obj = entries.optJSONObject(i) ?: continue
-            body.addView(listRow("globe", obj.optString("title", obj.optString("url")), Uri.parse(obj.optString("url")).host) {
-                openBrowser(obj.optString("url"), false)
-            })
-        }
-        page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        val scroll = ScrollView(this).apply { isFillViewport = true }
+        val body = linear(this, true).apply { setPadding(dp(16), dp(70), dp(16), dp(24)) }
+        body.addView(listRow("clock-counter-clockwise", "Histórico", null) { navigate("history") })
+        body.addView(listRow("bookmarks-simple", "Favoritos", null) { navigate("bookmarks") })
+        body.addView(listRow("download-simple", "Transferências", null) { navigate("downloads") })
+        scroll.addView(body)
+        page.addView(scroll, LinearLayout.LayoutParams(-1, -1))
+        page.addView(buildHomeAppBar(), FrameLayout.LayoutParams(-1, dp(64), Gravity.TOP))
         return shellContainer(page, 1)
     }
 
-    private fun metric(value: String, caption: String): View = linear(this, true).apply {
-        addView(textView(this@MainActivity, value, 24f, palette.text, Typeface.BOLD))
-        addView(textView(this@MainActivity, caption, 11f, palette.muted).apply { setPadding(0, dp(5), 0, 0) })
+    private fun buildHistory(): View {
+        val page = linear(this, true).apply { setBackgroundColor(palette.background) }
+        page.addView(buildFeatureHeader("Histórico") { onBackPressed() })
+        val array = store.readArray("looply_browsing_history_v1")
+        val body = linear(this, true).apply { setPadding(dp(14), dp(4), dp(14), dp(24)) }
+        if (array.length() == 0) body.addView(emptyState("Sem histórico", "As páginas que visitares vão aparecer aqui."))
+        for (i in array.length() - 1 downTo 0) {
+            val item = array.optJSONObject(i) ?: continue
+            body.addView(listRow("globe", item.optString("title").ifBlank { item.optString("url") }, item.optString("url")) {
+                openBrowser(item.optString("url"), false)
+            })
+        }
+        if (array.length() > 0) body.addView(textButton("Limpar histórico", false) {
+            store.clearArray("looply_browsing_history_v1"); showScreen("history", false)
+        }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(10) })
+        page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        return page
     }
 
-    private fun buildHistory(): View = buildStoredListScreen("Histórico", "looply_browsing_history_v1", "clock-counter-clockwise", true)
-    private fun buildBookmarks(): View = buildStoredListScreen("Favoritos", "looply_bookmarks_v1", "bookmarks-simple", false)
-    private fun buildDownloads(): View = buildStoredListScreen("Downloads", "looply_download_requests_v1", "download-simple", false)
-
-    private fun buildStoredListScreen(title: String, key: String, icon: String, isHistory: Boolean): View {
+    private fun buildBookmarks(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
-        page.addView(buildFeatureHeader(title) { onBackPressed() })
-        val entries = store.readArray(key)
-        val body = linear(this, true).apply { setPadding(dp(16), dp(10), dp(16), dp(26)) }
-        if (entries.length() == 0) body.addView(emptyState("Sem itens", if (isHistory) "Os sites que visitares aparecerão aqui." else "Ainda não existem itens guardados."))
-        for (i in entries.length() - 1 downTo 0) {
-            val item = entries.optJSONObject(i) ?: continue
-            val url = item.optString("url")
-            val titleText = item.optString("title", item.optString("filename", url))
-            val subtitle = if (isHistory) Uri.parse(url).host else url
-            val row = listRow(icon, titleText, subtitle) { if (url.isNotBlank()) openBrowser(url, false) }
-            row.setOnLongClickListener {
-                MaterialAlertDialogBuilder(this).setItems(arrayOf("Abrir", "Remover")) { _, which ->
-                    if (which == 0 && url.isNotBlank()) openBrowser(url, false)
-                    if (which == 1) { store.removeArrayItem(key, i); showScreen(currentScreen, false) }
-                }.show(); true
-            }
-            body.addView(row)
-        }
-        if (entries.length() > 0 && (isHistory || key == "looply_bookmarks_v1")) {
-            body.addView(textButton("Limpar tudo", false) {
-                MaterialAlertDialogBuilder(this).setTitle("Limpar ${title.lowercase(Locale.ROOT)}?").setNegativeButton("Cancelar", null)
-                    .setPositiveButton("Limpar") { _, _ -> store.clearArray(key); showScreen(currentScreen, false) }.show()
-            }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
+        page.addView(buildFeatureHeader("Favoritos") { onBackPressed() })
+        val array = store.readArray("looply_bookmarks_v1")
+        val body = linear(this, true).apply { setPadding(dp(14), dp(4), dp(14), dp(24)) }
+        if (array.length() == 0) body.addView(emptyState("Sem favoritos", "Guarda páginas para lhes aceder rapidamente."))
+        for (i in array.length() - 1 downTo 0) {
+            val item = array.optJSONObject(i) ?: continue
+            body.addView(listRow("bookmark-simple", item.optString("title").ifBlank { item.optString("url") }, item.optString("url")) {
+                openBrowser(item.optString("url"), false)
+            })
         }
         page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
         return page
     }
 
-    private fun buildSettings(): View {
+    private fun buildDownloads(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
-        page.addView(buildFeatureHeader("Definições") { onBackPressed() })
-        val body = linear(this, true).apply { setPadding(dp(16), dp(12), dp(16), dp(28)) }
-        body.addView(sectionTitle("Aparência"))
-        body.addView(settingCard("palette", "Tema", when (themeMode) { "light" -> "Claro"; "dark" -> if (pureBlack) "AMOLED" else "Escuro"; else -> "Sistema" }))
-        body.getChildAt(body.childCount - 1).setOnClickListener { chooseTheme() }
-        body.addView(sectionTitle("Navegador"))
-        body.addView(switchRow("shield-check", "Bloqueador de anúncios", "Bloqueia pedidos de publicidade conhecidos", store.getBoolean("flutter.looply_ad_block_enabled", true), "flutter.looply_ad_block_enabled") { enabled -> LooplyAdBlocker.enabled = enabled })
-        body.addView(switchRow("gauge", "Aceleração de navegação", "Ativa otimizações de carregamento", store.getBoolean("flutter.looply_navigation_accelerator_enabled", true), "flutter.looply_navigation_accelerator_enabled") { updateWebTheme() })
-        body.addView(switchRow("moon", "Forçar tema escuro nos sites", "Aplica escurecimento algorítmico quando suportado", store.getBoolean("flutter.looply_force_dark_websites", false), "flutter.looply_force_dark_websites") { updateWebTheme() })
-        body.addView(switchRow("palette", "Seguir o tema da aplicação", "Usa a aparência Looply nos sites compatíveis", store.getBoolean("flutter.looply_site_theme_follows_app", true), "flutter.looply_site_theme_follows_app") { updateWebTheme() })
-        body.addView(switchRow("image", "Cor adaptativa da barra", "Acompanha a cor dominante do site", store.getBoolean("flutter.looply_adaptive_toolbar_color", false), "flutter.looply_adaptive_toolbar_color") { enabled ->
-            if (enabled) currentWebView?.let { refreshAdaptiveToolbarColor(it) } else applyBrowserChromeColor(palette.background)
-        })
-        body.addView(switchRow("sparkles", "Pesquisa com IA", "Ativa a opção de pesquisa inteligente", store.getBoolean("flutter.looply_ai_search_mode", false), "flutter.looply_ai_search_mode") { })
-        body.addView(sectionTitle("Dados e conta"))
-        body.addView(settingCard("clock-counter-clockwise", "Histórico", "Gerir sites visitados").apply { setOnClickListener { navigate("history") } })
-        body.addView(settingCard("bookmarks-simple", "Favoritos", "Gerir páginas guardadas").apply { setOnClickListener { navigate("bookmarks") } })
-        body.addView(settingCard("download-simple", "Downloads", "Ficheiros transferidos").apply { setOnClickListener { navigate("downloads") } })
-        body.addView(settingCard("globe", "Idioma", "Português e outros idiomas").apply { setOnClickListener { navigate("language") } })
-        body.addView(settingCard("user", "Perfil", "Conta e sessão").apply { setOnClickListener { navigate("profile") } })
-        body.addView(settingCard("info", "Sobre o Looply", "Versão, licença e informação").apply { setOnClickListener { navigate("app_info") } })
+        page.addView(buildFeatureHeader("Transferências") { onBackPressed() })
+        val array = store.readArray("looply_download_requests_v1")
+        val body = linear(this, true).apply { setPadding(dp(14), dp(4), dp(14), dp(24)) }
+        if (array.length() == 0) body.addView(emptyState("Sem transferências", "Os teus downloads vão aparecer aqui."))
+        for (i in array.length() - 1 downTo 0) {
+            val item = array.optJSONObject(i) ?: continue
+            body.addView(listRow("download-simple", item.optString("filename"), item.optString("url")) { })
+        }
         page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
-        return page
-    }
-
-    private fun sectionTitle(title: String): View = textView(this, title, 13f, palette.muted, Typeface.BOLD).apply { setPadding(dp(8), dp(22), 0, dp(10)) }
-
-    private fun settingCard(icon: String, title: String, subtitle: String): View = linear(this).apply {
-        background = ripple(this@MainActivity, palette.pill, 18f); gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(14), dp(13), dp(14), dp(13)); isClickable = true; isFocusable = true
-        addView(LooplyIconView(this@MainActivity, icon).apply { tint = palette.accent }, LinearLayout.LayoutParams(dp(21), dp(21)))
-        addView(cardText(this@MainActivity, title, subtitle, palette), LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
-        addView(LooplyIconView(this@MainActivity, "caret-right").apply { tint = palette.muted }, LinearLayout.LayoutParams(dp(18), dp(18)))
-        minimumHeight = dp(68)
-    }
-
-    private fun switchRow(icon: String, title: String, subtitle: String, checked: Boolean, key: String, onChanged: (Boolean) -> Unit): View = linear(this).apply {
-        background = rounded(palette.pill, 16f, this@MainActivity); gravity = Gravity.CENTER_VERTICAL; setPadding(dp(14), dp(10), dp(10), dp(10))
-        addView(LooplyIconView(this@MainActivity, icon).apply { tint = palette.accent }, LinearLayout.LayoutParams(dp(21), dp(21)))
-        addView(cardText(this@MainActivity, title, subtitle, palette), LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
-        val toggle = SwitchCompat(this@MainActivity).apply {
-            isChecked = checked
-            thumbTintList = android.content.res.ColorStateList.valueOf(if (checked) Color.WHITE else palette.muted)
-            trackTintList = android.content.res.ColorStateList.valueOf(if (checked) palette.accent else palette.line)
-            setOnCheckedChangeListener { _, value -> store.putBoolean(key, value); onChanged(value) }
-        }
-        addView(toggle)
-        minimumHeight = dp(74)
-    }
-
-    private fun chooseTheme() {
-        val items = arrayOf("Sistema", "Claro", "Escuro", "AMOLED")
-        MaterialAlertDialogBuilder(this).setTitle("Tema").setSingleChoiceItems(items, when { themeMode == "light" -> 1; themeMode == "dark" && pureBlack -> 3; themeMode == "dark" -> 2; else -> 0 }) { dialog, which ->
-            themeMode = when (which) { 1 -> "light"; 2, 3 -> "dark"; else -> "system" }
-            pureBlack = which == 3
-            store.putString("flutter.looply_theme_mode", themeMode)
-            store.putBoolean("flutter.looply_theme_pure_dark", pureBlack)
-            applySystemTheme()
-            dialog.dismiss()
-            // The active WebView is retained; only the native shell and system bars are recolored.
-            if (currentScreen == "browser") {
-                currentWebView?.setBackgroundColor(palette.background)
-                currentProgress?.progressTintList = android.content.res.ColorStateList.valueOf(palette.accent)
-                currentAddress?.setTextColor(palette.text)
-                applyBrowserChromeColor(browserToolbarColor ?: palette.background)
-            } else showScreen("settings", false)
-        }.setNegativeButton("Cancelar", null).show()
-    }
-
-    private fun applyWebsiteAppearance(web: WebView) {
-        val followsApp = store.getBoolean("flutter.looply_site_theme_follows_app", true)
-        val scheme = if (followsApp) if (palette.dark) "dark" else "light" else "normal"
-        val script = "(function(){try{document.documentElement.style.setProperty('color-scheme','$scheme');document.documentElement.dataset.appTheme='$scheme';}catch(e){}})();"
-        try { web.evaluateJavascript(script, null) } catch (_: Exception) { }
-    }
-
-    private fun refreshAdaptiveToolbarColor(web: WebView) {
-        val script = "(function(){try{var m=document.querySelector('meta[name=theme-color]');return m?m.content:(getComputedStyle(document.body||document.documentElement).backgroundColor||'');}catch(e){return '';}})();"
-        try {
-            web.evaluateJavascript(script) { encoded ->
-                if (isFinishing || isDestroyed || currentWebView !== web || currentScreen != "browser") return@evaluateJavascript
-                val value = try { org.json.JSONTokener(encoded ?: "").nextValue() as? String } catch (_: Exception) { null }
-                val color = parseCssColor(value) ?: return@evaluateJavascript
-                browserToolbarColor = color
-                applyBrowserChromeColor(color)
-            }
-        } catch (_: Exception) { }
-    }
-
-    private fun parseCssColor(raw: String?): Int? {
-        val value = raw?.trim()?.lowercase(Locale.ROOT) ?: return null
-        return try {
-            when {
-                value.matches(Regex("^#[0-9a-f]{6}$")) || value.matches(Regex("^#[0-9a-f]{8}$")) -> Color.parseColor(value)
-                value.startsWith("rgb(") || value.startsWith("rgba(") -> {
-                    val values = Regex("\\d+").findAll(value).mapNotNull { it.value.toIntOrNull() }.toList()
-                    if (values.size < 3) null else Color.rgb(values[0].coerceIn(0, 255), values[1].coerceIn(0, 255), values[2].coerceIn(0, 255))
-                }
-                else -> null
-            }
-        } catch (_: Exception) { null }
-    }
-
-    private fun updateWebTheme() {
-        currentWebView?.let { web ->
-            web.settings.cacheMode = if (store.getBoolean("flutter.looply_navigation_accelerator_enabled", true)) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                @Suppress("DEPRECATION")
-                web.settings.forceDark = if (store.getBoolean("flutter.looply_force_dark_websites", false) || (store.getBoolean("flutter.looply_site_theme_follows_app", true) && palette.dark)) WebSettings.FORCE_DARK_ON else WebSettings.FORCE_DARK_OFF
-            }
-            web.reload()
-        }
-    }
-
-    private fun buildSecurity(): View {
-        val page = linear(this, true).apply { setBackgroundColor(palette.background) }
-        page.addView(buildFeatureHeader("Segurança") { onBackPressed() })
-        val body = linear(this, true).apply { setPadding(dp(18), dp(14), dp(18), dp(24)) }
-        body.addView(settingCard("shield-check", "Bloqueador de anúncios", "Filtragem local de domínios conhecidos"))
-        body.addView(settingCard("lock-simple", "Navegação HTTPS", "O navegador bloqueia conteúdo misto inseguro por predefinição"))
-        body.addView(settingCard("eye", "Privacidade", "As abas anónimas não são adicionadas ao histórico"))
-        page.addView(body, LinearLayout.LayoutParams(-1, -1))
         return page
     }
 
     private fun buildAllSites(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
         page.addView(buildFeatureHeader("Todos os sites") { onBackPressed() })
-        val body = linear(this, true).apply { setPadding(dp(16), dp(10), dp(16), dp(24)) }
-        val grouped = allSites.groupBy { it.category }
-        grouped.forEach { (category, sites) ->
-            body.addView(textView(this, category, 15f, palette.text, Typeface.BOLD).apply { setPadding(dp(4), dp(16), 0, dp(8)) })
-            val grid = android.widget.GridLayout(this).apply { columnCount = 3; useDefaultMargins = false }
-            sites.forEach { site ->
-                val tile = buildSiteTile(site)
-                tile.setPadding(dp(6), dp(8), dp(6), dp(8))
-                grid.addView(tile, android.widget.GridLayout.LayoutParams().apply { width = resources.displayMetrics.widthPixels / 3 - dp(20); height = dp(82) })
+        val body = linear(this, true).apply { setPadding(dp(14), dp(10), dp(14), dp(24)) }
+        allSites.groupBy { it.category }.forEach { (category, sites) ->
+            body.addView(textView(this, category, 14f, palette.muted, Typeface.BOLD).apply { setPadding(dp(6), dp(14), 0, dp(8)) })
+            val row = linear(this).apply {
+                var current: LinearLayout? = null
+                sites.chunked(4).forEach { chunk ->
+                    val lineRow = linear(this@MainActivity).apply { setPadding(0, 0, 0, dp(10)) }
+                    chunk.forEach { lineRow.addView(buildSiteTile(it), LinearLayout.LayoutParams(0, -2, 1f)) }
+                    body.addView(lineRow)
+                }
             }
-            body.addView(grid)
         }
         page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
         return page
     }
 
+    // ---------------------------------------------------------------------
+    // Settings and related subpages.
+    // ---------------------------------------------------------------------
+    private fun buildSettings(): View {
+        val page = linear(this, true).apply { setBackgroundColor(palette.background) }
+        page.addView(buildFeatureHeader("Definições") { onBackPressed() })
+        val scroll = ScrollView(this)
+        val body = linear(this, true).apply { setPadding(dp(14), dp(6), dp(14), dp(28)) }
+        body.addView(listRow("palette", "Tema", themeLabel()) { showThemePicker() })
+        body.addView(listRow("shield-check", "Bloqueador de anúncios", if (LooplyAdBlocker.enabled) "Ativado" else "Desativado") { toggleAdBlock() })
+        body.addView(listRow("globe", "Idioma", "Português") { navigate("language") })
+        body.addView(listRow("shield", "Segurança e privacidade", null) { navigate("security") })
+        body.addView(listRow("gauge", "Utilização por site", null) { navigate("site_usage") })
+        body.addView(listRow("browser", "Definir como navegador predefinido", null) { requestDefaultBrowser() })
+        body.addView(listRow("info", "Sobre o Looply", null) { navigate("app_info") })
+        scroll.addView(body)
+        page.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        return page
+    }
+
+    private fun themeLabel(): String = when (themeMode) { "light" -> "Claro"; "dark" -> if (pureBlack) "Escuro (preto puro)" else "Escuro"; else -> "Sistema" }
+
+    private fun showThemePicker() {
+        val options = listOf("Sistema" to "system", "Claro" to "light", "Escuro" to "dark", "Escuro (preto puro)" to "dark_pure")
+        val labels = options.map { it.first }.toTypedArray()
+        val currentIndex = when {
+            themeMode == "dark" && pureBlack -> 3
+            themeMode == "dark" -> 2
+            themeMode == "light" -> 1
+            else -> 0
+        }
+        MaterialAlertDialogBuilder(this).setTitle("Tema").setSingleChoiceItems(labels, currentIndex) { dialog, which ->
+            val (_, value) = options[which]
+            if (value == "dark_pure") { themeMode = "dark"; pureBlack = true } else { themeMode = value; pureBlack = false }
+            store.putString("flutter.looply_theme_mode", themeMode)
+            store.putBoolean("flutter.looply_theme_pure_dark", pureBlack)
+            applySystemTheme()
+            renderCurrent()
+            dialog.dismiss()
+        }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun toggleAdBlock() {
+        LooplyAdBlocker.enabled = !LooplyAdBlocker.enabled
+        store.putBoolean("flutter.looply_ad_block_enabled", LooplyAdBlocker.enabled)
+        showScreen("settings", false)
+    }
+
     private fun buildLanguage(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
         page.addView(buildFeatureHeader("Idioma") { onBackPressed() })
-        val body = linear(this, true).apply { setPadding(dp(16), dp(12), dp(16), dp(20)) }
-        val languages = listOf("Português" to "pt", "English" to "en", "Español" to "es", "Français" to "fr", "Deutsch" to "de", "العربية" to "ar", "हिन्दी" to "hi", "日本語" to "ja", "中文" to "zh", "Русский" to "ru", "Italiano" to "it", "Türkçe" to "tr")
-        val current = store.getString("flutter.looply_language", "pt")
-        languages.forEach { (name, code) ->
-            val item = listRow("globe", name, if (code == current) "Selecionado" else null) {
-                store.putString("flutter.looply_language", code); toast("Idioma guardado. Algumas áreas podem manter o idioma anterior até serem abertas novamente."); showScreen("language", false)
-            }
-            body.addView(item)
-        }
-        page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        val body = linear(this, true).apply { setPadding(dp(14), dp(10), dp(14), dp(24)) }
+        body.addView(listRow("check-circle", "Português", "Idioma atual") { })
+        page.addView(body)
         return page
     }
 
@@ -1253,26 +1071,35 @@ class MainActivity : AppCompatActivity() {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
         page.addView(buildFeatureHeader("Calendário do bloqueador") { onBackPressed() })
         val body = linear(this, true).apply { setPadding(dp(18), dp(18), dp(18), dp(24)) }
-        val stats = store.readArray("looply_adblock_daily_history_v2")
-        body.addView(settingCard("shield-check", "Bloqueios registados", "${stats.length()} registos diários guardados"))
-        body.addView(textView(this, "O bloqueador filtra localmente os pedidos reconhecidos. A atividade diária detalhada é mantida nas preferências da aplicação.", 13f, palette.muted).apply { setPadding(dp(8), dp(16), dp(8), 0) })
-        page.addView(body, LinearLayout.LayoutParams(-1, -1))
+        body.addView(textView(this, "O Looply bloqueou anúncios e rastreadores automaticamente enquanto navegavas.", 13f, palette.muted).apply { setLineSpacing(dp(3).toFloat(), 1f) })
+        page.addView(body)
         return page
     }
 
     private fun buildSiteUsage(): View {
         val page = linear(this, true).apply { setBackgroundColor(palette.background) }
         page.addView(buildFeatureHeader("Utilização por site") { onBackPressed() })
-        val body = linear(this, true).apply { setPadding(dp(16), dp(12), dp(16), dp(24)) }
-        val entries = store.readArray("looply_browsing_history_v1")
+        val array = store.readArray("looply_browsing_history_v1")
         val counts = linkedMapOf<String, Int>()
-        for (i in 0 until entries.length()) {
-            val host = Uri.parse(entries.optJSONObject(i)?.optString("url").orEmpty()).host ?: continue
+        for (i in 0 until array.length()) {
+            val host = Uri.parse(array.optJSONObject(i)?.optString("url").orEmpty()).host ?: continue
             counts[host] = (counts[host] ?: 0) + 1
         }
-        counts.toList().sortedByDescending { it.second }.forEach { (host, count) -> body.addView(listRow("globe", host, "$count visitas") { }) }
-        if (counts.isEmpty()) body.addView(emptyState("Sem dados de utilização", "A estatística será preenchida à medida que navegares."))
+        val body = linear(this, true).apply { setPadding(dp(14), dp(10), dp(14), dp(24)) }
+        if (counts.isEmpty()) body.addView(emptyState("Sem dados de utilização", "Navega para veres estatísticas por site."))
+        counts.entries.sortedByDescending { it.value }.take(30).forEach { (host, count) ->
+            body.addView(listRow("globe", host, "$count visita(s)") { })
+        }
         page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        return page
+    }
+
+    private fun buildSecurity(): View {
+        val page = linear(this, true).apply { setBackgroundColor(palette.background) }
+        page.addView(buildFeatureHeader("Segurança e privacidade") { onBackPressed() })
+        val body = linear(this, true).apply { setPadding(dp(18), dp(18), dp(18), dp(24)) }
+        body.addView(textView(this, "As tuas preferências e sessão são guardadas localmente. A sincronização com a nuvem é opcional e usa uma ligação segura ao Cloudflare Worker.", 13f, palette.muted).apply { setLineSpacing(dp(3).toFloat(), 1f) })
+        page.addView(body)
         return page
     }
 
@@ -1412,7 +1239,6 @@ class MainActivity : AppCompatActivity() {
         } else if (requestCode == 8163) {
             val allowed = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             pendingGeoCallback?.invoke(pendingGeoOrigin, allowed, false)
-            pendingGeoCallback = null
             pendingGeoOrigin = ""
         }
     }

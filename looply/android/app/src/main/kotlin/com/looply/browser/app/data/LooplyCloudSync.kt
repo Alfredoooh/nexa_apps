@@ -2,6 +2,7 @@ package com.looply.browser.app.data
 
 import android.content.Context
 import android.util.Base64
+import com.looply.browser.app.BuildConfig
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL

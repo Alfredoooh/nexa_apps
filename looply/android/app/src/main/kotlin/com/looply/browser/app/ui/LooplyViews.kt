@@ -29,12 +29,17 @@ internal fun rounded(color: Int, radiusDp: Float, context: Context, stroke: Int 
 internal fun ripple(context: Context, color: Int, radiusDp: Float, pressed: Int = 0x1F5F6368): RippleDrawable =
     RippleDrawable(ColorStateList.valueOf(pressed), rounded(color, radiusDp, context), null)
 
-internal fun textView(context: Context, text: CharSequence, size: Float, color: Int, weight: Int = Typeface.NORMAL): TextView =
+/**
+ * weight accepts Typeface.NORMAL / Typeface.BOLD / Typeface.ITALIC / Typeface.BOLD_ITALIC as before.
+ * A medium-weight look (previously the invalid Typeface.MEDIUM) is now requested via useMediumFamily = true,
+ * which switches the font family to "sans-serif-medium" instead of relying on a non-existent Typeface constant.
+ */
+internal fun textView(context: Context, text: CharSequence, size: Float, color: Int, weight: Int = Typeface.NORMAL, useMediumFamily: Boolean = false): TextView =
     TextView(context).apply {
         this.text = text
         textSize = size
         setTextColor(color)
-        typeface = Typeface.create("sans-serif", weight)
+        typeface = if (useMediumFamily) Typeface.create("sans-serif-medium", Typeface.NORMAL) else Typeface.create("sans-serif", weight)
         includeFontPadding = false
         gravity = Gravity.CENTER_VERTICAL
     }
@@ -47,8 +52,8 @@ internal fun spacer(context: Context, heightDp: Int): View = View(context).apply
     layoutParams = LinearLayout.LayoutParams(1, context.dp(heightDp))
 }
 
-internal fun label(context: Context, value: String, palette: LooplyPalette, size: Float = 14f, weight: Int = Typeface.NORMAL): TextView =
-    textView(context, value, size, palette.text, weight)
+internal fun label(context: Context, value: String, palette: LooplyPalette, size: Float = 14f, weight: Int = Typeface.NORMAL, useMediumFamily: Boolean = false): TextView =
+    textView(context, value, size, palette.text, weight, useMediumFamily)
 
 internal fun subLabel(context: Context, value: String, palette: LooplyPalette, size: Float = 12f): TextView =
     textView(context, value, size, palette.muted)
@@ -59,7 +64,7 @@ internal fun panel(context: Context, palette: LooplyPalette, radiusDp: Float = 2
 }
 
 internal fun cardText(context: Context, title: String, subtitle: String?, palette: LooplyPalette): LinearLayout = linear(context, true).apply {
-    addView(label(context, title, palette, 14f, Typeface.MEDIUM))
+    addView(label(context, title, palette, 14f, Typeface.NORMAL, useMediumFamily = true))
     if (!subtitle.isNullOrBlank()) {
         addView(subLabel(context, subtitle, palette, 12f).apply { setPadding(0, context.dp(4), 0, 0) })
     }
