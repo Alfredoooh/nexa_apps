@@ -141,6 +141,51 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   bool _tabsRequestInProgress = false;
   bool _firstLoadSignaled = false;
 
+  static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
+  bool _nativeDrawerRequestInProgress = false;
+
+  Future<void> _openNativeDrawer() async {
+    if (_nativeDrawerRequestInProgress) return;
+    _nativeDrawerRequestInProgress = true;
+    try {
+      final selected = await _nativeUi.invokeMethod<String>('showNativeDrawer', <String, Object>{
+        'items': <Map<String, Object>>[
+          {'label': appText('home'), 'value': 'home'},
+          {'label': appText('history'), 'value': 'history'},
+          {'label': appText('downloads'), 'value': 'downloads'},
+          {'label': appText('bookmarks'), 'value': 'bookmarks'},
+          {'label': appText('settings'), 'value': 'settings'},
+        ],
+      });
+      if (!mounted || selected == null) return;
+      switch (selected) {
+        case 'home': ShellTabRequest.instance.request(0); break;
+        case 'history': Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const HistoryScreen())); break;
+        case 'downloads': Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const DownloadsScreen())); break;
+        case 'bookmarks': Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const BookmarksScreen())); break;
+        case 'settings': Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const SettingsScreen())); break;
+      }
+    } on MissingPluginException {
+      // Sem drawer nativo fora do Android.
+    } on PlatformException {
+      // O browser continua utilizável se o canal falhar.
+    } finally {
+      _nativeDrawerRequestInProgress = false;
+    }
+  }
+
+  void _restartAiChat() {
+    if (!_isAiSearchPage) return;
+    setState(() {
+      _aiPageHtml = null;
+      _isLoading = true;
+      _showProgress = true;
+      _progress = 0;
+      _webViewKey = UniqueKey();
+    });
+    unawaited(_loadAiSearchAsset());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -841,6 +886,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             foregroundColor: toolbarText,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
+            centerTitle: _isAiSearchPage && !_isFindInPage,
             leadingWidth: _isAiSearchPage ? 50 : null,
             leading: AnimatedOpacity(
               opacity: _isExpandingToSearch ? 0 : 1,
@@ -850,10 +896,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 child: _isAiSearchPage
                     ? _BrowserToolbarCircleButton(
                         tooltip: appText('home'),
-                        icon: PhosphorIcons.house,
+                        icon: PhosphorIcons.list,
                         foreground: toolbarText,
                         background: pillColor(context),
-                        onPressed: () => ShellTabRequest.instance.request(0),
+                        onPressed: _openNativeDrawer,
                       )
                     : IconButton(
                         tooltip: appText('home'),
@@ -928,13 +974,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                           final width =
                               collapsedWidth + (expandedWidth - collapsedWidth) * t;
                           return SizedBox(
-                            width: width,
+                            width: _isAiSearchPage ? null : width,
                             child: child,
                           );
                         },
                         child: InkWell(
                           borderRadius: BorderRadius.circular(22),
-                          onTap: _openSearchWithExpandAnimation,
+                          onTap: _isAiSearchPage ? null : _openSearchWithExpandAnimation,
                           child: Container(
                             height: 40,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -943,17 +989,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                               borderRadius: BorderRadius.circular(22),
                             ),
                             child: Row(
+                              mainAxisSize: _isAiSearchPage ? MainAxisSize.min : MainAxisSize.max,
                               children: [
-                                PhosphorSvgIcon(_isAiSearchPage ? PhosphorIcons.sparkles : PhosphorIcons.magnifyingGlass, color: _isAiSearchPage ? toolbarText : muted, size: 19),
-                                const SizedBox(width: 9),
-                                Expanded(
-                                  child: Text(
-                                    _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600),
-                                  ),
-                                ),
+                                if (!_isAiSearchPage) ...[
+                                  PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 19),
+                                  const SizedBox(width: 9),
+                                ],
+                                _isAiSearchPage
+                                    ? Text(_currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))
+                                    : Expanded(child: Text(
+                                        _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))),
                               ],
                             ),
                           ),
@@ -969,40 +1018,41 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       duration: const Duration(milliseconds: 150),
                       child: IgnorePointer(
                         ignoring: _isExpandingToSearch,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedBuilder(
-                              animation: tabsController,
-                              builder: (context, _) => _isAiSearchPage
-                                  ? _BrowserToolbarCircleButton(
-                                      tooltip: appText('tabs'),
-                                      foreground: toolbarText,
-                                      background: pillColor(context),
-                                      customChild: _TabsCountIcon(count: tabsController.count, color: toolbarText),
-                                      onPressed: _openTabsGrid,
-                                    )
-                                  : IconButton(
+                        child: _isAiSearchPage
+                            ? Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: _BrowserToolbarGroupedButtons(
+                                  foreground: toolbarText,
+                                  background: pillColor(context),
+                                  tabsTooltip: appText('tabs'),
+                                  tabsChild: AnimatedBuilder(
+                                    animation: tabsController,
+                                    builder: (context, _) => _TabsCountIcon(count: tabsController.count, color: toolbarText),
+                                  ),
+                                  onTabsPressed: _openTabsGrid,
+                                  secondaryTooltip: appText('new_chat'),
+                                  secondaryIcon: PhosphorIcons.plus,
+                                  onSecondaryPressed: _restartAiChat,
+                                ),
+                              )
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedBuilder(
+                                    animation: tabsController,
+                                    builder: (context, _) => IconButton(
                                       tooltip: appText('tabs'),
                                       icon: _TabsCountIcon(count: tabsController.count, color: toolbarText),
                                       onPressed: _openTabsGrid,
                                     ),
-                            ),
-                            _isAiSearchPage
-                                ? _BrowserToolbarCircleButton(
-                                    tooltip: appText('more_options'),
-                                    icon: PhosphorIcons.dotsThreeVertical,
-                                    foreground: toolbarText,
-                                    background: pillColor(context),
-                                    onPressed: _showBrowserOptionsSheet,
-                                  )
-                                : IconButton(
+                                  ),
+                                  IconButton(
                                     tooltip: appText('more_options'),
                                     icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
                                     onPressed: _showBrowserOptionsSheet,
                                   ),
-                          ],
-                        ),
+                                ],
+                              ),
                       ),
                     ),
                   ],
@@ -1410,6 +1460,28 @@ enum _OrbitMenuAction {
   history,
   downloads,
   bookmark,
+}
+
+class _BrowserToolbarGroupedButtons extends StatelessWidget {
+  const _BrowserToolbarGroupedButtons({required this.foreground, required this.background,
+    required this.tabsTooltip, required this.tabsChild, required this.onTabsPressed,
+    required this.secondaryTooltip, required this.secondaryIcon, required this.onSecondaryPressed});
+  final Color foreground, background;
+  final String tabsTooltip, secondaryTooltip;
+  final Widget tabsChild;
+  final VoidCallback onTabsPressed, onSecondaryPressed;
+  final IconData secondaryIcon;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: background, borderRadius: BorderRadius.circular(100), clipBehavior: Clip.antiAlias,
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Tooltip(message: tabsTooltip, child: InkWell(onTap: onTabsPressed,
+        child: SizedBox(width: 40, height: 40, child: Center(child: tabsChild)))),
+      Tooltip(message: secondaryTooltip, child: InkWell(onTap: onSecondaryPressed,
+        child: SizedBox(width: 40, height: 40, child: Center(
+          child: PhosphorSvgIcon(secondaryIcon, size: 20, color: foreground))))),
+    ]),
+  );
 }
 
 class _BrowserToolbarCircleButton extends StatelessWidget {
