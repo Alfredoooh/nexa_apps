@@ -95,5 +95,9 @@ internal fun iconButton(context: Context, icon: String, sizeDp: Int, tint: Int, 
 
 internal fun assetImage(context: Context, asset: String): ImageView = ImageView(context).apply {
     scaleType = ImageView.ScaleType.FIT_CENTER
-    try { assets.open(asset).use { stream -> setImageDrawable(android.graphics.drawable.Drawable.createFromStream(stream, null)) } } catch (_: Exception) { }
+    try {
+        context.assets.open(asset).use { stream ->
+            setImageDrawable(android.graphics.drawable.Drawable.createFromStream(stream, null))
+        }
+    } catch (_: Exception) { }
 }
