@@ -1,0 +1,5 @@
+package com.looply.browser.app.icons.phosphor.fill
+
+const val ICON_TRASH_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 6h18v2H3zM9 3h6l1 2H8zM6 9h12l-1 12H7z" fill="#000"/><path d="M10 11v7M14 11v7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+"""

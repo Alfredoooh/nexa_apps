@@ -1,0 +1,5 @@
+package com.looply.browser.app.icons.phosphor.regular
+
+const val ICON_X_SVG = """
+<svg viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" desc="Created with imagetracer.js version 1.2.6" ><path fill="#000000" stroke="rgb(0,0,0)" stroke-width="0" opacity="1" d="M 92.5 80 L 99.5 80 L 104.5 82 L 256.5 233 L 407.5 82 L 412.5 80 L 419.5 80 L 424.5 82 L 430 87.5 L 432 92.5 L 432 99.5 L 430 104.5 L 279 256.5 L 430 407.5 L 432 412.5 L 432 419.5 L 430 424.5 L 424.5 430 L 419.5 432 L 412.5 432 L 407.5 430 L 255.5 279 L 104.5 430 L 99.5 432 L 92.5 432 L 87.5 430 L 82 424.5 L 80 419.5 L 80 412.5 L 82 407.5 L 233 255.5 L 82 104.5 L 80 99.5 L 80 92.5 L 82 87.5 L 87.5 82 L 92.5 80 Z " /><path fill="#000000" stroke="rgb(0,0,0)" stroke-width="0" opacity="0" d="M 0 0 L 512 0 L 512 512 L 0 512 L 0 0 Z M 93 80 L 88 82 L 82 88 L 80 93 L 80 100 L 82 105 L 233 256 L 82 408 L 80 413 L 80 420 L 82 425 L 88 430 L 93 432 L 100 432 L 105 430 L 256 279 L 408 430 L 413 432 L 420 432 L 425 430 L 430 425 L 432 420 L 432 413 L 430 408 L 279 257 L 430 105 L 432 100 L 432 93 L 430 88 L 425 82 L 420 80 L 413 80 L 408 82 L 257 233 L 105 82 L 100 80 L 93 80 Z " /></svg>
+"""
