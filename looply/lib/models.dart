@@ -625,6 +625,8 @@ class CustomSitesController extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> flushPersistence() => _persist();
+
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();
