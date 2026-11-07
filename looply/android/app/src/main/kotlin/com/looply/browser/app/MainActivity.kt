@@ -153,10 +153,6 @@ class MainActivity : FlutterActivity() {
         flutterRenderer = flutterEngine.renderer
         flutterRenderer?.addIsDisplayingFlutterUiListener(flutterUiDisplayListener)
         super.configureFlutterEngine(flutterEngine)
-        flutterEngine.platformViewsController.registry.registerViewFactory(
-            "looply/orbit_native_webview",
-            OrbitNativeWebViewFactory(flutterEngine.dartExecutor.binaryMessenger, ::recordNativeBlockedRequest),
-        )
         nativeUiChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         nativeUiChannel?.setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -168,6 +164,7 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "showNativePopup" -> showNativePopup(call, result)
+                    "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
                     "getAiSearchEnabled" -> result.success(readAiSearchEnabled())
@@ -336,7 +333,6 @@ class MainActivity : FlutterActivity() {
 
     /** Atualiza os filtros cosméticos das WebViews sem recarregar a página. */
     private fun updateNativeAdBlockerOnCurrentWebViews(enabled: Boolean) {
-        OrbitNativeWebViewRegistry.updateAll(enabled)
         val root = findViewById<View>(android.R.id.content) ?: return
         val script = "window.__looplyAdBlockSetEnabled && window.__looplyAdBlockSetEnabled($enabled);"
 
@@ -722,12 +718,9 @@ class MainActivity : FlutterActivity() {
         callback?.invoke(granted)
     }
 
-    @Deprecated("Deprecated in Android API; retained for compatibility with WebView file chooser")
+    @Deprecated("Deprecated in Android API; retained for compatibility with the FlutterActivity permission callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == OrbitFileChooserRegistry.REQUEST_CODE) {
-            OrbitFileChooserRegistry.onActivityResult(resultCode, data)
-        }
     }
 
     /**
@@ -839,6 +832,77 @@ class MainActivity : FlutterActivity() {
         } catch (error: RuntimeException) {
             finish(null)
         }
+    }
+
+    private var nativeDrawerWindow: PopupWindow? = null
+
+    /** Drawer nativo exclusivo do browser, sem formas/cantos do Material. */
+    private fun showNativeDrawer(call: MethodCall, result: MethodChannel.Result) {
+        nativeDrawerWindow?.dismiss()
+        val items = call.argument<List<Map<String, Any?>>>("items").orEmpty()
+        val dark = isAppDarkTheme()
+        val background = if (dark) Color.rgb(23, 24, 26) else Color.WHITE
+        val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
+        val dividerColor = if (dark) Color.rgb(45, 47, 51) else Color.rgb(228, 229, 231)
+        val density = resources.displayMetrics.density
+        fun dp(value: Int): Int = (value * density).roundToInt()
+        val root = findViewById<ViewGroup>(android.R.id.content)
+        val screenHeight = root.height
+        val drawerWidth = (resources.displayMetrics.widthPixels * 0.82f).roundToInt().coerceAtMost(dp(320))
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(background)
+            setPadding(0, dp(24), 0, dp(24))
+        }
+        var resolved = false
+        fun resolveOnce(value: Any?) {
+            if (resolved) return
+            resolved = true
+            result.success(value)
+        }
+        items.forEachIndexed { index, item ->
+            val label = item["label"]?.toString().orEmpty()
+            val value = item["value"]?.toString().orEmpty()
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                isClickable = true
+                isFocusable = true
+                setPadding(dp(20), dp(14), dp(20), dp(14))
+                val outValue = android.util.TypedValue()
+                theme.resolveAttribute(android.R.attr.selectableItemBackground, outValue, true)
+                setBackgroundResource(outValue.resourceId)
+            }
+            val labelView = TextView(this).apply {
+                text = label
+                setTextColor(textColor)
+                textSize = 15f
+                typeface = Typeface.DEFAULT
+            }
+            row.addView(labelView)
+            row.setOnClickListener {
+                resolveOnce(value)
+                nativeDrawerWindow?.dismiss()
+            }
+            container.addView(row)
+            if (index != items.lastIndex) container.addView(View(this).apply {
+                setBackgroundColor(dividerColor)
+                layoutParams = android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1))
+            })
+        }
+        val popup = PopupWindow(container, drawerWidth,
+            if (screenHeight > 0) screenHeight else ViewGroup.LayoutParams.MATCH_PARENT, true).apply {
+            setBackgroundDrawable(ColorDrawable(background))
+            elevation = 0f
+            isOutsideTouchable = true
+            animationStyle = 0
+        }
+        nativeDrawerWindow = popup
+        popup.setOnDismissListener {
+            nativeDrawerWindow = null
+            resolveOnce(null)
+        }
+        popup.showAtLocation(root, Gravity.START or Gravity.TOP, 0, 0)
     }
 
     private fun inflateSwitchActionView(themedContext: Context, item: MenuItem, dark: Boolean) {

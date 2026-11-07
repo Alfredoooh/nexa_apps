@@ -18,7 +18,7 @@ const Map<String, String> itExtraTranslations = <String, String>{
     'voice_search': 'Ricerca vocale', 'image_search': 'Ricerca per immagini', 'new_private_tab': 'Nuova scheda privata',
     'search_history': 'Cronologia ricerche', 'recent_searches': 'Ricerche recenti', 'no_saved_searches': 'Nessuna ricerca salvata.',
     'search_in_page': 'Cerca nella pagina', 'previous_result': 'Risultato precedente', 'next_result': 'Risultato successivo',
-    'close_search': 'Chiudi ricerca', 'tabs': 'Schede', 'research_ai': 'Ricerca IA', 'site_info': 'Informazioni sul sito',
+    'close_search': 'Chiudi ricerca', 'tabs': 'Schede', 'new_chat': 'Nuova chat', 'research_ai': 'Ricerca IA', 'site_info': 'Informazioni sul sito',
     'app_info': 'Informazioni app', 'loading_error': 'Impossibile caricare questa pagina.', 'retry': 'Riprova',
     'download_received': 'Richiesta di download ricevuta.',
   };

@@ -17,7 +17,7 @@ const Map<String, String> arExtraTranslations = <String, String>{
     'voice_search': 'بحث صوتي', 'image_search': 'بحث بالصور', 'new_private_tab': 'علامة تبويب خاصة جديدة',
     'search_history': 'سجل البحث', 'recent_searches': 'عمليات البحث الأخيرة', 'no_saved_searches': 'لا توجد عمليات بحث محفوظة بعد.',
     'search_in_page': 'بحث في الصفحة', 'previous_result': 'النتيجة السابقة', 'next_result': 'النتيجة التالية',
-    'close_search': 'إغلاق البحث', 'tabs': 'علامات التبويب', 'research_ai': 'بحث بالذكاء الاصطناعي', 'site_info': 'معلومات الموقع',
+    'close_search': 'إغلاق البحث', 'tabs': 'علامات التبويب', 'new_chat': 'محادثة جديدة', 'research_ai': 'بحث بالذكاء الاصطناعي', 'site_info': 'معلومات الموقع',
     'app_info': 'معلومات التطبيق', 'loading_error': 'تعذر تحميل هذه الصفحة.', 'retry': 'إعادة المحاولة',
     'download_received': 'تم استلام طلب التنزيل.',
   };

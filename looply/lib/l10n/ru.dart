@@ -16,7 +16,7 @@ const Map<String, String> ruExtraTranslations = <String, String>{
     'voice_search': 'Голосовой поиск', 'image_search': 'Поиск по изображению', 'new_private_tab': 'Новая приватная вкладка',
     'search_history': 'История поиска', 'recent_searches': 'Недавние запросы', 'no_saved_searches': 'Сохранённых запросов пока нет.',
     'search_in_page': 'Найти на странице', 'previous_result': 'Предыдущий результат', 'next_result': 'Следующий результат',
-    'close_search': 'Закрыть поиск', 'tabs': 'Вкладки', 'research_ai': 'Поиск с ИИ', 'site_info': 'Информация о сайте',
+    'close_search': 'Закрыть поиск', 'tabs': 'Вкладки', 'new_chat': 'Новый чат', 'research_ai': 'Поиск с ИИ', 'site_info': 'Информация о сайте',
     'app_info': 'Информация о приложении', 'loading_error': 'Не удалось загрузить страницу.', 'retry': 'Повторить',
     'download_received': 'Запрос на скачивание получен.',
   };

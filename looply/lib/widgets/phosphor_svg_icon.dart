@@ -14,7 +14,6 @@ class PhosphorIcons {
   static const IconData bookmarkSimple = IconData(0xF0006, fontFamily: 'BrowseItSvg');
   static const IconData bookmarksSimple = IconData(0xF0007, fontFamily: 'BrowseItSvg');
   static const IconData browser = IconData(0xF0008, fontFamily: 'BrowseItSvg');
-  static const IconData calendar = IconData(0xF0037, fontFamily: 'BrowseItSvg');
   static const IconData caretDown = IconData(0xF0009, fontFamily: 'BrowseItSvg');
   static const IconData caretLeft = IconData(0xF000A, fontFamily: 'BrowseItSvg');
   static const IconData caretRight = IconData(0xF000B, fontFamily: 'BrowseItSvg');
@@ -150,7 +149,6 @@ class PhosphorSvgIcon extends StatelessWidget {
     0xF0034: 'upload-simple',
     0xF0035: 'wifi-slash',
     0xF0036: 'x',
-    0xF0037: 'clock-counter-clockwise',
   };
 
   @override

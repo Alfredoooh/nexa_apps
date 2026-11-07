@@ -18,7 +18,7 @@ const Map<String, String> frExtraTranslations = <String, String>{
     'voice_search': 'Recherche vocale', 'image_search': 'Recherche par image', 'new_private_tab': 'Nouvel onglet privé',
     'search_history': 'Historique de recherche', 'recent_searches': 'Recherches récentes', 'no_saved_searches': 'Aucune recherche enregistrée.',
     'search_in_page': 'Rechercher dans la page', 'previous_result': 'Résultat précédent', 'next_result': 'Résultat suivant',
-    'close_search': 'Fermer la recherche', 'tabs': 'Onglets', 'research_ai': 'Recherche IA', 'site_info': 'Informations du site',
+    'close_search': 'Fermer la recherche', 'tabs': 'Onglets', 'new_chat': 'Nouvelle conversation', 'research_ai': 'Recherche IA', 'site_info': 'Informations du site',
     'app_info': 'Informations sur l’application', 'loading_error': 'Impossible de charger cette page.', 'retry': 'Réessayer',
     'download_received': 'Demande de téléchargement reçue.',
   };

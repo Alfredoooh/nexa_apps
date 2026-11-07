@@ -19,7 +19,7 @@ const Map<String, String> ptExtraTranslations = <String, String>{
     'new_private_tab': 'Novo separador anónimo', 'search_history': 'Histórico de pesquisas', 'recent_searches': 'Pesquisas recentes',
     'no_saved_searches': 'Ainda não existem pesquisas guardadas.', 'search_in_page': 'Pesquisar na página',
     'previous_result': 'Resultado anterior', 'next_result': 'Próximo resultado', 'close_search': 'Fechar pesquisa',
-    'tabs': 'Abas', 'research_ai': 'Pesquisa com IA', 'site_info': 'Informações do site',
+    'tabs': 'Abas', 'new_chat': 'Nova conversa', 'research_ai': 'Pesquisa com IA', 'site_info': 'Informações do site',
     'app_info': 'Informações do app', 'loading_error': 'Não foi possível carregar esta página.',
     'retry': 'Tentar novamente', 'download_received': 'Pedido de transferência recebido.',
   };

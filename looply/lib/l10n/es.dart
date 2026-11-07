@@ -18,7 +18,7 @@ const Map<String, String> esExtraTranslations = <String, String>{
     'voice_search': 'Búsqueda por voz', 'image_search': 'Búsqueda por imagen', 'new_private_tab': 'Nueva pestaña privada',
     'search_history': 'Historial de búsqueda', 'recent_searches': 'Búsquedas recientes', 'no_saved_searches': 'Aún no hay búsquedas guardadas.',
     'search_in_page': 'Buscar en la página', 'previous_result': 'Resultado anterior', 'next_result': 'Siguiente resultado',
-    'close_search': 'Cerrar búsqueda', 'tabs': 'Pestañas', 'research_ai': 'Búsqueda con IA', 'site_info': 'Información del sitio',
+    'close_search': 'Cerrar búsqueda', 'tabs': 'Pestañas', 'new_chat': 'Nueva conversación', 'research_ai': 'Búsqueda con IA', 'site_info': 'Información del sitio',
     'app_info': 'Información de la app', 'loading_error': 'No se pudo cargar esta página.', 'retry': 'Intentar de nuevo',
     'download_received': 'Solicitud de descarga recibida.',
   };

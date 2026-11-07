@@ -14,7 +14,7 @@ const Map<String, String> zhExtraTranslations = <String, String>{
     'browser_default_no': '设为默认浏览器', 'search_hint': '搜索或输入网址', 'voice_search': '语音搜索',
     'image_search': '图片搜索', 'new_private_tab': '新建无痕标签页', 'search_history': '搜索历史', 'recent_searches': '最近搜索',
     'no_saved_searches': '尚无已保存的搜索。', 'search_in_page': '在页面中查找', 'previous_result': '上一个结果',
-    'next_result': '下一个结果', 'close_search': '关闭搜索', 'tabs': '标签页', 'research_ai': 'AI 搜索',
+    'next_result': '下一个结果', 'close_search': '关闭搜索', 'tabs': '标签页', 'new_chat': '新对话', 'research_ai': 'AI 搜索',
     'site_info': '网站信息', 'app_info': '应用信息', 'loading_error': '无法加载此页面。', 'retry': '重试',
     'download_received': '已收到下载请求。',
   };

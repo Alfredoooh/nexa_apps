@@ -18,7 +18,7 @@ const Map<String, String> deExtraTranslations = <String, String>{
     'voice_search': 'Sprachsuche', 'image_search': 'Bildersuche', 'new_private_tab': 'Neuer privater Tab',
     'search_history': 'Suchverlauf', 'recent_searches': 'Letzte Suchanfragen', 'no_saved_searches': 'Noch keine Suchanfragen gespeichert.',
     'search_in_page': 'Auf Seite suchen', 'previous_result': 'Vorheriges Ergebnis', 'next_result': 'Nächstes Ergebnis',
-    'close_search': 'Suche schließen', 'tabs': 'Tabs', 'research_ai': 'KI-Suche', 'site_info': 'Website-Informationen',
+    'close_search': 'Suche schließen', 'tabs': 'Tabs', 'new_chat': 'Neuer Chat', 'research_ai': 'KI-Suche', 'site_info': 'Website-Informationen',
     'app_info': 'App-Informationen', 'loading_error': 'Diese Seite konnte nicht geladen werden.', 'retry': 'Erneut versuchen',
     'download_received': 'Downloadanfrage empfangen.',
   };

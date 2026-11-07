@@ -14,7 +14,7 @@ const Map<String, String> jaExtraTranslations = <String, String>{
     'browser_default_no': 'BrowseIt を既定のブラウザに設定', 'search_hint': '検索または URL を入力',
     'voice_search': '音声検索', 'image_search': '画像検索', 'new_private_tab': '新しいシークレットタブ', 'search_history': '検索履歴',
     'recent_searches': '最近の検索', 'no_saved_searches': '保存された検索はありません。', 'search_in_page': 'ページ内検索',
-    'previous_result': '前の結果', 'next_result': '次の結果', 'close_search': '検索を閉じる', 'tabs': 'タブ',
+    'previous_result': '前の結果', 'next_result': '次の結果', 'close_search': '検索を閉じる', 'tabs': 'タブ', 'new_chat': '新しいチャット',
     'research_ai': 'AI 検索', 'site_info': 'サイト情報', 'app_info': 'アプリ情報', 'loading_error': 'ページを読み込めませんでした。',
     'retry': '再試行', 'download_received': 'ダウンロード要求を受信しました。',
   };

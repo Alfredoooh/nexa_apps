@@ -14,7 +14,7 @@ const Map<String, String> hiExtraTranslations = <String, String>{
     'browser_default_no': 'BrowseIt को डिफ़ॉल्ट ब्राउज़र बनाएं', 'search_hint': 'खोजें या URL लिखें',
     'voice_search': 'आवाज़ से खोजें', 'image_search': 'छवि खोज', 'new_private_tab': 'नया निजी टैब', 'search_history': 'खोज इतिहास',
     'recent_searches': 'हाल की खोजें', 'no_saved_searches': 'अभी कोई खोज सहेजी नहीं गई।', 'search_in_page': 'पेज में खोजें',
-    'previous_result': 'पिछला परिणाम', 'next_result': 'अगला परिणाम', 'close_search': 'खोज बंद करें', 'tabs': 'टैब',
+    'previous_result': 'पिछला परिणाम', 'next_result': 'अगला परिणाम', 'close_search': 'खोज बंद करें', 'tabs': 'टैब', 'new_chat': 'नई चैट',
     'research_ai': 'AI खोज', 'site_info': 'साइट जानकारी', 'app_info': 'ऐप की जानकारी', 'loading_error': 'यह पेज लोड नहीं हो सका।',
     'retry': 'फिर से प्रयास करें', 'download_received': 'डाउनलोड अनुरोध प्राप्त हुआ।',
   };

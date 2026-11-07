@@ -18,7 +18,7 @@ const Map<String, String> enExtraTranslations = <String, String>{
     'voice_search': 'Voice search', 'image_search': 'Image search', 'new_private_tab': 'New private tab',
     'search_history': 'Search history', 'recent_searches': 'Recent searches', 'no_saved_searches': 'No searches saved yet.',
     'search_in_page': 'Find in page', 'previous_result': 'Previous result', 'next_result': 'Next result',
-    'close_search': 'Close search', 'tabs': 'Tabs', 'research_ai': 'AI search', 'site_info': 'Site information',
+    'close_search': 'Close search', 'tabs': 'Tabs', 'new_chat': 'New chat', 'research_ai': 'AI search', 'site_info': 'Site information',
     'app_info': 'App information', 'loading_error': 'Could not load this page.', 'retry': 'Try again',
     'download_received': 'Download request received.',
   };

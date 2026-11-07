@@ -14,7 +14,7 @@ const Map<String, String> trExtraTranslations = <String, String>{
     'browser_default_no': 'BrowseIt uygulamasını varsayılan yap', 'search_hint': 'Ara veya URL yaz',
     'voice_search': 'Sesli arama', 'image_search': 'Görselle arama', 'new_private_tab': 'Yeni gizli sekme', 'search_history': 'Arama geçmişi',
     'recent_searches': 'Son aramalar', 'no_saved_searches': 'Henüz kayıtlı arama yok.', 'search_in_page': 'Sayfada ara',
-    'previous_result': 'Önceki sonuç', 'next_result': 'Sonraki sonuç', 'close_search': 'Aramayı kapat', 'tabs': 'Sekmeler',
+    'previous_result': 'Önceki sonuç', 'next_result': 'Sonraki sonuç', 'close_search': 'Aramayı kapat', 'tabs': 'Sekmeler', 'new_chat': 'Yeni sohbet',
     'research_ai': 'Yapay zekâ araması', 'site_info': 'Site bilgileri', 'app_info': 'Uygulama bilgileri', 'loading_error': 'Bu sayfa yüklenemedi.',
     'retry': 'Yeniden dene', 'download_received': 'İndirme isteği alındı.',
   };
