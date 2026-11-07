@@ -1091,8 +1091,6 @@ class TabsController extends ChangeNotifier {
   }
 
   Future<void> flushPersistence() {
-
-  Future<void> flushPersistence() {
     _persistTimer?.cancel();
     return _persistNow();
   }
