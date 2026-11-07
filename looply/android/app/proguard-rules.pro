@@ -1,5 +1,4 @@
--keep class com.pichillilorenzo.flutter_inappwebview.** { *; }
--dontwarn com.pichillilorenzo.flutter_inappwebview.**
--keepattributes JavascriptInterface
--keepattributes *Annotation*
--keep class com.looply.browser.app.** { *; }
+-keepattributes JavascriptInterface,*Annotation*
+-keep class com.looply.browser.app.icons.phosphor.** { *; }
+-keep class com.caverock.androidsvg.** { *; }
+-dontwarn org.xmlpull.v1.**

@@ -1,0 +1,5 @@
+package com.looply.browser.app.icons.phosphor.fill
+
+const val ICON_EYE_SVG = """
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M2 12s3.5-7.5 10-7.5S22 12 22 12s-3.5 7.5-10 7.5S2 12 2 12z" fill="#000"/><circle cx="12" cy="12" r="3.2" fill="#fff"/><circle cx="12" cy="12" r="1.5" fill="#000"/></svg>
+"""

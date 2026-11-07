@@ -84,3 +84,4 @@ workflows:
 
     artifacts:
       - "$PROJECT_DIR/build/app/outputs/flutter-apk/*.apk"
+      

@@ -1,0 +1,5 @@
+package com.looply.browser.app.icons.phosphor.regular
+
+const val ICON_CARET_RIGHT_SVG = """
+<svg viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" desc="Created with imagetracer.js version 1.2.6" ><path fill="#000000" stroke="rgb(0,0,0)" stroke-width="0" opacity="1" d="M 140.5 33 L 149.5 33 L 153.5 35 L 161.5 42 L 381 246.5 L 384 252.5 L 384 259.5 L 381 265.5 L 371.5 275 L 161.5 470 L 150.5 479 L 147.5 480 L 140.5 480 Q 134.4 478.1 131 473.5 L 128 467.5 L 128 460.5 L 131 454.5 L 140.5 445 L 344 256.5 L 338.5 250 L 131 57.5 L 129 52.5 L 129 44.5 L 133 38.5 L 133 37 L 134.5 37 L 140.5 33 Z " /><path fill="#000000" stroke="rgb(0,0,0)" stroke-width="0" opacity="0" d="M 0 0 L 512 0 L 512 512 L 0 512 L 0 0 Z M 141 33 L 135 37 L 133 37 L 133 39 L 129 45 L 129 53 L 131 58 L 339 250 L 344 257 L 141 445 L 131 455 L 128 461 L 128 468 L 131 474 Q 134 478 141 480 L 148 480 L 151 479 L 162 470 L 372 275 L 381 266 L 384 260 L 384 253 L 381 247 L 162 42 L 154 35 L 150 33 L 141 33 Z " /></svg>
+"""
