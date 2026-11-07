@@ -1,0 +1,107 @@
+name: looply
+description: BrowseIt — navegador rápido, seguro e personalizável.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.8.1 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_symbols_icons: ^4.2815.0
+  flutter_inappwebview: any
+  cupertino_icons: ^1.0.8
+  animations: any
+  package_info_plus: ^8.1.2
+  http: ^1.2.0
+  cached_network_image: any
+  shared_preferences: ^2.3.3
+  flutter_secure_storage: ^9.2.4
+  image_picker: ^1.2.4
+  material3_expressive_loading_indicator: ^0.1.2
+  path_provider: ^2.1.5
+  file_picker: ^8.1.7
+  flutter_svg: ^2.0.10+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/apps/ai_search/index.html
+    - assets/apps/ai_search/
+    - assets/icons/phosphor/
+    - assets/icons/phosphor/fill/
+    - assets/icons/phosphor/regular/
+    - assets/images/avatar.png
+    - assets/images/looply_original_icon.png
+    - assets/images/looply_icon.png
+    - assets/images/looply_mark.png
+    - assets/images/logo_text.svg
+    - assets/images/quick_sites/adobe.webp
+    - assets/images/quick_sites/airbnb.webp
+    - assets/images/quick_sites/airtable.webp
+    - assets/images/quick_sites/alibaba.webp
+    - assets/images/quick_sites/amazon.webp
+    - assets/images/quick_sites/apple.webp
+    - assets/images/quick_sites/aside.webp
+    - assets/images/quick_sites/atlassian.webp
+    - assets/images/quick_sites/bantubet.webp
+    - assets/images/quick_sites/bbc.webp
+    - assets/images/quick_sites/besoccer_pro.webp
+    - assets/images/quick_sites/bing.webp
+    - assets/images/quick_sites/brave.webp
+    - assets/images/quick_sites/canva.webp
+    - assets/images/quick_sites/cloudflare.webp
+    - assets/images/quick_sites/deepgram.webp
+    - assets/images/quick_sites/deepmind.webp
+    - assets/images/quick_sites/dropbox.webp
+    - assets/images/quick_sites/duckduckgo.webp
+    - assets/images/quick_sites/figma.webp
+    - assets/images/quick_sites/flipkart.webp
+    - assets/images/quick_sites/framer.webp
+    - assets/images/quick_sites/github.webp
+    - assets/images/quick_sites/gitlab.webp
+    - assets/images/quick_sites/gmail.webp
+    - assets/images/quick_sites/google.webp
+    - assets/images/quick_sites/instagram.webp
+    - assets/images/quick_sites/jotform.webp
+    - assets/images/quick_sites/logo_geometrico_g.webp
+    - assets/images/quick_sites/loom.webp
+    - assets/images/quick_sites/lucidspark.webp
+    - assets/images/quick_sites/medium.webp
+    - assets/images/quick_sites/microsoft.webp
+    - assets/images/quick_sites/miro.webp
+    - assets/images/quick_sites/mistral.webp
+    - assets/images/quick_sites/netflix.webp
+    - assets/images/quick_sites/notion.webp
+    - assets/images/quick_sites/openai_chatgpt.webp
+    - assets/images/quick_sites/oracle.webp
+    - assets/images/quick_sites/poki.webp
+    - assets/images/quick_sites/premierbet.webp
+    - assets/images/quick_sites/recurly.webp
+    - assets/images/quick_sites/reddit.webp
+    - assets/images/quick_sites/replit.webp
+    - assets/images/quick_sites/revolt.webp
+    - assets/images/quick_sites/roblox.webp
+    - assets/images/quick_sites/semrush.webp
+    - assets/images/quick_sites/sider.webp
+    - assets/images/quick_sites/simbolo_branco_nao_identificado.webp
+    - assets/images/quick_sites/spotify.webp
+    - assets/images/quick_sites/stability_ai.webp
+    - assets/images/quick_sites/stabilityai.webp
+    - assets/images/quick_sites/tiktok.webp
+    - assets/images/quick_sites/wescore.webp
+    - assets/images/quick_sites/wikipedia.webp
+    - assets/images/quick_sites/x.webp
+    - assets/images/quick_sites/xai.webp
+    - assets/images/quick_sites/yahoo.webp
+    - assets/images/quick_sites/youtube.webp
+    - assets/images/quick_sites/zapier.webp
+    - assets/images/quick_sites/zoom.webp
+    - assets/images/share/whatsapp.png
+    - assets/images/share/telegram.png

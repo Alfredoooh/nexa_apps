@@ -1,52 +1,55 @@
 plugins {
-    id "com.android.application"
-    id "org.jetbrains.kotlin.android"
-    id "dev.flutter.flutter-gradle-plugin"
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
-def browseItWebClientId = (project.findProperty("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: System.getenv("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: "").toString()
-def browseItStoreFile = (project.findProperty("BROWSEIT_KEYSTORE_PATH") ?: System.getenv("BROWSEIT_KEYSTORE_PATH") ?: "").toString()
-def browseItStorePassword = (project.findProperty("BROWSEIT_STORE_PASSWORD") ?: System.getenv("BROWSEIT_STORE_PASSWORD") ?: "").toString()
-def browseItKeyPassword = (project.findProperty("BROWSEIT_KEY_PASSWORD") ?: System.getenv("BROWSEIT_KEY_PASSWORD") ?: "").toString()
-def browseItKeyAlias = (project.findProperty("BROWSEIT_KEY_ALIAS") ?: System.getenv("BROWSEIT_KEY_ALIAS") ?: "browseit").toString()
+def readConfig = { String key, String fallback = '' ->
+    def value = project.findProperty(key)
+    if (value == null || value.toString().trim().isEmpty()) value = System.getenv(key)
+    if (value == null || value.toString().trim().isEmpty()) value = fallback
+    value.toString().trim()
+}
 
-def browseItSigningConfigured =
-        !browseItStoreFile.isBlank() &&
-        !browseItStorePassword.isBlank() &&
-        !browseItKeyPassword.isBlank() &&
-        !browseItKeyAlias.isBlank() &&
-        project.file(browseItStoreFile).isFile()
+def asBuildConfigString = { String value ->
+    '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"'
+}
+
+def googleWebClientId = readConfig('BROWSEIT_GOOGLE_WEB_CLIENT_ID')
+if (googleWebClientId == 'PASTE_WEB_CLIENT_ID_HERE') googleWebClientId = ''
+def workerUrl = readConfig('BROWSEIT_WORKER_URL')
+def storeFilePath = readConfig('BROWSEIT_KEYSTORE_PATH')
+def storePasswordValue = readConfig('BROWSEIT_STORE_PASSWORD')
+def keyPasswordValue = readConfig('BROWSEIT_KEY_PASSWORD')
+def keyAliasValue = readConfig('BROWSEIT_KEY_ALIAS', 'browseit')
+
+def signingConfigured = !storeFilePath.isBlank() &&
+        !storePasswordValue.isBlank() &&
+        !keyPasswordValue.isBlank() &&
+        !keyAliasValue.isBlank() &&
+        project.file(storeFilePath).isFile()
 
 android {
-    namespace = "com.looply.browser.app"
-    compileSdk = flutter.compileSdkVersion
-    // Fixada em vez de "flutter.ndkVersion": o projeto não tem nenhum código
-    // nativo C/C++ próprio (todo o lado nativo aqui é Kotlin puro), por isso
-    // não depende de uma versão específica do NDK. "flutter.ndkVersion" segue
-    // a versão mais recente embutida no Flutter SDK (28.2.13676358 no momento
-    // deste build), cujo download falhou no runner do GitHub Actions com
-    // "Error reading Zip content from a SeekableByteChannel" — um pacote
-    // corrompido/truncado do lado do servidor de SDKs, não um erro de código.
-    // 27.0.12077973 é uma versão LTS do NDK, amplamente usada e já presente
-    // no cache de imagens do GitHub Actions, evitando esse download.
-    ndkVersion = "27.0.12077973"
+    namespace 'com.looply.browser.app'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'com.looply.browser.app'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+        buildConfigField 'String', 'GOOGLE_WEB_CLIENT_ID', asBuildConfigString(googleWebClientId)
+        buildConfigField 'String', 'BROWSEIT_WORKER_URL', asBuildConfigString(workerUrl)
+    }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
-    defaultConfig {
-        applicationId = "com.looply.browser.app"
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", "\"${browseItWebClientId}\""
+        jvmTarget = '17'
     }
 
     buildFeatures {
@@ -55,64 +58,67 @@ android {
 
     signingConfigs {
         browseitRelease {
-            if (browseItSigningConfigured) {
-                storeFile file(browseItStoreFile)
-                storeType = "JKS"
-                storePassword browseItStorePassword
-                keyAlias browseItKeyAlias
-                keyPassword browseItKeyPassword
+            if (signingConfigured) {
+                storeFile file(storeFilePath)
+                storeType 'JKS'
+                storePassword storePasswordValue
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
             }
         }
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ''
+        }
         release {
-            // The release variant is configured with the BrowseIt keystore.
-            // A verification task below prevents silently shipping a debug-signed APK.
-            signingConfig = browseItSigningConfigured ? signingConfigs.browseitRelease : signingConfigs.debug
-            minifyEnabled = true
-            shrinkResources = true
+            signingConfig signingConfigured ? signingConfigs.browseitRelease : signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += ['/META-INF/DEPENDENCIES', '/META-INF/LICENSE*', '/META-INF/NOTICE*']
         }
     }
 }
 
-// Do not allow a release build to fall back silently to the debug certificate.
-tasks.register("verifyBrowseItReleaseSigning") {
+tasks.register('verifyBrowseItReleaseSigning') {
     doLast {
         def missing = []
-        if (browseItStoreFile.isBlank()) missing << "BROWSEIT_KEYSTORE_PATH"
-        if (browseItStorePassword.isBlank()) missing << "BROWSEIT_STORE_PASSWORD"
-        if (browseItKeyPassword.isBlank()) missing << "BROWSEIT_KEY_PASSWORD"
-        if (browseItKeyAlias.isBlank()) missing << "BROWSEIT_KEY_ALIAS"
-        if (!browseItStoreFile.isBlank() && !project.file(browseItStoreFile).isFile()) {
-            missing << "keystore file not found at ${browseItStoreFile}"
+        if (storeFilePath.isBlank()) missing << 'BROWSEIT_KEYSTORE_PATH'
+        if (storePasswordValue.isBlank()) missing << 'BROWSEIT_STORE_PASSWORD'
+        if (keyPasswordValue.isBlank()) missing << 'BROWSEIT_KEY_PASSWORD'
+        if (keyAliasValue.isBlank()) missing << 'BROWSEIT_KEY_ALIAS'
+        if (!storeFilePath.isBlank() && !project.file(storeFilePath).isFile()) {
+            missing << "keystore file not found at ${storeFilePath}"
         }
-
         if (!missing.isEmpty()) {
-            throw new GradleException(
-                    "BrowseIt RELEASE signing is not configured. Missing/invalid: ${missing.join(', ')}. " +
-                    "Configure the uploaded BrowseIt keystore and its GitHub Actions secrets before building a release."
-            )
+            throw new GradleException('BrowseIt release signing is incomplete: ' + missing.join(', '))
         }
     }
 }
 
 tasks.configureEach { task ->
-    if (task.name.toLowerCase().contains("release") && task.name != "verifyBrowseItReleaseSigning") {
-        task.dependsOn(tasks.named("verifyBrowseItReleaseSigning"))
+    if (task.name.toLowerCase().contains('release') && task.name != 'verifyBrowseItReleaseSigning') {
+        task.dependsOn tasks.named('verifyBrowseItReleaseSigning')
     }
 }
 
 dependencies {
-    implementation "androidx.credentials:credentials:1.6.0"
-    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
-    implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
-    implementation "androidx.appcompat:appcompat:1.7.0"
-    implementation "com.google.android.material:material:1.12.0"
-}
-
-flutter {
-    source = "../.."
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'androidx.core:core-ktx:1.17.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.activity:activity-ktx:1.11.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.9.4'
+    implementation 'androidx.credentials:credentials:1.6.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'com.caverock:androidsvg-aar:1.4'
 }

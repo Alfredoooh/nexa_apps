@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pesquisa IA</title>
+<style>
+  :root {
+    --bg: #FFFFFF;
+    --panel: #FFFFFF;
+    --panel2: #F0F1F3;
+    --soft: #F8F9FA;
+    --text: #202124;
+    --muted: #5F6368;
+    --line: #E8EAED;
+    --outline: #E8EAED;
+    --accent: #1A73E8;
+    --on-accent: #FFFFFF;
+    --icon-filter: none;
+    color-scheme: light;
+  }
+
+  :root[data-app-theme="dark"] {
+    --bg: #141517;
+    --panel: #212325;
+    --panel2: #2B2D30;
+    --soft: #1D1F21;
+    --text: #E6E6E8;
+    --muted: #B2B4B8;
+    --line: #34363A;
+    --outline: #34363A;
+    --accent: #8AB4F8;
+    --on-accent: #17181A;
+    /* Os SVGs de origem têm stroke="#000000" fixo. Como <img> não aceita
+       currentColor, usamos filter para clareá-los no tema escuro. */
+    --icon-filter: invert(1) brightness(1.35);
+    color-scheme: dark;
+  }
+
+  :root[data-app-theme="amoled"] {
+    --bg: #000000;
+    --panel: #101010;
+    --panel2: #191919;
+    --soft: #050505;
+    --text: #E6E6E8;
+    --muted: #B2B4B8;
+    --line: #292929;
+    --outline: #292929;
+    --accent: #8AB4F8;
+    --on-accent: #17181A;
+    --icon-filter: invert(1) brightness(1.35);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+
+  body {
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    transition: background-color .18s ease, color .18s ease;
+  }
+
+  .app { position: relative; width: 100%; height: 100vh; height: 100dvh; }
+
+  .canvas {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    overflow-y: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    padding-bottom: 140px;
+  }
+
+  .empty-state {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .empty-state.visible { display: flex; }
+  .empty-state p { margin: 0; font-size: 14px; }
+
+  .inputbar-wrap {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: center;
+    padding: 0 16px;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 10;
+  }
+
+  .inputbar-box {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 480px;
+    background: var(--panel);
+    border-radius: 26px;
+    border: 1.5px solid var(--outline);
+    padding: 16px 16px 12px;
+    transition: background-color .18s ease, border-color .18s ease;
+  }
+
+  .input-field {
+    width: 100%;
+    min-height: 26px;
+    max-height: 140px;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.4;
+    resize: none;
+    overflow-y: auto;
+  }
+
+  .input-field::placeholder { color: var(--muted); }
+
+  .inputbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+  }
+
+  .actions-left { display: flex; align-items: center; gap: 14px; }
+
+  .tool-btn {
+    width: 28px; height: 28px;
+    border-radius: 999px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    transition: transform .3s cubic-bezier(.34, 1.5, .64, 1);
+  }
+
+  .tool-btn:active { transform: scale(.88); }
+  .tool-btn img {
+    width: 20px; height: 20px;
+    filter: var(--icon-filter);
+    opacity: .72;
+  }
+
+  .send-btn {
+    width: 32px; height: 32px;
+    border-radius: 999px;
+    border: none;
+    background: var(--panel2);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform .3s cubic-bezier(.34, 1.5, .64, 1), background-color .2s ease, color .2s ease;
+  }
+
+  .send-btn:active { transform: scale(.88); }
+  .send-btn img {
+    width: 18px; height: 18px;
+    filter: var(--icon-filter);
+    opacity: .72;
+  }
+  .send-btn.has-text img { filter: brightness(0) invert(1); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="canvas">
+    <div class="empty-state" id="emptyState">
+      <p>Sem resultados</p>
+    </div>
+  </div>
+  <div class="inputbar-wrap">
+    <div class="inputbar-box">
+      <textarea class="input-field" id="messageInput" placeholder="Pergunte, busque ou crie qualquer coisa" rows="1"></textarea>
+      <div class="inputbar-actions">
+        <div class="actions-left">
+          <button class="tool-btn" id="btnAdd" aria-label="Adicionar">
+            <img src="plus.svg" alt="">
+          </button>
+          <button class="tool-btn" id="btnTune" aria-label="Ajustar">
+            <img src="sliders-horizontal.svg" alt="">
+          </button>
+        </div>
+        <button class="send-btn" id="btnSend" aria-label="Enviar">
+          <img src="arrow-up.svg" alt="">
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const textarea = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('btnSend');
+  const emptyState = document.getElementById('emptyState');
+
+  textarea.addEventListener('input', () => {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 140) + 'px';
+    sendBtn.classList.toggle('has-text', textarea.value.trim().length > 0);
+  });
+
+  function sendMessage() {
+    const text = textarea.value.trim();
+    if (!text) return;
+    if (window.flutter_inappwebview) {
+      window.flutter_inappwebview.callHandler('browseItAiSearchSubmit', text);
+    }
+    textarea.value = '';
+    textarea.style.height = 'auto';
+    sendBtn.classList.remove('has-text');
+    emptyState.classList.add('visible');
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  window.browseItSetTheme = function (mode) {
+    document.documentElement.setAttribute('data-app-theme', mode === 'light' ? '' : mode);
+  };
+</script>
+</body>
+</html>
