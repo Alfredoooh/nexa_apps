@@ -526,6 +526,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
+  /// Captura + redução da miniatura. Corre DEPOIS de a página ser marcada
+  /// como carregada, para não atrasar a barra de progresso nem o first load.
+  Future<Uint8List?> _captureThumbnail(InAppWebViewController controller) async {
+    try {
+      final raw = await controller
+          .takeScreenshot()
+          .timeout(const Duration(seconds: 2));
+      if (raw == null) return null;
+      return await _downscaleScreenshot(raw, targetWidth: 720);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Uint8List?> _downscaleScreenshot(Uint8List bytes, {required int targetWidth}) async {
     ui.Codec? codec;
     ui.Image? image;
@@ -662,7 +676,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(appText('copied')),
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -1104,10 +1118,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       children: [
         ColoredBox(color: bg),
         if (!_renderProcessCrashed && (!_isAiSearchPage || _aiPageHtml != null))
-          // ✅ CORREÇÃO 1: ClipRect envolve a InAppWebView para eliminar
-          // as linhas brancas nas bordas direita e inferior. O bug é causado
-          // por truncamento de pixels fracionários na composição da PlatformView.
-          ClipRect(
+          // O _PixelSnappedViewport alinha a WebView à grelha de pixels
+          // físicos (origem e tamanho). É isto que elimina as linhas brancas
+          // à direita/em baixo e o leve desfoque causado por posições
+          // fracionárias, exatamente como os browsers nativos fazem.
+          _PixelSnappedViewport(
             child: InAppWebView(
               key: _webViewKey,
               initialUrlRequest: _isAiSearchPage ? null : URLRequest(
@@ -1127,8 +1142,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 databaseEnabled: true,
                 mediaPlaybackRequiresUserGesture: false,
 
-                // ✅ CORREÇÃO 2: Com Skia, fundo transparente causa composição
-                // com alpha que borra o texto. Deixar opaco.
+                // Fundo opaco: evita composição com alpha sobre o Flutter.
                 transparentBackground: false,
 
                 cacheEnabled: navigationAcceleratorEnabled.value,
@@ -1142,13 +1156,40 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 offscreenPreRaster: true,
                 hardwareAcceleration: true,
 
-                // ✅ CORREÇÃO 3: TLHC (Texture Layer Hybrid Composition)
-                // renderiza com melhor nitidez com Skia no Android.
-                useHybridComposition: false,
+                // PRINCIPAL CORREÇÃO DO DESFOQUE (Android): Hybrid Composition
+                // desenha a WebView nativa no tamanho real, sem a textura
+                // reescalada do Virtual Display.
+                useHybridComposition: true,
 
-                // ✅ CORREÇÃO 4: Aumenta o DPI da fonte para nitidez em telas
-                // HiDPI. Ajuste entre 100–130 conforme o dispositivo.
+                // Não deixa a escala de fonte do sistema alterar o layout
+                // das páginas (o Chrome também ignora isto no conteúdo).
                 textZoom: 100,
+                minimumFontSize: 1,
+
+                // Viewport e zoom iguais aos de um browser real.
+                useWideViewPort: true,
+                loadWithOverviewMode: true,
+                supportZoom: true,
+                builtInZoomControls: true,
+                displayZoomControls: false,
+                preferredContentMode: UserPreferredContentMode.MOBILE,
+
+                // Scrollbars e glow de overscroll nativos desenham linhas
+                // nas bordas direita/inferior. Os browsers móveis escondem-nos.
+                verticalScrollBarEnabled: false,
+                horizontalScrollBarEnabled: false,
+                overScrollMode: OverScrollMode.NEVER,
+
+                // Compatibilidade com sites reais.
+                mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
+                thirdPartyCookiesEnabled: true,
+
+                // iOS
+                enableViewportScale: true,
+                allowsInlineMediaPlayback: true,
+                allowsBackForwardNavigationGestures: true,
+
+                isInspectable: kDebugMode,
 
                 incognito: widget.isIncognito,
                 useOnDownloadStart: true,
@@ -1283,28 +1324,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 _pullToRefreshController?.endRefreshing();
                 bool back = false;
                 bool forward = false;
-                Uint8List? screenshot;
                 try {
                   back = await controller.canGoBack();
                   forward = await controller.canGoForward();
-                  screenshot = await controller
-                      .takeScreenshot()
-                      .timeout(const Duration(seconds: 2));
                 } catch (_) {}
 
-                if (screenshot != null) {
-                  // ✅ CORREÇÃO 5: Aumenta a resolução da miniatura para 720px
-                  // (antes 420px) para evitar aspecto borrado em telas modernas.
-                  screenshot = await _downscaleScreenshot(screenshot, targetWidth: 720);
-                }
                 final loadedUrl = _isAiSearchPage ? _currentUrl : (url?.toString() ?? _currentUrl);
+                final wrapped = _OrbitWebViewController(controller);
                 if (_isAiSearchPage) {
                   await _configureAiSearchPage(controller);
-                  await _applyWebsiteAppearance(_OrbitWebViewController(controller));
+                  await _applyWebsiteAppearance(wrapped);
                 } else {
-                  await _applyWebsiteAppearance(_OrbitWebViewController(controller));
+                  await _applyWebsiteAppearance(wrapped);
                   if (adaptiveToolbarColorEnabled.value) {
-                    unawaited(_refreshAdaptiveToolbarColor(_OrbitWebViewController(controller)));
+                    unawaited(_refreshAdaptiveToolbarColor(wrapped));
                   }
                 }
                 if (!widget.isIncognito && !_isAiSearchPage) {
@@ -1321,6 +1354,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   return;
                 }
 
+                // A página é marcada como carregada ANTES da miniatura, que
+                // pode demorar até 2s e não deve segurar a barra de progresso.
                 setState(() {
                   _isLoading = false;
                   _progress = 1;
@@ -1330,7 +1365,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   _canGoForward = forward;
                   if (url != null && !_isAiSearchPage) _currentUrl = url.toString();
                 });
-                _updateTabState(screenshot: screenshot);
+                _updateTabState();
                 _signalFirstLoad();
                 _progressHideTimer?.cancel();
                 _progressHideTimer = Timer(
@@ -1343,6 +1378,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     });
                   },
                 );
+
+                // Miniatura em segundo plano, a 720px de largura.
+                final screenshot = await _captureThumbnail(controller);
+                if (!mounted || screenshot == null) return;
+                _updateTabState(screenshot: screenshot);
               },
               onReceivedError: (controller, request, error) {
                 _pullToRefreshController?.endRefreshing();
@@ -1461,6 +1501,102 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Alinha o filho (a WebView) à grelha de pixels físicos do ecrã.
+///
+/// Problema: AppBar + barra de progresso + status bar podem deixar a origem
+/// da WebView num pixel físico fracionário (ex.: 157.5px em dpr 2.8125) e o
+/// tamanho lógico multiplicado pelo devicePixelRatio também não é inteiro.
+/// A PlatformView é então arredondada para baixo: sobra 1px de fundo à
+/// direita/em baixo (linha branca) e o conteúdo é reamostrado (desfoque).
+///
+/// Solução: mede a origem real no ecrã, recua o filho para o pixel inteiro
+/// anterior e arredonda o tamanho PARA CIMA em pixels físicos. O filho sangra
+/// no máximo 1px para fora, onde não há nada a tapar.
+class _PixelSnappedViewport extends StatefulWidget {
+  const _PixelSnappedViewport({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PixelSnappedViewport> createState() => _PixelSnappedViewportState();
+}
+
+class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
+    with WidgetsBindingObserver {
+  /// Deslocamento em pixels lógicos (sempre <= 0) para cair no pixel inteiro.
+  Offset _shift = Offset.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() => _scheduleMeasure();
+
+  void _scheduleMeasure() {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+  }
+
+  double _fraction(double physical) {
+    final nearest = physical.roundToDouble();
+    // Tolera ruído de ponto flutuante (146.99999 / 147.00001).
+    if ((physical - nearest).abs() < 0.02) return 0;
+    return physical - physical.floorToDouble();
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final origin = box.localToGlobal(Offset.zero);
+    final next = Offset(
+      -_fraction(origin.dx * dpr) / dpr,
+      -_fraction(origin.dy * dpr) / dpr,
+    );
+    if ((next - _shift).distance > 0.0005) {
+      setState(() => _shift = next);
+    }
+  }
+
+  /// Arredonda um tamanho lógico PARA CIMA para um número inteiro de pixels
+  /// físicos, devolvendo o valor em pixels lógicos.
+  double _snapUp(double logical, double dpr) =>
+      ((logical * dpr) - 0.001).ceilToDouble() / dpr;
+
+  @override
+  Widget build(BuildContext context) {
+    _scheduleMeasure();
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = _snapUp(constraints.maxWidth - _shift.dx, dpr);
+        final height = _snapUp(constraints.maxHeight - _shift.dy, dpr);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: _shift.dx,
+              top: _shift.dy,
+              width: width,
+              height: height,
+              child: widget.child,
+            ),
+          ],
+        );
+      },
     );
   }
 }
