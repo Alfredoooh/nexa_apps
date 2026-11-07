@@ -1104,273 +1104,293 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       children: [
         ColoredBox(color: bg),
         if (!_renderProcessCrashed && (!_isAiSearchPage || _aiPageHtml != null))
-          InAppWebView(
-            key: _webViewKey,
-            initialUrlRequest: _isAiSearchPage ? null : URLRequest(
-              url: WebUri(_currentUrl),
-              headers: <String, String>{'Accept-Language': _acceptLanguageHeader},
-            ),
-            initialData: _isAiSearchPage
-                ? InAppWebViewInitialData(
-                    data: _aiPageHtml!,
-                    baseUrl: WebUri('https://browseit.local/'),
-                  )
-                : null,
-            pullToRefreshController: _pullToRefreshController,
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              domStorageEnabled: true,
-              databaseEnabled: true,
-              mediaPlaybackRequiresUserGesture: false,
-              transparentBackground: true,
-              cacheEnabled: navigationAcceleratorEnabled.value,
-              cacheMode: navigationAcceleratorEnabled.value
-                  ? CacheMode.LOAD_DEFAULT
-                  : CacheMode.LOAD_NO_CACHE,
-              algorithmicDarkeningAllowed: !_isAiSearchPage &&
-                  (forceDarkWebsitesEnabled.value ||
-                      (siteThemeFollowsAppEnabled.value &&
-                          Theme.of(context).brightness == Brightness.dark)),
-              offscreenPreRaster: true,
-              hardwareAcceleration: true,
-              incognito: widget.isIncognito,
-              useOnDownloadStart: true,
-              useShouldOverrideUrlLoading: true,
-              contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
-              supportMultipleWindows: true,
-              javaScriptCanOpenWindowsAutomatically: false,
-            ),
-            shouldOverrideUrlLoading: (controller, action) async {
-              final uri = action.request.url;
-              if (uri == null) return NavigationActionPolicy.ALLOW;
-              final scheme = uri.scheme.toLowerCase();
-              if (scheme == 'http' ||
-                  scheme == 'https' ||
-                  scheme == 'about' ||
-                  scheme == 'data' ||
-                  scheme == 'blob' ||
-                  scheme == 'javascript') {
-                return NavigationActionPolicy.ALLOW;
-              }
-              return NavigationActionPolicy.CANCEL;
-            },
-            onCreateWindow: (controller, action) async {
-              // Links target="_blank" abrem no separador atual em vez de
-              // criarem uma janela nativa invisível que pode bloquear o WebView.
-              final target = action.request.url;
-              if (target == null || action.hasGesture != true) return false;
-              if (isAdBlockedUrl(target.toString())) return false;
-              final scheme = target.scheme.toLowerCase();
-              if (scheme != 'http' && scheme != 'https') return false;
-              try {
-                await controller.loadUrl(
-                  urlRequest: URLRequest(url: target),
-                );
-              } catch (_) {}
-              // A navegação já foi encaminhada para a WebView atual; cancela
-              // apenas a criação do popup separado.
-              return false;
-            },
-            onWebViewCreated: (controller) async {
-              final orbitController = _OrbitWebViewController(controller);
-              _controller = orbitController;
-              BrowserPreconnectHints.attach(widget.tabId, orbitController.evaluateJavascript);
-              if (_isAiSearchPage) {
-                controller.addJavaScriptHandler(
-                  handlerName: 'browseItAiSearchSubmit',
-                  callback: (arguments) {
-                    final query = arguments.isNotEmpty ? arguments.first.toString().trim() : '';
-                    if (query.isEmpty) return false;
-                    searchHistoryController.add(query);
-                    if (mounted) {
-                      setState(() {
-                        _currentTitle = query;
-                        _currentUrl = 'looply://ai-search?q=${Uri.encodeComponent(query)}';
-                      });
-                      _updateTabState();
-                    }
-                    return true;
-                  },
-                );
-              }
-              await installNativeAdBlocker();
-              unawaited(_applyRuntimeWebViewSettings(orbitController));
-              final ready = widget.browserReadyCompleter;
-              if (ready != null && !ready.isCompleted) ready.complete();
-              unawaited(_refreshNavigationState());
-            },
-            onProgressChanged: (controller, progress) {
-              if (!mounted) return;
-              _progressHideTimer?.cancel();
-              setState(() {
-                _showProgress = true;
-                _progress = (progress / 100).clamp(0.0, 1.0);
-                if (progress < 100) _isLoading = true;
-              });
-            },
-            onLoadStart: (controller, url) {
-              if (!mounted) return;
-              _progressHideTimer?.cancel();
-              final nextUrl = url?.toString();
-              if (_isAiSearchPage && nextUrl != null && !nextUrl.startsWith('https://browseit.local/')) {
-                _isAiSearchPage = false;
-                _siteToolbarColor = null;
-              }
-              setState(() {
-                if (!_isAiSearchPage) _siteToolbarColor = null;
-                _isLoading = true;
-                _showProgress = true;
-                _progress = 0;
-                _loadError = null;
-                if (nextUrl != null && !_isAiSearchPage) _currentUrl = nextUrl;
-              });
-              _updateTabState();
-            },
-            onTitleChanged: (controller, title) {
-              if (!mounted) return;
-              if (!_isAiSearchPage) _currentTitle = title ?? '';
-              _updateTabState();
-              setState(() {});
-            },
-            onUpdateVisitedHistory: (controller, url, isReload) async {
-              if (!mounted || url == null) return;
-              final nextUrl = url.toString();
-              bool canBack = _canGoBack;
-              bool canForward = _canGoForward;
-              String? title;
-              try {
-                canBack = await controller.canGoBack();
-                canForward = await controller.canGoForward();
-                title = await controller.getTitle();
-              } catch (_) {}
-              if (!mounted) return;
-              setState(() {
-                if (!_isAiSearchPage) {
-                  _currentUrl = nextUrl;
-                  if (title?.trim().isNotEmpty == true) _currentTitle = title!;
+          // ✅ CORREÇÃO 1: ClipRect envolve a InAppWebView para eliminar
+          // as linhas brancas nas bordas direita e inferior. O bug é causado
+          // por truncamento de pixels fracionários na composição da PlatformView.
+          ClipRect(
+            child: InAppWebView(
+              key: _webViewKey,
+              initialUrlRequest: _isAiSearchPage ? null : URLRequest(
+                url: WebUri(_currentUrl),
+                headers: <String, String>{'Accept-Language': _acceptLanguageHeader},
+              ),
+              initialData: _isAiSearchPage
+                  ? InAppWebViewInitialData(
+                      data: _aiPageHtml!,
+                      baseUrl: WebUri('https://browseit.local/'),
+                    )
+                  : null,
+              pullToRefreshController: _pullToRefreshController,
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                domStorageEnabled: true,
+                databaseEnabled: true,
+                mediaPlaybackRequiresUserGesture: false,
+
+                // ✅ CORREÇÃO 2: Com Skia, fundo transparente causa composição
+                // com alpha que borra o texto. Deixar opaco.
+                transparentBackground: false,
+
+                cacheEnabled: navigationAcceleratorEnabled.value,
+                cacheMode: navigationAcceleratorEnabled.value
+                    ? CacheMode.LOAD_DEFAULT
+                    : CacheMode.LOAD_NO_CACHE,
+                algorithmicDarkeningAllowed: !_isAiSearchPage &&
+                    (forceDarkWebsitesEnabled.value ||
+                        (siteThemeFollowsAppEnabled.value &&
+                            Theme.of(context).brightness == Brightness.dark)),
+                offscreenPreRaster: true,
+                hardwareAcceleration: true,
+
+                // ✅ CORREÇÃO 3: TLHC (Texture Layer Hybrid Composition)
+                // renderiza com melhor nitidez com Skia no Android.
+                useHybridComposition: false,
+
+                // ✅ CORREÇÃO 4: Aumenta o DPI da fonte para nitidez em telas
+                // HiDPI. Ajuste entre 100–130 conforme o dispositivo.
+                textZoom: 100,
+
+                incognito: widget.isIncognito,
+                useOnDownloadStart: true,
+                useShouldOverrideUrlLoading: true,
+                contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
+                supportMultipleWindows: true,
+                javaScriptCanOpenWindowsAutomatically: false,
+              ),
+              shouldOverrideUrlLoading: (controller, action) async {
+                final uri = action.request.url;
+                if (uri == null) return NavigationActionPolicy.ALLOW;
+                final scheme = uri.scheme.toLowerCase();
+                if (scheme == 'http' ||
+                    scheme == 'https' ||
+                    scheme == 'about' ||
+                    scheme == 'data' ||
+                    scheme == 'blob' ||
+                    scheme == 'javascript') {
+                  return NavigationActionPolicy.ALLOW;
                 }
-                _canGoBack = canBack;
-                _canGoForward = canForward;
-              });
-              if (!widget.isIncognito && !_isAiSearchPage) {
-                activityController.log(
-                  ActivityKind.site,
-                  _currentTitle.trim().isEmpty ? nextUrl : _currentTitle,
-                  nextUrl,
-                );
-                unawaited(browserFaviconCache.fetchForUrl(nextUrl));
-              }
-              _updateTabState();
-            },
-            onLoadStop: (controller, url) async {
-              _pullToRefreshController?.endRefreshing();
-              bool back = false;
-              bool forward = false;
-              Uint8List? screenshot;
-              try {
-                back = await controller.canGoBack();
-                forward = await controller.canGoForward();
-                screenshot = await controller
-                    .takeScreenshot()
-                    .timeout(const Duration(seconds: 2));
-              } catch (_) {}
-
-              if (screenshot != null) {
-                screenshot = await _downscaleScreenshot(screenshot, targetWidth: 420);
-              }
-              final loadedUrl = _isAiSearchPage ? _currentUrl : (url?.toString() ?? _currentUrl);
-              if (_isAiSearchPage) {
-                await _configureAiSearchPage(controller);
-                await _applyWebsiteAppearance(_OrbitWebViewController(controller));
-              } else {
-                await _applyWebsiteAppearance(_OrbitWebViewController(controller));
-                if (adaptiveToolbarColorEnabled.value) {
-                  unawaited(_refreshAdaptiveToolbarColor(_OrbitWebViewController(controller)));
-                }
-              }
-              if (!widget.isIncognito && !_isAiSearchPage) {
-                activityController.log(
-                  ActivityKind.site,
-                  _currentTitle.trim().isEmpty ? loadedUrl : _currentTitle,
-                  loadedUrl,
-                );
-                unawaited(browserFaviconCache.fetchForUrl(loadedUrl));
-              }
-
-              if (!mounted) {
-                _signalFirstLoad();
-                return;
-              }
-
-              setState(() {
-                _isLoading = false;
-                _progress = 1;
-                _showProgress = true;
-                _loadError = null;
-                _canGoBack = back;
-                _canGoForward = forward;
-                if (url != null && !_isAiSearchPage) _currentUrl = url.toString();
-              });
-              _updateTabState(screenshot: screenshot);
-              _signalFirstLoad();
-              _progressHideTimer?.cancel();
-              _progressHideTimer = Timer(
-                const Duration(milliseconds: 260),
-                () {
-                  if (!mounted) return;
-                  setState(() {
-                    _showProgress = false;
-                    _progress = 0;
-                  });
-                },
-              );
-            },
-            onReceivedError: (controller, request, error) {
-              _pullToRefreshController?.endRefreshing();
-              if (request.isForMainFrame == true) {
-                _signalFirstLoad();
-                if (mounted) {
-                  setState(() {
-                    _isLoading = false;
-                    _progress = 1;
-                    _loadError = error.description;
-                  });
-                  _progressHideTimer?.cancel();
-                  _progressHideTimer = Timer(
-                    const Duration(milliseconds: 260),
-                    () {
-                      if (!mounted) return;
-                      setState(() => _showProgress = false);
+                return NavigationActionPolicy.CANCEL;
+              },
+              onCreateWindow: (controller, action) async {
+                // Links target="_blank" abrem no separador atual em vez de
+                // criarem uma janela nativa invisível que pode bloquear o WebView.
+                final target = action.request.url;
+                if (target == null || action.hasGesture != true) return false;
+                if (isAdBlockedUrl(target.toString())) return false;
+                final scheme = target.scheme.toLowerCase();
+                if (scheme != 'http' && scheme != 'https') return false;
+                try {
+                  await controller.loadUrl(
+                    urlRequest: URLRequest(url: target),
+                  );
+                } catch (_) {}
+                // A navegação já foi encaminhada para a WebView atual; cancela
+                // apenas a criação do popup separado.
+                return false;
+              },
+              onWebViewCreated: (controller) async {
+                final orbitController = _OrbitWebViewController(controller);
+                _controller = orbitController;
+                BrowserPreconnectHints.attach(widget.tabId, orbitController.evaluateJavascript);
+                if (_isAiSearchPage) {
+                  controller.addJavaScriptHandler(
+                    handlerName: 'browseItAiSearchSubmit',
+                    callback: (arguments) {
+                      final query = arguments.isNotEmpty ? arguments.first.toString().trim() : '';
+                      if (query.isEmpty) return false;
+                      searchHistoryController.add(query);
+                      if (mounted) {
+                        setState(() {
+                          _currentTitle = query;
+                          _currentUrl = 'looply://ai-search?q=${Uri.encodeComponent(query)}';
+                        });
+                        _updateTabState();
+                      }
+                      return true;
                     },
                   );
                 }
-              }
-            },
-            onDownloadStartRequest: (controller, request) {
-              if (!widget.isIncognito) {
-                downloadsController.register(
-                  url: request.url.toString(),
-                  filename: request.suggestedFilename,
-                  mimeType: request.mimeType,
+                await installNativeAdBlocker();
+                unawaited(_applyRuntimeWebViewSettings(orbitController));
+                final ready = widget.browserReadyCompleter;
+                if (ready != null && !ready.isCompleted) ready.complete();
+                unawaited(_refreshNavigationState());
+              },
+              onProgressChanged: (controller, progress) {
+                if (!mounted) return;
+                _progressHideTimer?.cancel();
+                setState(() {
+                  _showProgress = true;
+                  _progress = (progress / 100).clamp(0.0, 1.0);
+                  if (progress < 100) _isLoading = true;
+                });
+              },
+              onLoadStart: (controller, url) {
+                if (!mounted) return;
+                _progressHideTimer?.cancel();
+                final nextUrl = url?.toString();
+                if (_isAiSearchPage && nextUrl != null && !nextUrl.startsWith('https://browseit.local/')) {
+                  _isAiSearchPage = false;
+                  _siteToolbarColor = null;
+                }
+                setState(() {
+                  if (!_isAiSearchPage) _siteToolbarColor = null;
+                  _isLoading = true;
+                  _showProgress = true;
+                  _progress = 0;
+                  _loadError = null;
+                  if (nextUrl != null && !_isAiSearchPage) _currentUrl = nextUrl;
+                });
+                _updateTabState();
+              },
+              onTitleChanged: (controller, title) {
+                if (!mounted) return;
+                if (!_isAiSearchPage) _currentTitle = title ?? '';
+                _updateTabState();
+                setState(() {});
+              },
+              onUpdateVisitedHistory: (controller, url, isReload) async {
+                if (!mounted || url == null) return;
+                final nextUrl = url.toString();
+                bool canBack = _canGoBack;
+                bool canForward = _canGoForward;
+                String? title;
+                try {
+                  canBack = await controller.canGoBack();
+                  canForward = await controller.canGoForward();
+                  title = await controller.getTitle();
+                } catch (_) {}
+                if (!mounted) return;
+                setState(() {
+                  if (!_isAiSearchPage) {
+                    _currentUrl = nextUrl;
+                    if (title?.trim().isNotEmpty == true) _currentTitle = title!;
+                  }
+                  _canGoBack = canBack;
+                  _canGoForward = canForward;
+                });
+                if (!widget.isIncognito && !_isAiSearchPage) {
+                  activityController.log(
+                    ActivityKind.site,
+                    _currentTitle.trim().isEmpty ? nextUrl : _currentTitle,
+                    nextUrl,
+                  );
+                  unawaited(browserFaviconCache.fetchForUrl(nextUrl));
+                }
+                _updateTabState();
+              },
+              onLoadStop: (controller, url) async {
+                _pullToRefreshController?.endRefreshing();
+                bool back = false;
+                bool forward = false;
+                Uint8List? screenshot;
+                try {
+                  back = await controller.canGoBack();
+                  forward = await controller.canGoForward();
+                  screenshot = await controller
+                      .takeScreenshot()
+                      .timeout(const Duration(seconds: 2));
+                } catch (_) {}
+
+                if (screenshot != null) {
+                  // ✅ CORREÇÃO 5: Aumenta a resolução da miniatura para 720px
+                  // (antes 420px) para evitar aspecto borrado em telas modernas.
+                  screenshot = await _downscaleScreenshot(screenshot, targetWidth: 720);
+                }
+                final loadedUrl = _isAiSearchPage ? _currentUrl : (url?.toString() ?? _currentUrl);
+                if (_isAiSearchPage) {
+                  await _configureAiSearchPage(controller);
+                  await _applyWebsiteAppearance(_OrbitWebViewController(controller));
+                } else {
+                  await _applyWebsiteAppearance(_OrbitWebViewController(controller));
+                  if (adaptiveToolbarColorEnabled.value) {
+                    unawaited(_refreshAdaptiveToolbarColor(_OrbitWebViewController(controller)));
+                  }
+                }
+                if (!widget.isIncognito && !_isAiSearchPage) {
+                  activityController.log(
+                    ActivityKind.site,
+                    _currentTitle.trim().isEmpty ? loadedUrl : _currentTitle,
+                    loadedUrl,
+                  );
+                  unawaited(browserFaviconCache.fetchForUrl(loadedUrl));
+                }
+
+                if (!mounted) {
+                  _signalFirstLoad();
+                  return;
+                }
+
+                setState(() {
+                  _isLoading = false;
+                  _progress = 1;
+                  _showProgress = true;
+                  _loadError = null;
+                  _canGoBack = back;
+                  _canGoForward = forward;
+                  if (url != null && !_isAiSearchPage) _currentUrl = url.toString();
+                });
+                _updateTabState(screenshot: screenshot);
+                _signalFirstLoad();
+                _progressHideTimer?.cancel();
+                _progressHideTimer = Timer(
+                  const Duration(milliseconds: 260),
+                  () {
+                    if (!mounted) return;
+                    setState(() {
+                      _showProgress = false;
+                      _progress = 0;
+                    });
+                  },
                 );
-              }
-              if (mounted && !widget.isIncognito) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(appText('download_received'))),
-                );
-              }
-            },
-            onRenderProcessGone: (controller, detail) {
-              _pullToRefreshController?.endRefreshing();
-              _signalFirstLoad();
-              if (!mounted) return;
-              setState(() {
-                _renderProcessCrashed = true;
-                _isLoading = false;
-                _showProgress = false;
-                _loadError = 'O motor da página foi reiniciado.';
-              });
-            },
+              },
+              onReceivedError: (controller, request, error) {
+                _pullToRefreshController?.endRefreshing();
+                if (request.isForMainFrame == true) {
+                  _signalFirstLoad();
+                  if (mounted) {
+                    setState(() {
+                      _isLoading = false;
+                      _progress = 1;
+                      _loadError = error.description;
+                    });
+                    _progressHideTimer?.cancel();
+                    _progressHideTimer = Timer(
+                      const Duration(milliseconds: 260),
+                      () {
+                        if (!mounted) return;
+                        setState(() => _showProgress = false);
+                      },
+                    );
+                  }
+                }
+              },
+              onDownloadStartRequest: (controller, request) {
+                if (!widget.isIncognito) {
+                  downloadsController.register(
+                    url: request.url.toString(),
+                    filename: request.suggestedFilename,
+                    mimeType: request.mimeType,
+                  );
+                }
+                if (mounted && !widget.isIncognito) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(appText('download_received'))),
+                  );
+                }
+              },
+              onRenderProcessGone: (controller, detail) {
+                _pullToRefreshController?.endRefreshing();
+                _signalFirstLoad();
+                if (!mounted) return;
+                setState(() {
+                  _renderProcessCrashed = true;
+                  _isLoading = false;
+                  _showProgress = false;
+                  _loadError = 'O motor da página foi reiniciado.';
+                });
+              },
+            ),
           ),
         if (_renderProcessCrashed || _loadError != null)
           _buildWebViewErrorOverlay(context, bg),

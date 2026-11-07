@@ -473,6 +473,9 @@ const Map<SiteCategory, String> siteCategoryLabels = {
   SiteCategory.personalizados: 'Os meus sites',
 };
 
+String siteCategoryLabel(SiteCategory category) =>
+    siteCategoryLabels[category] ?? category.name;
+
 class QuickSite {
   const QuickSite({
     required this.name,
@@ -622,6 +625,8 @@ class CustomSitesController extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> flushPersistence() => _persist();
+
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -744,6 +749,10 @@ class BrowserTab {
     this.title,
     this.thumbnail,
     this.isIncognito = false,
+    this.canGoBack = false,
+    this.canGoForward = false,
+    this.appScreenLabel,
+    this.appScreenIcon,
     DateTime? lastActivity,
   }) : lastActivity = lastActivity ?? DateTime.now();
 
@@ -753,6 +762,10 @@ class BrowserTab {
   String? title;
   Uint8List? thumbnail;
   final bool isIncognito;
+  bool canGoBack;
+  bool canGoForward;
+  String? appScreenLabel;
+  IconData? appScreenIcon;
   DateTime lastActivity;
 
   void touch() {
@@ -766,8 +779,10 @@ class TabsController extends ChangeNotifier {
   final List<BrowserTab> _tabs = [];
   String? _activeTabId;
   final List<Future<void>> _pendingSnapshotWrites = [];
+  Timer? _persistTimer;
 
   List<BrowserTab> get tabs => List.unmodifiable(_tabs);
+  int get count => _tabs.length;
   String? get activeTabId => _activeTabId;
   BrowserTab? get activeTab {
     if (_activeTabId == null) return null;
@@ -868,11 +883,20 @@ class TabsController extends ChangeNotifier {
     if (tab != null && !tab.isIncognito) _schedulePersist();
   }
 
-  void updateTab(String id, {String? url, String? title, Uint8List? thumbnail}) {
+  void updateTab(
+    String id, {
+    String? url,
+    String? title,
+    Uint8List? thumbnail,
+    bool? canGoBack,
+    bool? canGoForward,
+  }) {
     final tab = getTab(id);
     if (tab == null) return;
     if (url != null) tab.url = url;
     if (title != null) tab.title = title;
+    if (canGoBack != null) tab.canGoBack = canGoBack;
+    if (canGoForward != null) tab.canGoForward = canGoForward;
     if (thumbnail != null) {
       tab.thumbnail = thumbnail;
       if (!tab.isIncognito) {
@@ -889,6 +913,60 @@ class TabsController extends ChangeNotifier {
       ));
       _schedulePersist();
     }
+  }
+
+  // Reaproveita a aba fixa do Orbit Browser se já existir; caso contrário,
+  // cria-a. Só deve existir uma instância de TabKind.orbitBrowser de cada vez.
+  BrowserTab upsertOrbitBrowserTab(String? url) {
+    final existing = getOrbitBrowserTab();
+    if (existing != null) {
+      if (url != null && url.isNotEmpty) {
+        existing.url = url;
+      }
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.orbitBrowser,
+      url: url ?? '',
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    _schedulePersist();
+    return tab;
+  }
+
+  // Reaproveita a aba fixa de um ecrã da app (identificada por screenKey) se
+  // já existir, atualizando o seu rótulo/ícone/miniatura; caso contrário, cria-a.
+  BrowserTab upsertAppScreenTab(
+    String screenKey,
+    String label,
+    IconData icon,
+    Uint8List? thumbnail,
+  ) {
+    final existing = getAppScreen(screenKey);
+    if (existing != null) {
+      existing.appScreenLabel = label;
+      existing.appScreenIcon = icon;
+      if (thumbnail != null) existing.thumbnail = thumbnail;
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.appScreen,
+      url: screenKey,
+      title: label,
+      thumbnail: thumbnail,
+      appScreenLabel: label,
+      appScreenIcon: icon,
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    return tab;
   }
 
   void _trackSnapshotWrite(String id, Uint8List bytes) {
