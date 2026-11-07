@@ -473,6 +473,9 @@ const Map<SiteCategory, String> siteCategoryLabels = {
   SiteCategory.personalizados: 'Os meus sites',
 };
 
+String siteCategoryLabel(SiteCategory category) =>
+    siteCategoryLabels[category] ?? category.name;
+
 class QuickSite {
   const QuickSite({
     required this.name,
@@ -744,6 +747,10 @@ class BrowserTab {
     this.title,
     this.thumbnail,
     this.isIncognito = false,
+    this.canGoBack = false,
+    this.canGoForward = false,
+    this.appScreenLabel,
+    this.appScreenIcon,
     DateTime? lastActivity,
   }) : lastActivity = lastActivity ?? DateTime.now();
 
@@ -754,6 +761,16 @@ class BrowserTab {
   Uint8List? thumbnail;
   final bool isIncognito;
   DateTime lastActivity;
+
+  // Estado de navegação do WebView, usado pela toolbar do browser para
+  // ativar/desativar os botões de avançar/recuar.
+  bool canGoBack;
+  bool canGoForward;
+
+  // Preenchidos apenas para abas do tipo TabKind.appScreen (Início,
+  // Atividade, etc.), usados pela grelha de abas para rotular o cartão.
+  String? appScreenLabel;
+  IconData? appScreenIcon;
 
   void touch() {
     lastActivity = DateTime.now();
@@ -766,9 +783,13 @@ class TabsController extends ChangeNotifier {
   final List<BrowserTab> _tabs = [];
   String? _activeTabId;
   final List<Future<void>> _pendingSnapshotWrites = [];
+  Timer? _persistTimer;
 
   List<BrowserTab> get tabs => List.unmodifiable(_tabs);
   String? get activeTabId => _activeTabId;
+  // Número de abas visíveis na grelha de abas (exclui as abas internas de
+  // ecrã de app, como Início/Atividade, que não aparecem nessa contagem).
+  int get count => _tabs.where((tab) => tab.kind != TabKind.appScreen).length;
   BrowserTab? get activeTab {
     if (_activeTabId == null) return null;
     for (final tab in _tabs) {
@@ -868,11 +889,20 @@ class TabsController extends ChangeNotifier {
     if (tab != null && !tab.isIncognito) _schedulePersist();
   }
 
-  void updateTab(String id, {String? url, String? title, Uint8List? thumbnail}) {
+  void updateTab(
+    String id, {
+    String? url,
+    String? title,
+    Uint8List? thumbnail,
+    bool? canGoBack,
+    bool? canGoForward,
+  }) {
     final tab = getTab(id);
     if (tab == null) return;
     if (url != null) tab.url = url;
     if (title != null) tab.title = title;
+    if (canGoBack != null) tab.canGoBack = canGoBack;
+    if (canGoForward != null) tab.canGoForward = canGoForward;
     if (thumbnail != null) {
       tab.thumbnail = thumbnail;
       if (!tab.isIncognito) {
@@ -1003,6 +1033,64 @@ class TabsController extends ChangeNotifier {
     }
     return null;
   }
+
+  // A aba do Orbit Browser é única e persistente: se já existir, apenas
+  // atualiza a sua miniatura; caso contrário, cria-a.
+  BrowserTab upsertOrbitBrowserTab(Uint8List? thumbnail) {
+    final existing = getOrbitBrowserTab();
+    if (existing != null) {
+      if (thumbnail != null) {
+        existing.thumbnail = thumbnail;
+        _trackSnapshotWrite(existing.id, thumbnail);
+      }
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.orbitBrowser,
+      url: 'https://www.google.com',
+      thumbnail: thumbnail,
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    return tab;
+  }
+
+  // Cada ecrã de app (Início, Atividade, ...) tem no máximo uma aba própria,
+  // identificada por screenKey, usada apenas para a pré-visualização na
+  // grelha de abas — nunca é persistida nem contada em `count`.
+  BrowserTab upsertAppScreenTab(
+    String screenKey,
+    String screenLabel,
+    IconData screenIcon,
+    Uint8List? thumbnail,
+  ) {
+    final existing = getAppScreen(screenKey);
+    if (existing != null) {
+      existing.appScreenLabel = screenLabel;
+      existing.appScreenIcon = screenIcon;
+      if (thumbnail != null) existing.thumbnail = thumbnail;
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.appScreen,
+      url: screenKey,
+      title: screenLabel,
+      thumbnail: thumbnail,
+      appScreenLabel: screenLabel,
+      appScreenIcon: screenIcon,
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    return tab;
+  }
+
+  Future<void> flushPersistence() {
 
   Future<void> flushPersistence() {
     _persistTimer?.cancel();
