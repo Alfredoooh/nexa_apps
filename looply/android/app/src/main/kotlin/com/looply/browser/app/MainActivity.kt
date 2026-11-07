@@ -537,7 +537,9 @@ class MainActivity : AppCompatActivity() {
         if (tab.incognito) web.clearCache(true)
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                return if (LooplyAdBlocker.enabled && LooplyAdBlocker.shouldBlock(request.url.toString())) LooplyAdBlocker.blockedResponse() else null
+                return if (LooplyAdBlocker.shouldBlock(request)) {
+                    WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                } else null
             }
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
@@ -997,13 +999,10 @@ class MainActivity : AppCompatActivity() {
         val body = linear(this, true).apply { setPadding(dp(14), dp(10), dp(14), dp(24)) }
         allSites.groupBy { it.category }.forEach { (category, sites) ->
             body.addView(textView(this, category, 14f, palette.muted, Typeface.BOLD).apply { setPadding(dp(6), dp(14), 0, dp(8)) })
-            val row = linear(this).apply {
-                var current: LinearLayout? = null
-                sites.chunked(4).forEach { chunk ->
-                    val lineRow = linear(this@MainActivity).apply { setPadding(0, 0, 0, dp(10)) }
-                    chunk.forEach { lineRow.addView(buildSiteTile(it), LinearLayout.LayoutParams(0, -2, 1f)) }
-                    body.addView(lineRow)
-                }
+            sites.chunked(4).forEach { chunk ->
+                val lineRow = linear(this@MainActivity).apply { setPadding(0, 0, 0, dp(10)) }
+                chunk.forEach { lineRow.addView(buildSiteTile(it), LinearLayout.LayoutParams(0, -2, 1f)) }
+                body.addView(lineRow)
             }
         }
         page.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
