@@ -1,1451 +1,1164 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
-import 'dart:math' as math;
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
-import 'models.dart';
-import 'auth_service.dart';
-import 'cloud_sync.dart';
-import 'browser_library.dart';
-import 'screens/activity_screen.dart';
-import 'screens/home_screen.dart';
-import 'screens/orbit_browser_screen.dart';
-import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
-import 'shell/shell_tab_request.dart';
-import 'shell/tabs_grid_screen.dart';
-import 'theme.dart';
-import 'localization.dart';
 import 'widgets/phosphor_svg_icon.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+const Set<String> adBlockDomains = {
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+  'google-analytics.com', 'googletagmanager.com', 'googletagservices.com',
+  'adservice.google.com', 'adsystem.com', 'amazon-adsystem.com', 'facebook.net',
+  'connect.facebook.net', 'fbcdn.net', 'ads.facebook.com', 'taboola.com',
+  'outbrain.com', 'criteo.com', 'criteo.net', 'adroll.com', 'adnxs.com',
+  'rubiconproject.com', 'pubmatic.com', 'openx.net', 'casalemedia.com',
+  'smartadserver.com', 'advertising.com', 'adform.net', 'adtech.com', 'media.net',
+  'yieldmo.com', 'bidswitch.net', 'contextweb.com', 'exoclick.com', 'popads.net',
+  'propellerads.com', 'revcontent.com', 'mgid.com', 'zedo.com', 'adblade.com',
+  'adcolony.com', 'applovin.com', 'chartboost.com', 'unityads.unity3d.com',
+  'vungle.com', 'inmobi.com', 'mopub.com', 'scorecardresearch.com',
+  'quantserve.com', 'hotjar.com', 'mixpanel.com', 'segment.io', 'segment.com',
+  'amplitude.com', 'crazyegg.com', 'optimizely.com', 'newrelic.com', 'nr-data.net',
+  'bugsnag.com', 'sentry.io', 'intercom.io', 'drift.com', 'onesignal.com',
+  'pushwoosh.com', 'branch.io', 'adjust.com', 'appsflyer.com', 'kochava.com',
+  'tapjoy.com', 'ironsrc.com', 'smaato.net', 'sharethrough.com', 'teads.tv',
+  'triplelift.com', 'spotxchange.com', 'adsrvr.org', 'turn.com', 'mathtag.com',
+  'bluekai.com', 'krxd.net', 'demdex.net', 'everesttech.net', 'serving-sys.com',
+  'atdmt.com', 'adbrite.com', 'adtechus.com', 'burstnet.com', 'chitika.com',
+  'clicksor.com', 'infolinks.com', 'kontera.com', 'lijit.com', 'media6degrees.com',
+  'pointroll.com', 'quantcast.com', 'rlcdn.com', 'simpli.fi', 'tribalfusion.com',
+  'tremorhub.com', 'undertone.com', 'yieldlab.net', 'zergnet.com', 'popcash.net',
+  'adsterra.com', 'propellerclick.com', 'clickadu.com', 'galaksion.com',
+  'adspyglass.com', 'hilltopads.net', 'juicyads.com', 'trafficjunky.com',
+  'exosrv.com', 'moatads.com', 'adsafeprotected.com', 'doubleverify.com',
+  'ensighten.com', 'tynt.com', 'addthis.com', 'sharethis.com', 'disqus.com',
+  'gemius.pl', 'histats.com', 'statcounter.com', 'clicky.com', 'getclicky.com',
+  'woopra.com', 'kissmetrics.com', 'heap.io', 'fullstory.com', 'luckyorange.com',
+  'trafficstars.com', 'plugrush.com', 'tsyndicate.com', 'adcash.com',
+  'adnium.com', 'ero-advertising.com', 'adxpansion.com', 'onclickads.net',
+  'onclickalgo.com', 'onclckmn.com', 'adk2x.com', 'adtrafico.com', 'bebi.com',
+  'a-ads.com', 'trafficfactory.biz',
+  'mouseflow.com', 'smartlook.com', 'clarity.ms',
+};
 
-  // Restaurar preferências e dados locais antes de construir a primeira tela:
-  // evita mostrar temporariamente o tema padrão ou uma grelha sem separadores.
-  await themeController.restore();
-  await appLanguageController.restore();
-  await tabsController.restore();
-  await activityController.restore();
-  await searchHistoryController.restore();
-  await authController.restore();
-  await customSitesController.restore();
-  await activeSearchEngine.restore();
-  await restoreRuntimeSettings();
-  await AdBlockStats.instance.restore();
-  await browserFaviconCache.restore();
-  await bookmarksController.restore();
-  await downloadsController.restore();
+// Preferências persistentes do motor do navegador e da aparência dos sites.
+final ValueNotifier<bool> adBlockEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> navigationAcceleratorEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> forceDarkWebsitesEnabled = ValueNotifier<bool>(false);
+final ValueNotifier<bool> siteThemeFollowsAppEnabled = ValueNotifier<bool>(true);
+final ValueNotifier<bool> adaptiveToolbarColorEnabled = ValueNotifier<bool>(false);
+final ValueNotifier<bool> aiSearchModeEnabled = ValueNotifier<bool>(false);
 
-  runApp(const LooplyApp());
-}
+bool _runtimePreferenceListenersAttached = false;
 
-
-class LooplyApp extends StatelessWidget {
-  const LooplyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AppLanguage>(
-      valueListenable: appLanguageController,
-      builder: (context, language, _) => ValueListenableBuilder<ThemeMode>(
-        valueListenable: themeController,
-        builder: (context, mode, __) => ValueListenableBuilder<bool>(
-          valueListenable: themeController.pureDark,
-          builder: (context, pureBlack, ___) => MaterialApp(
-            title: 'BrowseIt',
-            debugShowCheckedModeBanner: false,
-            builder: (context, child) => Directionality(
-              textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-              child: child ?? const SizedBox.shrink(),
-            ),
-            locale: language.locale,
-            supportedLocales: supportedAppLanguages.map((item) => item.locale).toList(growable: false),
-            themeMode: mode,
-            themeAnimationDuration: Duration.zero,
-            theme: buildLooplyTheme(Brightness.light),
-            darkTheme: buildLooplyTheme(Brightness.dark, pureBlack: pureBlack),
-            home: const LooplyShell(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Future<Uint8List?> captureWidgetSnapshot(GlobalKey key, {double pixelRatio = 1.5}) async {
+Future<void> restoreRuntimeSettings() async {
   try {
-    // Aguarda o frame atual terminar para não capturar um RenderObject a meio
-    // de um layout/paint causado pela troca de rota ou pela atualização da aba.
-    await WidgetsBinding.instance.endOfFrame;
-    var renderObject = key.currentContext?.findRenderObject();
-    if (renderObject is! RenderRepaintBoundary || !renderObject.attached) {
-      await WidgetsBinding.instance.endOfFrame;
-      renderObject = key.currentContext?.findRenderObject();
+    final prefs = await SharedPreferences.getInstance();
+    adBlockEnabled.value = prefs.getBool('looply_ad_block_enabled') ?? true;
+    navigationAcceleratorEnabled.value = prefs.getBool('looply_navigation_accelerator_enabled') ?? true;
+    forceDarkWebsitesEnabled.value = prefs.getBool('looply_force_dark_websites') ?? false;
+    siteThemeFollowsAppEnabled.value = prefs.getBool('looply_site_theme_follows_app') ?? true;
+    adaptiveToolbarColorEnabled.value = prefs.getBool('looply_adaptive_toolbar_color') ?? false;
+    aiSearchModeEnabled.value = prefs.getBool('looply_ai_search_mode') ?? false;
+    if (_runtimePreferenceListenersAttached) return;
+    _runtimePreferenceListenersAttached = true;
+    void persist(String key, ValueNotifier<bool> notifier) {
+      notifier.addListener(() => unawaited(prefs.setBool(key, notifier.value)));
     }
-    if (renderObject is! RenderRepaintBoundary ||
-        !renderObject.attached ||
-        renderObject.size.isEmpty) {
-      return null;
-    }
-    if (renderObject.debugNeedsPaint) {
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    final ready = key.currentContext?.findRenderObject();
-    if (ready is! RenderRepaintBoundary || !ready.attached || ready.size.isEmpty) {
-      return null;
-    }
-
-    final image = await ready.toImage(pixelRatio: pixelRatio);
-    try {
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } finally {
-      image.dispose();
-    }
-  } catch (_) {
-    return null;
-  }
+    persist('looply_ad_block_enabled', adBlockEnabled);
+    persist('looply_navigation_accelerator_enabled', navigationAcceleratorEnabled);
+    persist('looply_force_dark_websites', forceDarkWebsitesEnabled);
+    persist('looply_site_theme_follows_app', siteThemeFollowsAppEnabled);
+    persist('looply_adaptive_toolbar_color', adaptiveToolbarColorEnabled);
+    persist('looply_ai_search_mode', aiSearchModeEnabled);
+  } catch (_) {}
 }
 
 
-class LooplyShell extends StatefulWidget {
-  const LooplyShell({super.key});
-  @override
-  State<LooplyShell> createState() => _LooplyShellState();
-}
+class AdBlockStats extends ChangeNotifier {
+  AdBlockStats._();
+  static final AdBlockStats instance = AdBlockStats._();
 
-class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _selectedTab = 0;
-  bool _showingTabsGrid = false;
-  bool _morphing = false;
-  String? _activeBrowserTabId;
-  final Map<String, GlobalKey> _browserViewportKeys = {};
-  final Map<String, Completer<void>> _browserFirstLoads = {};
-  // Sinaliza quando o widget InAppWebView está anexado à árvore. A entrada
-  // do browser só começa depois deste ponto, evitando iniciar a transição
-  // enquanto o plugin ainda prepara a primeira composição da página.
-  final Map<String, Completer<void>> _browserPlatformReady = {};
-  final GlobalKey _repaintKey = GlobalKey();
-  final Map<String, GlobalKey> _previewKeys = {};
-  final Map<String, GlobalKey> _cardKeys = {};
-  // As páginas principais são Início e Atividade.
-  final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
-  List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
-  final List<IconData> _screenIcons = const [PhosphorIcons.house, PhosphorIcons.clockCounterClockwise];
-  late final AnimationController _morphController;
-  late final AnimationController _browserSlideController;
-  late final AnimationController _drawerController;
-  late final Animation<Offset> _browserSlidePosition;
-  OverlayEntry? _morphEntry;
-  ImageProvider? _morphImage;
-  Rect? _morphFrom;
-  Rect? _morphTo;
-  bool _morphOpening = true;
-  Uint8List? _lastScreenSnapshot;
-  String? _preferredReturnTabId;
-  bool _restoreChecked = false;
-  late final List<Listenable> _cloudSyncSources;
-  static const MethodChannel _defaultBrowserIntentChannel = MethodChannel('browseit/default_browser');
+  static const String _storageKey = 'looply_adblock_daily_history_v2';
+  static const String _usageStorageKey = 'looply_app_usage_days_v1';
+  static const MethodChannel _nativeStatsChannel = MethodChannel('looply/native_adblock');
+  final Map<String, int> _dailyCounts = <String, int>{};
+  final Set<String> _usageDays = <String>{};
+  Timer? _notifyTimer;
+  Timer? _persistTimer;
+  bool _restored = false;
 
-  void _onCloudSyncSourceChanged() {
-    BrowseItCloudSync.scheduleAppBackup();
+  bool get isRestored => _restored;
+  int get totalBlocked => _dailyCounts.values.fold<int>(0, (sum, value) => sum + value);
+  Map<String, int> get dailyHistory => Map.unmodifiable(_dailyCounts);
+
+  List<int> get dailyBuckets => List<int>.generate(7, (index) {
+    final date = DateTime.now().subtract(Duration(days: 6 - index));
+    return countForDate(date);
+  }, growable: false);
+
+  static String dateKey(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  int countForDate(DateTime date) => _dailyCounts[dateKey(date)] ?? 0;
+  bool wasUsedOn(DateTime date) =>
+      _usageDays.contains(dateKey(date)) || countForDate(date) > 0;
+
+  /// Rótulos e totais de anúncios bloqueados para os 7 dias mais recentes
+  /// (usado na vista "Day" do gráfico de barras da tela de Atividade).
+  List<MapEntry<String, int>> get dayView {
+    const labels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final date = DateTime.now().subtract(Duration(days: 6 - index));
+      return MapEntry(labels[date.weekday % 7], countForDate(date));
+    }, growable: false);
   }
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _cloudSyncSources = <Listenable>[
-      themeController,
-      themeController.pureDark,
-      appLanguageController,
-      tabsController,
-      activityController,
-      searchHistoryController,
-      customSitesController,
-      activeSearchEngine,
-      AdBlockStats.instance,
-      browserFaviconCache,
-      bookmarksController,
-      downloadsController,
-    ];
-    for (final source in _cloudSyncSources) {
-      source.addListener(_onCloudSyncSourceChanged);
+  /// Totais por semana (segunda a domingo) das últimas 7 semanas, incluindo
+  /// a semana atual (usado na vista "Week").
+  List<MapEntry<String, int>> get weekView {
+    final now = DateTime.now();
+    final currentMonday = now.subtract(Duration(days: now.weekday - 1));
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final mondayOfWeek = currentMonday.subtract(Duration(days: 7 * (6 - index)));
+      var total = 0;
+      for (var dayOffset = 0; dayOffset < 7; dayOffset++) {
+        total += countForDate(mondayOfWeek.add(Duration(days: dayOffset)));
+      }
+      return MapEntry('S${index + 1}', total);
+    }, growable: false);
+  }
+
+  /// Totais por mês dos últimos 7 meses, incluindo o mês atual
+  /// (usado na vista "Month").
+  List<MapEntry<String, int>> get monthView {
+    const labels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    final now = DateTime.now();
+    return List<MapEntry<String, int>>.generate(7, (index) {
+      final monthsAgo = 6 - index;
+      final targetMonthIndex = now.month - 1 - monthsAgo;
+      final year = now.year + (targetMonthIndex < 0 ? ((targetMonthIndex + 1) ~/ 12) - 1 : targetMonthIndex ~/ 12);
+      final month = ((targetMonthIndex % 12) + 12) % 12 + 1;
+      var total = 0;
+      for (final key in _dailyCounts.keys) {
+        final parts = key.split('-');
+        if (parts.length != 3) continue;
+        final keyYear = int.tryParse(parts[0]);
+        final keyMonth = int.tryParse(parts[1]);
+        if (keyYear == year && keyMonth == month) total += _dailyCounts[key] ?? 0;
+      }
+      return MapEntry(labels[month - 1], total);
+    }, growable: false);
+  }
+
+  /// Totais por ano dos últimos 5 anos (usado na vista "Year").
+  List<MapEntry<String, int>> get yearView {
+    final now = DateTime.now();
+    return List<MapEntry<String, int>>.generate(5, (index) {
+      final year = now.year - (4 - index);
+      var total = 0;
+      for (final key in _dailyCounts.keys) {
+        final parts = key.split('-');
+        if (parts.length != 3) continue;
+        if (int.tryParse(parts[0]) == year) total += _dailyCounts[key] ?? 0;
+      }
+      return MapEntry(year.toString(), total);
+    }, growable: false);
+  }
+
+  /// Uso (verdadeiro/falso) de cada dia da semana atual (segunda a domingo),
+  /// usado para marcar os "checks" do Day Streak. Dias futuros são sempre
+  /// falsos, mesmo que a semana ainda não tenha terminado.
+  List<bool> get currentWeekUsage {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    return List<bool>.generate(7, (index) {
+      final day = monday.add(Duration(days: index));
+      final todayAtMidnight = DateTime(now.year, now.month, now.day);
+      final dayAtMidnight = DateTime(day.year, day.month, day.day);
+      if (dayAtMidnight.isAfter(todayAtMidnight)) return false;
+      return wasUsedOn(day);
+    }, growable: false);
+  }
+
+  /// Sequência atual de dias consecutivos de uso, terminando hoje ou ontem
+  /// (se hoje ainda não tiver uso registado, a sequência de ontem continua
+  /// a contar como "em curso" até à meia-noite).
+  int get currentStreak {
+    final now = DateTime.now();
+    var cursor = DateTime(now.year, now.month, now.day);
+    if (!wasUsedOn(cursor)) {
+      cursor = cursor.subtract(const Duration(days: 1));
     }
-    tabsController.addListener(_onTabsChanged);
-    ShellTabRequest.instance.addListener(_handleShellTabRequest);
-    _defaultBrowserIntentChannel.setMethodCallHandler(_handleDefaultBrowserIntent);
-    _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
-    _drawerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-      reverseDuration: const Duration(milliseconds: 460),
-    );
-    drawer_menu.LooplyDrawerBridge.open = _openShellDrawer;
-    drawer_menu.LooplyDrawerBridge.close = _closeShellDrawer;
-    _browserSlideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-      reverseDuration: const Duration(milliseconds: 390),
-    )..value = 1;
-    _browserSlidePosition = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _browserSlideController,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    ));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeRestoreSession();
-      _consumePendingDefaultBrowserUrls();
+    var streak = 0;
+    while (wasUsedOn(cursor)) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  bool _nativeListenerAttached = false;
+
+  void _attachNativeStatsListener() {
+    if (_nativeListenerAttached || defaultTargetPlatform != TargetPlatform.android) return;
+    _nativeListenerAttached = true;
+    _nativeStatsChannel.setMethodCallHandler((call) async {
+      if (call.method == 'statsChanged') await restore();
     });
   }
 
-  Future<dynamic> _handleDefaultBrowserIntent(MethodCall call) async {
-    if (call.method != 'openUrl') return null;
-    final url = call.arguments?.toString() ?? '';
-    _openExternalBrowserUrl(url);
-    return true;
-  }
-
-  Future<void> _consumePendingDefaultBrowserUrls() async {
+  Future<void> restore() async {
+    _attachNativeStatsListener();
+    _dailyCounts.clear();
     try {
-      while (mounted) {
-        final url = await _defaultBrowserIntentChannel.invokeMethod<String>('consumeInitialUrl');
-        if (url == null || url.isEmpty) break;
-        _openExternalBrowserUrl(url);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          _dailyCounts
+            ..clear()
+            ..addEntries(decoded.entries.where((entry) =>
+              entry.key is String && entry.value is num && (entry.value as num) >= 0
+            ).map((entry) => MapEntry(entry.key as String, (entry.value as num).toInt())));
+        }
       }
-    } on PlatformException {
-      // A aplicação continua a poder ser usada normalmente se não tiver sido
-      // aberta através de um link externo.
-    } on MissingPluginException {
-      // O canal só existe na implementação Android nativa do BrowseIt.
+      _usageDays.clear();
+      final rawUsage = prefs.getString(_usageStorageKey);
+      if (rawUsage != null && rawUsage.isNotEmpty) {
+        final decodedUsage = jsonDecode(rawUsage);
+        if (decodedUsage is List) {
+          _usageDays.addAll(decodedUsage.whereType<String>().where(
+            (key) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(key),
+          ));
+        }
+      }
+    } catch (_) {
+      // Dados antigos/corrompidos não impedem o arranque do navegador.
+    } finally {
+      // Datas antigas com histórico de navegação são reconhecidas como dias
+      // de utilização. O dia atual também é registado ao abrir a aplicação.
+      for (final entry in activityController.entries) {
+        _usageDays.add(dateKey(entry.timestamp));
+      }
+      _usageDays.add(dateKey(DateTime.now()));
+      if (_usageDays.length > 730) {
+        final ordered = _usageDays.toList()..sort();
+        _usageDays.removeAll(ordered.take(_usageDays.length - 730));
+      }
+      _restored = true;
+      unawaited(_persistUsageDays());
+      notifyListeners();
     }
   }
 
-  void _openExternalBrowserUrl(String rawUrl) {
-    if (!mounted) return;
-    final uri = Uri.tryParse(rawUrl);
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) return;
-    final tab = tabsController.createBrowserTab(uri.toString());
-    ShellTabRequest.instance.requestBrowser(tab.id);
+  Future<void> _persistUsageDays() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ordered = _usageDays.toList()..sort();
+      await prefs.setString(_usageStorageKey, jsonEncode(ordered));
+    } catch (_) {}
+  }
+
+  void registerBlock({DateTime? at}) {
+    final key = dateKey(at ?? DateTime.now());
+    _dailyCounts[key] = (_dailyCounts[key] ?? 0) + 1;
+
+    // Mantém no máximo dois anos de histórico, evitando crescimento ilimitado
+    // do SharedPreferences em sessões de navegação longas.
+    if (_dailyCounts.length > 730) {
+      final keys = _dailyCounts.keys.toList()..sort();
+      for (final oldKey in keys.take(_dailyCounts.length - 730)) {
+        _dailyCounts.remove(oldKey);
+      }
+    }
+
+    _notifyTimer?.cancel();
+    _notifyTimer = Timer(const Duration(milliseconds: 180), notifyListeners);
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 650), () {
+      unawaited(_persist());
+    });
+  }
+
+  void clear() {
+    _dailyCounts.clear();
+    _notifyTimer?.cancel();
+    _persistTimer?.cancel();
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(_dailyCounts));
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    for (final source in _cloudSyncSources) {
-      source.removeListener(_onCloudSyncSourceChanged);
-    }
-    tabsController.removeListener(_onTabsChanged);
-    ShellTabRequest.instance.removeListener(_handleShellTabRequest);
-    _defaultBrowserIntentChannel.setMethodCallHandler(null);
-    _removeSnapshotOverlay();
-    _morphController.dispose();
-    _browserSlideController.dispose();
-    _drawerController.dispose();
-    drawer_menu.LooplyDrawerBridge.open = null;
-    drawer_menu.LooplyDrawerBridge.close = null;
+    _notifyTimer?.cancel();
+    _persistTimer?.cancel();
     super.dispose();
   }
+}
 
-  // Quando o app vai para segundo plano, pausado ou é encerrado, marca o
-  // instante — é o que decide, no próximo arranque, se ainda estamos
-  // dentro da janela de 1h para restaurar o browser.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Quando Histórico, Downloads ou outra página está por cima,
-      // não substitui a atividade dessa rota pela tela que ficou atrás.
-      final shellRoute = ModalRoute.of(context);
-      if (shellRoute == null || shellRoute.isCurrent) {
-        _persistCurrentActivity();
-      }
-      unawaited(SessionStore.instance.markBackgrounded());
-      unawaited(tabsController.flushPersistence());
-      unawaited(activityController.flushPersistence());
-      unawaited(AdBlockStats.instance.flushPersistence());
-      unawaited(BrowseItCloudSync.syncAppBackup().catchError((_) {}));
-    } else if (state == AppLifecycleState.resumed) {
-      unawaited(BrowseItCloudSync.syncAppBackup().catchError((_) {}));
-    }
+bool isAdBlockedUrl(String url) {
+  if (!adBlockEnabled.value) return false;
+  final uri = Uri.tryParse(url);
+  final host = uri?.host.toLowerCase().replaceFirst(RegExp(r'\.$'), '');
+  if (host == null || host.isEmpty) return false;
+  if (adBlockDomains.any((domain) => host == domain || host.endsWith('.$domain'))) {
+    return true;
   }
 
-  Future<void> _maybeRestoreSession() async {
-    if (_restoreChecked || !mounted) return;
-    _restoreChecked = true;
+  // Heurísticas conservadoras usadas também para rejeitar popups publicitários
+  // de subdomínios/hosts novos que ainda não constam na lista de domínios.
+  const adHostLabels = <String>{
+    'ad', 'ads', 'adserver', 'adservice', 'advert', 'advertising', 'banner',
+    'popunder', 'popads', 'clickunder', 'tracker', 'tracking', 'pixel',
+    'beacon', 'affiliate', 'sponsored', 'impression', 'prebid', 'adunit',
+  };
+  final labels = host.split('.').expand((part) => part.split('-'));
+  if (labels.any(adHostLabels.contains)) return true;
 
-    // A escolha de arranque é a última atividade do utilizador, não o último
-    // URL guardado. Assim, abrir o browser ontem não força o app a arrancar
-    // sempre nesse site se a última utilização foi noutra área.
-    final saved = await SessionStore.instance.getLastActivity();
-    if (!mounted) return;
-
-    if (saved == null) {
-      setState(() {
-        _selectedTab = 0;
-        _activeBrowserTabId = null;
-        _showingTabsGrid = false;
-      });
-      return;
-    }
-
-    final type = saved['type']?.toString() ?? 'shell';
-    final returnTo = _activityMap(saved['returnTo']);
-
-    if (type == 'drawer_page') {
-      _restoreBaseActivity(returnTo);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final pageKey = saved['page']?.toString() ?? '';
-        unawaited(drawer_menu.restoreDrawerPageActivity(
-          context,
-          pageKey: pageKey,
-          returnTo: returnTo,
-        ));
-      });
-      return;
-    }
-
-    if (type == 'tabs_grid') {
-      _restoreBaseActivity(returnTo);
-      _preferredReturnTabId = _activeBrowserTabId;
-      if (mounted) setState(() => _showingTabsGrid = true);
-      return;
-    }
-
-    _restoreBaseActivity(saved);
+  final path = uri?.path.toLowerCase() ?? '';
+  if (RegExp(r'(?:^|/)(?:ads?|adserver|adservice|advert(?:ising)?|banners?|popunder|clickunder|trackers?|tracking|pixels?|beacons?|impressions?|vast)(?:[/._-]|$)')
+      .hasMatch(path)) {
+    return true;
   }
+  return false;
+}
 
-  Map<String, dynamic> _activityMap(Object? value) {
-    if (value is Map) return Map<String, dynamic>.from(value);
-    return <String, dynamic>{'type': 'shell', 'screenIndex': 0};
-  }
+class SearchEngine {
+  const SearchEngine({required this.name, required this.domain, required this.urlTemplate, this.assetPath});
+  final String name;
+  final String domain;
+  final String urlTemplate;
+  final String? assetPath;
+  String buildUrl(String query) => urlTemplate.replaceAll('{q}', Uri.encodeQueryComponent(query));
+  String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+}
 
-  void _restoreBaseActivity(Map<String, dynamic> activity) {
-    final type = activity['type']?.toString() ?? 'shell';
-    String? restoredBrowserId;
-    var restoredScreen = 0;
+const List<SearchEngine> searchEngines = [
+  SearchEngine(name: 'Google', domain: 'google.com', assetPath: 'assets/images/quick_sites/google.webp', urlTemplate: 'https://www.google.com/search?q={q}'),
+  SearchEngine(name: 'Bing', domain: 'bing.com', assetPath: 'assets/images/quick_sites/bing.webp', urlTemplate: 'https://www.bing.com/search?q={q}'),
+  SearchEngine(name: 'DuckDuckGo', domain: 'duckduckgo.com', assetPath: 'assets/images/quick_sites/duckduckgo.webp', urlTemplate: 'https://duckduckgo.com/?q={q}'),
+  SearchEngine(name: 'Yahoo', domain: 'yahoo.com', assetPath: 'assets/images/quick_sites/yahoo.webp', urlTemplate: 'https://search.yahoo.com/search?p={q}'),
+  SearchEngine(name: 'Brave', domain: 'search.brave.com', assetPath: 'assets/images/quick_sites/brave.webp', urlTemplate: 'https://search.brave.com/search?q={q}'),
+  SearchEngine(name: 'Ecosia', domain: 'ecosia.org', urlTemplate: 'https://www.ecosia.org/search?q={q}'),
+];
 
-    BrowserTab? restoreBrowserTab;
-    if (type == 'browser') {
-      final id = activity['tabId']?.toString();
-      final tab = id == null ? null : tabsController.getTab(id);
-      // As sessões privadas não são reabertas automaticamente.
-      if (tab != null && !tab.isIncognito && tab.kind != TabKind.appScreen) {
-        restoreBrowserTab = tab;
-        restoredBrowserId = tab.id;
-      }
-    } else if (type == 'shell') {
-      final rawIndex = activity['screenIndex'];
-      if (rawIndex is num) restoredScreen = rawIndex.toInt();
-    }
+class SearchEngineController extends ValueNotifier<SearchEngine> {
+  SearchEngineController() : super(searchEngines.first);
 
-    if (mounted) {
-      setState(() {
-        _selectedTab = restoredScreen.clamp(0, _screenKeys.length - 1).toInt();
-        _activeBrowserTabId = restoredBrowserId;
-        _showingTabsGrid = false;
-      });
-      if (restoreBrowserTab != null) {
-        _ensureBrowserTabMounted(restoreBrowserTab);
-        tabsController.activate(restoreBrowserTab.id);
-      }
-    }
-  }
-
-  Map<String, dynamic> _currentBaseActivity() {
-    final id = _activeBrowserTabId;
-    final active = id == null ? null : tabsController.getTab(id);
-    if (active != null && !active.isIncognito && active.kind != TabKind.appScreen) {
-      return <String, dynamic>{'type': 'browser', 'tabId': active.id};
-    }
-    return <String, dynamic>{'type': 'shell', 'screenIndex': _selectedTab};
-  }
-
-  void _persistCurrentActivity() {
-    final activity = _showingTabsGrid
-        ? <String, dynamic>{
-            'type': 'tabs_grid',
-            'returnTo': _currentBaseActivity(),
-          }
-        : _currentBaseActivity();
-    unawaited(SessionStore.instance.saveLastActivity(activity));
-  }
-
-  void _onTabsChanged() {
-    if (!mounted) return;
-
-    final liveBrowserIds = tabsController.tabs
-        .where((tab) => tab.kind != TabKind.appScreen)
-        .map((tab) => tab.id)
-        .toSet();
-
-    if (_activeBrowserTabId != null) {
-      final active = tabsController.getTab(_activeBrowserTabId!);
-      if (active != null && active.kind != TabKind.appScreen) {
-        _ensureBrowserTabMounted(active);
-      }
-    }
-
-    // Mantém apenas os recursos de WebView da aba efetivamente ativa.
-    // Miniaturas e chaves dos cartões continuam independentes para a grelha.
-    _browserViewportKeys.removeWhere((id, _) =>
-        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
-    _browserFirstLoads.removeWhere((id, _) =>
-        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
-    _browserPlatformReady.removeWhere((id, _) =>
-        !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
-    _previewKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
-    _cardKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
-
-    if (_activeBrowserTabId != null &&
-        !liveBrowserIds.contains(_activeBrowserTabId)) {
-      _activeBrowserTabId = null;
-    }
-
-    setState(() {});
-  }
-
-  void _ensureBrowserTabMounted(BrowserTab tab) {
-    if (tab.kind == TabKind.appScreen) return;
-    _browserViewportKeys.putIfAbsent(tab.id, GlobalKey.new);
-    _browserFirstLoads.putIfAbsent(tab.id, Completer<void>.new);
-    _browserPlatformReady.putIfAbsent(tab.id, Completer<void>.new);
-    _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
-    _cardKeys.putIfAbsent(tab.id, GlobalKey.new);
-  }
-
-  void _animateDrawerTo(double target, {double velocity = 0, double drawerWidth = 304}) {
-    if (!mounted) return;
-    final distance = (target - _drawerController.value).abs();
-    if (distance <= .001) return;
-    _drawerController.stop();
-    final speed = velocity.abs();
-    final milliseconds = speed > 80
-        ? (distance * drawerWidth / speed * 1000).round().clamp(105, 260).toInt()
-        : (distance * 245).round().clamp(105, 245).toInt();
-    unawaited(_drawerController.animateTo(
-      target,
-      duration: Duration(milliseconds: milliseconds),
-      curve: Curves.easeOutCubic,
-    ));
-  }
-
-  void _openShellDrawer() => _animateDrawerTo(1);
-
-  void _closeShellDrawer() => _animateDrawerTo(0);
-
-  void _onDrawerDragStart(DragStartDetails details) {
-    _drawerController.stop();
-  }
-
-  void _onDrawerDragUpdate(DragUpdateDetails details, double drawerWidth) {
-    if (drawerWidth <= 0) return;
-    _drawerController.value =
-        (_drawerController.value + details.delta.dx / drawerWidth)
-            .clamp(0.0, 1.0)
-            .toDouble();
-  }
-
-  void _onDrawerDragEnd(DragEndDetails details, double drawerWidth) {
-    final velocity = details.velocity.pixelsPerSecond.dx;
-    final progress = _drawerController.value;
-    final target = velocity > 420
-        ? 1.0
-        : velocity < -420
-            ? 0.0
-            : progress >= .42
-                ? 1.0
-                : 0.0;
-    _animateDrawerTo(target, velocity: velocity, drawerWidth: drawerWidth);
-  }
-
-  double _drawerWidth(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    return math.min(320.0, math.min(screenWidth * .82, screenWidth - 24)).toDouble();
-  }
-
-  void _activateBrowserTab(BrowserTab tab) {
-    _ensureBrowserTabMounted(tab);
-    // A abertura pela grelha usa exclusivamente o Container Transform.
-    // Repor a posição final do slide normal impede que a WebView fique
-    // deslocada para fora do ecrã depois de uma navegação Home -> Browser.
-    _browserSlideController.stop();
-    _browserSlideController.value = 1;
-    setState(() {
-      _activeBrowserTabId = tab.id;
-      _showingTabsGrid = false;
-    });
-    tabsController.activate(tab.id);
-    _persistCurrentActivity();
-  }
-
-  // Transição vertical usada apenas na navegação normal entre Home e Browser.
-  // O Container Transform dos separadores continua a usar o seu overlay/captura
-  // original, sem passar por este controlador.
-  void _activateBrowserTabWithSlide(BrowserTab tab) {
-    _ensureBrowserTabMounted(tab);
-    final browserAlreadyVisible =
-        _activeBrowserTabId != null && !_showingTabsGrid;
-    _browserSlideController.stop();
-    _browserSlideController.value = browserAlreadyVisible ? 1 : 0;
-    setState(() {
-      _activeBrowserTabId = tab.id;
-      _showingTabsGrid = false;
-    });
-    tabsController.activate(tab.id);
-    _persistCurrentActivity();
-    if (!browserAlreadyVisible) {
-      unawaited(_playBrowserEntranceWhenReady(tab.id));
-    }
-  }
-
-  Future<void> _playBrowserEntranceWhenReady(String tabId) async {
-    final ready = _browserPlatformReady[tabId];
-    if (ready != null && !ready.isCompleted) {
-      try {
-        await ready.future.timeout(const Duration(milliseconds: 650));
-      } on TimeoutException {
-        // Não bloqueia a navegação caso a plataforma demore a sinalizar.
-      }
-    }
-
-    // Deixa o Android anexar a superfície nativa e o Flutter concluir um
-    // frame antes de iniciar o movimento. A transição continua a ser um slide
-    // real, sem fade ou screenshot e sem tocar no Container Transform.
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted ||
-        _activeBrowserTabId != tabId ||
-        _showingTabsGrid ||
-        _browserSlideController.isAnimating) {
-      return;
-    }
-    await _browserSlideController.forward();
-  }
-
-  Future<void> _navigateToShellScreen(int index) async {
-    if (_activeBrowserTabId != null && !_showingTabsGrid) {
-      _browserSlideController.stop();
-      try {
-        await _browserSlideController.reverse();
-      } catch (_) {}
-      if (!mounted) return;
-    }
-    setState(() {
-      _activeBrowserTabId = null;
-      _selectedTab = index.clamp(0, _screenKeys.length - 1).toInt();
-    });
-    _persistCurrentActivity();
-  }
-
-  void _handleShellTabRequest() {
-    if (!mounted) return;
-    final request = ShellTabRequest.instance;
-
-    if (request.browserCloseRequested) {
-      request.browserCloseRequested = false;
-      final tabId = request.browserCloseTabId;
-      final screenshot = request.browserCloseScreenshot;
-      final sourceRect = request.browserCloseSourceRect;
-      request.browserCloseTabId = null;
-      request.browserCloseScreenshot = null;
-      request.browserCloseSourceRect = null;
-      if (tabId != null) {
-        unawaited(_closeBrowserToTabsGrid(
-          tabId: tabId,
-          screenshot: screenshot,
-          sourceRect: sourceRect,
-        ));
-      }
-      return;
-    }
-
-    if (request.orbitBrowserRequested) {
-      request.orbitBrowserRequested = false;
-      final tab = tabsController.getOrbitBrowserTab() ??
-          tabsController.upsertOrbitBrowserTab(null);
-      _activateBrowserTabWithSlide(tab);
-      return;
-    }
-
-    final requestedBrowserId = request.browserTabRequested;
-    request.browserTabRequested = null;
-    if (requestedBrowserId != null) {
-      final tab = tabsController.getTab(requestedBrowserId);
-      if (tab != null) _activateBrowserTabWithSlide(tab);
-      return;
-    }
-
-    if (request.tabsRequested) {
-      request.tabsRequested = false;
-      request.requestedIndex = null;
-      _preferredReturnTabId = _activeBrowserTabId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openTabsGrid();
-      });
-      return;
-    }
-
-    final requested = request.requestedIndex;
-    request.requestedIndex = null;
-    if (requested == null) return;
-    unawaited(_navigateToShellScreen(requested));
-  }
-
-  Rect? _rectInOverlay(GlobalKey key) {
+  Future<void> restore() async {
     try {
-      final overlay = Overlay.of(context, rootOverlay: true);
-      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
-      final box = key.currentContext?.findRenderObject() as RenderBox?;
-      if (overlayBox == null || box == null || !box.attached) return null;
-      final topLeft = box.localToGlobal(Offset.zero, ancestor: overlayBox);
-      return topLeft & box.size;
-    } catch (_) {
-      return null;
-    }
+      final prefs = await SharedPreferences.getInstance();
+      final name = prefs.getString('looply_search_engine') ?? searchEngines.first.name;
+      value = searchEngines.first;
+      SearchEngine? engine;
+      for (final item in searchEngines) {
+        if (item.name == name) { engine = item; break; }
+      }
+      if (engine != null) value = engine;
+    } catch (_) {}
   }
 
-  Future<ImageProvider?> _prepareSnapshotImage(Uint8List bitmap) async {
-    final provider = MemoryImage(bitmap);
+  void select(SearchEngine engine) {
+    value = engine;
+    unawaited(_persist());
+  }
+
+  Future<void> _persist() async {
     try {
-      // Decodifica antes de inserir o overlay. Assim o primeiro frame da
-      // animação já contém a imagem real e nunca um placeholder cinzento.
-      await precacheImage(provider, context);
-      return provider;
-    } catch (_) {
-      return null;
-    }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('looply_search_engine', value.name);
+    } catch (_) {}
   }
+}
 
-  void _insertSnapshotOverlay({
-    required ImageProvider image,
-    required Rect from,
-    required bool opening,
-  }) {
-    _removeSnapshotOverlay();
-    _morphController.stop();
-    _morphController.value = 0;
-    _morphImage = image;
-    _morphFrom = from;
-    _morphTo = from;
-    _morphOpening = opening;
 
-    // A mesma OverlayEntry permanece montada do primeiro ao último frame.
-    // Não removemos uma imagem para inserir outra no início da animação —
-    // essa troca de entries era a origem do frame vazio/flash.
-    _morphEntry = OverlayEntry(
-      builder: (overlayContext) => Positioned.fill(
-        child: IgnorePointer(
-          child: AnimatedBuilder(
-            animation: _morphController,
-            builder: (context, _) {
-              final imageProvider = _morphImage;
-              final from = _morphFrom;
-              final to = _morphTo;
-              if (imageProvider == null || from == null || to == null) {
-                return const SizedBox.expand();
-              }
 
-              final t = Curves.easeInOutCubic.transform(_morphController.value);
-              final rect = Rect.lerp(from, to, t) ?? to;
-              final startRadius = _morphOpening
-                  ? BorderRadius.zero
-                  : BorderRadius.circular(18);
-              final endRadius = _morphOpening
-                  ? BorderRadius.circular(18)
-                  : BorderRadius.zero;
-              final radius = BorderRadius.lerp(startRadius, endRadius, t) ??
-                  BorderRadius.zero;
+final SearchEngineController activeSearchEngine = SearchEngineController();
 
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (!_morphOpening)
-                    Positioned.fill(
-                      child: ColoredBox(color: pageBg(overlayContext)),
-                    ),
-                  Positioned.fromRect(
-                    rect: rect,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: ClipRRect(
-                        borderRadius: radius,
-                        child: Image(
-                          image: imageProvider,
-                          fit: BoxFit.cover,
-                          gaplessPlayback: true,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context, rootOverlay: true).insert(_morphEntry!);
-  }
+/// Pesquisas recentes persistentes, independentes do histórico de navegação.
+class SearchHistoryController extends ChangeNotifier {
+  static const String _storageKey = 'looply_search_history_v1';
+  final List<String> _queries = <String>[];
+  List<String> get queries => List.unmodifiable(_queries);
 
-  void _removeSnapshotOverlay() {
-    _morphEntry?.remove();
-    _morphEntry = null;
-    _morphImage = null;
-    _morphFrom = null;
-    _morphTo = null;
-  }
-
-  Future<void> _animateSnapshot({
-    required Rect to,
-    bool keepOverlayAtEnd = false,
-  }) async {
-    if (!mounted || _morphEntry == null) return;
-    _morphTo = to;
-    _morphEntry!.markNeedsBuild();
-
+  Future<void> restore() async {
+    _queries.clear();
     try {
-      // A curva é aplicada apenas no builder. O driver fica linear para não
-      // aplicar easeInOut duas vezes e alterar a velocidade a meio do morph.
-      await _morphController.animateTo(
-        1,
-        duration: const Duration(milliseconds: 470),
-        curve: Curves.linear,
-      );
-    } finally {
-      if (!keepOverlayAtEnd) _removeSnapshotOverlay();
-    }
-  }
-
-  Future<void> _openTabsGrid() async {
-    if (_showingTabsGrid || _morphing) return;
-    _morphing = true;
-    final returnTo = _currentBaseActivity();
-    _preferredReturnTabId = _activeBrowserTabId;
-    unawaited(SessionStore.instance.saveLastActivity({
-      'type': 'tabs_grid',
-      'returnTo': returnTo,
-    }));
-
-    final sourceRect = _rectInOverlay(_repaintKey);
-    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.35);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    if (bitmap == null || sourceRect == null) {
-      final appTab = tabsController.upsertAppScreenTab(
-        _screenKeys[_selectedTab],
-        _screenLabels[_selectedTab],
-        _screenIcons[_selectedTab],
-        bitmap,
-      );
-      _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
-      _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
-      setState(() {
-        _showingTabsGrid = true;
-        _morphing = false;
-      });
-      return;
-    }
-
-    final imageProvider = await _prepareSnapshotImage(bitmap);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    _lastScreenSnapshot = bitmap;
-    final appTab = tabsController.upsertAppScreenTab(
-      _screenKeys[_selectedTab],
-      _screenLabels[_selectedTab],
-      _screenIcons[_selectedTab],
-      bitmap,
-    );
-    _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
-    _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
-
-    if (imageProvider == null) {
-      setState(() {
-        _showingTabsGrid = true;
-        _morphing = false;
-      });
-      return;
-    }
-
-    // Primeiro cobrimos o ecrã atual com a captura já descodificada.
-    // Só depois montamos a grelha por baixo dela.
-    _insertSnapshotOverlay(
-      image: imageProvider,
-      from: sourceRect,
-      opening: true,
-    );
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      return;
-    }
-
-    setState(() => _showingTabsGrid = true);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      return;
-    }
-
-    final target = _rectInOverlay(_previewKeys[appTab.id]!) ??
-        _rectInOverlay(_cardKeys[appTab.id]!) ??
-        sourceRect;
-    await _animateSnapshot(to: target);
-    if (mounted) setState(() => _morphing = false);
-  }
-
-  // Todas as páginas Orbit usam o mesmo percurso de ida para a grelha.
-  // A captura cobre a viewport antes de a WebView ativa ser desmontada;
-  // na grelha ficam apenas as miniaturas persistidas de cada separador.
-  Future<void> _closeBrowserToTabsGrid({
-    required String tabId,
-    required Uint8List? screenshot,
-    required Rect? sourceRect,
-  }) async {
-    if (_showingTabsGrid || _morphing) return;
-    _morphing = true;
-
-    final browserTab = tabsController.getTab(tabId);
-    if (browserTab == null) {
-      _morphing = false;
-      return;
-    }
-
-    _ensureBrowserTabMounted(browserTab);
-    _preferredReturnTabId = browserTab.id;
-    if (!browserTab.isIncognito) {
-      unawaited(SessionStore.instance.saveLastActivity({
-        'type': 'tabs_grid',
-        'returnTo': <String, dynamic>{'type': 'browser', 'tabId': browserTab.id},
-      }));
-    }
-    final bitmap = screenshot ?? browserTab.thumbnail;
-    final imageProvider = bitmap == null
-        ? null
-        : await _prepareSnapshotImage(bitmap);
-
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    if (imageProvider != null && sourceRect != null) {
-      _insertSnapshotOverlay(
-        image: imageProvider,
-        from: sourceRect,
-        opening: true,
-      );
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      _morphing = false;
-      return;
-    }
-
-    // A grelha passa a apresentar as miniaturas locais. A WebView ativa sai
-    // da árvore enquanto nenhum separador está em utilização direta.
-    setState(() => _showingTabsGrid = true);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (!mounted) {
-      _removeSnapshotOverlay();
-      _morphing = false;
-      return;
-    }
-
-    if (imageProvider != null && sourceRect != null) {
-      final preview = _previewKeys[browserTab.id];
-      final card = _cardKeys[browserTab.id];
-      final destination = (preview == null ? null : _rectInOverlay(preview)) ??
-          (card == null ? null : _rectInOverlay(card));
-      if (destination != null) {
-        await _animateSnapshot(to: destination);
-      } else {
-        _removeSnapshotOverlay();
-      }
-    } else {
-      _removeSnapshotOverlay();
-    }
-
-    if (mounted) setState(() => _morphing = false);
-  }
-
-  Future<void> _closeTabsGrid({BrowserTab? openTab}) async {
-    if (_morphing || !_showingTabsGrid) return;
-    _morphing = true;
-
-    final preferredReturnTab = tabsController.getTab(_preferredReturnTabId ?? '');
-    final targetTab = openTab ??
-        preferredReturnTab ??
-        tabsController.getAppScreen(_screenKeys[_selectedTab]);
-    _preferredReturnTabId = null;
-
-    final sourceKey = targetTab == null
-        ? null
-        : (_previewKeys[targetTab.id] ?? _cardKeys[targetTab.id]);
-    final sourceRect = sourceKey == null ? null : _rectInOverlay(sourceKey);
-
-    Uint8List? bitmap = targetTab?.thumbnail;
-    if (bitmap == null && targetTab?.kind == TabKind.appScreen) {
-      bitmap = _lastScreenSnapshot;
-    }
-    if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
-    }
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    final imageProvider = bitmap == null ? null : await _prepareSnapshotImage(bitmap);
-    if (!mounted) {
-      _morphing = false;
-      return;
-    }
-
-    if (targetTab != null && targetTab.kind != TabKind.appScreen) {
-      _ensureBrowserTabMounted(targetTab);
-      // Ao regressar da grelha, o movimento é feito pelo Container Transform.
-      // O slide de navegação normal deve começar já na posição final.
-      _browserSlideController.stop();
-      _browserSlideController.value = 1;
-      setState(() {
-        _activeBrowserTabId = targetTab.id;
-        _showingTabsGrid = false;
-      });
-      tabsController.activate(targetTab.id);
-      if (!targetTab.isIncognito) {
-        unawaited(SessionStore.instance.saveLastActivity({
-          'type': 'browser',
-          'tabId': targetTab.id,
-        }));
-      } else {
-        unawaited(SessionStore.instance.saveLastActivity({
-          'type': 'shell',
-          'screenIndex': _selectedTab,
-        }));
-      }
-
-      // A captura é colocada por cima da grelha antes de montar a WebView.
-      // Assim não há um frame intermédio em que a WebView recém-ativada apareça
-      // sem a imagem do cartão, mantendo exatamente o Container Transform.
-      if (imageProvider != null && sourceRect != null) {
-        _insertSnapshotOverlay(
-          image: imageProvider,
-          from: sourceRect,
-          opening: false,
-        );
-      }
-
-      await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!mounted) {
-        _removeSnapshotOverlay();
-        _morphing = false;
-        return;
-      }
-
-      if (imageProvider != null && sourceRect != null) {
-        final viewportKey = _browserViewportKeys[targetTab.id];
-        final destination = viewportKey == null
-            ? null
-            : _rectInOverlay(viewportKey);
-        if (destination != null) {
-          final firstLoad = _browserFirstLoads[targetTab.id];
-          final needsInitialCover = targetTab.thumbnail == null &&
-              firstLoad != null &&
-              !firstLoad.isCompleted;
-          await _animateSnapshot(
-            to: destination,
-            keepOverlayAtEnd: needsInitialCover,
-          );
-          if (needsInitialCover) {
-            try {
-              await firstLoad.future.timeout(const Duration(seconds: 5));
-            } on TimeoutException {
-              // A captura continua por um limite curto; a navegação não fica
-              // bloqueada indefinidamente quando o site não responde.
-            }
-            _removeSnapshotOverlay();
-          }
-        } else {
-          _removeSnapshotOverlay();
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          _queries.addAll(decoded.whereType<String>().map((value) => value.trim())
+              .where((value) => value.isNotEmpty).take(30));
         }
-      } else {
-        _removeSnapshotOverlay();
       }
-
-      if (mounted) setState(() => _morphing = false);
-      return;
-    }
-
-    if (targetTab != null && targetTab.kind == TabKind.appScreen) {
-      var index = _screenKeys.indexOf(targetTab.url);
-      // Compatibilidade com separadores de ecrã 'Jogos' e 'Descobrir' gravados
-      // por versões anteriores: encaminha-os para o Início, já que nenhum dos
-      // dois continua exposto na navegação principal.
-      if (index < 0 &&
-          (targetTab.url == 'games_screen' || targetTab.url == 'discover_screen')) {
-        index = 0;
-      }
-      if (index >= 0) _selectedTab = index;
-    }
-    unawaited(SessionStore.instance.saveLastActivity({
-      'type': 'shell',
-      'screenIndex': _selectedTab,
-    }));
-
-    if (imageProvider != null && sourceRect != null) {
-      _insertSnapshotOverlay(
-        image: imageProvider,
-        from: sourceRect,
-        opening: false,
-      );
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    setState(() {
-      _activeBrowserTabId = null;
-      _showingTabsGrid = false;
-    });
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-
-    if (imageProvider != null && sourceRect != null && mounted) {
-      final destination = _rectInOverlay(_repaintKey);
-      if (destination != null) {
-        await _animateSnapshot(to: destination);
-      } else {
-        _removeSnapshotOverlay();
-      }
-    } else {
-      _removeSnapshotOverlay();
-    }
-
-    if (mounted) setState(() => _morphing = false);
+    } catch (_) {}
+    notifyListeners();
   }
 
-
-  void _returnHomeFromTabs() {
-    final homeTab = tabsController.getAppScreen(_screenKeys.first) ??
-        tabsController.upsertAppScreenTab(
-          _screenKeys.first,
-          _screenLabels.first,
-          _screenIcons.first,
-          null,
-        );
-    unawaited(_closeTabsGrid(openTab: homeTab));
+  void add(String query) {
+    final value = query.trim();
+    if (value.isEmpty) return;
+    _queries.removeWhere((item) => item.toLowerCase() == value.toLowerCase());
+    _queries.insert(0, value);
+    if (_queries.length > 30) _queries.removeRange(30, _queries.length);
+    notifyListeners();
+    unawaited(_persist());
   }
 
+  void remove(String query) {
+    _queries.remove(query);
+    notifyListeners();
+    unawaited(_persist());
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = pageBg(context);
-    final browserTabs = tabsController.tabs
-        .where((tab) => tab.kind != TabKind.appScreen)
-        .toList(growable: false);
-    final activeBrowserIndex = browserTabs.indexWhere(
-      (tab) => tab.id == _activeBrowserTabId,
-    );
-    final BrowserTab? activeBrowserTab = activeBrowserIndex < 0
-        ? null
-        : browserTabs[activeBrowserIndex];
-    if (activeBrowserTab != null && !_showingTabsGrid) {
-      _ensureBrowserTabMounted(activeBrowserTab);
-    }
+  Future<void> flushPersistence() => _persist();
 
-    // A shell principal e os separadores do Orbit são duas camadas reais.
-    // Isto permite que o browser suba por cima da página anterior enquanto
-    // a página de trás é empurrada ligeiramente para baixo, sem substituir
-    // nem reconstruir a WebView persistente. O Container Transform da grelha
-    // continua independente e inalterado.
-    final shellPages = <Widget>[
-      HomeScreen(onOpenDrawer: _openShellDrawer),
-      const ActivityScreen(),
-    ];
-    final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
-        ? null
-        : OrbitBrowserScreen(
-            key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
-            tabId: activeBrowserTab.id,
-            initialUrl: activeBrowserTab.url,
-            isActive: true,
-            viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
-            firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
-            browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
-            isIncognito: activeBrowserTab.isIncognito,
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(_queries));
+    } catch (_) {}
+  }
+}
+
+final SearchHistoryController searchHistoryController = SearchHistoryController();
+
+enum SiteCategory {
+  destaque,
+  produtividade,
+  social,
+  entretenimento,
+  desenvolvimento,
+  ia,
+  apostas,
+  compras,
+  noticias,
+  viagens,
+  financas,
+  personalizados,
+}
+
+const Map<SiteCategory, String> siteCategoryLabels = {
+  SiteCategory.destaque: 'Destaques',
+  SiteCategory.produtividade: 'Produtividade',
+  SiteCategory.social: 'Redes sociais',
+  SiteCategory.entretenimento: 'Entretenimento',
+  SiteCategory.desenvolvimento: 'Desenvolvimento',
+  SiteCategory.ia: 'Inteligência artificial',
+  SiteCategory.apostas: 'Apostas desportivas',
+  SiteCategory.compras: 'Compras',
+  SiteCategory.noticias: 'Notícias e informação',
+  SiteCategory.viagens: 'Viagens',
+  SiteCategory.financas: 'Finanças e serviços',
+  SiteCategory.personalizados: 'Os meus sites',
+};
+
+String siteCategoryLabel(SiteCategory category) =>
+    siteCategoryLabels[category] ?? category.name;
+
+class QuickSite {
+  const QuickSite({
+    required this.name,
+    required this.url,
+    this.assetPath,
+    this.iconBase64,
+    this.faviconUrl,
+    this.category = SiteCategory.destaque,
+  });
+  final String name;
+  final String? assetPath;
+  final String url;
+  final String? iconBase64;
+  final String? faviconUrl;
+  final SiteCategory category;
+}
+
+
+const String _qs = 'assets/images/quick_sites';
+
+const List<QuickSite> quickSites = [
+  QuickSite(name: 'Google', assetPath: '$_qs/google.webp', url: 'https://www.google.com'),
+  QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com'),
+  QuickSite(name: 'Instagram', assetPath: '$_qs/instagram.webp', url: 'https://www.instagram.com'),
+  QuickSite(name: 'WeScore', assetPath: '$_qs/wescore.webp', url: 'https://www.wescore.com'),
+  QuickSite(name: 'X', assetPath: '$_qs/x.webp', url: 'https://x.com'),
+  QuickSite(name: 'Ao vivo', assetPath: '$_qs/besoccer_pro.webp', url: 'https://www.flashscore.com'),
+  QuickSite(name: 'BantuBet', assetPath: '$_qs/bantubet.webp', url: 'https://www.bantubet.com'),
+  QuickSite(name: 'PremierBet', assetPath: '$_qs/premierbet.webp', url: 'https://www.premierbet.co.ao'),
+  QuickSite(name: 'Wikipedia', assetPath: '$_qs/wikipedia.webp', url: 'https://www.wikipedia.org'),
+];
+
+const List<QuickSite> allSites = [
+  // Destaques e pesquisa
+  QuickSite(name: 'Google', assetPath: '$_qs/google.webp', url: 'https://www.google.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Bing', assetPath: '$_qs/bing.webp', url: 'https://www.bing.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Brave', assetPath: '$_qs/brave.webp', url: 'https://search.brave.com', category: SiteCategory.destaque),
+  QuickSite(name: 'DuckDuckGo', assetPath: '$_qs/duckduckgo.webp', url: 'https://duckduckgo.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Yahoo', assetPath: '$_qs/yahoo.webp', url: 'https://www.yahoo.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Wikipedia', assetPath: '$_qs/wikipedia.webp', url: 'https://www.wikipedia.org', category: SiteCategory.destaque),
+  QuickSite(name: 'Reddit', assetPath: '$_qs/reddit.webp', url: 'https://www.reddit.com', category: SiteCategory.destaque),
+  QuickSite(name: 'Medium', assetPath: '$_qs/medium.webp', url: 'https://medium.com', category: SiteCategory.destaque),
+  QuickSite(name: 'YouTube', assetPath: '$_qs/youtube.webp', url: 'https://www.youtube.com', category: SiteCategory.destaque),
+  // Produtividade e criação
+  QuickSite(name: 'Adobe', assetPath: '$_qs/adobe.webp', url: 'https://www.adobe.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Airtable', assetPath: '$_qs/airtable.webp', url: 'https://www.airtable.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Apple', assetPath: '$_qs/apple.webp', url: 'https://www.apple.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Canva', assetPath: '$_qs/canva.webp', url: 'https://www.canva.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Dropbox', assetPath: '$_qs/dropbox.webp', url: 'https://www.dropbox.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Figma', assetPath: '$_qs/figma.webp', url: 'https://www.figma.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Jotform', assetPath: '$_qs/jotform.webp', url: 'https://www.jotform.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Loom', assetPath: '$_qs/loom.webp', url: 'https://www.loom.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Lucidspark', assetPath: '$_qs/lucidspark.webp', url: 'https://lucidspark.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Microsoft', assetPath: '$_qs/microsoft.webp', url: 'https://www.microsoft.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Miro', assetPath: '$_qs/miro.webp', url: 'https://miro.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Notion', assetPath: '$_qs/notion.webp', url: 'https://www.notion.so', category: SiteCategory.produtividade),
+  QuickSite(name: 'Zoom', assetPath: '$_qs/zoom.webp', url: 'https://zoom.us', category: SiteCategory.produtividade),
+  QuickSite(name: 'Oracle', assetPath: '$_qs/oracle.webp', url: 'https://www.oracle.com', category: SiteCategory.produtividade),
+  QuickSite(name: 'Recurly', assetPath: '$_qs/recurly.webp', url: 'https://recurly.com', category: SiteCategory.financas),
+  // Redes sociais e comunicação
+  QuickSite(name: 'Instagram', assetPath: '$_qs/instagram.webp', url: 'https://www.instagram.com', category: SiteCategory.social),
+  QuickSite(name: 'X', assetPath: '$_qs/x.webp', url: 'https://x.com', category: SiteCategory.social),
+  QuickSite(name: 'TikTok', assetPath: '$_qs/tiktok.webp', url: 'https://www.tiktok.com', category: SiteCategory.social),
+  QuickSite(name: 'Gmail', assetPath: '$_qs/gmail.webp', url: 'https://mail.google.com', category: SiteCategory.social),
+  QuickSite(name: 'Revolt', assetPath: '$_qs/revolt.webp', url: 'https://revolt.chat', category: SiteCategory.social),
+  // Entretenimento e jogos
+  QuickSite(name: 'Netflix', assetPath: '$_qs/netflix.webp', url: 'https://www.netflix.com', category: SiteCategory.entretenimento),
+  QuickSite(name: 'Spotify', assetPath: '$_qs/spotify.webp', url: 'https://open.spotify.com', category: SiteCategory.entretenimento),
+  QuickSite(name: 'Roblox', assetPath: '$_qs/roblox.webp', url: 'https://www.roblox.com', category: SiteCategory.entretenimento),
+  QuickSite(name: 'Poki', assetPath: '$_qs/poki.webp', url: 'https://poki.com', category: SiteCategory.entretenimento),
+  // Notícias e desporto
+  QuickSite(name: 'BBC', assetPath: '$_qs/bbc.webp', url: 'https://www.bbc.com', category: SiteCategory.noticias),
+  QuickSite(name: 'BeSoccer Pro', assetPath: '$_qs/besoccer_pro.webp', url: 'https://www.besoccer.com', category: SiteCategory.noticias),
+  // Desenvolvimento e ferramentas
+  QuickSite(name: 'Atlassian', assetPath: '$_qs/atlassian.webp', url: 'https://www.atlassian.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Cloudflare', assetPath: '$_qs/cloudflare.webp', url: 'https://www.cloudflare.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Framer', assetPath: '$_qs/framer.webp', url: 'https://www.framer.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'GitHub', assetPath: '$_qs/github.webp', url: 'https://github.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'GitLab', assetPath: '$_qs/gitlab.webp', url: 'https://gitlab.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Replit', assetPath: '$_qs/replit.webp', url: 'https://replit.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Semrush', assetPath: '$_qs/semrush.webp', url: 'https://www.semrush.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Zapier', assetPath: '$_qs/zapier.webp', url: 'https://zapier.com', category: SiteCategory.desenvolvimento),
+  QuickSite(name: 'Deepgram', assetPath: '$_qs/deepgram.webp', url: 'https://deepgram.com', category: SiteCategory.desenvolvimento),
+  // Inteligência artificial
+  QuickSite(name: 'ChatGPT', assetPath: '$_qs/openai_chatgpt.webp', url: 'https://chatgpt.com', category: SiteCategory.ia),
+  QuickSite(name: 'DeepMind', assetPath: '$_qs/deepmind.webp', url: 'https://deepmind.google', category: SiteCategory.ia),
+  QuickSite(name: 'Mistral', assetPath: '$_qs/mistral.webp', url: 'https://mistral.ai', category: SiteCategory.ia),
+  QuickSite(name: 'xAI', assetPath: '$_qs/xai.webp', url: 'https://x.ai', category: SiteCategory.ia),
+  QuickSite(name: 'Stability AI', assetPath: '$_qs/stabilityai.webp', url: 'https://stability.ai', category: SiteCategory.ia),
+  QuickSite(name: 'DreamStudio', assetPath: '$_qs/stability_ai.webp', url: 'https://dreamstudio.ai', category: SiteCategory.ia),
+  QuickSite(name: 'Sider', assetPath: '$_qs/sider.webp', url: 'https://sider.ai', category: SiteCategory.ia),
+  // Apostas, compras e viagens
+  QuickSite(name: 'BantuBet', assetPath: '$_qs/bantubet.webp', url: 'https://www.bantubet.com', category: SiteCategory.apostas),
+  QuickSite(name: 'PremierBet', assetPath: '$_qs/premierbet.webp', url: 'https://www.premierbet.co.ao', category: SiteCategory.apostas),
+  QuickSite(name: 'WeScore', assetPath: '$_qs/wescore.webp', url: 'https://www.wescore.com', category: SiteCategory.apostas),
+  QuickSite(name: 'Amazon', assetPath: '$_qs/amazon.webp', url: 'https://www.amazon.com', category: SiteCategory.compras),
+  QuickSite(name: 'Alibaba', assetPath: '$_qs/alibaba.webp', url: 'https://www.alibaba.com', category: SiteCategory.compras),
+  QuickSite(name: 'Flipkart', assetPath: '$_qs/flipkart.webp', url: 'https://www.flipkart.com', category: SiteCategory.compras),
+  QuickSite(name: 'Airbnb', assetPath: '$_qs/airbnb.webp', url: 'https://www.airbnb.com', category: SiteCategory.viagens),
+  QuickSite(name: 'Aside', assetPath: '$_qs/aside.webp', url: 'https://aside.com', category: SiteCategory.produtividade),
+];
+
+
+/// Sites adicionados pelo utilizador. A lista e os ícones enviados são
+/// guardados localmente e reaparecem automaticamente na próxima abertura.
+class CustomSitesController extends ChangeNotifier {
+  static const String _storageKey = 'looply_custom_sites_v1';
+  final List<QuickSite> _sites = [];
+  List<QuickSite> get sites => List.unmodifiable(_sites);
+
+  Future<void> restore() async {
+    _sites.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) _sites.addAll(decoded.whereType<Map>().map((item) {
+          final name = item['name'];
+          final url = item['url'];
+          if (name is! String || url is! String) return null;
+          return QuickSite(
+            name: name,
+            url: url,
+            iconBase64: item['iconBase64'] is String ? item['iconBase64'] as String : null,
+            faviconUrl: item['faviconUrl'] is String ? item['faviconUrl'] as String : null,
+            category: SiteCategory.personalizados,
           );
+        }).whereType<QuickSite>());
+      }
+    } catch (_) {
+      // Dados de sites inválidos não impedem a abertura do Looply.
+    }
+    notifyListeners();
+  }
 
-    final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        backgroundColor: bg,
-        extendBody: true,
-        body: Stack(
-          children: [
-            // Página de trás: ao entrar no Orbit é empurrada para baixo e
-            // ligeiramente reduzida. Ao fechar, regressa à posição original.
-            // Este é o conteúdo vivo da tela anterior, não uma screenshot.
-            Positioned.fill(
-              child: Offstage(
-                offstage: _showingTabsGrid,
-                child: AnimatedBuilder(
-                  animation: _browserSlideController,
-                  child: SafeArea(
-                    bottom: false,
-                    child: SizedBox.expand(
-                      child: RepaintBoundary(
-                        key: _repaintKey,
-                        child: IndexedStack(
-                          index: _selectedTab,
-                          children: shellPages,
-                        ),
-                      ),
-                    ),
-                  ),
-                  builder: (context, child) {
-                    // Usa exatamente o mesmo progresso curvo da página que
-                    // sobe, para que a tela anterior seja empurrada ao mesmo
-                    // ritmo e regresse sincronizada no fecho.
-                    final progress = _activeBrowserTabId == null
-                        ? 0.0
-                        : (1 - _browserSlidePosition.value.dy).clamp(0.0, 1.0).toDouble();
-                    return IgnorePointer(
-                      ignoring: _activeBrowserTabId != null,
-                      // Movimento simples por composição: evita recalcular
-                      // clip arredondado e escala em todos os frames, mantendo
-                      // a sensação de a tela anterior ser empurrada para baixo.
-                      child: Transform.translate(
-                        offset: Offset(0, 16 * progress),
-                        child: child,
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            // Só a WebView da aba ativa existe na árvore. Ao abrir a grelha,
-            // ela é desmontada e a próxima só é criada quando for selecionada.
-            Positioned.fill(
-              child: Offstage(
-                offstage: _activeBrowserTabId == null || _showingTabsGrid,
-                child: SlideTransition(
-                  position: _browserSlidePosition,
-                  child: RepaintBoundary(
-                    child: SafeArea(
-                      bottom: false,
-                      child: SizedBox.expand(
-                        child: activeBrowserPage ?? const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (_showingTabsGrid)
-              Positioned.fill(
-                child: PopScope<void>(
-                  canPop: false,
-                  onPopInvokedWithResult: (didPop, result) {
-                    if (!didPop) _closeTabsGrid();
-                  },
-                  child: TabsGridScreen(
-                    previewKeys: _previewKeys,
-                    cardKeys: _cardKeys,
-                    onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
-                    onClose: () => _closeTabsGrid(),
-                    onHome: _returnHomeFromTabs,
-                    onNewTab: () {
-                      final tab = tabsController.createBrowserTab('https://www.google.com');
-                      _ensureBrowserTabMounted(tab);
-                      _closeTabsGrid(openTab: tab);
-                    },
-                    onNewIncognitoTab: () {
-                      final tab = tabsController.createBrowserTab(
-                        'https://www.google.com',
-                        isIncognito: true,
-                      );
-                      _ensureBrowserTabMounted(tab);
-                      _closeTabsGrid(openTab: tab);
-                    },
-                    onCloseAllTabs: () {
-                      _preferredReturnTabId = null;
-                      tabsController.closeAllTabs();
-                      setState(() {
-                        _activeBrowserTabId = null;
-                      });
-                      unawaited(SessionStore.instance.saveLastActivity({
-                        'type': 'tabs_grid',
-                        'returnTo': <String, dynamic>{
-                          'type': 'shell',
-                          'screenIndex': _selectedTab,
-                        },
-                      }));
-                    },
-                  ),
-                ),
-              ),
-          ],
-        ),
-        bottomNavigationBar: Offstage(
-          offstage: _showingTabsGrid || _activeBrowserTabId != null,
-          child: _LooplyBottomBar(
-            // Início e Atividade mapeiam 1:1 para _selectedTab (0 e 1).
-            // Abas é a posição 2 na UI mas não corresponde a nenhum
-            // _selectedTab — é tratada à parte no onSelect abaixo.
-            selectedIndex: switch (_selectedTab) { 1 => 1, _ => 0 },
-            tabCount: tabsController.count,
-            onSelect: (index) {
-              if (index == 2) {
-                _openTabsGrid();
-              } else {
-                unawaited(_navigateToShellScreen(index));
+  Future<void> add(QuickSite site) async {
+    _sites.removeWhere((item) => item.url == site.url);
+    _sites.insert(0, site);
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> remove(String url) async {
+    _sites.removeWhere((item) => item.url == url);
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _sites.map((site) => <String, Object?>{
+        'name': site.name,
+        'url': site.url,
+        'iconBase64': site.iconBase64,
+        'faviconUrl': site.faviconUrl,
+      }).toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+}
+
+final CustomSitesController customSitesController = CustomSitesController();
+
+enum ActivityKind { site, game }
+
+class ActivityEntry {
+  ActivityEntry({required this.kind, required this.title, required this.url, DateTime? timestamp})
+      : timestamp = timestamp ?? DateTime.now();
+  final ActivityKind kind;
+  final String title;
+  final String url;
+  final DateTime timestamp;
+}
+
+String _activityEntryKey(ActivityEntry entry) =>
+    '${entry.kind.name}|${entry.url}|${entry.timestamp.microsecondsSinceEpoch}';
+
+class ActivityController extends ChangeNotifier {
+  static const String _storageKey = 'looply_browsing_history_v1';
+  final List<ActivityEntry> _entries = [];
+  List<ActivityEntry> get entries => List.unmodifiable(_entries.reversed);
+
+  Future<void> restore() async {
+    _entries.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) _entries.addAll(decoded.whereType<Map>().map((item) {
+          final kindName = item['kind'];
+          final title = item['title'];
+          final url = item['url'];
+          final timestamp = item['timestamp'];
+          if (kindName is! String || title is! String || url is! String) return null;
+          ActivityKind? kind;
+          for (final candidate in ActivityKind.values) {
+            if (candidate.name == kindName) { kind = candidate; break; }
+          }
+          if (kind == null) return null;
+          return ActivityEntry(
+            kind: kind,
+            title: title,
+            url: url,
+            timestamp: timestamp is String ? DateTime.tryParse(timestamp) : null,
+          );
+        }).whereType<ActivityEntry>().toList().take(200));
+      }
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  void log(ActivityKind kind, String title, String url) {
+    if (url.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_entries.isNotEmpty) {
+      final latest = _entries.last;
+      if (latest.url == url && now.difference(latest.timestamp).inSeconds < 3) return;
+    }
+    _entries.add(ActivityEntry(kind: kind, title: title, url: url, timestamp: now));
+    if (_entries.length > 200) _entries.removeAt(0);
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  void removeEntries(Iterable<ActivityEntry> entries) {
+    final keys = entries.map(_activityEntryKey).toSet();
+    if (keys.isEmpty) return;
+    _entries.removeWhere((entry) => keys.contains(_activityEntryKey(entry)));
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  void clear() {
+    _entries.clear();
+    notifyListeners();
+    unawaited(_persist());
+  }
+
+  Future<void> flushPersistence() => _persist();
+
+  Future<void> _persist() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _entries.map((entry) => <String, Object?>{
+        'kind': entry.kind.name,
+        'title': entry.title,
+        'url': entry.url,
+        'timestamp': entry.timestamp.toIso8601String(),
+      }).toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+}
+
+final ActivityController activityController = ActivityController();
+
+// A aba especial do Orbit Browser mantém uma única instância persistente,
+// reutilizada em toda a navegação da aplicação (como um separador fixo).
+enum TabKind { orbitBrowser, browser, appScreen }
+
+class BrowserTab {
+  BrowserTab({
+    required this.id,
+    required this.kind,
+    required this.url,
+    this.title,
+    this.thumbnail,
+    this.isIncognito = false,
+    this.canGoBack = false,
+    this.canGoForward = false,
+    this.appScreenLabel,
+    this.appScreenIcon,
+    DateTime? lastActivity,
+  }) : lastActivity = lastActivity ?? DateTime.now();
+
+  final String id;
+  final TabKind kind;
+  String url;
+  String? title;
+  Uint8List? thumbnail;
+  final bool isIncognito;
+  DateTime lastActivity;
+
+  // Estado de navegação do WebView, usado pela toolbar do browser para
+  // ativar/desativar os botões de avançar/recuar.
+  bool canGoBack;
+  bool canGoForward;
+
+  // Preenchidos apenas para abas do tipo TabKind.appScreen (Início,
+  // Atividade, etc.), usados pela grelha de abas para rotular o cartão.
+  String? appScreenLabel;
+  IconData? appScreenIcon;
+
+  void touch() {
+    lastActivity = DateTime.now();
+  }
+}
+
+class TabsController extends ChangeNotifier {
+  static const String _storageKey = 'looply_open_tabs_v1';
+  static const String _activeStorageKey = 'looply_active_tab_v1';
+  final List<BrowserTab> _tabs = [];
+  String? _activeTabId;
+  final List<Future<void>> _pendingSnapshotWrites = [];
+  Timer? _persistTimer;
+
+  List<BrowserTab> get tabs => List.unmodifiable(_tabs);
+  String? get activeTabId => _activeTabId;
+  // Número de abas visíveis na grelha de abas (exclui as abas internas de
+  // ecrã de app, como Início/Atividade, que não aparecem nessa contagem).
+  int get count => _tabs.where((tab) => tab.kind != TabKind.appScreen).length;
+  BrowserTab? get activeTab {
+    if (_activeTabId == null) return null;
+    for (final tab in _tabs) {
+      if (tab.id == _activeTabId) return tab;
+    }
+    return null;
+  }
+
+  Future<Directory> _tabSnapshotDirectory() async {
+    final support = await getApplicationSupportDirectory();
+    final directory = Directory('${support.path}${Platform.pathSeparator}tab_snapshots');
+    if (!await directory.exists()) await directory.create(recursive: true);
+    return directory;
+  }
+
+  String _safeTabSnapshotName(String id) =>
+      '${id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_')}.png';
+
+  Future<void> restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          final directory = await _tabSnapshotDirectory();
+          for (final item in decoded) {
+            if (item is! Map) continue;
+            final id = item['id'];
+            final kindName = item['kind'];
+            final url = item['url'];
+            if (id is! String || kindName is! String || url is! String) continue;
+            TabKind? kind;
+            for (final candidate in TabKind.values) {
+              if (candidate.name == kindName) { kind = candidate; break; }
+            }
+            if (kind == null || kind == TabKind.appScreen) continue;
+            Uint8List? thumbnail;
+            final thumbnailFile = item['thumbnailFile'];
+            if (thumbnailFile is String) {
+              try {
+                final file = File('${directory.path}${Platform.pathSeparator}$thumbnailFile');
+                if (await file.exists()) thumbnail = await file.readAsBytes();
+              } catch (_) {}
+            }
+            if (thumbnail == null) {
+              final thumbnailBase64 = item['thumbnailBase64'];
+              if (thumbnailBase64 is String) {
+                try { thumbnail = base64Decode(thumbnailBase64); } catch (_) {}
               }
-            },
-          ),
-        ),
-      ),
-    );
+            }
+            final lastActivity = item['lastActivity'];
+            _tabs.add(BrowserTab(
+              id: id,
+              kind: kind,
+              url: url,
+              title: item['title'] is String ? item['title'] as String : null,
+              thumbnail: thumbnail,
+              lastActivity: lastActivity is String ? DateTime.tryParse(lastActivity) : null,
+            ));
+          }
+        }
+      }
+      final activeId = prefs.getString(_activeStorageKey);
+      if (activeId != null && _tabs.any((tab) => tab.id == activeId)) {
+        _activeTabId = activeId;
+      }
+    } catch (_) {
+      // Sessões corrompidas não impedem o arranque com abas vazias.
+    }
+    notifyListeners();
+  }
 
-    final drawerWidth = _drawerWidth(context);
-    final drawerGestureEnabled = _selectedTab == 0 &&
-        _activeBrowserTabId == null && !_showingTabsGrid;
-    final drawerPanel = drawer_menu.LooplyDrawer(
-      width: drawerWidth,
-      onClose: _closeShellDrawer,
+  String _generateTabId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${_tabs.length}_${identityHashCode(this)}';
+
+  BrowserTab createBrowserTab(String url, {String? title, bool isIncognito = false}) {
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.browser,
+      url: url,
+      title: title,
+      isIncognito: isIncognito,
     );
-    return AnimatedBuilder(
-      animation: _drawerController,
-      child: shellPage,
-      builder: (context, child) {
-        final progress = _drawerController.value.clamp(0.0, 1.0).toDouble();
-        final isDrawerOpen = progress > .001;
-        return Stack(
-          clipBehavior: Clip.hardEdge,
-          children: [
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: drawerWidth,
-              child: drawerPanel,
-            ),
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragStart: drawerGestureEnabled ? _onDrawerDragStart : null,
-                onHorizontalDragUpdate: drawerGestureEnabled
-                    ? (details) => _onDrawerDragUpdate(details, drawerWidth)
-                    : null,
-                onHorizontalDragEnd: drawerGestureEnabled ? (details) => _onDrawerDragEnd(details, drawerWidth) : null,
-                child: Transform.translate(
-                  offset: Offset(drawerWidth * progress, 0),
-                  child: child!,
-                ),
-              ),
-            ),
-            if (isDrawerOpen)
-              Positioned(
-                left: drawerWidth * progress,
-                top: 0,
-                right: 0,
-                bottom: 0,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _closeShellDrawer,
-                  onHorizontalDragStart: _onDrawerDragStart,
-                  onHorizontalDragUpdate: (details) =>
-                      _onDrawerDragUpdate(details, drawerWidth),
-                  onHorizontalDragEnd: (details) => _onDrawerDragEnd(details, drawerWidth),
-                  child: ColoredBox(
-                    color: Colors.black.withOpacity(.07 * progress),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
+    _tabs.add(tab);
+    notifyListeners();
+    if (!isIncognito) _schedulePersist();
+    return tab;
+  }
+
+  void activate(String id) {
+    if (_activeTabId == id) return;
+    _activeTabId = id;
+    final tab = getTab(id);
+    tab?.touch();
+    notifyListeners();
+    if (tab != null && !tab.isIncognito) _schedulePersist();
+  }
+
+  void updateTab(
+    String id, {
+    String? url,
+    String? title,
+    Uint8List? thumbnail,
+    bool? canGoBack,
+    bool? canGoForward,
+  }) {
+    final tab = getTab(id);
+    if (tab == null) return;
+    if (url != null) tab.url = url;
+    if (title != null) tab.title = title;
+    if (canGoBack != null) tab.canGoBack = canGoBack;
+    if (canGoForward != null) tab.canGoForward = canGoForward;
+    if (thumbnail != null) {
+      tab.thumbnail = thumbnail;
+      if (!tab.isIncognito) {
+        _trackSnapshotWrite(id, thumbnail);
+      }
+    }
+    tab.touch();
+    notifyListeners();
+
+    if (tab.kind != TabKind.appScreen && !tab.isIncognito && tab.url.isNotEmpty) {
+      unawaited(SessionStore.instance.saveLastPage(
+        url: tab.url,
+        title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
+      ));
+      _schedulePersist();
+    }
+  }
+
+  void _trackSnapshotWrite(String id, Uint8List bytes) {
+    final pending = _saveTabSnapshot(id, bytes);
+    _pendingSnapshotWrites.add(pending);
+    unawaited(pending.whenComplete(() => _pendingSnapshotWrites.remove(pending)));
+  }
+
+  Future<void> _saveTabSnapshot(String id, Uint8List bytes) async {
+    try {
+      final directory = await _tabSnapshotDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
+      await file.writeAsBytes(bytes, flush: true);
+    } catch (_) {
+      // A grelha continua a funcionar com a miniatura em memória se o disco falhar.
+    }
+  }
+
+  Future<void> _deleteTabSnapshot(String id) async {
+    try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
+      final directory = await _tabSnapshotDirectory();
+      final file = File('${directory.path}${Platform.pathSeparator}${_safeTabSnapshotName(id)}');
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
+  Future<void> clearStoredSnapshots() async {
+    try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
+      final directory = await _tabSnapshotDirectory();
+      if (await directory.exists()) {
+        await for (final entity in directory.list(followLinks: false)) {
+          if (entity is File && entity.path.toLowerCase().endsWith('.png')) {
+            await entity.delete();
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  void closeTab(String id) {
+    _tabs.removeWhere((tab) => tab.id == id);
+    unawaited(_deleteTabSnapshot(id));
+    if (_activeTabId == id) {
+      _activeTabId = _tabs.where((tab) => tab.kind != TabKind.appScreen).isNotEmpty
+          ? _tabs.firstWhere((tab) => tab.kind != TabKind.appScreen).id
+          : null;
+    }
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void reorderById(String movingId, String targetId) {
+    final from = _tabs.indexWhere((tab) => tab.id == movingId);
+    final target = _tabs.indexWhere((tab) => tab.id == targetId);
+    if (from < 0 || target < 0 || from == target) return;
+
+    final moving = _tabs.removeAt(from);
+    // Depois da remoção, o índice do alvo desloca-se quando o cartão veio
+    // de uma posição anterior. Inserir imediatamente antes do alvo deixa
+    // os restantes cartões preencherem o espaço com AnimatedPositioned.
+    final destination = from < target ? target - 1 : target;
+    final safeDestination = destination.clamp(0, _tabs.length).toInt();
+    _tabs.insert(safeDestination, moving);
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void closeTabs(Iterable<String> ids) {
+    final removed = ids.toSet();
+    if (removed.isEmpty) return;
+    _tabs.removeWhere((tab) => removed.contains(tab.id));
+    for (final id in removed) { unawaited(_deleteTabSnapshot(id)); }
+    if (_activeTabId != null && removed.contains(_activeTabId)) {
+      final remaining = _tabs.where((tab) => tab.kind != TabKind.appScreen).toList(growable: false);
+      _activeTabId = remaining.isEmpty ? null : remaining.first.id;
+    }
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  void closeAllTabs() {
+    for (final tab in _tabs) { unawaited(_deleteTabSnapshot(tab.id)); }
+    _tabs.clear();
+    _activeTabId = null;
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  BrowserTab? getTab(String id) {
+    for (final tab in _tabs) {
+      if (tab.id == id) return tab;
+    }
+    return null;
+  }
+
+  BrowserTab? getAppScreen(String screenKey) {
+    for (final tab in _tabs) {
+      if (tab.kind == TabKind.appScreen && tab.url == screenKey) return tab;
+    }
+    return null;
+  }
+
+  BrowserTab? getOrbitBrowserTab() {
+    for (final tab in _tabs) {
+      if (tab.kind == TabKind.orbitBrowser) return tab;
+    }
+    return null;
+  }
+
+  // A aba do Orbit Browser é única e persistente: se já existir, apenas
+  // atualiza a sua miniatura; caso contrário, cria-a.
+  BrowserTab upsertOrbitBrowserTab(Uint8List? thumbnail) {
+    final existing = getOrbitBrowserTab();
+    if (existing != null) {
+      if (thumbnail != null) {
+        existing.thumbnail = thumbnail;
+        _trackSnapshotWrite(existing.id, thumbnail);
+      }
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.orbitBrowser,
+      url: 'https://www.google.com',
+      thumbnail: thumbnail,
     );
+    _tabs.add(tab);
+    notifyListeners();
+    return tab;
+  }
+
+  // Cada ecrã de app (Início, Atividade, ...) tem no máximo uma aba própria,
+  // identificada por screenKey, usada apenas para a pré-visualização na
+  // grelha de abas — nunca é persistida nem contada em `count`.
+  BrowserTab upsertAppScreenTab(
+    String screenKey,
+    String screenLabel,
+    IconData screenIcon,
+    Uint8List? thumbnail,
+  ) {
+    final existing = getAppScreen(screenKey);
+    if (existing != null) {
+      existing.appScreenLabel = screenLabel;
+      existing.appScreenIcon = screenIcon;
+      if (thumbnail != null) existing.thumbnail = thumbnail;
+      existing.touch();
+      notifyListeners();
+      return existing;
+    }
+    final tab = BrowserTab(
+      id: _generateTabId(),
+      kind: TabKind.appScreen,
+      url: screenKey,
+      title: screenLabel,
+      thumbnail: thumbnail,
+      appScreenLabel: screenLabel,
+      appScreenIcon: screenIcon,
+    );
+    _tabs.add(tab);
+    notifyListeners();
+    return tab;
+  }
+
+  Future<void> flushPersistence() {
+    _persistTimer?.cancel();
+    return _persistNow();
+  }
+
+  void _schedulePersist() {
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 280), _persistNow);
+  }
+
+  Future<void> _persistNow() async {
+    try {
+      if (_pendingSnapshotWrites.isNotEmpty) {
+        await Future.wait<void>(_pendingSnapshotWrites.toList(growable: false));
+      }
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _tabs
+          .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito)
+          .map((tab) {
+            final thumbnail = tab.thumbnail;
+            return <String, Object?>{
+              'id': tab.id,
+              'kind': tab.kind.name,
+              'url': tab.url,
+              'title': tab.title,
+              'thumbnailFile': thumbnail != null ? _safeTabSnapshotName(tab.id) : null,
+              'thumbnailBase64': thumbnail != null && thumbnail.length <= 70000
+                  ? base64Encode(thumbnail)
+                  : null,
+              'lastActivity': tab.lastActivity.toIso8601String(),
+            };
+          })
+          .toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+      if (_activeTabId == null || !_tabs.any((tab) => tab.id == _activeTabId && tab.kind != TabKind.appScreen && !tab.isIncognito)) {
+        await prefs.remove(_activeStorageKey);
+      } else {
+        await prefs.setString(_activeStorageKey, _activeTabId!);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _persistTimer?.cancel();
+    unawaited(_persistNow());
+    super.dispose();
   }
 }
 
-class _TabsCountIcon extends StatelessWidget {
-  const _TabsCountIcon({required this.count, required this.color});
-  final int count;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 24,
-    height: 24,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      border: Border.all(color: color.withOpacity(.88), width: 1.6),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
-        ),
-      ),
-    ),
-  );
+final TabsController tabsController = TabsController();
+
+class LooplyGame {
+  const LooplyGame({required this.title, required this.category, required this.players, required this.artColor, required this.index, required this.description, this.url});
+  final String title;
+  final String category;
+  final String players;
+  final Color artColor;
+  final int index;
+  final String description;
+  final String? url;
 }
 
-// Bottombar flutuante com o mesmo efeito de esmaecer do appbar, mas
-// invertido: transparente no topo da barra, sólido na base — onde a
-// barra encosta no fundo do ecrã.
-class _LooplyBottomBar extends StatelessWidget {
-  const _LooplyBottomBar({
-    required this.selectedIndex,
-    required this.tabCount,
-    required this.onSelect,
-  });
-
-  final int selectedIndex;
-  final int tabCount;
-  final ValueChanged<int> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = browserBottomBarColor(context);
-    final foreground = mutedText(context);
-    final selected = mainText(context);
-    final indicator = Theme.of(context).brightness == Brightness.dark
-        ? inputBarTone(context)
-        : accentColor(context).withOpacity(.15);
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-
-    return Container(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg.withOpacity(0.0), bg, bg],
-          stops: const [0.0, 0.45, 1.0],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final slotWidth = constraints.maxWidth / 3;
-              final left = selectedIndex * slotWidth + 3;
-              return Stack(
-                children: [
-                  // O indicador só acompanha Início/Atividade; a posição de
-                  // Abas (índice 2) não tem _selectedTab correspondente,
-                  // então não recebe o realce deslizante.
-                  if (selectedIndex <= 1)
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeInOutCubic,
-                      left: left,
-                      top: 3,
-                      width: slotWidth - 6,
-                      height: 48,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: indicator,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      _BottomBarItem(
-                        icon: PhosphorIcons.house,
-                        selectedIcon: PhosphorIcons.house,
-                        tooltip: 'Início',
-                        selected: selectedIndex == 0,
-                        color: selectedIndex == 0 ? selected : foreground,
-                        onTap: () => onSelect(0),
-                      ),
-                      _BottomBarItem(
-                        icon: PhosphorIcons.clockCounterClockwise,
-                        selectedIcon: PhosphorIcons.clockCounterClockwise,
-                        tooltip: 'Atividade',
-                        selected: selectedIndex == 1,
-                        color: selectedIndex == 1 ? selected : foreground,
-                        onTap: () => onSelect(1),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: IconButton(
-                            tooltip: 'Abas',
-                            onPressed: () => onSelect(2),
-                            icon: _TabsCountIcon(count: tabCount, color: foreground),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BottomBarItem extends StatelessWidget {
-  const _BottomBarItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.tooltip,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final IconData selectedIcon;
-  final String tooltip;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Center(
-          child: IconButton(
-            tooltip: tooltip,
-            onPressed: onTap,
-            icon: PhosphorSvgIcon(selected ? selectedIcon : icon, color: color, size: 24, fill: selected ? 1 : 0),
-          ),
-        ),
-      );
-}
+const List<LooplyGame> looplyGames = [
+  LooplyGame(
+    title: 'Zombie Rush', category: 'Ação', players: '—', artColor: Color(0xFF1D76D2), index: 0,
+    description: 'Sobrevive à horda de zombies nesta experiência jogável diretamente na app.',
+    url: 'https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/refs/heads/master/offline/zombie-rush.html',
+  ),
+];
