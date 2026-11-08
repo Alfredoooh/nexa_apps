@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../screens/history_screen.dart';
 import '../screens/downloads_screen.dart';
@@ -53,7 +52,7 @@ class LooplyDrawer extends StatelessWidget {
               padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
               child: Column(
                 children: [
-                  _DrawerHeader(),
+                  const _DrawerHeader(),
                   const SizedBox(height: 8),
                   Expanded(
                     child: ListView(
@@ -195,27 +194,26 @@ Future<void> restoreDrawerPageActivity(
   await SessionStore.instance.saveLastActivity(returnTo);
 }
 
-// Cabeçalho do drawer: logo.svg em destaque + nome do app. O SVG é o
-// único ícone aqui — o fallback só entra se o asset faltar/falhar ao
-// carregar, nunca substitui o logo em uso normal.
+// Cabeçalho do drawer: apenas o título "Menu", no mesmo tamanho e peso
+// usados pelo título "Início" da home (26px, w500), alinhado à esquerda
+// na mesma posição horizontal. Sem logo e sem o nome do app aqui.
 class _DrawerHeader extends StatelessWidget {
+  const _DrawerHeader();
+
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      child: Row(children: [
-        SvgPicture.asset(
-          'assets/images/logo.svg',
-          width: 38,
-          height: 38,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) =>
-              PhosphorSvgIcon(PhosphorIcons.browser, size: 38, color: text),
+      child: Text(
+        appText('menu'),
+        style: TextStyle(
+          color: text,
+          fontSize: 26,
+          fontWeight: FontWeight.w500,
+          letterSpacing: -.2,
         ),
-        const SizedBox(width: 12),
-        Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
-      ]),
+      ),
     );
   }
 }

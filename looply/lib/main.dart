@@ -1334,13 +1334,14 @@ class _TabsCountIcon extends StatelessWidget {
   );
 }
 
-// Bottom bar flutuante no estilo "pill". No tema escuro mantém o tom do
-// inputbar para o item selecionado (inalterado); no tema claro passa a
-// usar o mesmo cinza suave dos cards (settingsCardColor) em vez da cor
-// primária translúcida, aproximando-se do seletor flutuante do iOS.
-// A animação de seleção usa uma curva com leve overshoot (easeOutBack)
-// para um resultado mais suave e "vivo" do que o easeOutCubic simples.
-class _LooplyBottomBar extends StatelessWidget {
+// Bottom bar flutuante no estilo "pill". Um único indicador desliza por
+// baixo do item ativo (Início/Atividade), com física suave tipo iOS. A
+// barra inteira responde a um gesto de arrastar contínuo: o dedo pode
+// deslizar de Início para Atividade e o indicador acompanha em tempo
+// real, sem esperar soltar. Abas e Pesquisa não são slots selecionáveis
+// (abrem grid/push), então soltar o dedo sobre eles dispara a ação e o
+// indicador retorna suavemente para onde estava.
+class _LooplyBottomBar extends StatefulWidget {
   const _LooplyBottomBar({
     required this.selectedIndex,
     required this.tabCount,
@@ -1350,6 +1351,116 @@ class _LooplyBottomBar extends StatelessWidget {
   final int selectedIndex;
   final int tabCount;
   final ValueChanged<int> onSelect;
+
+  @override
+  State<_LooplyBottomBar> createState() => _LooplyBottomBarState();
+}
+
+class _LooplyBottomBarState extends State<_LooplyBottomBar>
+    with SingleTickerProviderStateMixin {
+  static const int _itemCount = 4;
+  // Apenas os índices 0 e 1 (Início/Atividade) são "selecionáveis": têm
+  // conteúdo próprio na shell e podem receber o indicador em repouso.
+  static const Set<int> _selectableIndices = {0, 1};
+
+  late final AnimationController _dragController;
+  double _indicatorPosition = 0; // 0..1, fração do índice selecionável atual
+  bool _isDragging = false;
+  double? _dragLocalX;
+  double _barWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _indicatorPosition = widget.selectedIndex.clamp(0, 1).toDouble();
+    _dragController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1),
+    )..value = 1;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LooplyBottomBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isDragging && oldWidget.selectedIndex != widget.selectedIndex) {
+      _animateIndicatorTo(widget.selectedIndex.clamp(0, 1).toDouble());
+    }
+  }
+
+  @override
+  void dispose() {
+    _dragController.dispose();
+    super.dispose();
+  }
+
+  void _animateIndicatorTo(double target) {
+    final start = _indicatorPosition;
+    if ((start - target).abs() < 0.001) return;
+    _dragController.stop();
+    _dragController.value = 0;
+    final animation = Tween<double>(begin: start, end: target).animate(
+      CurvedAnimation(parent: _dragController, curve: Curves.easeOutCubic),
+    );
+    void listener() {
+      if (!mounted) return;
+      setState(() => _indicatorPosition = animation.value);
+    }
+    animation.addListener(listener);
+    _dragController
+        .animateTo(1, duration: const Duration(milliseconds: 320))
+        .whenCompleteOrCancel(() => animation.removeListener(listener));
+  }
+
+  int _slotForLocalX(double localX) {
+    if (_barWidth <= 0) return widget.selectedIndex;
+    final slotWidth = _barWidth / _itemCount;
+    final raw = (localX / slotWidth).floor();
+    return raw.clamp(0, _itemCount - 1);
+  }
+
+  void _onPanDown(DragDownDetails details) {
+    _isDragging = true;
+    _dragLocalX = details.localPosition.dx;
+    _dragController.stop();
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (_barWidth <= 0) return;
+    _dragLocalX = details.localPosition.dx;
+    final slotWidth = _barWidth / _itemCount;
+    // Posição contínua do indicador seguindo o dedo, restrita à faixa dos
+    // slots selecionáveis (0..1) — ao arrastar para Abas/Pesquisa o
+    // indicador simplesmente para na borda, sem invadir esses slots, já
+    // que eles não têm estado "selecionado" próprio.
+    final continuousIndex = (details.localPosition.dx / slotWidth) - .5;
+    setState(() {
+      _indicatorPosition = continuousIndex.clamp(0.0, 1.0);
+    });
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    final localX = _dragLocalX;
+    _isDragging = false;
+    _dragLocalX = null;
+    if (localX == null) return;
+    final slot = _slotForLocalX(localX);
+    if (_selectableIndices.contains(slot)) {
+      _animateIndicatorTo(slot.toDouble());
+      widget.onSelect(slot);
+    } else {
+      // Abas ou Pesquisa: dispara a ação, mas o indicador volta a repousar
+      // sobre o item realmente selecionado da shell.
+      _animateIndicatorTo(widget.selectedIndex.clamp(0, 1).toDouble());
+      widget.onSelect(slot);
+    }
+  }
+
+  void _onTapUpItem(int index) {
+    if (_selectableIndices.contains(index)) {
+      _animateIndicatorTo(index.toDouble());
+    }
+    widget.onSelect(index);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1371,49 +1482,93 @@ class _LooplyBottomBar extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: 60,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Row(
-              children: [
-                _FloatingBarItem(
-                  icon: PhosphorIcons.house,
-                  label: appText('home'),
-                  selected: selectedIndex == 0,
-                  selectedColor: selected,
-                  unselectedColor: foreground,
-                  selectedBg: itemSelectedBg,
-                  onTap: () => onSelect(0),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              _barWidth = constraints.maxWidth;
+              final slotWidth = _barWidth / _itemCount;
+              final indicatorLeft = 6 + _indicatorPosition * slotWidth;
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanDown: _onPanDown,
+                onHorizontalDragUpdate: _onPanUpdate,
+                onHorizontalDragEnd: _onPanEnd,
+                onHorizontalDragCancel: () => _isDragging = false,
+                child: Stack(
+                  children: [
+                    // Indicador único deslizante: segue o dedo durante o
+                    // drag e assenta com easeOutCubic ao soltar — a mesma
+                    // física usada nos seletores segmentados do iOS.
+                    if (!_isDragging)
+                      AnimatedPositioned(
+                        duration: Duration.zero,
+                        left: indicatorLeft,
+                        top: 6,
+                        width: slotWidth - 12,
+                        height: 48,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: itemSelectedBg,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      )
+                    else
+                      Positioned(
+                        left: indicatorLeft,
+                        top: 6,
+                        width: slotWidth - 12,
+                        height: 48,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: itemSelectedBg,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Row(
+                        children: [
+                          _FloatingBarItem(
+                            icon: PhosphorIcons.house,
+                            label: appText('home'),
+                            selected: widget.selectedIndex == 0,
+                            selectedColor: selected,
+                            unselectedColor: foreground,
+                            onTapUp: () => _onTapUpItem(0),
+                          ),
+                          _FloatingBarItem(
+                            icon: PhosphorIcons.clockCounterClockwise,
+                            label: appText('activity'),
+                            selected: widget.selectedIndex == 1,
+                            selectedColor: selected,
+                            unselectedColor: foreground,
+                            onTapUp: () => _onTapUpItem(1),
+                          ),
+                          _FloatingBarItem(
+                            icon: null,
+                            tabsCountIcon: _TabsCountIcon(count: widget.tabCount, color: foreground),
+                            label: appText('tabs'),
+                            selected: false,
+                            selectedColor: selected,
+                            unselectedColor: foreground,
+                            onTapUp: () => _onTapUpItem(2),
+                          ),
+                          _FloatingBarItem(
+                            icon: PhosphorIcons.magnifyingGlass,
+                            label: appText('search'),
+                            selected: false,
+                            selectedColor: selected,
+                            unselectedColor: foreground,
+                            onTapUp: () => _onTapUpItem(3),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                _FloatingBarItem(
-                  icon: PhosphorIcons.clockCounterClockwise,
-                  label: appText('activity'),
-                  selected: selectedIndex == 1,
-                  selectedColor: selected,
-                  unselectedColor: foreground,
-                  selectedBg: itemSelectedBg,
-                  onTap: () => onSelect(1),
-                ),
-                _FloatingBarItem(
-                  icon: null,
-                  tabsCountIcon: _TabsCountIcon(count: tabCount, color: foreground),
-                  label: appText('tabs'),
-                  selected: false,
-                  selectedColor: selected,
-                  unselectedColor: foreground,
-                  selectedBg: itemSelectedBg,
-                  onTap: () => onSelect(2),
-                ),
-                _FloatingBarItem(
-                  icon: PhosphorIcons.magnifyingGlass,
-                  label: appText('search'),
-                  selected: false,
-                  selectedColor: selected,
-                  unselectedColor: foreground,
-                  selectedBg: itemSelectedBg,
-                  onTap: () => onSelect(3),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -1421,10 +1576,10 @@ class _LooplyBottomBar extends StatelessWidget {
   }
 }
 
-// Um item da pill: quando selecionado, ganha o próprio fundo arredondado
-// (como "Modes" na referência) em vez de depender de um indicador externo
-// que desliza por baixo de toda a barra. A curva easeOutBack dá um leve
-// "assentar" no fim da transição, mais suave do que um corte linear.
+// Conteúdo de um item: ícone + label. O fundo "selecionado" não vive mais
+// aqui — pertence ao indicador único que desliza por trás de toda a barra.
+// Isso é o que permite o movimento contínuo ao arrastar: um só elemento
+// se move, em vez de quatro fundos aparecendo/desaparecendo.
 class _FloatingBarItem extends StatelessWidget {
   const _FloatingBarItem({
     required this.icon,
@@ -1432,8 +1587,7 @@ class _FloatingBarItem extends StatelessWidget {
     required this.selected,
     required this.selectedColor,
     required this.unselectedColor,
-    required this.selectedBg,
-    required this.onTap,
+    required this.onTapUp,
     this.tabsCountIcon,
   });
 
@@ -1443,61 +1597,41 @@ class _FloatingBarItem extends StatelessWidget {
   final bool selected;
   final Color selectedColor;
   final Color unselectedColor;
-  final Color selectedBg;
-  final VoidCallback onTap;
+  final VoidCallback onTapUp;
 
   @override
   Widget build(BuildContext context) {
     final color = selected ? selectedColor : unselectedColor;
     return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: onTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutBack,
-              decoration: BoxDecoration(
-                color: selected ? selectedBg : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (_) => onTapUp(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedScale(
+              scale: selected ? 1.06 : 1.0,
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutCubic,
+              child: tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
+            ),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              style: TextStyle(
+                color: color,
+                fontSize: 10.5,
+                height: 1.1,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
-              child: AnimatedScale(
-                scale: selected ? 1.0 : 1.0,
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutBack,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedScale(
-                      scale: selected ? 1.06 : 1.0,
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutBack,
-                      child: tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
-                    ),
-                    const SizedBox(height: 3),
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 10.5,
-                        height: 1.1,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
