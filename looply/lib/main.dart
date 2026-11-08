@@ -14,6 +14,8 @@ import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
+import 'screens/search_screen.dart';
+import 'shell/fade_page_route.dart';
 import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
@@ -1058,6 +1060,15 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     unawaited(_closeTabsGrid(openTab: homeTab));
   }
 
+  // Botão de Pesquisa na bottom bar: empilha a SearchScreen como página,
+  // exatamente como o antigo botão de lupa da home fazia. Não muda
+  // _selectedTab nem marca nenhum item da bottom bar como selecionado.
+  void _openSearchFromBottomBar() {
+    Navigator.of(context).push<void>(
+      FadePageRoute<void>(builder: (_) => const SearchScreen()),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -1216,15 +1227,18 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: _LooplyBottomBar(
             // Início e Atividade mapeiam 1:1 para _selectedTab (0 e 1).
-            // Abas é a posição 2 na UI mas não corresponde a nenhum
-            // _selectedTab — é tratada à parte no onSelect abaixo.
+            // Abas e Pesquisa são posições na UI que não correspondem a
+            // nenhum _selectedTab — tratadas à parte no onSelect abaixo.
             selectedIndex: switch (_selectedTab) { 1 => 1, _ => 0 },
             tabCount: tabsController.count,
             onSelect: (index) {
-              if (index == 2) {
-                _openTabsGrid();
-              } else {
-                unawaited(_navigateToShellScreen(index));
+              switch (index) {
+                case 2:
+                  _openTabsGrid();
+                case 3:
+                  _openSearchFromBottomBar();
+                default:
+                  unawaited(_navigateToShellScreen(index));
               }
             },
           ),
@@ -1320,10 +1334,12 @@ class _TabsCountIcon extends StatelessWidget {
   );
 }
 
-// Bottom bar flutuante no estilo "pill", inspirada no seletor de Modos/
-// Rotinas/Descobrir da Apple: cápsula isolada do fundo do ecrã, com o item
-// selecionado a ganhar o seu próprio fundo arredondado em vez de um
-// indicador que desliza por baixo de toda a barra.
+// Bottom bar flutuante no estilo "pill". No tema escuro mantém o tom do
+// inputbar para o item selecionado (inalterado); no tema claro passa a
+// usar o mesmo cinza suave dos cards (settingsCardColor) em vez da cor
+// primária translúcida, aproximando-se do seletor flutuante do iOS.
+// A animação de seleção usa uma curva com leve overshoot (easeOutBack)
+// para um resultado mais suave e "vivo" do que o easeOutCubic simples.
 class _LooplyBottomBar extends StatelessWidget {
   const _LooplyBottomBar({
     required this.selectedIndex,
@@ -1343,7 +1359,7 @@ class _LooplyBottomBar extends StatelessWidget {
     final selected = mainText(context);
     final itemSelectedBg = isDark
         ? inputBarTone(context)
-        : accentColor(context).withOpacity(.12);
+        : settingsCardColor(context);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
@@ -1387,6 +1403,15 @@ class _LooplyBottomBar extends StatelessWidget {
                   selectedBg: itemSelectedBg,
                   onTap: () => onSelect(2),
                 ),
+                _FloatingBarItem(
+                  icon: PhosphorIcons.magnifyingGlass,
+                  label: appText('search'),
+                  selected: false,
+                  selectedColor: selected,
+                  unselectedColor: foreground,
+                  selectedBg: itemSelectedBg,
+                  onTap: () => onSelect(3),
+                ),
               ],
             ),
           ),
@@ -1398,7 +1423,8 @@ class _LooplyBottomBar extends StatelessWidget {
 
 // Um item da pill: quando selecionado, ganha o próprio fundo arredondado
 // (como "Modes" na referência) em vez de depender de um indicador externo
-// que desliza por baixo de toda a barra.
+// que desliza por baixo de toda a barra. A curva easeOutBack dá um leve
+// "assentar" no fim da transição, mais suave do que um corte linear.
 class _FloatingBarItem extends StatelessWidget {
   const _FloatingBarItem({
     required this.icon,
@@ -1432,29 +1458,43 @@ class _FloatingBarItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             onTap: onTap,
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutBack,
               decoration: BoxDecoration(
                 color: selected ? selectedBg : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 10.5,
-                      height: 1.1,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              child: AnimatedScale(
+                scale: selected ? 1.0 : 1.0,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutBack,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      scale: selected ? 1.06 : 1.0,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutBack,
+                      child: tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 10.5,
+                        height: 1.1,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

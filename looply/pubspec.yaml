@@ -33,6 +33,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/apps/ai_search/index.html
+    - assets/images/logo.svg
+    - assets/images/
     - assets/apps/ai_search/
     - assets/icons/phosphor/
     - assets/icons/phosphor/fill/

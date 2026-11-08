@@ -2,17 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../localization.dart';
 import '../models.dart';
 import '../shell/browser_navigation.dart';
-import '../shell/fade_page_route.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../auth_service.dart';
 import 'all_sites_screen.dart';
-import 'search_screen.dart';
 import 'auth_screen.dart';
 import '../widgets/phosphor_svg_icon.dart';
 
@@ -65,6 +62,9 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+// Título "Início" à esquerda com peso leve, avatar compacto à direita
+// abrindo o drawer. Sem logo central e sem botão de busca — a busca
+// agora vive como aba própria na bottom bar.
 class LooplyHomeAppBar extends StatelessWidget {
   const LooplyHomeAppBar({super.key, this.onOpenDrawer});
 
@@ -89,28 +89,22 @@ class LooplyHomeAppBar extends StatelessWidget {
       child: SizedBox(
         height: 64,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              _ProfileAvatarButton(
-                onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
-              ),
               Expanded(
-                child: Center(
-                  child: SvgPicture.asset(
-                    'assets/images/logo_text.svg',
-                    height: 34,
-                    fit: BoxFit.contain,
-                    colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
+                child: Text(
+                  appText('home'),
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -.2,
                   ),
                 ),
               ),
-              _CircleIconButton(
-                icon: PhosphorIcons.magnifyingGlass,
-                tooltip: appText('search'),
-                onTap: () => Navigator.of(context).push<void>(
-                  FadePageRoute<void>(builder: (_) => const SearchScreen()),
-                ),
+              _ProfileAvatarButton(
+                onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
             ],
           ),
@@ -120,6 +114,9 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
+// Avatar compacto (36px): foto da conta quando há sessão, ou o asset local
+// avatar.png quando não há. O toque abre o drawer — nunca navega direto
+// para Login/Perfil a partir daqui.
 class _ProfileAvatarButton extends StatelessWidget {
   const _ProfileAvatarButton({required this.onTap});
 
@@ -133,16 +130,16 @@ class _ProfileAvatarButton extends StatelessWidget {
         button: true,
         label: appText('open_menu'),
         child: Material(
-          color: pillColor(context),
+          color: Colors.transparent,
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
             child: SizedBox(
-              width: 44,
-              height: 44,
+              width: 36,
+              height: 36,
               child: CircleAvatar(
-                radius: 22,
+                radius: 18,
                 backgroundColor: pillColor(context),
                 foregroundImage: user?.photoUrl != null
                     ? NetworkImage(user!.photoUrl!)
@@ -150,40 +147,6 @@ class _ProfileAvatarButton extends StatelessWidget {
                 child: null,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = mutedText(context);
-    return Semantics(
-      button: true,
-      label: tooltip,
-      child: Material(
-        color: pillColor(context),
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: PhosphorSvgIcon(icon, size: 22, color: muted),
           ),
         ),
       ),

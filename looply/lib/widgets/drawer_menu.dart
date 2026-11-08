@@ -195,6 +195,9 @@ Future<void> restoreDrawerPageActivity(
   await SessionStore.instance.saveLastActivity(returnTo);
 }
 
+// Cabeçalho do drawer: logo.svg em destaque + nome do app. O SVG é o
+// único ícone aqui — o fallback só entra se o asset faltar/falhar ao
+// carregar, nunca substitui o logo em uso normal.
 class _DrawerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -204,13 +207,13 @@ class _DrawerHeader extends StatelessWidget {
       child: Row(children: [
         SvgPicture.asset(
           'assets/images/logo.svg',
-          width: 34,
-          height: 34,
+          width: 38,
+          height: 38,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) =>
-              PhosphorSvgIcon(PhosphorIcons.browser, size: 34, color: text),
+              PhosphorSvgIcon(PhosphorIcons.browser, size: 38, color: text),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Text('BrowseIt', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
       ]),
     );
