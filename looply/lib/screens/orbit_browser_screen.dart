@@ -321,9 +321,25 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     return null;
   }
 
+  /// Luminância perceptual (fórmula YIQ) em vez da luminância linear de
+  /// computeLuminance(). A linear sobrestima o "brilho" de cores saturadas
+  /// como roxo/laranja puro, fazendo a status bar escolher o contraste
+  /// errado (ex.: roxo #FF4500-like a ficar classificado como "claro").
+  double _perceivedBrightness(Color color) {
+    return (color.red * 299 + color.green * 587 + color.blue * 114) / 1000 / 255;
+  }
+
+  bool _isLightSurface(Color color) => _perceivedBrightness(color) > .55;
+
   Color _contrastForeground(Color color) {
-    final luminance = color.computeLuminance();
-    return luminance > .48 ? const Color(0xFF111111) : Colors.white;
+    return _isLightSurface(color) ? const Color(0xFF111111) : Colors.white;
+  }
+
+  /// Cor do pill de busca quando a toolbar adaptativa está ativa: a mesma
+  /// cor do site, mas com opacidade reduzida para parecer um "vidro" sobre
+  /// o appbar em vez de competir com ele em intensidade total.
+  Color _adaptivePillColor(Color toolbarColor) {
+    return toolbarColor.withOpacity(.82);
   }
 
   Future<void> _applyWebsiteAppearance(_OrbitWebViewController controller) async {
@@ -527,17 +543,31 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   /// Captura + redução da miniatura. Corre DEPOIS de a página ser marcada
-  /// como carregada, para não atrasar a barra de progresso nem o first load.
+  /// como carregada e DEPOIS de dois frames em idle, para nunca competir
+  /// com animações de transição/scroll que estejam a decorrer nesse
+  /// instante — é isto que torna a navegação mais fluida ao evitar jank
+  /// causado pela captura de bitmap no meio de um gesto do utilizador.
   Future<Uint8List?> _captureThumbnail(InAppWebViewController controller) async {
     try {
+      await _waitForIdleFrame();
       final raw = await controller
           .takeScreenshot()
           .timeout(const Duration(seconds: 2));
       if (raw == null) return null;
-      return await _downscaleScreenshot(raw, targetWidth: 720);
+      return await _downscaleScreenshot(raw, targetWidth: 640);
     } catch (_) {
       return null;
     }
+  }
+
+  Future<void> _waitForIdleFrame() {
+    final completer = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!completer.isCompleted) completer.complete();
+      });
+    });
+    return completer.future;
   }
 
   Future<Uint8List?> _downscaleScreenshot(Uint8List bytes, {required int targetWidth}) async {
@@ -872,10 +902,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final useAdaptiveToolbar = !_isAiSearchPage && adaptiveToolbarColorEnabled.value && _siteToolbarColor != null;
     final toolbarColor = _isAiSearchPage ? bg : (useAdaptiveToolbar ? _siteToolbarColor! : bg);
     final toolbarText = useAdaptiveToolbar ? _contrastForeground(toolbarColor) : text;
+    // Quando adaptativo, o pill usa a MESMA cor do site com opacidade
+    // reduzida (vidro fosco), em vez da cor fixa do tema — fica fiel à
+    // identidade visual de cada site sem competir com a appbar.
+    final pillBackground = useAdaptiveToolbar ? _adaptivePillColor(toolbarColor) : pillColor(context);
     final parsedUri = Uri.tryParse(_currentUrl);
     final fallbackTitle = _isAiSearchPage
         ? appText('research_ai')
         : (parsedUri?.host.isNotEmpty == true ? parsedUri!.host : 'Orbit Browser');
+
+    // A status bar segue a MESMA fonte de verdade que decide o texto da
+    // appbar (_isLightSurface sobre toolbarColor), eliminando o caso em que
+    // a appbar muda de cor mas a status bar continuava sempre clara/escura.
+    final statusBarIsLight = _isLightSurface(toolbarColor);
 
     return PopScope<void>(
       // Esta tela só existe para a aba ativa; por isso apenas ela intercepta
@@ -886,10 +925,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         await _handleSystemBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: (toolbarColor.computeLuminance() > .48 ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
+        value: (statusBarIsLight ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: toolbarColor.computeLuminance() > .48 ? Brightness.dark : Brightness.light,
-          statusBarBrightness: toolbarColor.computeLuminance() > .48 ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: statusBarIsLight ? Brightness.dark : Brightness.light,
+          statusBarBrightness: statusBarIsLight ? Brightness.light : Brightness.dark,
           systemNavigationBarColor: bg,
           systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         ),
@@ -912,7 +951,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                         tooltip: appText('home'),
                         icon: PhosphorIcons.list,
                         foreground: toolbarText,
-                        background: pillColor(context),
+                        background: pillBackground,
                         onPressed: _openNativeDrawer,
                       )
                     : IconButton(
@@ -999,7 +1038,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                             height: 40,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: _isAiSearchPage ? bg : pillColor(context),
+                              color: _isAiSearchPage ? bg : pillBackground,
                               borderRadius: BorderRadius.circular(22),
                             ),
                             child: Row(
@@ -1037,7 +1076,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                                 padding: const EdgeInsets.only(right: 10),
                                 child: _BrowserToolbarGroupedButtons(
                                   foreground: toolbarText,
-                                  background: pillColor(context),
+                                  background: pillBackground,
                                   tabsTooltip: appText('tabs'),
                                   tabsChild: AnimatedBuilder(
                                     animation: tabsController,
@@ -1153,7 +1192,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     (forceDarkWebsitesEnabled.value ||
                         (siteThemeFollowsAppEnabled.value &&
                             Theme.of(context).brightness == Brightness.dark)),
-                offscreenPreRaster: true,
+
+                // offscreenPreRaster removido: em single-tab ativo o ganho de
+                // suavidade de scroll não compensa o custo extra de memória
+                // de pré-rasterizar fora do ecrã — com Hybrid Composition já
+                // ligado, o próprio Android trata disto de forma mais leve.
                 hardwareAcceleration: true,
 
                 // PRINCIPAL CORREÇÃO DO DESFOQUE (Android): Hybrid Composition
@@ -1379,10 +1422,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   },
                 );
 
-                // Miniatura em segundo plano, a 720px de largura.
-                final screenshot = await _captureThumbnail(controller);
-                if (!mounted || screenshot == null) return;
-                _updateTabState(screenshot: screenshot);
+                // Miniatura em segundo plano, só depois de dois frames idle
+                // (ver _captureThumbnail), para não competir com a animação
+                // de conclusão da barra de progresso nem com qualquer scroll
+                // que o utilizador já tenha iniciado.
+                unawaited(() async {
+                  final screenshot = await _captureThumbnail(controller);
+                  if (!mounted || screenshot == null) return;
+                  _updateTabState(screenshot: screenshot);
+                }());
               },
               onReceivedError: (controller, request, error) {
                 _pullToRefreshController?.endRefreshing();
@@ -1514,8 +1562,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 /// direita/em baixo (linha branca) e o conteúdo é reamostrado (desfoque).
 ///
 /// Solução: mede a origem real no ecrã, recua o filho para o pixel inteiro
-/// anterior e arredonda o tamanho PARA CIMA em pixels físicos. O filho sangra
-/// no máximo 1px para fora, onde não há nada a tapar.
+/// anterior e EXPANDE o tamanho 1 pixel físico extra além do necessário
+/// (em vez de só arredondar para cima). Isto garante que, mesmo que o
+/// Hybrid Composition recorte a PlatformView pela caixa delimitadora do
+/// Flutter, sobra sempre conteúdo da WebView a cobrir esse pixel — a
+/// imagem nunca "falta" na borda, no máximo sangra 1-2px para fora de uma
+/// área que o ClipRect do pai já esconde.
 class _PixelSnappedViewport extends StatefulWidget {
   const _PixelSnappedViewport({required this.child});
 
@@ -1572,9 +1624,14 @@ class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
   }
 
   /// Arredonda um tamanho lógico PARA CIMA para um número inteiro de pixels
-  /// físicos, devolvendo o valor em pixels lógicos.
-  double _snapUp(double logical, double dpr) =>
-      ((logical * dpr) - 0.001).ceilToDouble() / dpr;
+  /// físicos, devolvendo o valor em pixels lógicos, e acrescenta 1 pixel
+  /// físico extra de folga — essa folga é o que impede a linha branca de
+  /// voltar a aparecer quando o recorte da PlatformView é 1px conservador
+  /// em relação ao Positioned do Flutter.
+  double _snapUpWithBleed(double logical, double dpr) {
+    final physicalCeil = ((logical * dpr) - 0.001).ceilToDouble();
+    return (physicalCeil + 1) / dpr;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1582,19 +1639,27 @@ class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _snapUp(constraints.maxWidth - _shift.dx, dpr);
-        final height = _snapUp(constraints.maxHeight - _shift.dy, dpr);
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: _shift.dx,
-              top: _shift.dy,
-              width: width,
-              height: height,
-              child: widget.child,
-            ),
-          ],
+        final width = _snapUpWithBleed(constraints.maxWidth - _shift.dx, dpr);
+        final height = _snapUpWithBleed(constraints.maxHeight - _shift.dy, dpr);
+        // ClipRect com Rect.largest: o pai (RepaintBoundary do viewport) já
+        // define a área visível real; aqui só queremos garantir que o 1px
+        // de bleed do child nunca é cortado prematuramente por este nível,
+        // deixando o recorte final a cargo do layout externo (que é maior
+        // que a WebView, nunca menor).
+        return ClipRect(
+          clipBehavior: Clip.hardEdge,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: _shift.dx,
+                top: _shift.dy,
+                width: width,
+                height: height,
+                child: widget.child,
+              ),
+            ],
+          ),
         );
       },
     );

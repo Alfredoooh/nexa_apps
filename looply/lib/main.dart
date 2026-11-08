@@ -1320,9 +1320,10 @@ class _TabsCountIcon extends StatelessWidget {
   );
 }
 
-// Bottombar flutuante com o mesmo efeito de esmaecer do appbar, mas
-// invertido: transparente no topo da barra, sólido na base — onde a
-// barra encosta no fundo do ecrã.
+// Bottom bar flutuante no estilo "pill", inspirada no seletor de Modos/
+// Rotinas/Descobrir da Apple: cápsula isolada do fundo do ecrã, com o item
+// selecionado a ganhar o seu próprio fundo arredondado em vez de um
+// indicador que desliza por baixo de toda a barra.
 class _LooplyBottomBar extends StatelessWidget {
   const _LooplyBottomBar({
     required this.selectedIndex,
@@ -1336,84 +1337,70 @@ class _LooplyBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = browserBottomBarColor(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pillSurface = panelColor(context);
     final foreground = mutedText(context);
     final selected = mainText(context);
-    final indicator = Theme.of(context).brightness == Brightness.dark
+    final itemSelectedBg = isDark
         ? inputBarTone(context)
-        : accentColor(context).withOpacity(.15);
+        : accentColor(context).withOpacity(.12);
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Container(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg.withOpacity(0.0), bg, bg],
-          stops: const [0.0, 0.45, 1.0],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final slotWidth = constraints.maxWidth / 3;
-              final left = selectedIndex * slotWidth + 3;
-              return Stack(
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomInset > 0 ? bottomInset - 2 : 14),
+      child: Material(
+        color: pillSurface,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(999),
+        clipBehavior: Clip.antiAlias,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? .32 : .10),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: SizedBox(
+            height: 60,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
                 children: [
-                  // O indicador só acompanha Início/Atividade; a posição de
-                  // Abas (índice 2) não tem _selectedTab correspondente,
-                  // então não recebe o realce deslizante.
-                  if (selectedIndex <= 1)
-                    AnimatedPositioned(
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeInOutCubic,
-                      left: left,
-                      top: 3,
-                      width: slotWidth - 6,
-                      height: 48,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: indicator,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      _BottomBarItem(
-                        icon: PhosphorIcons.house,
-                        selectedIcon: PhosphorIcons.house,
-                        tooltip: 'Início',
-                        selected: selectedIndex == 0,
-                        color: selectedIndex == 0 ? selected : foreground,
-                        onTap: () => onSelect(0),
-                      ),
-                      _BottomBarItem(
-                        icon: PhosphorIcons.clockCounterClockwise,
-                        selectedIcon: PhosphorIcons.clockCounterClockwise,
-                        tooltip: 'Atividade',
-                        selected: selectedIndex == 1,
-                        color: selectedIndex == 1 ? selected : foreground,
-                        onTap: () => onSelect(1),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: IconButton(
-                            tooltip: 'Abas',
-                            onPressed: () => onSelect(2),
-                            icon: _TabsCountIcon(count: tabCount, color: foreground),
-                          ),
-                        ),
-                      ),
-                    ],
+                  _FloatingBarItem(
+                    icon: PhosphorIcons.house,
+                    label: appText('home'),
+                    selected: selectedIndex == 0,
+                    selectedColor: selected,
+                    unselectedColor: foreground,
+                    selectedBg: itemSelectedBg,
+                    onTap: () => onSelect(0),
+                  ),
+                  _FloatingBarItem(
+                    icon: PhosphorIcons.clockCounterClockwise,
+                    label: appText('activity'),
+                    selected: selectedIndex == 1,
+                    selectedColor: selected,
+                    unselectedColor: foreground,
+                    selectedBg: itemSelectedBg,
+                    onTap: () => onSelect(1),
+                  ),
+                  _FloatingBarItem(
+                    icon: PhosphorIcons.squaresFour,
+                    label: appText('tabs'),
+                    selected: false,
+                    selectedColor: selected,
+                    unselectedColor: foreground,
+                    selectedBg: itemSelectedBg,
+                    onTap: () => onSelect(2),
+                    badgeCount: tabCount,
                   ),
                 ],
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),
@@ -1421,30 +1408,105 @@ class _LooplyBottomBar extends StatelessWidget {
   }
 }
 
-class _BottomBarItem extends StatelessWidget {
-  const _BottomBarItem({
+// Um item da pill: quando selecionado, ganha o próprio fundo arredondado
+// (como "Modes" na referência) em vez de depender de um indicador externo
+// que desliza por baixo de toda a barra.
+class _FloatingBarItem extends StatelessWidget {
+  const _FloatingBarItem({
     required this.icon,
-    required this.selectedIcon,
-    required this.tooltip,
+    required this.label,
     required this.selected,
-    required this.color,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.selectedBg,
     required this.onTap,
+    this.badgeCount,
   });
 
   final IconData icon;
-  final IconData selectedIcon;
-  final String tooltip;
+  final String label;
   final bool selected;
-  final Color color;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final Color selectedBg;
   final VoidCallback onTap;
+  final int? badgeCount;
 
   @override
-  Widget build(BuildContext context) => Expanded(
-        child: Center(
-          child: IconButton(
-            tooltip: tooltip,
-            onPressed: onTap,
-            icon: PhosphorSvgIcon(selected ? selectedIcon : icon, color: color, size: 24, fill: selected ? 1 : 0),
+  Widget build(BuildContext context) {
+    final color = selected ? selectedColor : unselectedColor;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: selected ? selectedBg : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      PhosphorSvgIcon(icon, color: color, size: 21, fill: selected ? 1 : 0),
+                      if (badgeCount != null && badgeCount! > 0)
+                        Positioned(
+                          right: -9,
+                          top: -5,
+                          child: _FloatingBarBadge(count: badgeCount!, color: color),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 10.5,
+                      height: 1.1,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingBarBadge extends StatelessWidget {
+  const _FloatingBarBadge({required this.count, required this.color});
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 15),
+        height: 15,
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(.9), width: 1.3),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            count > 99 ? '99+' : '$count',
+            style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, height: 1),
           ),
         ),
       );
