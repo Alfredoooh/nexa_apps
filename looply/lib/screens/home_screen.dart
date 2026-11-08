@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -25,9 +27,6 @@ class HomeScreen extends StatelessWidget {
     final bg = pageBg(context);
     final topInset = MediaQuery.of(context).padding.top;
 
-    // Mantém a estrutura de página original da Home (Scaffold + SafeArea).
-    // O drawer push/drag pertence ao shell; o callback evita criar um
-    // drawer interno e preserva o Container Transform de ecrã inteiro.
     return Scaffold(
       backgroundColor: bg,
       body: Stack(
@@ -98,9 +97,6 @@ class LooplyHomeAppBar extends StatelessWidget {
               ),
               Expanded(
                 child: Center(
-                  // ColorFilter força o SVG a usar a cor do texto do tema
-                  // (branco no escuro, preto no claro), independentemente
-                  // de que cores o próprio ficheiro .svg tenha desenhadas.
                   child: SvgPicture.asset(
                     'assets/images/logo_text.svg',
                     height: 34,
@@ -124,10 +120,6 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
-// Mesmo lugar e tamanho do antigo botão de lista, mas mostra o avatar da
-// conta (como em Settings): foto da conta quando há sessão, ou o asset
-// local avatar.png quando não há. O toque continua a abrir o drawer —
-// nunca navega para Login/Perfil a partir daqui.
 class _ProfileAvatarButton extends StatelessWidget {
   const _ProfileAvatarButton({required this.onTap});
 
@@ -364,8 +356,6 @@ class QuickSiteTile extends StatelessWidget {
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
               child: Transform.scale(
-                // Aumenta apenas o conteúdo do círculo em 10%; o recipiente
-                // continua rigorosamente com 40 x 40 px.
                 scale: 1.232,
                 child: _siteIcon(site, text),
               ),
@@ -408,7 +398,6 @@ Widget _siteIcon(QuickSite site, Color fallbackColor) {
   return PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18);
 }
 
-// Abre sites como páginas Orbit persistentes dentro do IndexedStack.
 void openNewTab(BuildContext context, String url, {String? title}) {
   openOrbitTab(context, url, title: title);
 }
