@@ -11,8 +11,9 @@ class LooplyDialogAction<T> {
   final bool isDestructive;
 }
 
-/// Diálogo próprio do BrowseIt: painel arredondado, contorno subtil e ações
-/// compactas. Evita AlertDialog/Dialogs fornecidos pelo tema da plataforma.
+/// Diálogo próprio do BrowseIt: painel arredondado e simples, sem contorno
+/// nem botão de fechar — fecha-se através das ações ou do toque fora dele.
+/// Evita AlertDialog/Dialogs fornecidos pelo tema da plataforma.
 Future<T?> showLooplyDialog<T>({
   required BuildContext context,
   required String title,
@@ -31,7 +32,6 @@ Future<T?> showLooplyDialog<T>({
       final text = mainText(dialogContext);
       final muted = mutedText(dialogContext);
       final surface = panelColor(dialogContext);
-      final outline = lineColor(dialogContext);
       return SafeArea(
         child: Center(
           child: Material(
@@ -46,8 +46,7 @@ Future<T?> showLooplyDialog<T>({
                   elevation: 18,
                   clipBehavior: Clip.antiAlias,
                   borderRadius: BorderRadius.circular(26),
-                  child: Container(
-                    decoration: BoxDecoration(border: Border.all(color: outline, width: 1.2), borderRadius: BorderRadius.circular(26)),
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -65,12 +64,6 @@ Future<T?> showLooplyDialog<T>({
                             const SizedBox(width: 10),
                           ],
                           Expanded(child: Text(title, style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800))),
-                          IconButton(
-                            tooltip: 'Fechar',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            icon: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 19),
-                          ),
                         ]),
                         const SizedBox(height: 8),
                         DefaultTextStyle.merge(
