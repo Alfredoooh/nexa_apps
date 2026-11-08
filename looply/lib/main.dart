@@ -1353,53 +1353,41 @@ class _LooplyBottomBar extends StatelessWidget {
         elevation: 0,
         borderRadius: BorderRadius.circular(999),
         clipBehavior: Clip.antiAlias,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? .32 : .10),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: SizedBox(
-            height: 60,
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Row(
-                children: [
-                  _FloatingBarItem(
-                    icon: PhosphorIcons.house,
-                    label: appText('home'),
-                    selected: selectedIndex == 0,
-                    selectedColor: selected,
-                    unselectedColor: foreground,
-                    selectedBg: itemSelectedBg,
-                    onTap: () => onSelect(0),
-                  ),
-                  _FloatingBarItem(
-                    icon: PhosphorIcons.clockCounterClockwise,
-                    label: appText('activity'),
-                    selected: selectedIndex == 1,
-                    selectedColor: selected,
-                    unselectedColor: foreground,
-                    selectedBg: itemSelectedBg,
-                    onTap: () => onSelect(1),
-                  ),
-                  _FloatingBarItem(
-                    icon: PhosphorIcons.squaresFour,
-                    label: appText('tabs'),
-                    selected: false,
-                    selectedColor: selected,
-                    unselectedColor: foreground,
-                    selectedBg: itemSelectedBg,
-                    onTap: () => onSelect(2),
-                    badgeCount: tabCount,
-                  ),
-                ],
-              ),
+        child: SizedBox(
+          height: 60,
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Row(
+              children: [
+                _FloatingBarItem(
+                  icon: PhosphorIcons.house,
+                  label: appText('home'),
+                  selected: selectedIndex == 0,
+                  selectedColor: selected,
+                  unselectedColor: foreground,
+                  selectedBg: itemSelectedBg,
+                  onTap: () => onSelect(0),
+                ),
+                _FloatingBarItem(
+                  icon: PhosphorIcons.clockCounterClockwise,
+                  label: appText('activity'),
+                  selected: selectedIndex == 1,
+                  selectedColor: selected,
+                  unselectedColor: foreground,
+                  selectedBg: itemSelectedBg,
+                  onTap: () => onSelect(1),
+                ),
+                _FloatingBarItem(
+                  icon: null,
+                  tabsCountIcon: _TabsCountIcon(count: tabCount, color: foreground),
+                  label: appText('tabs'),
+                  selected: false,
+                  selectedColor: selected,
+                  unselectedColor: foreground,
+                  selectedBg: itemSelectedBg,
+                  onTap: () => onSelect(2),
+                ),
+              ],
             ),
           ),
         ),
@@ -1420,17 +1408,17 @@ class _FloatingBarItem extends StatelessWidget {
     required this.unselectedColor,
     required this.selectedBg,
     required this.onTap,
-    this.badgeCount,
+    this.tabsCountIcon,
   });
 
-  final IconData icon;
+  final IconData? icon;
+  final Widget? tabsCountIcon;
   final String label;
   final bool selected;
   final Color selectedColor;
   final Color unselectedColor;
   final Color selectedBg;
   final VoidCallback onTap;
-  final int? badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -1453,18 +1441,7 @@ class _FloatingBarItem extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      PhosphorSvgIcon(icon, color: color, size: 21, fill: selected ? 1 : 0),
-                      if (badgeCount != null && badgeCount! > 0)
-                        Positioned(
-                          right: -9,
-                          top: -5,
-                          child: _FloatingBarBadge(count: badgeCount!, color: color),
-                        ),
-                    ],
-                  ),
+                  tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
                   const SizedBox(height: 3),
                   Text(
                     label,
@@ -1485,29 +1462,4 @@ class _FloatingBarItem extends StatelessWidget {
       ),
     );
   }
-}
-
-class _FloatingBarBadge extends StatelessWidget {
-  const _FloatingBarBadge({required this.count, required this.color});
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minWidth: 15),
-        height: 15,
-        padding: const EdgeInsets.symmetric(horizontal: 3),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          border: Border.all(color: color.withOpacity(.9), width: 1.3),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            count > 99 ? '99+' : '$count',
-            style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w800, height: 1),
-          ),
-        ),
-      );
 }

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,10 +8,10 @@ import '../shell/browser_navigation.dart';
 import '../shell/fade_page_route.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
+import '../auth_service.dart';
 import 'all_sites_screen.dart';
 import 'search_screen.dart';
 import 'auth_screen.dart';
-import '../auth_service.dart';
 import '../widgets/phosphor_svg_icon.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -95,9 +93,7 @@ class LooplyHomeAppBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              _CircleIconButton(
-                icon: PhosphorIcons.list,
-                tooltip: appText('open_menu'),
+              _ProfileAvatarButton(
                 onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
               Expanded(
@@ -121,6 +117,47 @@ class LooplyHomeAppBar extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Mesmo lugar e tamanho do antigo botão de lista, mas mostra o avatar da
+// conta (como em Settings): foto da conta quando há sessão, ou o asset
+// local avatar.png quando não há. O toque continua a abrir o drawer —
+// nunca navega para Login/Perfil a partir daqui.
+class _ProfileAvatarButton extends StatelessWidget {
+  const _ProfileAvatarButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<LooplyUser?>(
+      valueListenable: authController,
+      builder: (context, user, _) => Semantics(
+        button: true,
+        label: appText('open_menu'),
+        child: Material(
+          color: pillColor(context),
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: pillColor(context),
+                foregroundImage: user?.photoUrl != null
+                    ? NetworkImage(user!.photoUrl!)
+                    : const AssetImage('assets/images/avatar.png') as ImageProvider,
+                child: null,
+              ),
+            ),
           ),
         ),
       ),
