@@ -340,7 +340,7 @@ class _HistoryCard extends StatelessWidget {
                 width: 18,
                 height: 18,
                 colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
-                placeholderBuilder: (context) => PhosphorSvgIcon(PhosphorIcons.arrowSquareOut, color: muted, size: 18),
+                placeholderBuilder: (context) => PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, color: muted, size: 18),
               ),
             ],
           ),

@@ -1208,13 +1208,13 @@ class DownloadEntry {
 
   IconData get icon {
     if (isImage) return PhosphorIcons.image;
-    if (isVideo) return PhosphorIcons.videoCamera;
-    if (isAudio) return PhosphorIcons.musicNote;
-    if (isArchive) return PhosphorIcons.fileZip;
-    if (isCode) return PhosphorIcons.fileCode;
-    if (isPdf) return PhosphorIcons.filePdf;
-    if (isDocument) return PhosphorIcons.fileText;
-    return PhosphorIcons.file;
+    if (isVideo) return PhosphorIcons.browser;
+    if (isAudio) return PhosphorIcons.microphone;
+    if (isArchive) return PhosphorIcons.downloadSimple;
+    if (isCode) return PhosphorIcons.list;
+    if (isPdf) return PhosphorIcons.fileArrowUp;
+    if (isDocument) return PhosphorIcons.fileArrowUp;
+    return PhosphorIcons.fileArrowUp;
   }
 
   bool get canOpenLocally =>

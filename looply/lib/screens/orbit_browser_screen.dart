@@ -20,7 +20,7 @@ import '../theme.dart';
 import '../localization.dart';
 import '../translate_service.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/looply_popup_menu_button.dart';
+import '../widgets/looply_popup.dart';
 import 'history_screen.dart';
 import 'downloads_screen.dart';
 import 'bookmarks_screen.dart';
@@ -822,7 +822,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
                       _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
                       _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.translate, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
                       _BrowserSheetListItem(icon: PhosphorIcons.arrowClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
@@ -911,9 +911,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final isImage = type == InAppWebViewHitTestResultType.IMAGE_TYPE ||
         type == InAppWebViewHitTestResultType.SRC_IMAGE_ANCHOR_TYPE;
     final isVideoOrAudio = _looksLikeMediaUrl(extra);
-    final isLink = type == InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE ||
-        type == InAppWebViewHitTestResultType.SRC_EMAIL_ADDRESS_TYPE ||
-        type == InAppWebViewHitTestResultType.SRC_PHONE_NUMBER_TYPE;
+    final isLink = type == InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE;
 
     if (!isImage && !isVideoOrAudio && !isLink) return;
 
@@ -923,14 +921,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
     if (isImage) {
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadImage, label: appText('download_image'), icon: PhosphorIcons.downloadSimple));
-      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowUpLeft));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
     } else if (isVideoOrAudio) {
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadVideo, label: appText('download_video'), icon: PhosphorIcons.downloadSimple));
-      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowUpLeft));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
     } else if (isLink) {
-      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowUpLeft));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.viewPage, label: appText('view_page'), icon: PhosphorIcons.eye));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.bookmarkLink, label: appText('add_bookmark'), icon: PhosphorIcons.bookmarkSimple));
