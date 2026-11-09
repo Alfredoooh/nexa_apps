@@ -61,6 +61,7 @@ class PhosphorIcons {
   static const IconData uploadSimple = IconData(0xF0034, fontFamily: 'BrowseItSvg');
   static const IconData wifiSlash = IconData(0xF0035, fontFamily: 'BrowseItSvg');
   static const IconData x = IconData(0xF0036, fontFamily: 'BrowseItSvg');
+  static const IconData warningCircle = IconData(0xF0038, fontFamily: 'BrowseItSvg');
 }
 
 class PhosphorSvgIcon extends StatelessWidget {
@@ -150,7 +151,8 @@ class PhosphorSvgIcon extends StatelessWidget {
     0xF0034: 'upload-simple',
     0xF0035: 'wifi-slash',
     0xF0036: 'x',
-    0xF0037: 'clock-counter-clockwise',
+    0xF0037: 'calendar',
+    0xF0038: 'warning-circle',
   };
 
   @override
