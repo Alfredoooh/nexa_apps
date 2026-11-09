@@ -18,7 +18,9 @@ import '../shell/browser_navigation.dart';
 import '../shell/fade_page_route.dart';
 import '../theme.dart';
 import '../localization.dart';
+import '../translate_service.dart';
 import '../widgets/looply_dialog.dart';
+import '../widgets/looply_popup_menu_button.dart';
 import 'history_screen.dart';
 import 'downloads_screen.dart';
 import 'bookmarks_screen.dart';
@@ -48,6 +50,10 @@ class _OrbitWebViewController {
     await plugin.evaluateJavascript(source: source);
   }
 
+  Future<dynamic> evaluateJavascriptRaw(String source) {
+    return plugin.evaluateJavascript(source: source);
+  }
+
   Future<String?> getPageToolbarColor() async {
     try {
       final result = await plugin.evaluateJavascript(source: r'''(() => {
@@ -65,6 +71,22 @@ class _OrbitWebViewController {
       if (result == null) return null;
       final value = result.toString().replaceAll('"', '').trim();
       return value.isEmpty || value == 'null' ? null : value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Lê o idioma declarado pela própria página (atributo lang do <html>).
+  /// Usado para decidir se vale a pena oferecer tradução.
+  Future<String?> getPageLanguage() async {
+    try {
+      final result = await plugin.evaluateJavascript(source: r'''(() => {
+        const htmlLang = document.documentElement.lang || '';
+        return htmlLang.split('-')[0].toLowerCase();
+      })()''');
+      if (result == null) return null;
+      final value = result.toString().replaceAll('"', '').trim();
+      return value.isEmpty ? null : value;
     } catch (_) {
       return null;
     }
@@ -127,6 +149,16 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   final FocusNode _findFocusNode = FocusNode();
   bool _isFindInPage = false;
   bool _isExpandingToSearch = false;
+
+  // Captura de miniatura: controla se uma captura está em curso para nunca
+  // disparar duas em simultâneo (é isso que causava o "piscar" visível —
+  // takeScreenshot() concorrente faz o WebView repintar/flash).
+  bool _thumbnailCaptureInFlight = false;
+
+  // Evita re-perguntar tradução na mesma sessão de página se o utilizador
+  // já respondeu (sim ou não) para a URL atual.
+  String? _translationPromptedForUrl;
+  bool _pageIsTranslated = false;
 
   bool _isLoading = true;
   bool _showProgress = true;
@@ -335,11 +367,21 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     return _isLightSurface(color) ? const Color(0xFF111111) : Colors.white;
   }
 
-  /// Cor do pill de busca quando a toolbar adaptativa está ativa: a mesma
-  /// cor do site, mas com opacidade reduzida para parecer um "vidro" sobre
-  /// o appbar em vez de competir com ele em intensidade total.
+  /// Cor do pill de busca quando a toolbar adaptativa está ativa: mistura a
+  /// cor do site com o tom de contraste (preto/branco) e aplica opacidade,
+  /// para o pill ficar claramente distinguível do fundo sólido do appbar
+  /// em vez de se misturar nele (era esse o "mesmo valor" que tornava o
+  /// pill invisível sobre a appbar na imagem que mandaste).
   Color _adaptivePillColor(Color toolbarColor) {
-    return toolbarColor.withOpacity(.82);
+    final mixTarget = _isLightSurface(toolbarColor) ? Colors.black : Colors.white;
+    return Color.lerp(toolbarColor, mixTarget, .22)!.withOpacity(.86);
+  }
+
+  /// Status bar: versão mais fraca/dessaturada da cor dominante do site,
+  /// nunca idêntica ao appbar — mistura a cor do site com o fundo da
+  /// Scaffold para suavizar.
+  Color _statusBarSurfaceColor(Color toolbarColor, Color bg) {
+    return Color.lerp(toolbarColor, bg, .35)!;
   }
 
   Future<void> _applyWebsiteAppearance(_OrbitWebViewController controller) async {
@@ -358,34 +400,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       );
       final scheme = followsApp ? (appIsDark ? 'dark' : 'light') : 'normal';
       final needsCssDarkFallback = defaultTargetPlatform != TargetPlatform.android;
-      final targetLanguage = appLanguageController.value.code == 'zh'
-          ? 'zh-CN'
-          : appLanguageController.value.code;
       final script = '''(() => {
         try {
           const root = document.documentElement;
           root.style.setProperty('color-scheme', '$scheme');
           root.dataset.appTheme = '$scheme';
-          root.lang = '$targetLanguage';
-          const uiTranslations = {
-            pt:{placeholder:'Pergunte, busque ou crie qualquer coisa',noResults:'Sem resultados'},
-            en:{placeholder:'Ask, search or create anything',noResults:'No results'},
-            es:{placeholder:'Pregunta, busca o crea cualquier cosa',noResults:'Sin resultados'},
-            fr:{placeholder:'Demandez, recherchez ou créez',noResults:'Aucun résultat'},
-            de:{placeholder:'Fragen, suchen oder etwas erstellen',noResults:'Keine Ergebnisse'},
-            it:{placeholder:'Chiedi, cerca o crea qualsiasi cosa',noResults:'Nessun risultato'},
-            ar:{placeholder:'اسأل أو ابحث أو أنشئ أي شيء',noResults:'لا توجد نتائج'},
-            zh:{placeholder:'提问、搜索或创建任何内容',noResults:'没有结果'},
-            ja:{placeholder:'質問、検索、または何かを作成',noResults:'結果がありません'},
-            ru:{placeholder:'Спросите, найдите или создайте что угодно',noResults:'Нет результатов'},
-            hi:{placeholder:'कुछ भी पूछें, खोजें या बनाएँ',noResults:'कोई परिणाम नहीं'},
-            tr:{placeholder:'Sorun, arayın veya herhangi bir şey oluşturun',noResults:'Sonuç yok'}
-          };
-          const uiText = uiTranslations['$targetLanguage'] || uiTranslations['${appLanguageController.value.code}'] || uiTranslations.pt;
-          const aiInput = document.getElementById('messageInput');
-          if (aiInput) aiInput.placeholder = uiText.placeholder;
-          const emptyText = document.querySelector('#emptyState p');
-          if (emptyText) emptyText.textContent = uiText.noResults;
           let meta = document.querySelector('meta[name="color-scheme"]');
           if (!meta) { meta = document.createElement('meta'); meta.name = 'color-scheme'; document.head?.appendChild(meta); }
           meta.content = '$scheme';
@@ -395,43 +414,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             if (!style) { style = document.createElement('style'); style.id = id; document.head?.appendChild(style); }
             style.textContent = 'html{background:#111!important;filter:invert(1) hue-rotate(180deg)!important} img,video,canvas,picture,svg{filter:invert(1) hue-rotate(180deg)!important}';
           } else if (style) { style.remove(); }
-          window.__browseitTargetLanguage = '$targetLanguage';
-          window.__browseitApplyTranslation = () => {
-            try {
-              const select = document.querySelector('.goog-te-combo');
-              const target = window.__browseitTargetLanguage;
-              if (select && target && select.value !== target) {
-                select.value = target;
-                select.dispatchEvent(new Event('change', { bubbles:true }));
-              }
-            } catch (_) {}
-          };
-          if (!window.__browseitTranslateStarted) {
-            window.__browseitTranslateStarted = true;
-            window.googleTranslateElementInit = () => {
-              try {
-                new google.translate.TranslateElement({pageLanguage:'auto', includedLanguages:'pt,en,es,fr,de,it,ar,zh-CN,ja,ru,hi,tr', autoDisplay:false}, 'browseit-translate-root');
-                setTimeout(() => window.__browseitApplyTranslation?.(), 650);
-                setTimeout(() => window.__browseitApplyTranslation?.(), 1500);
-              } catch (_) {}
-            };
-            const host = document.createElement('div');
-            host.id = 'browseit-translate-root';
-            host.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;overflow:hidden';
-            document.body?.appendChild(host);
-            const css = document.createElement('style');
-            css.id = 'browseit-translate-css';
-            css.textContent = '.goog-te-banner-frame,.goog-te-balloon-frame,#goog-gt-tt{display:none!important}body{top:0!important}.skiptranslate{display:none!important}';
-            document.head?.appendChild(css);
-            const translateScript = document.createElement('script');
-            translateScript.id = 'browseit-google-translate';
-            translateScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-            translateScript.async = true;
-            document.head?.appendChild(translateScript);
-          } else {
-            setTimeout(() => window.__browseitApplyTranslation?.(), 300);
-            setTimeout(() => window.__browseitApplyTranslation?.(), 900);
-          }
         } catch (_) {}
       })();''';
       await controller.evaluateJavascript(script);
@@ -545,9 +527,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   /// Captura + redução da miniatura. Corre DEPOIS de a página ser marcada
   /// como carregada e DEPOIS de dois frames em idle, para nunca competir
   /// com animações de transição/scroll que estejam a decorrer nesse
-  /// instante — é isto que torna a navegação mais fluida ao evitar jank
-  /// causado pela captura de bitmap no meio de um gesto do utilizador.
+  /// instante. O guard _thumbnailCaptureInFlight impede duas capturas
+  /// simultâneas — era essa sobreposição que fazia o WebView "piscar"
+  /// (flash) quando o utilizador tocava em "Abas" logo após o carregamento
+  /// ter acabado de disparar a sua própria captura automática.
   Future<Uint8List?> _captureThumbnail(InAppWebViewController controller) async {
+    if (_thumbnailCaptureInFlight) return null;
+    _thumbnailCaptureInFlight = true;
     try {
       await _waitForIdleFrame();
       final raw = await controller
@@ -557,6 +543,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       return await _downscaleScreenshot(raw, targetWidth: 640);
     } catch (_) {
       return null;
+    } finally {
+      _thumbnailCaptureInFlight = false;
     }
   }
 
@@ -609,17 +597,24 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (_tabsRequestInProgress) return;
     _tabsRequestInProgress = true;
     try {
-      // Captura apenas a área real da WebView. O Rect de origem aponta para
-      // esta mesma área, mantendo a proporção e o alinhamento do Container Transform.
-      final freshScreenshot = await _captureScreenshot();
-      final oldScreenshot = tabsController.getTab(widget.tabId)?.thumbnail;
-      _updateTabState(screenshot: freshScreenshot ?? oldScreenshot);
+      // Reaproveita a última miniatura já capturada em segundo plano em vez
+      // de disparar outro takeScreenshot() síncrono aqui: era esta segunda
+      // captura — a correr ao mesmo tempo que a animação de abertura da
+      // grelha de abas — que causava o flash visível no WebView. Só captura
+      // de novo se ainda não existir nenhuma miniatura guardada para a aba
+      // e nenhuma outra captura já estiver em curso.
+      final existingThumbnail = tabsController.getTab(widget.tabId)?.thumbnail;
+      Uint8List? screenshot = existingThumbnail;
+      if (screenshot == null && !_thumbnailCaptureInFlight) {
+        screenshot = await _captureScreenshot();
+        if (screenshot != null) _updateTabState(screenshot: screenshot);
+      }
 
       if (!mounted) return;
       final viewportRect = _rectInRootOverlay(widget.viewportKey);
       ShellTabRequest.instance.requestCloseBrowser(
         tabId: widget.tabId,
-        screenshot: freshScreenshot ?? oldScreenshot,
+        screenshot: screenshot,
         sourceRect: viewportRect,
       );
     } finally {
@@ -689,6 +684,69 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     setState(() => _isExpandingToSearch = false);
   }
 
+  // ---------------------------------------------------------------------
+  // Tradução via API pública sem chave (translate_service.dart), com
+  // SnackBar de confirmação em vez do widget flutuante do Google Translate.
+  // ---------------------------------------------------------------------
+
+  void _maybeOfferTranslation() {
+    if (_isAiSearchPage || widget.isIncognito) return;
+    if (_translationPromptedForUrl == _currentUrl) return;
+    final controller = _controller;
+    if (controller == null || !mounted) return;
+    _translationPromptedForUrl = _currentUrl;
+    final targetCode = appLanguageController.value.code;
+
+    unawaited(() async {
+      // Só pergunta se a página parecer estar num idioma diferente do
+      // idioma da app — evita perguntar em toda a navegação.
+      final detected = await controller.getPageLanguage();
+      if (detected == null || detected.isEmpty || detected == targetCode) return;
+      if (!mounted) return;
+      _showTranslateSnackBar(targetCode);
+    }());
+  }
+
+  void _showTranslateSnackBar(String targetCode) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        content: Text(appText('translate_page_prompt')),
+        action: SnackBarAction(
+          label: appText('translate'),
+          onPressed: () => unawaited(_translateCurrentPage(targetCode)),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _translateCurrentPage(String targetCode) async {
+    final controller = _controller;
+    if (controller == null || !mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text(appText('translating_page')),
+      ),
+    );
+    try {
+      await PageTranslateService.translateWebView(
+        controller: controller.plugin,
+        targetLanguageCode: targetCode,
+      );
+      _pageIsTranslated = true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appText('translation_failed'))),
+        );
+      }
+    }
+  }
+
   Future<void> _runShortcut(_OrbitMenuAction action) async {
     if (!mounted) return;
     switch (action) {
@@ -746,6 +804,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           CupertinoPageRoute(builder: (_) => const DownloadsScreen()),
         );
         break;
+      case _OrbitMenuAction.translate:
+        unawaited(_translateCurrentPage(appLanguageController.value.code));
+        break;
       case _OrbitMenuAction.bookmark:
         if (bookmarksController.contains(_currentUrl)) {
           if (mounted) {
@@ -770,9 +831,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   void _showBrowserOptionsSheet() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final surface = panelColor(context);
-    final text = mainText(context);
     final muted = mutedText(context);
 
     showModalBottomSheet<void>(
@@ -824,6 +883,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                       _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
                       _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
                       _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.translate, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
                       _BrowserSheetListItem(icon: PhosphorIcons.arrowClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
@@ -893,6 +953,125 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     ));
   }
 
+  // ---------------------------------------------------------------------
+  // Long-press contextual: deteta o tipo de elemento tocado (imagem, vídeo,
+  // link simples) via hitTestResult e mostra apenas as opções relevantes
+  // a esse tipo, usando o LooplyPopupMenuButton já existente no projeto
+  // (mesmo componente sem bordas sólidas usado no resto da app).
+  // ---------------------------------------------------------------------
+
+  final GlobalKey _longPressAnchorKey = GlobalKey();
+  Offset? _lastLongPressGlobalPosition;
+
+  Future<void> _handleLongPressHitTest(InAppWebViewHitTestResult hitTestResult) async {
+    if (!mounted) return;
+    final type = hitTestResult.type;
+    final extra = hitTestResult.extra;
+    if (extra == null || extra.trim().isEmpty) return;
+
+    final isImage = type == InAppWebViewHitTestResultType.IMAGE_TYPE ||
+        type == InAppWebViewHitTestResultType.SRC_IMAGE_ANCHOR_TYPE;
+    final isVideoOrAudio = _looksLikeMediaUrl(extra);
+    final isLink = type == InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE ||
+        type == InAppWebViewHitTestResultType.SRC_EMAIL_ADDRESS_TYPE ||
+        type == InAppWebViewHitTestResultType.SRC_PHONE_NUMBER_TYPE;
+
+    if (!isImage && !isVideoOrAudio && !isLink) return;
+
+    HapticFeedback.mediumImpact();
+
+    final actions = <LooplyPopupAction<_OrbitLongPressAction>>[];
+
+    if (isImage) {
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadImage, label: appText('download_image'), icon: PhosphorIcons.downloadSimple));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
+    } else if (isVideoOrAudio) {
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadVideo, label: appText('download_video'), icon: PhosphorIcons.downloadSimple));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
+    } else if (isLink) {
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowSquareOut));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.viewPage, label: appText('view_page'), icon: PhosphorIcons.eye));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
+      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.bookmarkLink, label: appText('add_bookmark'), icon: PhosphorIcons.bookmarkSimple));
+    }
+
+    // Usa o LooplyPopupMenuButton existente, ancorado invisivelmente no
+    // ponto onde o utilizador pressionou — mantém a mesma aparência (sem
+    // bordas sólidas) do resto do browser em vez de um bottom sheet novo.
+    await showGeneralDialog<void>(
+      context: context,
+      barrierColor: Colors.transparent,
+      barrierDismissible: true,
+      barrierLabel: 'Fechar',
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return _LongPressActionSheet<_OrbitLongPressAction>(
+          subtitle: extra,
+          actions: actions,
+          onSelected: (action) {
+            Navigator.of(dialogContext).pop();
+            unawaited(_runLongPressAction(action, extra));
+          },
+        );
+      },
+    );
+  }
+
+  bool _looksLikeMediaUrl(String url) {
+    final lower = url.toLowerCase();
+    const videoExtensions = ['.mp4', '.webm', '.mov', '.m3u8', '.mkv', '.avi'];
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.flac'];
+    return videoExtensions.any(lower.contains) || audioExtensions.any(lower.contains);
+  }
+
+  Future<void> _runLongPressAction(_OrbitLongPressAction action, String url) async {
+    switch (action) {
+      case _OrbitLongPressAction.downloadImage:
+      case _OrbitLongPressAction.downloadVideo:
+        if (!widget.isIncognito) {
+          downloadsController.register(url: url);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(appText('download_received'))),
+            );
+          }
+        }
+        break;
+      case _OrbitLongPressAction.openNewTab:
+      case _OrbitLongPressAction.viewPage:
+        final newTab = tabsController.createBrowserTab(url);
+        ShellTabRequest.instance.requestBrowser(newTab.id);
+        break;
+      case _OrbitLongPressAction.copyLink:
+        await Clipboard.setData(ClipboardData(text: url));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(appText('copied')), duration: const Duration(seconds: 2)),
+          );
+        }
+        break;
+      case _OrbitLongPressAction.bookmarkLink:
+        if (bookmarksController.contains(url)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(appText('already_bookmarked'))),
+            );
+          }
+        } else {
+          bookmarksController.add(url, url);
+          unawaited(browserFaviconCache.fetchForUrl(url));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(appText('bookmark_saved'))),
+            );
+          }
+        }
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -902,19 +1081,24 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final useAdaptiveToolbar = !_isAiSearchPage && adaptiveToolbarColorEnabled.value && _siteToolbarColor != null;
     final toolbarColor = _isAiSearchPage ? bg : (useAdaptiveToolbar ? _siteToolbarColor! : bg);
     final toolbarText = useAdaptiveToolbar ? _contrastForeground(toolbarColor) : text;
-    // Quando adaptativo, o pill usa a MESMA cor do site com opacidade
-    // reduzida (vidro fosco), em vez da cor fixa do tema — fica fiel à
-    // identidade visual de cada site sem competir com a appbar.
-    final pillBackground = useAdaptiveToolbar ? _adaptivePillColor(toolbarColor) : pillColor(context);
+    // Quando adaptativo, o pill usa uma mistura com preto/branco de contraste
+    // em cima da cor do site (com opacidade), em vez da cor fixa do tema ou
+    // da mesma cor sólida do appbar — assim o pill fica claramente separado
+    // visualmente da faixa da appbar, mesmo que a página seja monocromática.
+    final pillBackground = useAdaptiveToolbar
+        ? _adaptivePillColor(toolbarColor)
+        : pillColor(context);
     final parsedUri = Uri.tryParse(_currentUrl);
     final fallbackTitle = _isAiSearchPage
         ? appText('research_ai')
         : (parsedUri?.host.isNotEmpty == true ? parsedUri!.host : 'Orbit Browser');
 
-    // A status bar segue a MESMA fonte de verdade que decide o texto da
-    // appbar (_isLightSurface sobre toolbarColor), eliminando o caso em que
-    // a appbar muda de cor mas a status bar continuava sempre clara/escura.
-    final statusBarIsLight = _isLightSurface(toolbarColor);
+    // A status bar segue uma versão dessaturada/mais fraca da cor do
+    // appbar (nunca idêntica), misturada com o fundo da Scaffold.
+    final statusBarSurface = useAdaptiveToolbar
+        ? _statusBarSurfaceColor(toolbarColor, bg)
+        : bg;
+    final statusBarIsLight = _isLightSurface(statusBarSurface);
 
     return PopScope<void>(
       // Esta tela só existe para a aba ativa; por isso apenas ela intercepta
@@ -934,204 +1118,63 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         ),
         child: Scaffold(
           backgroundColor: bg,
-          appBar: AppBar(
-            backgroundColor: toolbarColor,
-            foregroundColor: toolbarText,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            centerTitle: _isAiSearchPage && !_isFindInPage,
-            leadingWidth: _isAiSearchPage ? 50 : null,
-            leading: AnimatedOpacity(
-              opacity: _isExpandingToSearch ? 0 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: IgnorePointer(
-                ignoring: _isExpandingToSearch,
-                child: _isAiSearchPage
-                    ? _BrowserToolbarCircleButton(
-                        tooltip: appText('home'),
-                        icon: PhosphorIcons.list,
-                        foreground: toolbarText,
-                        background: pillBackground,
-                        onPressed: _openNativeDrawer,
-                      )
-                    : IconButton(
-                        tooltip: appText('home'),
-                        icon: PhosphorSvgIcon(PhosphorIcons.house, color: toolbarText),
-                        onPressed: () => ShellTabRequest.instance.request(0),
-                      ),
-              ),
-            ),
-            titleSpacing: 0,
-            title: _isFindInPage
-                ? Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _findController,
-                          focusNode: _findFocusNode,
-                          autofocus: true,
-                          textInputAction: TextInputAction.search,
-                          onChanged: _onFindTextChanged,
-                          onSubmitted: (_) => _moveFindResult(true),
-                          style: TextStyle(color: toolbarText, fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: appText('search_in_page'),
-                            hintStyle: TextStyle(color: muted, fontSize: 14),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: appText('previous_result'),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => _moveFindResult(false),
-                        icon: PhosphorSvgIcon(PhosphorIcons.caretUp, color: toolbarText),
-                      ),
-                      IconButton(
-                        tooltip: appText('next_result'),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => _moveFindResult(true),
-                        icon: PhosphorSvgIcon(PhosphorIcons.caretDown, color: toolbarText),
-                      ),
-                      IconButton(
-                        tooltip: appText('close_search'),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _exitFindInPage,
-                        icon: PhosphorSvgIcon(PhosphorIcons.x, color: toolbarText),
-                      ),
-                    ],
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Largura disponível no title quando leading e actions
-                      // ainda estão visíveis (estado "fechado").
-                      final collapsedWidth = constraints.maxWidth;
-                      // Ao expandir, o pill cresce até tomar o espaço extra
-                      // que leading (56) e actions (~96) ocupavam, imitando
-                      // a largura do input da tela de pesquisa.
-                      const leadingWidth = 56.0;
-                      const actionsWidth = 96.0;
-                      final expandedWidth =
-                          collapsedWidth + leadingWidth + actionsWidth;
-
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween<double>(
-                          begin: 0,
-                          end: _isExpandingToSearch ? 1 : 0,
-                        ),
-                        duration: const Duration(milliseconds: 190),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, t, child) {
-                          final width =
-                              collapsedWidth + (expandedWidth - collapsedWidth) * t;
-                          return SizedBox(
-                            width: _isAiSearchPage ? null : width,
-                            child: child,
-                          );
-                        },
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(22),
-                          onTap: _isAiSearchPage ? null : _openSearchWithExpandAnimation,
-                          child: Container(
-                            height: 40,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: _isAiSearchPage ? bg : pillBackground,
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            child: Row(
-                              mainAxisSize: _isAiSearchPage ? MainAxisSize.min : MainAxisSize.max,
-                              children: [
-                                if (!_isAiSearchPage) ...[
-                                  PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 19),
-                                  const SizedBox(width: 9),
-                                ],
-                                _isAiSearchPage
-                                    ? Text(_currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))
-                                    : Expanded(child: Text(
-                                        _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            actions: _isFindInPage
-                ? const []
-                : [
-                    AnimatedOpacity(
-                      opacity: _isExpandingToSearch ? 0 : 1,
-                      duration: const Duration(milliseconds: 150),
-                      child: IgnorePointer(
-                        ignoring: _isExpandingToSearch,
-                        child: _isAiSearchPage
-                            ? Padding(
-                                padding: const EdgeInsets.only(right: 10),
-                                child: _BrowserToolbarGroupedButtons(
-                                  foreground: toolbarText,
-                                  background: pillBackground,
-                                  tabsTooltip: appText('tabs'),
-                                  tabsChild: AnimatedBuilder(
-                                    animation: tabsController,
-                                    builder: (context, _) => _TabsCountIcon(count: tabsController.count, color: toolbarText),
-                                  ),
-                                  onTabsPressed: _openTabsGrid,
-                                  secondaryTooltip: appText('new_chat'),
-                                  secondaryIcon: PhosphorIcons.plus,
-                                  onSecondaryPressed: _restartAiChat,
-                                ),
-                              )
-                            : Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  AnimatedBuilder(
-                                    animation: tabsController,
-                                    builder: (context, _) => IconButton(
-                                      tooltip: appText('tabs'),
-                                      icon: _TabsCountIcon(count: tabsController.count, color: toolbarText),
-                                      onPressed: _openTabsGrid,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    tooltip: appText('more_options'),
-                                    icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
-                                    onPressed: _showBrowserOptionsSheet,
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                  ],
-          ),
+          extendBodyBehindAppBar: false,
           body: Column(
             children: [
-              SizedBox(
-                height: 3,
-                child: AnimatedOpacity(
-                  opacity: _showProgress ? 1 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  child: TweenAnimationBuilder<double>(
-                    // Sem um begin fixo: cada atualização parte do valor
-                    // atualmente pintado, evitando saltar novamente para zero
-                    // a cada evento de progresso enviado pelo WebView.
-                    tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, animatedProgress, _) =>
-                        LinearProgressIndicator(
-                      value: animatedProgress,
-                      minHeight: 3,
-                      color: accentColor(context),
-                      backgroundColor: muted.withOpacity(.13),
-                      borderRadius: BorderRadius.zero,
-                    ),
+              // Faixa de status bar com a cor dessaturada, visualmente
+              // distinta do appbar sólido logo abaixo dela.
+              Container(
+                color: statusBarSurface,
+                height: MediaQuery.paddingOf(context).top,
+                width: double.infinity,
+              ),
+              Material(
+                color: toolbarColor,
+                elevation: 0,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: Stack(
+                    children: [
+                      SizedBox(
+                        height: kToolbarHeight,
+                        child: _buildAppBarContent(
+                          context: context,
+                          toolbarText: toolbarText,
+                          pillBackground: pillBackground,
+                          muted: muted,
+                          fallbackTitle: fallbackTitle,
+                        ),
+                      ),
+                      // Progressbar fino, colado imediatamente por baixo do
+                      // pill/appbar, em vez de ficar entre o appbar e o
+                      // conteúdo da página — igual ao comportamento do
+                      // Google (barrinha logo sob a barra de busca).
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: SizedBox(
+                          height: 2.4,
+                          child: AnimatedOpacity(
+                            opacity: _showProgress ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, animatedProgress, _) => LinearProgressIndicator(
+                                value: animatedProgress,
+                                minHeight: 2.4,
+                                color: accentColor(context),
+                                backgroundColor: Colors.transparent,
+                                borderRadius: BorderRadius.zero,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1145,6 +1188,192 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAppBarContent({
+    required BuildContext context,
+    required Color toolbarText,
+    required Color pillBackground,
+    required Color muted,
+    required String fallbackTitle,
+  }) {
+    return Row(
+      children: [
+        const SizedBox(width: 4),
+        AnimatedOpacity(
+          opacity: _isExpandingToSearch ? 0 : 1,
+          duration: const Duration(milliseconds: 150),
+          child: IgnorePointer(
+            ignoring: _isExpandingToSearch,
+            // Modo IA: sem pill de fundo no botão — ícone solto, mais limpo,
+            // como pedido (interface de browser mais completa sem pills
+            // extra competindo com a UI de chat).
+            child: _isAiSearchPage
+                ? IconButton(
+                    tooltip: appText('home'),
+                    icon: PhosphorSvgIcon(PhosphorIcons.list, color: toolbarText),
+                    onPressed: _openNativeDrawer,
+                  )
+                : IconButton(
+                    tooltip: appText('home'),
+                    icon: PhosphorSvgIcon(PhosphorIcons.house, color: toolbarText),
+                    onPressed: () => ShellTabRequest.instance.request(0),
+                  ),
+          ),
+        ),
+        Expanded(
+          child: _isFindInPage
+              ? _buildFindInPageBar(toolbarText, muted)
+              : _buildTitlePill(context, toolbarText, pillBackground, muted, fallbackTitle),
+        ),
+        if (!_isFindInPage)
+          AnimatedOpacity(
+            opacity: _isExpandingToSearch ? 0 : 1,
+            duration: const Duration(milliseconds: 150),
+            child: IgnorePointer(
+              ignoring: _isExpandingToSearch,
+              child: _isAiSearchPage
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedBuilder(
+                          animation: tabsController,
+                          builder: (context, _) => IconButton(
+                            tooltip: appText('tabs'),
+                            icon: _TabsCountIcon(count: tabsController.count, color: toolbarText),
+                            onPressed: _openTabsGrid,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: appText('new_chat'),
+                          icon: PhosphorSvgIcon(PhosphorIcons.plus, color: toolbarText),
+                          onPressed: _restartAiChat,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedBuilder(
+                          animation: tabsController,
+                          builder: (context, _) => IconButton(
+                            tooltip: appText('tabs'),
+                            icon: _TabsCountIcon(count: tabsController.count, color: toolbarText),
+                            onPressed: _openTabsGrid,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: appText('more_options'),
+                          icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
+                          onPressed: _showBrowserOptionsSheet,
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  Widget _buildFindInPageBar(Color toolbarText, Color muted) {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _findController,
+            focusNode: _findFocusNode,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onChanged: _onFindTextChanged,
+            onSubmitted: (_) => _moveFindResult(true),
+            style: TextStyle(color: toolbarText, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: appText('search_in_page'),
+              hintStyle: TextStyle(color: muted, fontSize: 14),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: appText('previous_result'),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _moveFindResult(false),
+          icon: PhosphorSvgIcon(PhosphorIcons.caretUp, color: toolbarText),
+        ),
+        IconButton(
+          tooltip: appText('next_result'),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _moveFindResult(true),
+          icon: PhosphorSvgIcon(PhosphorIcons.caretDown, color: toolbarText),
+        ),
+        IconButton(
+          tooltip: appText('close_search'),
+          visualDensity: VisualDensity.compact,
+          onPressed: _exitFindInPage,
+          icon: PhosphorSvgIcon(PhosphorIcons.x, color: toolbarText),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTitlePill(BuildContext context, Color toolbarText, Color pillBackground, Color muted, String fallbackTitle) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final collapsedWidth = constraints.maxWidth;
+        const leadingWidth = 56.0;
+        const actionsWidth = 96.0;
+        final expandedWidth = collapsedWidth + leadingWidth + actionsWidth;
+
+        return TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: _isExpandingToSearch ? 1 : 0),
+          duration: const Duration(milliseconds: 190),
+          curve: Curves.easeOutCubic,
+          builder: (context, t, child) {
+            final width = collapsedWidth + (expandedWidth - collapsedWidth) * t;
+            return SizedBox(width: _isAiSearchPage ? null : width, child: child);
+          },
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: _isAiSearchPage ? null : _openSearchWithExpandAnimation,
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  // Modo IA: sem pill — título solto sobre o appbar.
+                  color: _isAiSearchPage ? Colors.transparent : pillBackground,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  mainAxisSize: _isAiSearchPage ? MainAxisSize.min : MainAxisSize.max,
+                  children: [
+                    if (!_isAiSearchPage) ...[
+                      PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 19),
+                      const SizedBox(width: 9),
+                    ],
+                    _isAiSearchPage
+                        ? Text(_currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))
+                        : Expanded(
+                            child: Text(
+                              _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1193,23 +1422,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                         (siteThemeFollowsAppEnabled.value &&
                             Theme.of(context).brightness == Brightness.dark)),
 
-                // offscreenPreRaster removido: em single-tab ativo o ganho de
-                // suavidade de scroll não compensa o custo extra de memória
-                // de pré-rasterizar fora do ecrã — com Hybrid Composition já
-                // ligado, o próprio Android trata disto de forma mais leve.
                 hardwareAcceleration: true,
-
-                // PRINCIPAL CORREÇÃO DO DESFOQUE (Android): Hybrid Composition
-                // desenha a WebView nativa no tamanho real, sem a textura
-                // reescalada do Virtual Display.
                 useHybridComposition: true,
 
-                // Não deixa a escala de fonte do sistema alterar o layout
-                // das páginas (o Chrome também ignora isto no conteúdo).
                 textZoom: 100,
                 minimumFontSize: 1,
 
-                // Viewport e zoom iguais aos de um browser real.
                 useWideViewPort: true,
                 loadWithOverviewMode: true,
                 supportZoom: true,
@@ -1217,10 +1435,16 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 displayZoomControls: false,
                 preferredContentMode: UserPreferredContentMode.MOBILE,
 
-                // Scrollbars e glow de overscroll nativos desenham linhas
-                // nas bordas direita/inferior. Os browsers móveis escondem-nos.
-                verticalScrollBarEnabled: false,
+                // Scrollbar vertical modernizada: overlay fino que aparece
+                // só durante o scroll e desvanece, em vez da barra espessa
+                // clássica do WebView antigo. Esta propriedade/enum existe
+                // no flutter_inappwebview desde a série 6.x; se o build
+                // acusar erro aqui, é o único ponto a verificar contra a
+                // versão exata do pubspec.lock.
+                verticalScrollBarEnabled: true,
                 horizontalScrollBarEnabled: false,
+                scrollBarStyle: ScrollBarStyle.SCROLLBARS_INSIDE_OVERLAY,
+                scrollbarFadingEnabled: true,
                 overScrollMode: OverScrollMode.NEVER,
 
                 // Compatibilidade com sites reais.
@@ -1241,6 +1465,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 supportMultipleWindows: true,
                 javaScriptCanOpenWindowsAutomatically: false,
               ),
+              onLongPressHitTestResult: (controller, hitTestResult) {
+                unawaited(_handleLongPressHitTest(hitTestResult));
+              },
               shouldOverrideUrlLoading: (controller, action) async {
                 final uri = action.request.url;
                 if (uri == null) return NavigationActionPolicy.ALLOW;
@@ -1325,6 +1552,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   _loadError = null;
                   if (nextUrl != null && !_isAiSearchPage) _currentUrl = nextUrl;
                 });
+                _pageIsTranslated = false;
                 _updateTabState();
               },
               onTitleChanged: (controller, title) {
@@ -1422,10 +1650,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   },
                 );
 
+                if (!_isAiSearchPage) _maybeOfferTranslation();
+
                 // Miniatura em segundo plano, só depois de dois frames idle
-                // (ver _captureThumbnail), para não competir com a animação
-                // de conclusão da barra de progresso nem com qualquer scroll
-                // que o utilizador já tenha iniciado.
+                // (ver _captureThumbnail), e só se nenhuma outra captura
+                // estiver já a decorrer — evita o "piscar" por sobreposição.
                 unawaited(() async {
                   final screenshot = await _captureThumbnail(controller);
                   if (!mounted || screenshot == null) return;
@@ -1641,11 +1870,6 @@ class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
       builder: (context, constraints) {
         final width = _snapUpWithBleed(constraints.maxWidth - _shift.dx, dpr);
         final height = _snapUpWithBleed(constraints.maxHeight - _shift.dy, dpr);
-        // ClipRect com Rect.largest: o pai (RepaintBoundary do viewport) já
-        // define a área visível real; aqui só queremos garantir que o 1px
-        // de bleed do child nunca é cortado prematuramente por este nível,
-        // deixando o recorte final a cargo do layout externo (que é maior
-        // que a WebView, nunca menor).
         return ClipRect(
           clipBehavior: Clip.hardEdge,
           child: Stack(
@@ -1666,6 +1890,88 @@ class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
   }
 }
 
+/// Folha de ações do long-press (imagem/vídeo/link), reutilizando o mesmo
+/// visual sem bordas sólidas do LooplyPopupMenuButton — painel flutuante
+/// centrado, cantos arredondados, contorno suave em vez de borda rígida.
+class _LongPressActionSheet<T> extends StatelessWidget {
+  const _LongPressActionSheet({
+    required this.subtitle,
+    required this.actions,
+    required this.onSelected,
+  });
+
+  final String subtitle;
+  final List<LooplyPopupAction<T>> actions;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = panelColor(context);
+    final muted = mutedText(context);
+    final text = mainText(context);
+    final screen = MediaQuery.sizeOf(context);
+    final width = (screen.width * .82).clamp(240.0, 340.0);
+
+    return Center(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {}, // bloqueia o tap-through sobre o painel
+        child: Material(
+          color: surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 18,
+          borderRadius: BorderRadius.circular(20),
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            width: width,
+            decoration: BoxDecoration(
+              border: Border.all(color: muted.withOpacity(.14), width: .6),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                  child: Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: muted, fontSize: 12),
+                  ),
+                ),
+                for (final action in actions)
+                  InkWell(
+                    onTap: () => onSelected(action.value),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          PhosphorSvgIcon(action.icon, size: 20, color: muted),
+                          const SizedBox(width: 13),
+                          Expanded(
+                            child: Text(
+                              action.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum _OrbitMenuAction {
   back,
   forward,
@@ -1681,70 +1987,16 @@ enum _OrbitMenuAction {
   history,
   downloads,
   bookmark,
+  translate,
 }
 
-class _BrowserToolbarGroupedButtons extends StatelessWidget {
-  const _BrowserToolbarGroupedButtons({required this.foreground, required this.background,
-    required this.tabsTooltip, required this.tabsChild, required this.onTabsPressed,
-    required this.secondaryTooltip, required this.secondaryIcon, required this.onSecondaryPressed});
-  final Color foreground, background;
-  final String tabsTooltip, secondaryTooltip;
-  final Widget tabsChild;
-  final VoidCallback onTabsPressed, onSecondaryPressed;
-  final IconData secondaryIcon;
-  @override
-  Widget build(BuildContext context) => Material(
-    color: background, borderRadius: BorderRadius.circular(100), clipBehavior: Clip.antiAlias,
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Tooltip(message: tabsTooltip, child: InkWell(onTap: onTabsPressed,
-        child: SizedBox(width: 40, height: 40, child: Center(child: tabsChild)))),
-      Tooltip(message: secondaryTooltip, child: InkWell(onTap: onSecondaryPressed,
-        child: SizedBox(width: 40, height: 40, child: Center(
-          child: PhosphorSvgIcon(secondaryIcon, size: 20, color: foreground))))),
-    ]),
-  );
-}
-
-class _BrowserToolbarCircleButton extends StatelessWidget {
-  const _BrowserToolbarCircleButton({
-    required this.tooltip,
-    required this.foreground,
-    required this.background,
-    required this.onPressed,
-    this.icon,
-    this.customChild,
-  });
-
-  final String tooltip;
-  final IconData? icon;
-  final Widget? customChild;
-  final Color foreground;
-  final Color background;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 3),
-          child: Material(
-            color: background,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onPressed,
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: customChild ?? PhosphorSvgIcon(icon ?? PhosphorIcons.circle, size: 21, color: foreground),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+enum _OrbitLongPressAction {
+  downloadImage,
+  downloadVideo,
+  openNewTab,
+  viewPage,
+  copyLink,
+  bookmarkLink,
 }
 
 class _BrowserQuickAction extends StatelessWidget {
@@ -1817,66 +2069,6 @@ class _BrowserSheetListItem extends StatelessWidget {
   }
 }
 
-class _OrbitShortcut extends StatelessWidget {
-  const _OrbitShortcut({
-    required this.icon,
-    required this.onPressed,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final VoidCallback onPressed;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final foreground = mainText(context);
-    final circle = isDark
-        ? const Color(0xFF20242C)
-        : const Color(0xFFE4E7EC);
-    return SizedBox(
-      width: 45,
-      height: 45,
-      child: IconButton(
-        tooltip: null,
-        padding: EdgeInsets.zero,
-        style: IconButton.styleFrom(
-          backgroundColor: circle,
-          foregroundColor: enabled ? foreground : foreground.withOpacity(.35),
-          fixedSize: const Size(45, 45),
-          shape: const CircleBorder(),
-        ),
-        onPressed: enabled ? onPressed : null,
-        icon: PhosphorSvgIcon(icon, size: 22),
-      ),
-    );
-  }
-}
-
-class _OrbitMenuItem extends StatelessWidget {
-  const _OrbitMenuItem({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        PhosphorSvgIcon(icon, size: 20, color: mainText(context)),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(color: mainText(context), fontSize: 14),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _TabsCountIcon extends StatelessWidget {
   const _TabsCountIcon({required this.count, required this.color});
 
@@ -1903,5 +2095,4 @@ class _TabsCountIcon extends StatelessWidget {
           ),
         ),
       );
-
 }

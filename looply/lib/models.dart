@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 import 'session_store.dart';
 import 'widgets/phosphor_svg_icon.dart';
@@ -1152,3 +1153,332 @@ const List<LooplyGame> looplyGames = [
     url: 'https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/refs/heads/master/offline/zombie-rush.html',
   ),
 ];
+
+enum DownloadStatus { pending, downloading, completed, failed }
+
+class DownloadEntry {
+  DownloadEntry({
+    required this.id,
+    required this.url,
+    required this.filename,
+    this.mimeType,
+    this.localPath,
+    this.status = DownloadStatus.pending,
+    this.progress = 0,
+    this.errorMessage,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final String id;
+  final String url;
+  String filename;
+  String? mimeType;
+  String? localPath;
+  DownloadStatus status;
+  double progress;
+  String? errorMessage;
+  final DateTime createdAt;
+
+  static const Map<String, List<String>> _extensionGroups = {
+    'image': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'],
+    'video': ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'],
+    'audio': ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'],
+    'archive': ['.zip', '.rar', '.7z', '.tar', '.gz'],
+    'code': ['.dart', '.js', '.ts', '.py', '.java', '.kt', '.html', '.css',
+             '.json', '.xml', '.yaml', '.yml', '.c', '.cpp', '.h', '.swift'],
+    'pdf': ['.pdf'],
+    'doc': ['.doc', '.docx', '.txt', '.rtf'],
+  };
+
+  String get _extension {
+    final lower = filename.toLowerCase();
+    final dot = lower.lastIndexOf('.');
+    return dot < 0 ? '' : lower.substring(dot);
+  }
+
+  bool _isGroup(String group) => _extensionGroups[group]!.contains(_extension);
+
+  bool get isImage => _isGroup('image');
+  bool get isVideo => _isGroup('video');
+  bool get isAudio => _isGroup('audio');
+  bool get isArchive => _isGroup('archive');
+  bool get isCode => _isGroup('code');
+  bool get isPdf => _isGroup('pdf');
+  bool get isDocument => _isGroup('doc');
+
+  IconData get icon {
+    if (isImage) return PhosphorIcons.image;
+    if (isVideo) return PhosphorIcons.videoCamera;
+    if (isAudio) return PhosphorIcons.musicNote;
+    if (isArchive) return PhosphorIcons.fileZip;
+    if (isCode) return PhosphorIcons.fileCode;
+    if (isPdf) return PhosphorIcons.filePdf;
+    if (isDocument) return PhosphorIcons.fileText;
+    return PhosphorIcons.file;
+  }
+
+  bool get canOpenLocally =>
+      status == DownloadStatus.completed && localPath != null && localPath!.isNotEmpty;
+}
+
+/// Controla downloads reais: faz a requisição HTTP, grava os bytes em disco
+/// na pasta de documentos da app, e acompanha o progresso em tempo real.
+/// Antes desta classe, o app só registava que uma URL de download tinha sido
+/// detectada pelo WebView — nenhum byte era de facto transferido nem gravado.
+class DownloadsController extends ChangeNotifier {
+  static const String _storageKey = 'looply_downloads_v1';
+  final List<DownloadEntry> _entries = [];
+  final Map<String, http.Client> _activeClients = {};
+  Timer? _persistTimer;
+
+  List<DownloadEntry> get entries => List.unmodifiable(_entries.reversed);
+
+  Future<Directory> _downloadsDirectory() async {
+    final support = await getApplicationDocumentsDirectory();
+    final directory = Directory('${support.path}${Platform.pathSeparator}downloads');
+    if (!await directory.exists()) await directory.create(recursive: true);
+    return directory;
+  }
+
+  String _generateId() => '${DateTime.now().microsecondsSinceEpoch}_${_entries.length}';
+
+  String _safeFileName(String filename, String id) {
+    final cleaned = filename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return cleaned.isEmpty ? id : '${id}_$cleaned';
+  }
+
+  Future<void> restore() async {
+    _entries.clear();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_storageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is! Map) continue;
+            final id = item['id'];
+            final url = item['url'];
+            final filename = item['filename'];
+            if (id is! String || url is! String || filename is! String) continue;
+            final localPath = item['localPath'] is String ? item['localPath'] as String : null;
+            // Um download marcado como concluído cujo ficheiro já não existe
+            // no disco (ex: app reinstalada, cache limpa) é reclassificado
+            // como falhado, para não oferecer abrir um ficheiro inexistente.
+            var status = DownloadStatus.values.firstWhere(
+              (value) => value.name == item['status'],
+              orElse: () => DownloadStatus.failed,
+            );
+            if (status == DownloadStatus.completed) {
+              final exists = localPath != null && await File(localPath).exists();
+              if (!exists) status = DownloadStatus.failed;
+            }
+            _entries.add(DownloadEntry(
+              id: id,
+              url: url,
+              filename: filename,
+              mimeType: item['mimeType'] is String ? item['mimeType'] as String : null,
+              localPath: localPath,
+              status: status,
+              progress: status == DownloadStatus.completed ? 1 : 0,
+              createdAt: item['createdAt'] is String ? DateTime.tryParse(item['createdAt'] as String) : null,
+            ));
+          }
+        }
+      }
+    } catch (_) {
+      // Downloads corrompidos não impedem a abertura do navegador.
+    }
+    notifyListeners();
+  }
+
+  /// Ponto de entrada chamado pelo onDownloadStartRequest do WebView.
+  /// Cria a entrada, dispara o download real em segundo plano e devolve
+  /// imediatamente — a UI acompanha o progresso através dos listeners.
+  String register({required String url, String? filename, String? mimeType}) {
+    final id = _generateId();
+    final resolvedName = (filename?.trim().isNotEmpty ?? false)
+        ? filename!.trim()
+        : _filenameFromUrl(url);
+    final entry = DownloadEntry(
+      id: id,
+      url: url,
+      filename: resolvedName,
+      mimeType: mimeType,
+      status: DownloadStatus.pending,
+    );
+    _entries.add(entry);
+    notifyListeners();
+    unawaited(_download(entry));
+    _schedulePersist();
+    return id;
+  }
+
+  String _filenameFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final last = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+      if (last.trim().isNotEmpty) return last;
+    } catch (_) {}
+    return 'ficheiro_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  Future<void> _download(DownloadEntry entry) async {
+    final client = http.Client();
+    _activeClients[entry.id] = client;
+    entry.status = DownloadStatus.downloading;
+    notifyListeners();
+
+    try {
+      final request = http.Request('GET', Uri.parse(entry.url));
+      final response = await client.send(request);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('HTTP ${response.statusCode}');
+      }
+
+      final directory = await _downloadsDirectory();
+      final safeName = _safeFileName(entry.filename, entry.id);
+      final file = File('${directory.path}${Platform.pathSeparator}$safeName');
+      final sink = file.openWrite();
+
+      final total = response.contentLength ?? 0;
+      var received = 0;
+      var lastNotify = DateTime.now();
+
+      await response.stream.listen(
+        (chunk) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (total > 0) {
+            entry.progress = (received / total).clamp(0.0, 1.0);
+            // Limita a frequência de notifyListeners para não sobrecarregar
+            // a UI em downloads rápidos de ficheiros pequenos.
+            final now = DateTime.now();
+            if (now.difference(lastNotify).inMilliseconds > 120) {
+              lastNotify = now;
+              notifyListeners();
+            }
+          }
+        },
+        onError: (Object error) => throw error,
+        cancelOnError: true,
+      ).asFuture<void>();
+
+      await sink.flush();
+      await sink.close();
+
+      entry.localPath = file.path;
+      entry.progress = 1;
+      entry.status = DownloadStatus.completed;
+      entry.mimeType ??= _guessMimeType(entry.filename);
+    } catch (error) {
+      entry.status = DownloadStatus.failed;
+      entry.errorMessage = error.toString();
+    } finally {
+      _activeClients.remove(entry.id);
+      client.close();
+      notifyListeners();
+      _schedulePersist();
+    }
+  }
+
+  String? _guessMimeType(String filename) {
+    final lower = filename.toLowerCase();
+    const map = {
+      '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.mp4': 'video/mp4',
+      '.pdf': 'application/pdf', '.zip': 'application/zip',
+      '.mp3': 'audio/mpeg', '.txt': 'text/plain', '.json': 'application/json',
+      '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+    };
+    for (final entry in map.entries) {
+      if (lower.endsWith(entry.key)) return entry.value;
+    }
+    return null;
+  }
+
+  void cancel(String id) {
+    _activeClients[id]?.close();
+    _activeClients.remove(id);
+    for (final entry in _entries) {
+      if (entry.id == id && entry.status == DownloadStatus.downloading) {
+        entry.status = DownloadStatus.failed;
+        entry.errorMessage = 'Cancelado';
+      }
+    }
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  Future<void> remove(String id) async {
+    final index = _entries.indexWhere((entry) => entry.id == id);
+    if (index < 0) return;
+    final entry = _entries[index];
+    _activeClients[id]?.close();
+    _activeClients.remove(id);
+    if (entry.localPath != null) {
+      try {
+        final file = File(entry.localPath!);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+    _entries.removeAt(index);
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  Future<void> clear() async {
+    for (final entry in _entries) {
+      _activeClients[entry.id]?.close();
+      if (entry.localPath != null) {
+        try {
+          final file = File(entry.localPath!);
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+    _activeClients.clear();
+    _entries.clear();
+    notifyListeners();
+    _schedulePersist();
+  }
+
+  Future<void> flushPersistence() {
+    _persistTimer?.cancel();
+    return _persistNow();
+  }
+
+  void _schedulePersist() {
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 280), _persistNow);
+  }
+
+  Future<void> _persistNow() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = _entries.map((entry) => <String, Object?>{
+        'id': entry.id,
+        'url': entry.url,
+        'filename': entry.filename,
+        'mimeType': entry.mimeType,
+        'localPath': entry.localPath,
+        'status': entry.status.name,
+        'createdAt': entry.createdAt.toIso8601String(),
+      }).toList();
+      await prefs.setString(_storageKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _persistTimer?.cancel();
+    for (final client in _activeClients.values) {
+      client.close();
+    }
+    unawaited(_persistNow());
+    super.dispose();
+  }
+}
+
+final DownloadsController downloadsController = DownloadsController();

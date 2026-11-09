@@ -63,7 +63,6 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
       transitionDuration: const Duration(milliseconds: 150),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         final surface = panelColor(dialogContext);
-        final outline = lineColor(dialogContext);
         final muted = mutedText(dialogContext);
         final text = mainText(dialogContext);
         var localAiValue = aiToggleValue;
@@ -88,8 +87,12 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                   borderRadius: BorderRadius.circular(19),
                   clipBehavior: Clip.antiAlias,
                   child: Container(
+                    // Contorno suave e translúcido em vez de borda sólida:
+                    // dá profundidade ao painel sem desenhar uma linha
+                    // rígida à volta, acompanhando o mesmo tratamento
+                    // aplicado aos dialogs e à folha de long-press.
                     decoration: BoxDecoration(
-                      border: Border.all(color: outline.withOpacity(.9), width: .8),
+                      border: Border.all(color: muted.withOpacity(.14), width: .6),
                       borderRadius: BorderRadius.circular(19),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 7),
