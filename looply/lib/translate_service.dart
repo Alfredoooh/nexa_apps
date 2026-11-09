@@ -4,37 +4,35 @@ import 'dart:convert';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 
-/// Tradução de página inteira via API pública (MyMemory), sem chave e sem
-/// o widget flutuante do Google Translate. A API tem um limite prático de
-/// ~500 caracteres por requisição, por isso o texto da página é dividido
-/// em blocos de nós de texto do DOM, traduzido em grupos com concorrência
-/// limitada, e cada bloco é substituído assim que a sua tradução volta —
-/// a página vai sendo traduzida progressivamente em vez de tudo de uma vez
-/// no fim, e nenhum trecho fica de fora por exceder o limite de um único
-/// pedido.
+/// Tradução de página inteira através do endpoint web público do Google
+/// Translate, sem chave de API e sem exibir a marca do Google na interface.
+/// O endpoint não é uma API pública documentada; pode aplicar limites ou mudar.
 class PageTranslateService {
   static const int _maxCharsPerChunk = 450;
-  static const int _maxConcurrentRequests = 4;
+  static const int _maxConcurrentRequests = 2;
 
-  /// Extrai os nós de texto visíveis da página, agrupa-os em blocos que
-  /// cabem no limite da API, traduz cada bloco e escreve o resultado de
-  /// volta no DOM assim que chega — sem esperar a página inteira terminar.
-  static Future<void> translateWebView({
+  /// Recolhe os nós de texto visíveis, divide nós longos sem os truncar,
+  /// traduz em pequenos lotes e devolve cada tradução ao respetivo nó DOM.
+  static Future<bool> translateWebView({
     required InAppWebViewController controller,
     required String targetLanguageCode,
   }) async {
     final nodes = await _collectTextNodes(controller);
-    if (nodes.isEmpty) return;
+    if (nodes.isEmpty) return false;
 
     final chunks = _buildChunks(nodes);
-    if (chunks.isEmpty) return;
+    if (chunks.isEmpty) return false;
 
+    final expectedParts = <String, int>{};
+    for (final chunk in chunks) {
+      for (final node in chunk.nodes) {
+        expectedParts[node.id] = node.partCount;
+      }
+    }
+
+    final translatedByNode = <String, Map<int, String>>{};
     final client = http.Client();
     try {
-      // Processa os blocos em grupos de _maxConcurrentRequests em paralelo,
-      // em vez de todos de uma vez (evitando sobrecarregar a API pública
-      // e levar a respostas 429) ou um de cada vez (demasiado lento numa
-      // página com muito texto).
       for (var start = 0; start < chunks.length; start += _maxConcurrentRequests) {
         final batch = chunks.skip(start).take(_maxConcurrentRequests);
         await Future.wait(batch.map((chunk) async {
@@ -43,17 +41,49 @@ class PageTranslateService {
             chunk: chunk,
             targetLanguageCode: targetLanguageCode,
           );
-          if (translated != null) {
-            await _applyChunkTranslation(controller, chunk, translated);
+          if (translated == null) return;
+
+          for (var index = 0; index < chunk.nodes.length; index++) {
+            final text = translated[index].trim();
+            if (text.isEmpty) continue;
+            final node = chunk.nodes[index];
+            translatedByNode.putIfAbsent(node.id, () => <int, String>{})[node.partIndex] = text;
           }
         }));
       }
     } finally {
       client.close();
     }
+
+    final replacements = <Map<String, String>>[];
+    for (final entry in translatedByNode.entries) {
+      final expected = expectedParts[entry.key] ?? 0;
+      if (expected == 0 || entry.value.length != expected) continue;
+      final orderedParts = <String>[];
+      var complete = true;
+      for (var index = 0; index < expected; index++) {
+        final part = entry.value[index];
+        if (part == null || part.isEmpty) {
+          complete = false;
+          break;
+        }
+        orderedParts.add(part);
+      }
+      if (!complete) continue;
+      replacements.add(<String, String>{
+        'id': entry.key,
+        'text': orderedParts.join(' '),
+      });
+    }
+
+    if (replacements.isEmpty) return false;
+    await _applyTranslations(controller, replacements);
+    return true;
   }
 
-  static Future<List<_TextNodeRef>> _collectTextNodes(InAppWebViewController controller) async {
+  static Future<List<_TextNodeRef>> _collectTextNodes(
+    InAppWebViewController controller,
+  ) async {
     final result = await controller.evaluateJavascript(source: r'''(() => {
       const skipTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'CODE', 'PRE']);
       const nodes = [];
@@ -73,7 +103,6 @@ class PageTranslateService {
       while ((current = walker.nextNode())) {
         const id = 'browseit-tx-' + (counter++);
         current.__browseitId = id;
-        current.parentElement.dataset.browseitTxHolder = current.parentElement.dataset.browseitTxHolder || '1';
         nodes.push({ id, text: current.nodeValue.trim() });
         if (!window.__browseitTxNodes) window.__browseitTxNodes = {};
         window.__browseitTxNodes[id] = current;
@@ -86,40 +115,69 @@ class PageTranslateService {
       final decoded = jsonDecode(result.toString()) as List<dynamic>;
       return decoded
           .whereType<Map<String, dynamic>>()
-          .map((item) => _TextNodeRef(id: item['id'] as String, text: item['text'] as String))
+          .map((item) => _TextNodeRef(
+                id: item['id'] as String,
+                text: item['text'] as String,
+              ))
           .toList(growable: false);
     } catch (_) {
       return const [];
     }
   }
 
-  /// Agrupa nós de texto em blocos cujo tamanho total não ultrapassa o
-  /// limite por requisição, preservando a correspondência id→texto para
-  /// poder repor cada tradução no nó certo do DOM depois.
+  /// Divide nós grandes em partes completas de até 450 caracteres.
+  /// Preferimos cortar junto de espaços/pontuação para evitar palavras partidas.
+  static List<String> _splitLongText(String rawText) {
+    final text = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) return const [];
+    if (text.length <= _maxCharsPerChunk) return <String>[text];
+
+    final pieces = <String>[];
+    var start = 0;
+    while (start < text.length) {
+      var end = (start + _maxCharsPerChunk).clamp(0, text.length).toInt();
+      if (end < text.length) {
+        final boundary = text.lastIndexOf(RegExp(r'[\s.!?;,:]'), end - 1);
+        if (boundary > start + 120) end = boundary + 1;
+      }
+      final piece = text.substring(start, end).trim();
+      if (piece.isNotEmpty) pieces.add(piece);
+      start = end;
+    }
+    return pieces;
+  }
+
+  /// Mantém o total de texto por pedido baixo e envia vários parâmetros `q`
+  /// independentes, preservando a correspondência de cada resposta ao nó.
   static List<_TextChunk> _buildChunks(List<_TextNodeRef> nodes) {
     final chunks = <_TextChunk>[];
     var currentNodes = <_TextNodeRef>[];
     var currentLength = 0;
-    const separator = '\n§§\n';
+
+    void flush() {
+      if (currentNodes.isEmpty) return;
+      chunks.add(_TextChunk(List<_TextNodeRef>.unmodifiable(currentNodes)));
+      currentNodes = <_TextNodeRef>[];
+      currentLength = 0;
+    }
 
     for (final node in nodes) {
-      final addedLength = node.text.length + separator.length;
-      if (currentNodes.isNotEmpty && currentLength + addedLength > _maxCharsPerChunk) {
-        chunks.add(_TextChunk(currentNodes));
-        currentNodes = [];
-        currentLength = 0;
+      final pieces = _splitLongText(node.text);
+      for (var index = 0; index < pieces.length; index++) {
+        final piece = pieces[index];
+        if (currentNodes.isNotEmpty && currentLength + piece.length > _maxCharsPerChunk) {
+          flush();
+        }
+        currentNodes.add(_TextNodeRef(
+          id: node.id,
+          text: piece,
+          partIndex: index,
+          partCount: pieces.length,
+        ));
+        currentLength += piece.length;
       }
-      // Um único nó maior que o limite é truncado para a própria
-      // requisição não ser rejeitada pela API — melhor traduzir parte do
-      // texto do que nenhuma.
-      if (node.text.length > _maxCharsPerChunk) {
-        chunks.add(_TextChunk([_TextNodeRef(id: node.id, text: node.text.substring(0, _maxCharsPerChunk))]));
-        continue;
-      }
-      currentNodes.add(node);
-      currentLength += addedLength;
     }
-    if (currentNodes.isNotEmpty) chunks.add(_TextChunk(currentNodes));
+    flush();
     return chunks;
   }
 
@@ -128,45 +186,51 @@ class PageTranslateService {
     required _TextChunk chunk,
     required String targetLanguageCode,
   }) async {
-    const separator = '\n§§\n';
-    final joined = chunk.nodes.map((node) => node.text).join(separator);
-
     try {
-      final uri = Uri.https('api.mymemory.translated.net', '/get', {
-        'q': joined,
-        'langpair': 'autodetect|$targetLanguageCode',
-      });
-      final response = await client.get(uri).timeout(const Duration(seconds: 8));
+      // Google Translate Web usa GET e aceita q repetido quando a origem é auto.
+      // Montamos a query manualmente para garantir parâmetros q independentes.
+      final query = <String>[
+        'client=${Uri.encodeQueryComponent('dict-chrome-ex')}',
+        'sl=auto',
+        'tl=${Uri.encodeQueryComponent(targetLanguageCode)}',
+        ...chunk.nodes.map((node) => 'q=${Uri.encodeQueryComponent(node.text)}'),
+      ].join('&');
+      final uri = Uri.parse('https://translate.googleapis.com/translate_a/t?$query');
+
+      var response = await client.get(
+        uri,
+        headers: const <String, String>{'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 429 || response.statusCode == 503) {
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        response = await client.get(
+          uri,
+          headers: const <String, String>{'Accept': 'application/json'},
+        ).timeout(const Duration(seconds: 12));
+      }
       if (response.statusCode != 200) return null;
 
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final translatedText = decoded['responseData']?['translatedText'] as String?;
-      if (translatedText == null || translatedText.isEmpty) return null;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) return null;
 
-      final parts = translatedText.split(RegExp(r'\n\s*§§\s*\n|\n§§\n'));
-      // Se a API colapsar ou reordenar o separador de forma inesperada, o
-      // número de partes não bate com o número de nós enviados — nesse
-      // caso é mais seguro não aplicar nada a esse bloco do que aplicar
-      // traduções trocadas em nós errados.
-      if (parts.length != chunk.nodes.length) return null;
-      return parts.map((part) => part.trim()).toList(growable: false);
+      // Com sl=auto, cada item é [texto traduzido, idioma detetado].
+      final translations = <String>[];
+      for (final item in decoded) {
+        if (item is! List || item.isEmpty || item.first is! String) return null;
+        translations.add((item.first as String).trim());
+      }
+      if (translations.length != chunk.nodes.length) return null;
+      return translations;
     } catch (_) {
       return null;
     }
   }
 
-  static Future<void> _applyChunkTranslation(
+  static Future<void> _applyTranslations(
     InAppWebViewController controller,
-    _TextChunk chunk,
-    List<String> translatedParts,
+    List<Map<String, String>> replacements,
   ) async {
-    final replacements = <Map<String, String>>[];
-    for (var i = 0; i < chunk.nodes.length; i++) {
-      if (translatedParts[i].isEmpty) continue;
-      replacements.add({'id': chunk.nodes[i].id, 'text': translatedParts[i]});
-    }
-    if (replacements.isEmpty) return;
-
     final payload = jsonEncode(replacements);
     await controller.evaluateJavascript(source: '''(() => {
       try {
@@ -182,9 +246,17 @@ class PageTranslateService {
 }
 
 class _TextNodeRef {
-  const _TextNodeRef({required this.id, required this.text});
+  const _TextNodeRef({
+    required this.id,
+    required this.text,
+    this.partIndex = 0,
+    this.partCount = 1,
+  });
+
   final String id;
   final String text;
+  final int partIndex;
+  final int partCount;
 }
 
 class _TextChunk {

@@ -29,51 +29,77 @@ Future<T?> showLooplyDialog<T>({
     barrierColor: Colors.black.withOpacity(.42),
     transitionDuration: const Duration(milliseconds: 190),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final text = mainText(dialogContext);
-      final muted = mutedText(dialogContext);
-      final surface = panelColor(dialogContext);
+      final scheme = Theme.of(dialogContext).colorScheme;
+      final surface = scheme.surfaceContainerHigh;
       return SafeArea(
         child: Center(
           child: Material(
             color: Colors.transparent,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
+              constraints: const BoxConstraints(maxWidth: 560),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: Material(
                   color: surface,
                   surfaceTintColor: Colors.transparent,
-                  elevation: 18,
+                  elevation: 3,
                   clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(28),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          if (icon != null) ...[
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(color: pillColor(dialogContext), shape: BoxShape.circle),
-                              alignment: Alignment.center,
-                              child: PhosphorSvgIcon(icon, color: accentColor(dialogContext), size: 19),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (icon != null) ...[
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: ShapeDecoration(
+                                  color: scheme.secondaryContainer,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(17),
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: PhosphorSvgIcon(
+                                  icon,
+                                  color: scheme.onSecondaryContainer,
+                                  size: 23,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                            ],
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: TextStyle(
+                                  color: scheme.onSurface,
+                                  fontSize: 21,
+                                  height: 1.18,
+                                  letterSpacing: -.25,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
-                            const SizedBox(width: 10),
                           ],
-                          Expanded(child: Text(title, style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800))),
-                        ]),
-                        const SizedBox(height: 8),
+                        ),
+                        const SizedBox(height: 16),
                         DefaultTextStyle.merge(
-                          style: TextStyle(color: muted, fontSize: 13.5, height: 1.45),
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
                           child: content,
                         ),
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 24),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            const Spacer(),
                             for (var index = 0; index < actions.length; index++) ...[
                               if (index > 0) const SizedBox(width: 8),
                               _DialogActionButton<T>(
@@ -93,6 +119,7 @@ Future<T?> showLooplyDialog<T>({
         ),
       );
     },
+    // Preserva a animação de container já usada pelo projeto.
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(
@@ -110,27 +137,31 @@ class _DialogActionButton<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = action.isDestructive
-        ? const Color(0xFFFF453A)
-        : (action.isPrimary ? Colors.white : mutedText(context));
-    return Material(
-      color: action.isPrimary ? accentColor(context) : pillColor(context),
-      borderRadius: BorderRadius.circular(999),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(
-            action.label,
-            style: TextStyle(
-              color: foreground,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+    final scheme = Theme.of(context).colorScheme;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(22));
+    if (action.isPrimary) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          shape: shape,
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
+        child: Text(action.label),
+      );
+    }
+
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: action.isDestructive ? scheme.error : scheme.primary,
+        minimumSize: const Size(0, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: shape,
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
+      child: Text(action.label),
     );
   }
 }
