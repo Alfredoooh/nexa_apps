@@ -153,6 +153,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   Uint8List? _lastScreenSnapshot;
   String? _preferredReturnTabId;
   bool _restoreChecked = false;
+  int _lastObservedTabCount = 0;
   late final List<Listenable> _cloudSyncSources;
   static const MethodChannel _defaultBrowserIntentChannel = MethodChannel('browseit/default_browser');
 
@@ -181,6 +182,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     for (final source in _cloudSyncSources) {
       source.addListener(_onCloudSyncSourceChanged);
     }
+    _lastObservedTabCount = tabsController.count;
     tabsController.addListener(_onTabsChanged);
     ShellTabRequest.instance.addListener(_handleShellTabRequest);
     _defaultBrowserIntentChannel.setMethodCallHandler(_handleDefaultBrowserIntent);
@@ -386,35 +388,47 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   void _onTabsChanged() {
     if (!mounted) return;
 
-    final liveBrowserIds = tabsController.tabs
+    final tabs = tabsController.tabs;
+    final liveBrowserIds = tabs
         .where((tab) => tab.kind != TabKind.appScreen)
         .map((tab) => tab.id)
         .toSet();
+    final liveTabIds = tabs.map((tab) => tab.id).toSet();
 
-    if (_activeBrowserTabId != null) {
-      final active = tabsController.getTab(_activeBrowserTabId!);
+    final activeId = _activeBrowserTabId;
+    if (activeId != null && liveBrowserIds.contains(activeId)) {
+      final active = tabsController.getTab(activeId);
       if (active != null && active.kind != TabKind.appScreen) {
         _ensureBrowserTabMounted(active);
       }
     }
 
-    // Mantém apenas os recursos de WebView da aba efetivamente ativa.
-    // Miniaturas e chaves dos cartões continuam independentes para a grelha.
+    // Remove recursos de abas fechadas sem reconstruir a página inteira em
+    // cada atualização de título/URL enviada pelo WebView.
     _browserViewportKeys.removeWhere((id, _) =>
         !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
     _browserFirstLoads.removeWhere((id, _) =>
         !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
     _browserPlatformReady.removeWhere((id, _) =>
         !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
-    _previewKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
-    _cardKeys.removeWhere((id, _) => tabsController.getTab(id) == null);
+    _previewKeys.removeWhere((id, _) => !liveTabIds.contains(id));
+    _cardKeys.removeWhere((id, _) => !liveTabIds.contains(id));
 
+    var activeWasRemoved = false;
     if (_activeBrowserTabId != null &&
         !liveBrowserIds.contains(_activeBrowserTabId)) {
       _activeBrowserTabId = null;
+      activeWasRemoved = true;
     }
 
-    setState(() {});
+    final nextCount = tabs.length;
+    final countChanged = nextCount != _lastObservedTabCount;
+    _lastObservedTabCount = nextCount;
+
+    // Atualizações de navegação são refletidas localmente pela WebView e pela
+    // grelha. O Shell só precisa de rebuild quando muda o número de abas ou
+    // quando a aba que estava aberta é realmente removida.
+    if (countChanged || activeWasRemoved) setState(() {});
   }
 
   void _ensureBrowserTabMounted(BrowserTab tab) {
@@ -685,7 +699,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                           image: imageProvider,
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
-                          filterQuality: FilterQuality.medium,
+                          filterQuality: FilterQuality.low,
                         ),
                       ),
                     ),
@@ -721,7 +735,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       // aplicar easeInOut duas vezes e alterar a velocidade a meio do morph.
       await _morphController.animateTo(
         1,
-        duration: const Duration(milliseconds: 470),
+        duration: const Duration(milliseconds: 440),
         curve: Curves.linear,
       );
     } finally {
@@ -740,7 +754,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }));
 
     final sourceRect = _rectInOverlay(_repaintKey);
-    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.35);
+    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.1);
     if (!mounted) {
       _morphing = false;
       return;
@@ -913,7 +927,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       bitmap = _lastScreenSnapshot;
     }
     if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.3);
+      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.1);
     }
     if (!mounted) {
       _morphing = false;
@@ -1098,15 +1112,20 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     ];
     final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
         ? null
-        : OrbitBrowserScreen(
-            key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
-            tabId: activeBrowserTab.id,
-            initialUrl: activeBrowserTab.url,
-            isActive: true,
-            viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
-            firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
-            browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
-            isIncognito: activeBrowserTab.isIncognito,
+        : Theme(
+            data: activeBrowserTab.isIncognito
+                ? buildLooplyTheme(Brightness.dark)
+                : Theme.of(context),
+            child: OrbitBrowserScreen(
+              key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
+              tabId: activeBrowserTab.id,
+              initialUrl: activeBrowserTab.url,
+              isActive: true,
+              viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
+              firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
+              browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
+              isIncognito: activeBrowserTab.isIncognito,
+            ),
           );
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
@@ -1188,6 +1207,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                   child: TabsGridScreen(
                     previewKeys: _previewKeys,
                     cardKeys: _cardKeys,
+                    initialIncognitoMode: tabsController
+                        .getTab(_preferredReturnTabId ?? _activeBrowserTabId ?? '')
+                        ?.isIncognito ?? false,
+                    initialActiveTabId: _preferredReturnTabId ?? _activeBrowserTabId,
                     onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
                     onClose: () => _closeTabsGrid(),
                     onHome: _returnHomeFromTabs,
@@ -1204,12 +1227,18 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                       _ensureBrowserTabMounted(tab);
                       _closeTabsGrid(openTab: tab);
                     },
-                    onCloseAllTabs: () {
+                    onCloseAllTabs: (incognitoOnly) {
+                      final idsToClose = tabsController.tabs
+                          .where((tab) => tab.isIncognito == incognitoOnly)
+                          .map((tab) => tab.id)
+                          .toList(growable: false);
+                      final activeWasClosed = _activeBrowserTabId != null &&
+                          idsToClose.contains(_activeBrowserTabId);
                       _preferredReturnTabId = null;
-                      tabsController.closeAllTabs();
-                      setState(() {
-                        _activeBrowserTabId = null;
-                      });
+                      tabsController.closeTabs(idsToClose);
+                      if (activeWasClosed) {
+                        setState(() => _activeBrowserTabId = null);
+                      }
                       unawaited(SessionStore.instance.saveLastActivity({
                         'type': 'tabs_grid',
                         'returnTo': <String, dynamic>{

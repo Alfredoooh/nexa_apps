@@ -81,17 +81,19 @@ class _OrbitWebViewController {
   Future<String?> getPageLanguage() async {
     try {
       final result = await plugin.evaluateJavascript(source: r'''(() => {
-        const declared = document.documentElement.lang ||
-          document.body?.getAttribute('lang') ||
-          document.querySelector('[lang]')?.getAttribute('lang') ||
-          document.querySelector('meta[http-equiv="content-language"]')?.content ||
-          document.querySelector('meta[name="language"]')?.content ||
-          document.querySelector('meta[property="og:locale"]')?.content || '';
-        return declared.trim().toLowerCase();
+        const candidates = [
+          document.documentElement?.getAttribute('lang'),
+          document.querySelector('meta[http-equiv="content-language"]')?.content,
+          document.querySelector('meta[name="language"]')?.content,
+          document.querySelector('html')?.getAttribute('xml:lang'),
+          document.querySelector('meta[property="og:locale"]')?.content
+        ];
+        const value = candidates.find(item => typeof item === 'string' && item.trim());
+        return value ? value.trim().replace('_', '-').split('-')[0].toLowerCase() : '';
       })()''');
       if (result == null) return null;
-      final value = result.toString().replaceAll('"', '').trim();
-      return value.isEmpty ? null : value;
+      final value = result.toString().replaceAll('"', '').trim().toLowerCase();
+      return value.isEmpty || value == 'null' ? null : value.split(RegExp(r'[-_]')).first;
     } catch (_) {
       return null;
     }
@@ -146,7 +148,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   bool _isAiSearchPage = false;
   String? _aiPageHtml;
   Color? _siteToolbarColor;
-  String? _lastSystemUiStyleKey;
   Brightness? _lastAppBrightness;
   PullToRefreshController? _pullToRefreshController;
   Timer? _progressHideTimer;
@@ -184,8 +185,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       final selected = await _nativeUi.invokeMethod<String>('showNativeDrawer', <String, Object>{
         'items': <Map<String, Object>>[
           {'label': appText('home'), 'value': 'home'},
-          {'label': appText('history'), 'value': 'history'},
-          {'label': appText('downloads'), 'value': 'downloads'},
+          if (!widget.isIncognito) {'label': appText('history'), 'value': 'history'},
+          if (!widget.isIncognito) {'label': appText('downloads'), 'value': 'downloads'},
           {'label': appText('bookmarks'), 'value': 'bookmarks'},
           {'label': appText('settings'), 'value': 'settings'},
         ],
@@ -245,10 +246,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     forceDarkWebsitesEnabled.addListener(_onRuntimeWebViewSettingsChanged);
     siteThemeFollowsAppEnabled.addListener(_onRuntimeWebViewSettingsChanged);
     adaptiveToolbarColorEnabled.addListener(_onRuntimeWebViewSettingsChanged);
+    appLanguageController.addListener(_onRuntimeWebViewSettingsChanged);
     appLanguageController.addListener(_onAppLanguageChanged);
     themeController.addListener(_onRuntimeWebViewSettingsChanged);
     themeController.pureDark.addListener(_onRuntimeWebViewSettingsChanged);
-    BrowserPreconnectHints.setActive(widget.tabId, widget.isActive);
+    BrowserPreconnectHints.setActive(widget.tabId, widget.isActive && !widget.isIncognito);
 
     _pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(color: looplyPrimary),
@@ -289,6 +291,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     forceDarkWebsitesEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
     siteThemeFollowsAppEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
     adaptiveToolbarColorEnabled.removeListener(_onRuntimeWebViewSettingsChanged);
+    appLanguageController.removeListener(_onRuntimeWebViewSettingsChanged);
     appLanguageController.removeListener(_onAppLanguageChanged);
     themeController.removeListener(_onRuntimeWebViewSettingsChanged);
     themeController.pureDark.removeListener(_onRuntimeWebViewSettingsChanged);
@@ -302,7 +305,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   void didUpdateWidget(covariant OrbitBrowserScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
-      BrowserPreconnectHints.setActive(widget.tabId, widget.isActive);
+      BrowserPreconnectHints.setActive(widget.tabId, widget.isActive && !widget.isIncognito);
     }
   }
 
@@ -377,6 +380,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     return Color.lerp(toolbarColor, mixTarget, .22)!.withOpacity(.86);
   }
 
+  /// Status bar: versão mais fraca/dessaturada da cor dominante do site,
+  /// nunca idêntica ao appbar — mistura a cor do site com o fundo da
+  /// Scaffold para suavizar.
+  Color _statusBarSurfaceColor(Color toolbarColor, Color bg) {
+    return Color.lerp(toolbarColor, bg, .35)!;
+  }
+
   Future<void> _applyWebsiteAppearance(_OrbitWebViewController controller) async {
     if (!mounted) return;
     final appIsDark = Theme.of(context).brightness == Brightness.dark;
@@ -385,7 +395,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final followsApp = siteThemeFollowsAppEnabled.value;
     try {
       await controller.setSettings(
-        cacheEnabled: navigationAcceleratorEnabled.value,
+        cacheEnabled: !widget.isIncognito && navigationAcceleratorEnabled.value,
         adBlockEnabled: adBlockEnabled.value,
         forceDark: forceDark,
         followAppTheme: followsApp,
@@ -414,7 +424,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   Future<void> _refreshAdaptiveToolbarColor(_OrbitWebViewController controller) async {
-    if (!adaptiveToolbarColorEnabled.value || _isAiSearchPage) {
+    if (widget.isIncognito || !adaptiveToolbarColorEnabled.value || _isAiSearchPage) {
       if (mounted && _siteToolbarColor != null) setState(() => _siteToolbarColor = null);
       return;
     }
@@ -424,20 +434,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (_siteToolbarColor != color) setState(() => _siteToolbarColor = color);
   }
 
-  void _onAppLanguageChanged() {
-    _translationPromptedForUrl = null;
-    _pageIsTranslated = false;
-    if (mounted && !_isAiSearchPage && _controller != null) {
-      unawaited(_maybeOfferTranslation());
-    }
-  }
-
   void _onRuntimeWebViewSettingsChanged() {
     final controller = _controller;
     if (controller == null || !mounted) return;
     unawaited(_applyWebsiteAppearance(controller));
     if (adaptiveToolbarColorEnabled.value) unawaited(_refreshAdaptiveToolbarColor(controller));
     if (mounted) setState(() {});
+  }
+
+  void _onAppLanguageChanged() {
+    _translationPromptedForUrl = null;
+    if (!widget.isIncognito && !_isAiSearchPage && _controller != null) {
+      unawaited(_maybeOfferTranslation());
+    }
   }
 
   Future<void> _applyRuntimeWebViewSettings(
@@ -517,9 +526,30 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final controller = _controller;
     if (controller == null) return null;
     try {
-      return await controller
+      final raw = await controller
           .takeScreenshot()
           .timeout(const Duration(milliseconds: 900));
+      if (raw == null || raw.isEmpty) return null;
+
+      // Miniaturas pequenas evitam manter screenshots de ecrã inteiro para
+      // dezenas de separadores. O Container Transform continua a usar a
+      // captura de viewport independente; esta versão reduzida é só para a grelha.
+      final codec = await ui.instantiateImageCodec(
+        raw,
+        targetWidth: 520,
+        allowUpscaling: false,
+      );
+      try {
+        final frame = await codec.getNextFrame();
+        try {
+          final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+          return data?.buffer.asUint8List();
+        } finally {
+          frame.image.dispose();
+        }
+      } finally {
+        codec.dispose();
+      }
     } catch (_) {
       return null;
     }
@@ -623,7 +653,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (!mounted) return;
 
     await Navigator.of(context).push<void>(
-      FadePageRoute<void>(builder: (_) => const SearchScreen()),
+      FadePageRoute<void>(builder: (_) => SearchScreen(isIncognito: widget.isIncognito)),
     );
 
     if (!mounted) return;
@@ -631,89 +661,82 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 
   // ---------------------------------------------------------------------
-  // Tradução via endpoint público do Google (translate_service.dart),
-  // com SnackBar próprio e sem widget flutuante ou marca do Google.
+  // Tradução via API pública sem chave (translate_service.dart), com
+  // SnackBar de confirmação em vez do widget flutuante do Google Translate.
   // ---------------------------------------------------------------------
 
-  void _maybeOfferTranslation() {
-    if (_isAiSearchPage || widget.isIncognito) return;
-    if (_translationPromptedForUrl == _currentUrl) return;
-    final controller = _controller;
-    if (controller == null || !mounted) return;
-    final requestedUrl = _currentUrl;
-    _translationPromptedForUrl = requestedUrl;
-    final targetCode = appLanguageController.value.code;
+  String _normalizeLanguageCode(String value) =>
+      value.trim().toLowerCase().replaceAll('_', '-').split('-').first;
 
-    unawaited(() async {
-      // Só pergunta se a página parecer estar num idioma diferente do
-      // idioma da app — evita perguntar em toda a navegação.
-      final detected = await controller.getPageLanguage();
-      if (detected == null || detected.isEmpty) return;
-      final detectedCode = detected.trim().toLowerCase().split(RegExp(r'[-_]')).first;
-      final targetLanguage = targetCode.trim().toLowerCase().split(RegExp(r'[-_]')).first;
-      if (detectedCode == targetLanguage || _pageIsTranslated) return;
-      if (!mounted || _currentUrl != requestedUrl || targetCode != appLanguageController.value.code) return;
-      _showTranslateSnackBar(targetCode);
-    }());
+  Future<void> _maybeOfferTranslation() async {
+    if (_isAiSearchPage || widget.isIncognito || !mounted) return;
+    final pageUrl = _currentUrl;
+    if (_translationPromptedForUrl == pageUrl) return;
+    final controller = _controller;
+    if (controller == null) return;
+
+    final targetCode = _normalizeLanguageCode(appLanguageController.value.code);
+    final detected = await controller.getPageLanguage();
+    if (!mounted || pageUrl != _currentUrl || detected == null || detected.isEmpty) return;
+    final siteCode = _normalizeLanguageCode(detected);
+    if (siteCode == targetCode) return;
+
+    _translationPromptedForUrl = pageUrl;
+    _showTranslateSnackBar(targetCode);
   }
 
-  void _showTranslateSnackBar(String targetCode) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      _buildTranslationSnackBar(
-        message: appText('translate_page_prompt'),
-        duration: const Duration(seconds: 6),
-        actionLabel: appText('translate'),
-        onAction: () => unawaited(_translateCurrentPage(targetCode)),
-      ),
+  SnackBar _translationSnackBar(String message, {SnackBarAction? action, Duration? duration}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final foreground = isDark ? Colors.white : const Color(0xFF202124);
+    return SnackBar(
+      duration: duration ?? const Duration(seconds: 5),
+      backgroundColor: isDark ? const Color(0xFF34363A) : const Color(0xFFF1F3F4),
+      content: Text(message, style: TextStyle(color: foreground, fontWeight: FontWeight.w500)),
+      action: action == null
+          ? null
+          : SnackBarAction(
+              label: action.label,
+              textColor: foreground,
+              onPressed: action.onPressed,
+            ),
     );
   }
 
-  SnackBar _buildTranslationSnackBar({
-    required String message,
-    Duration duration = const Duration(seconds: 3),
-    String? actionLabel,
-    VoidCallback? onAction,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final foreground = isDark ? Colors.white : Colors.black;
-    return SnackBar(
-      duration: duration,
-      backgroundColor: pillColor(context),
-      behavior: SnackBarBehavior.floating,
-      content: Text(message, style: TextStyle(color: foreground)),
-      action: actionLabel == null || onAction == null
-          ? null
-          : SnackBarAction(
-              label: actionLabel,
-              textColor: accentColor(context),
-              onPressed: onAction,
-            ),
+  void _showTranslateSnackBar(String targetCode) {
+    if (!mounted || widget.isIncognito) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      _translationSnackBar(
+        appText('translate_page_prompt'),
+        duration: const Duration(seconds: 7),
+        action: SnackBarAction(
+          label: appText('translate'),
+          onPressed: () => unawaited(_translateCurrentPage(targetCode)),
+        ),
+      ),
     );
   }
 
   Future<void> _translateCurrentPage(String targetCode) async {
     final controller = _controller;
-    if (controller == null || !mounted) return;
+    if (controller == null || !mounted || widget.isIncognito) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      _buildTranslationSnackBar(message: appText('translating_page')),
+      _translationSnackBar(appText('translating_page'), duration: const Duration(seconds: 3)),
     );
     try {
       final translated = await PageTranslateService.translateWebView(
         controller: controller.plugin,
-        targetLanguageCode: targetCode,
+        targetLanguageCode: _normalizeLanguageCode(targetCode),
       );
-      if (!mounted) return;
-      if (!translated) throw StateError('Google Translate did not return any translated content.');
+      if (!translated) throw StateError('Google Translate returned no translated text.');
       _pageIsTranslated = true;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          _buildTranslationSnackBar(message: appText('translation_failed')),
-        );
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(_translationSnackBar(appText('translation_failed')));
       }
     }
   }
@@ -753,7 +776,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         _enterFindInPage();
         break;
       case _OrbitMenuAction.newTab:
-        final newTab = tabsController.createBrowserTab('https://www.google.com');
+        final newTab = tabsController.createBrowserTab('https://www.google.com', isIncognito: widget.isIncognito);
         ShellTabRequest.instance.requestBrowser(newTab.id);
         break;
       case _OrbitMenuAction.bookmarks:
@@ -766,17 +789,21 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         ShellTabRequest.instance.request(0);
         break;
       case _OrbitMenuAction.history:
+        if (widget.isIncognito) break;
         Navigator.of(context).push(
           CupertinoPageRoute(builder: (_) => const HistoryScreen()),
         );
         break;
       case _OrbitMenuAction.downloads:
+        if (widget.isIncognito) break;
         Navigator.of(context).push(
           CupertinoPageRoute(builder: (_) => const DownloadsScreen()),
         );
         break;
       case _OrbitMenuAction.translate:
-        unawaited(_translateCurrentPage(appLanguageController.value.code));
+        if (!widget.isIncognito) {
+          unawaited(_translateCurrentPage(appLanguageController.value.code));
+        }
         break;
       case _OrbitMenuAction.bookmark:
         if (bookmarksController.contains(_currentUrl)) {
@@ -834,14 +861,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
-                  child: Row(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
                     children: [
                       _BrowserQuickAction(icon: PhosphorIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
                       _BrowserQuickAction(icon: PhosphorIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
-                      _BrowserQuickAction(icon: PhosphorIcons.plus, label: appText('new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
+                      _BrowserQuickAction(icon: PhosphorIcons.plus, label: appText(widget.isIncognito ? 'new_private_tab' : 'new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
                       _BrowserQuickAction(icon: PhosphorIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
                       _BrowserQuickAction(icon: PhosphorIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 Divider(height: 1, thickness: 1, color: muted.withOpacity(.18), indent: 22, endIndent: 22),
@@ -850,11 +880,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
                     children: [
-                      _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
                       _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
                       _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
                       _BrowserSheetListItem(icon: PhosphorIcons.arrowClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
@@ -952,11 +982,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final actions = <LooplyPopupAction<_OrbitLongPressAction>>[];
 
     if (isImage) {
-      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadImage, label: appText('download_image'), icon: PhosphorIcons.downloadSimple));
+      if (!widget.isIncognito) actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadImage, label: appText('download_image'), icon: PhosphorIcons.downloadSimple));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowUpLeft));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
     } else if (isVideoOrAudio) {
-      actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadVideo, label: appText('download_video'), icon: PhosphorIcons.downloadSimple));
+      if (!widget.isIncognito) actions.add(LooplyPopupAction(value: _OrbitLongPressAction.downloadVideo, label: appText('download_video'), icon: PhosphorIcons.downloadSimple));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.openNewTab, label: appText('open_in_new_tab'), icon: PhosphorIcons.arrowUpLeft));
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.copyLink, label: appText('copy_link'), icon: PhosphorIcons.copy));
     } else if (isLink) {
@@ -1009,7 +1039,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         break;
       case _OrbitLongPressAction.openNewTab:
       case _OrbitLongPressAction.viewPage:
-        final newTab = tabsController.createBrowserTab(url);
+        final newTab = tabsController.createBrowserTab(url, isIncognito: widget.isIncognito);
         ShellTabRequest.instance.requestBrowser(newTab.id);
         break;
       case _OrbitLongPressAction.copyLink:
@@ -1046,7 +1076,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final bg = pageBg(context);
     final text = mainText(context);
     final muted = mutedText(context);
-    final useAdaptiveToolbar = !_isAiSearchPage && adaptiveToolbarColorEnabled.value && _siteToolbarColor != null;
+    final useAdaptiveToolbar = !widget.isIncognito && !_isAiSearchPage && adaptiveToolbarColorEnabled.value && _siteToolbarColor != null;
     final toolbarColor = _isAiSearchPage ? bg : (useAdaptiveToolbar ? _siteToolbarColor! : bg);
     final toolbarText = useAdaptiveToolbar ? _contrastForeground(toolbarColor) : text;
     final pillBackground = useAdaptiveToolbar
@@ -1057,26 +1087,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         ? appText('research_ai')
         : (parsedUri?.host.isNotEmpty == true ? parsedUri!.host : 'Orbit Browser');
 
-    // Quando a barra adaptativa está ativa, a faixa de status usa a mesma
-    // cor dominante do site. Os ícones escolhem automaticamente o contraste.
-    final statusBarSurface = useAdaptiveToolbar ? toolbarColor : bg;
+    // A status bar segue uma versão dessaturada/mais fraca da cor do
+    // appbar (nunca idêntica), misturada com o fundo da Scaffold.
+    final statusBarSurface = useAdaptiveToolbar
+        ? _statusBarSurfaceColor(toolbarColor, bg)
+        : bg;
     final statusBarIsLight = _isLightSurface(statusBarSurface);
-    final overlayStyle = (statusBarIsLight ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: statusBarIsLight ? Brightness.dark : Brightness.light,
-      statusBarBrightness: statusBarIsLight ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor: bg,
-      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-    );
-    final overlayStyleKey = '${statusBarSurface.value}:${statusBarIsLight ? 1 : 0}:${bg.value}:${isDark ? 1 : 0}';
-    if (_lastSystemUiStyleKey != overlayStyleKey) {
-      _lastSystemUiStyleKey = overlayStyleKey;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _lastSystemUiStyleKey == overlayStyleKey) {
-          SystemChrome.setSystemUIOverlayStyle(overlayStyle);
-        }
-      });
-    }
 
     return PopScope<void>(
       // Esta tela só existe para a aba ativa; por isso apenas ela intercepta
@@ -1087,14 +1103,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         await _handleSystemBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: overlayStyle,
+        value: (statusBarIsLight ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: statusBarIsLight ? Brightness.dark : Brightness.light,
+          statusBarBrightness: statusBarIsLight ? Brightness.light : Brightness.dark,
+          systemNavigationBarColor: bg,
+          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        ),
         child: Scaffold(
           backgroundColor: bg,
           extendBodyBehindAppBar: false,
           body: Column(
             children: [
-              // Faixa da status bar segue a cor adaptativa do site e usa
-              // os ícones de contraste definidos no SystemUiOverlayStyle.
+              // Faixa de status bar com a cor dessaturada, visualmente
+              // distinta do appbar sólido logo abaixo dela.
               Container(
                 color: statusBarSurface,
                 height: MediaQuery.paddingOf(context).top,
@@ -1106,15 +1128,47 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 child: SafeArea(
                   top: false,
                   bottom: false,
-                  child: SizedBox(
-                    height: kToolbarHeight,
-                    child: _buildAppBarContent(
-                      context: context,
-                      toolbarText: toolbarText,
-                      pillBackground: pillBackground,
-                      muted: muted,
-                      fallbackTitle: fallbackTitle,
-                    ),
+                  child: Stack(
+                    children: [
+                      SizedBox(
+                        height: kToolbarHeight,
+                        child: _buildAppBarContent(
+                          context: context,
+                          toolbarText: toolbarText,
+                          pillBackground: pillBackground,
+                          muted: muted,
+                          fallbackTitle: fallbackTitle,
+                        ),
+                      ),
+                      // Progressbar fino, colado imediatamente por baixo do
+                      // pill/appbar, em vez de ficar entre o appbar e o
+                      // conteúdo da página — igual ao comportamento do
+                      // Google (barrinha logo sob a barra de busca).
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: SizedBox(
+                          height: 2.4,
+                          child: AnimatedOpacity(
+                            opacity: _showProgress ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, animatedProgress, _) => LinearProgressIndicator(
+                                value: animatedProgress,
+                                minHeight: 2.4,
+                                color: accentColor(context),
+                                backgroundColor: Colors.transparent,
+                                borderRadius: BorderRadius.zero,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1281,97 +1335,32 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             child: InkWell(
               borderRadius: BorderRadius.circular(22),
               onTap: _isAiSearchPage ? null : _openSearchWithExpandAnimation,
-              child: SizedBox(
-                height: _isAiSearchPage ? 40 : 42.4,
-                child: Stack(
-                  clipBehavior: Clip.none,
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  // Modo IA: sem pill — título solto sobre o appbar.
+                  color: _isAiSearchPage ? Colors.transparent : pillBackground,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(
+                  mainAxisSize: _isAiSearchPage ? MainAxisSize.min : MainAxisSize.max,
                   children: [
-                    Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        // Modo IA: sem pill — título solto sobre o appbar.
-                        color: _isAiSearchPage ? Colors.transparent : pillBackground,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Row(
-                        mainAxisSize: _isAiSearchPage ? MainAxisSize.min : MainAxisSize.max,
-                        children: [
-                          if (!_isAiSearchPage) ...[
-                            AnimatedBuilder(
-                              animation: browserFaviconCache,
-                              builder: (context, _) {
-                                final encoded = browserFaviconCache.forUrl(_currentUrl);
-                                Widget fallback() => Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: muted.withOpacity(.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: PhosphorSvgIcon(PhosphorIcons.globe, color: muted, size: 13),
-                                );
-                                if (encoded == null || encoded.isEmpty) return fallback();
-                                try {
-                                  return ClipOval(
-                                    child: Image.memory(
-                                      base64Decode(encoded),
-                                      width: 20,
-                                      height: 20,
-                                      fit: BoxFit.cover,
-                                      gaplessPlayback: true,
-                                      errorBuilder: (_, __, ___) => fallback(),
-                                    ),
-                                  );
-                                } catch (_) {
-                                  return fallback();
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 9),
-                          ],
-                          _isAiSearchPage
-                              ? Text(_currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))
-                              : Expanded(
-                                  child: Text(
-                                    _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600),
-                                  ),
-                                ),
-                        ],
-                      ),
-                    ),
-                    if (!_isAiSearchPage)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: SizedBox(
-                            height: 2.4,
-                            child: AnimatedOpacity(
-                              opacity: _showProgress ? 1 : 0,
-                              duration: const Duration(milliseconds: 180),
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
-                                duration: const Duration(milliseconds: 180),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, animatedProgress, _) => LinearProgressIndicator(
-                                  value: animatedProgress,
-                                  minHeight: 2.4,
-                                  color: accentColor(context),
-                                  backgroundColor: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
+                    if (!_isAiSearchPage) ...[
+                      PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 19),
+                      const SizedBox(width: 9),
+                    ],
+                    _isAiSearchPage
+                        ? Text(_currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600))
+                        : Expanded(
+                            child: Text(
+                              _currentTitle.isNotEmpty ? _currentTitle : fallbackTitle,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: toolbarText, fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                           ),
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -1418,8 +1407,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 // Fundo opaco: evita composição com alpha sobre o Flutter.
                 transparentBackground: false,
 
-                cacheEnabled: navigationAcceleratorEnabled.value,
-                cacheMode: navigationAcceleratorEnabled.value
+                // A sessão privada desativa cache HTTP e gravação de formulários.
+                // O isolamento de cookies/WebStorage depende do perfil nativo;
+                // ver NOTA_MODO_PRIVADO_ANDROID.md.
+                cacheEnabled: !widget.isIncognito && navigationAcceleratorEnabled.value,
+                cacheMode: !widget.isIncognito && navigationAcceleratorEnabled.value
                     ? CacheMode.LOAD_DEFAULT
                     : CacheMode.LOAD_NO_CACHE,
                 algorithmicDarkeningAllowed: !_isAiSearchPage &&
@@ -1451,7 +1443,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
                 // Compatibilidade com sites reais.
                 mixedContentMode: MixedContentMode.MIXED_CONTENT_COMPATIBILITY_MODE,
-                thirdPartyCookiesEnabled: true,
+                thirdPartyCookiesEnabled: !widget.isIncognito,
+                saveFormData: !widget.isIncognito,
 
                 // iOS
                 enableViewportScale: true,
@@ -1460,7 +1453,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
                 isInspectable: kDebugMode,
 
-                incognito: widget.isIncognito,
+                // Não ativar InAppWebViewSettings.incognito aqui: na implementação
+                // Android desse plugin, essa opção remove cookies do CookieManager
+                // global e pode terminar sessões normais. O isolamento completo por
+                // perfil requer suporte nativo AndroidX Multi-Profile no plugin.
                 useOnDownloadStart: true,
                 useShouldOverrideUrlLoading: true,
                 contentBlockers: buildPlatformAdBlockers(enabled: adBlockEnabled.value),
@@ -1504,14 +1500,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               onWebViewCreated: (controller) async {
                 final orbitController = _OrbitWebViewController(controller);
                 _controller = orbitController;
-                BrowserPreconnectHints.attach(widget.tabId, orbitController.evaluateJavascript);
+                if (!widget.isIncognito) BrowserPreconnectHints.attach(widget.tabId, orbitController.evaluateJavascript);
                 if (_isAiSearchPage) {
                   controller.addJavaScriptHandler(
                     handlerName: 'browseItAiSearchSubmit',
                     callback: (arguments) {
                       final query = arguments.isNotEmpty ? arguments.first.toString().trim() : '';
                       if (query.isEmpty) return false;
-                      searchHistoryController.add(query);
+                      if (!widget.isIncognito) searchHistoryController.add(query);
                       if (mounted) {
                         setState(() {
                           _currentTitle = query;
@@ -1555,7 +1551,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   if (nextUrl != null && !_isAiSearchPage) _currentUrl = nextUrl;
                 });
                 _pageIsTranslated = false;
-                _translationPromptedForUrl = null;
                 _updateTabState();
               },
               onTitleChanged: (controller, title) {
@@ -1584,15 +1579,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   _canGoBack = canBack;
                   _canGoForward = canForward;
                 });
-                if (!_isAiSearchPage) {
+                if (!widget.isIncognito && !_isAiSearchPage) {
+                  activityController.log(
+                    ActivityKind.site,
+                    _currentTitle.trim().isEmpty ? nextUrl : _currentTitle,
+                    nextUrl,
+                  );
                   unawaited(browserFaviconCache.fetchForUrl(nextUrl));
-                  if (!widget.isIncognito) {
-                    activityController.log(
-                      ActivityKind.site,
-                      _currentTitle.trim().isEmpty ? nextUrl : _currentTitle,
-                      nextUrl,
-                    );
-                  }
                 }
                 _updateTabState();
               },
@@ -1616,15 +1609,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                     unawaited(_refreshAdaptiveToolbarColor(wrapped));
                   }
                 }
-                if (!_isAiSearchPage) {
+                if (!widget.isIncognito && !_isAiSearchPage) {
+                  activityController.log(
+                    ActivityKind.site,
+                    _currentTitle.trim().isEmpty ? loadedUrl : _currentTitle,
+                    loadedUrl,
+                  );
                   unawaited(browserFaviconCache.fetchForUrl(loadedUrl));
-                  if (!widget.isIncognito) {
-                    activityController.log(
-                      ActivityKind.site,
-                      _currentTitle.trim().isEmpty ? loadedUrl : _currentTitle,
-                      loadedUrl,
-                    );
-                  }
                 }
 
                 if (!mounted) {
@@ -1657,7 +1648,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                   },
                 );
 
-                if (!_isAiSearchPage) _maybeOfferTranslation();
+                if (!_isAiSearchPage) unawaited(_maybeOfferTranslation());
 
                 // A miniatura NÃO é mais capturada automaticamente aqui.
                 // A única captura de screenshot do browser acontece dentro

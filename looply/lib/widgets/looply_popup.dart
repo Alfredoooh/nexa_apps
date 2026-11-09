@@ -47,13 +47,23 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
     final origin = object.localToGlobal(Offset.zero);
     final anchor = origin & object.size;
     final screen = MediaQuery.sizeOf(buttonContext);
-    final width = menuWidth.clamp(210.0, screen.width - 24.0).toDouble();
-    final estimatedHeight = (actions.length * 48.0) + (includeAiToggle ? 58.0 : 0.0) + 16.0;
-    final left = (anchor.right - width).clamp(12.0, screen.width - width - 12.0).toDouble();
+    final availableWidth = (screen.width - 24).clamp(1.0, screen.width).toDouble();
+    final width = availableWidth < 210
+        ? availableWidth
+        : menuWidth.clamp(210.0, availableWidth).toDouble();
+    // Os rótulos podem ocupar duas linhas em alguns idiomas. Reservamos uma
+    // altura mais realista e deixamos o conteúdo rolar quando necessário.
+    final maxMenuHeight = (screen.height * .68).clamp(1.0, screen.height).toDouble();
+    final estimatedHeight = ((actions.length * 66.0) + (includeAiToggle ? 66.0 : 0.0) + 16.0)
+        .clamp(1.0, maxMenuHeight)
+        .toDouble();
+    final maxLeft = (screen.width - width - 12).clamp(12.0, screen.width).toDouble();
+    final left = (anchor.right - width).clamp(12.0, maxLeft).toDouble();
     final preferredTop = anchor.bottom + 7;
+    final bottomLimit = (screen.height - estimatedHeight - 12).clamp(12.0, screen.height).toDouble();
     final top = preferredTop + estimatedHeight > screen.height - 16
-        ? (anchor.top - estimatedHeight - 7).clamp(12.0, screen.height - estimatedHeight - 12.0).toDouble()
-        : preferredTop;
+        ? (anchor.top - estimatedHeight - 7).clamp(12.0, bottomLimit).toDouble()
+        : preferredTop.clamp(12.0, bottomLimit).toDouble();
 
     final selected = await showGeneralDialog<T>(
       context: buttonContext,
@@ -89,7 +99,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: screen.height * .68),
+                      constraints: BoxConstraints(maxHeight: maxMenuHeight),
                       child: SingleChildScrollView(
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
                           if (includeAiToggle) ...[
@@ -130,7 +140,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                                 child: Row(children: [
                                   PhosphorSvgIcon(action.icon, size: 20, color: muted),
                                   const SizedBox(width: 13),
-                                  Expanded(child: Text(action.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                  Expanded(child: Text(action.label, maxLines: 2, overflow: TextOverflow.ellipsis,
                                       style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500))),
                                 ]),
                               ),

@@ -111,4 +111,6 @@ const Map<String, String> phosphorSvgFallbackData = <String, String>{
   'fill:upload-simple': r'''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M10 15V7H6l6-6 6 6h-4v8z M4 19h16v2H4z" fill="none" stroke="#000000" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" /></svg>''',
   'fill:wifi-slash': r'''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 8a14 14 0 0 1 18-1 M5.5 11a10 10 0 0 1 8-2 M8.8 14.5a5 5 0 0 1 6.5.3 M12 20h.01 M3 3l18 18" fill="none" stroke="#000000" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" /></svg>''',
   'fill:x': r'''<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19" fill="none" stroke="#000000" stroke-width="2.35" stroke-linecap="round" stroke-linejoin="round" /></svg>''',
+  'regular:incognito': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M32 112l16-48h160l16 48"/><path d="M24 112h76l-6 22a30 30 0 0 1-58 0z"/><path d="M156 112h76l-12 22a30 30 0 0 1-58 0z"/><path d="M100 120h56"/></svg>',
+
 };

@@ -63,5 +63,5 @@ final AppLanguageController appLanguageController = AppLanguageController();
 String appText(String key) {
   final languageCode = appLanguageController.value.code;
   final language = appTranslations[languageCode] ?? appTranslations['pt']!;
-  return language[key] ?? key;
+  return language[key] ?? appTranslations['en']?[key] ?? key;
 }

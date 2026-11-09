@@ -31,12 +31,16 @@ Future<T?> showLooplyDialog<T>({
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       final scheme = Theme.of(dialogContext).colorScheme;
       final surface = scheme.surfaceContainerHigh;
+      final screenHeight = MediaQuery.sizeOf(dialogContext).height;
       return SafeArea(
         child: Center(
           child: Material(
             color: Colors.transparent,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+              constraints: BoxConstraints(
+                maxWidth: 560,
+                maxHeight: screenHeight * .86,
+              ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 22),
                 child: Material(
@@ -47,69 +51,84 @@ Future<T?> showLooplyDialog<T>({
                   borderRadius: BorderRadius.circular(28),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (icon != null) ...[
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: ShapeDecoration(
-                                  color: scheme.secondaryContainer,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(17),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (icon != null) ...[
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: ShapeDecoration(
+                                    color: scheme.secondaryContainer,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(17),
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: PhosphorSvgIcon(
+                                    icon,
+                                    color: scheme.onSecondaryContainer,
+                                    size: 23,
                                   ),
                                 ),
-                                alignment: Alignment.center,
-                                child: PhosphorSvgIcon(
-                                  icon,
-                                  color: scheme.onSecondaryContainer,
-                                  size: 23,
+                                const SizedBox(width: 16),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: TextStyle(
+                                    color: scheme.onSurface,
+                                    fontSize: 21,
+                                    height: 1.18,
+                                    letterSpacing: -.25,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 16),
                             ],
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: TextStyle(
-                                  color: scheme.onSurface,
-                                  fontSize: 21,
-                                  height: 1.18,
-                                  letterSpacing: -.25,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          DefaultTextStyle.merge(
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                            child: content,
+                          ),
+                          const SizedBox(height: 24),
+                          LayoutBuilder(
+                            builder: (context, constraints) => Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final action in actions)
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: constraints.maxWidth
+                                            .clamp(120.0, 240.0)
+                                            .toDouble(),
+                                      ),
+                                      child: _DialogActionButton<T>(
+                                        action: action,
+                                        onPressed: () => Navigator.of(dialogContext).pop(action.value),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        DefaultTextStyle.merge(
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 14,
-                            height: 1.5,
                           ),
-                          child: content,
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            for (var index = 0; index < actions.length; index++) ...[
-                              if (index > 0) const SizedBox(width: 8),
-                              _DialogActionButton<T>(
-                                action: actions[index],
-                                onPressed: () => Navigator.of(dialogContext).pop(actions[index].value),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -119,12 +138,15 @@ Future<T?> showLooplyDialog<T>({
         ),
       );
     },
-    // Preserva a animação de container já usada pelo projeto.
+    // Mantém o movimento original do diálogo; não altera Container Transform.
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(
         opacity: curved,
-        child: ScaleTransition(scale: Tween<double>(begin: .94, end: 1).animate(curved), child: child),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: .94, end: 1).animate(curved),
+          child: child,
+        ),
       );
     },
   );
@@ -148,7 +170,7 @@ class _DialogActionButton<T> extends StatelessWidget {
           shape: shape,
           textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        child: Text(action.label),
+        child: Text(action.label, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
       );
     }
 
@@ -161,7 +183,7 @@ class _DialogActionButton<T> extends StatelessWidget {
         shape: shape,
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
-      child: Text(action.label),
+      child: Text(action.label, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
     );
   }
 }

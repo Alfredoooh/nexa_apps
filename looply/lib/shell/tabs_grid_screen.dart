@@ -22,6 +22,8 @@ class TabsGridScreen extends StatefulWidget {
     required this.onCloseAllTabs,
     required this.previewKeys,
     required this.cardKeys,
+    this.initialIncognitoMode = false,
+    this.initialActiveTabId,
   });
 
   final ValueChanged<BrowserTab> onSelectTab;
@@ -29,9 +31,11 @@ class TabsGridScreen extends StatefulWidget {
   final VoidCallback onHome;
   final VoidCallback onNewTab;
   final VoidCallback onNewIncognitoTab;
-  final VoidCallback onCloseAllTabs;
+  final ValueChanged<bool> onCloseAllTabs;
   final Map<String, GlobalKey> previewKeys;
   final Map<String, GlobalKey> cardKeys;
+  final bool initialIncognitoMode;
+  final String? initialActiveTabId;
 
   @override
   State<TabsGridScreen> createState() => _TabsGridScreenState();
@@ -39,29 +43,59 @@ class TabsGridScreen extends StatefulWidget {
 
 class _TabsGridScreenState extends State<TabsGridScreen> {
   bool _selectionMode = false;
+  bool _showIncognitoTabs = false;
+  bool _initialScrollScheduled = false;
+  final ScrollController _gridScrollController = ScrollController();
   final Set<String> _selectedIds = <String>{};
+  int _visibleTabsHash = 0;
+  int _visibleTabsCount = -1;
 
   @override
   void initState() {
     super.initState();
+    _showIncognitoTabs = widget.initialIncognitoMode;
     tabsController.addListener(_onChanged);
-    browserFaviconCache.addListener(_onChanged);
-    for (final tab in tabsController.tabs) {
-      if (tab.kind != TabKind.appScreen) unawaited(browserFaviconCache.fetchForUrl(tab.url));
+    // Favicons atualizam apenas o ícone de cada cartão (AnimatedBuilder local).
+    // Evita reconstruir toda a grelha sempre que uma imagem chega da rede.
+    if (!_showIncognitoTabs) {
+      for (final tab in tabsController.tabs) {
+        if (!tab.isIncognito && tab.kind != TabKind.appScreen) {
+          unawaited(browserFaviconCache.fetchForUrl(tab.url));
+        }
+      }
     }
   }
 
   @override
   void dispose() {
     tabsController.removeListener(_onChanged);
-    browserFaviconCache.removeListener(_onChanged);
+    _gridScrollController.dispose();
     super.dispose();
   }
 
   void _onChanged() {
     if (!mounted) return;
-    final live = tabsController.tabs.map((tab) => tab.id).toSet();
-    _selectedIds.removeWhere((id) => !live.contains(id));
+    final visibleTabs = tabsController.tabs
+        .where((tab) => tab.isIncognito == _showIncognitoTabs)
+        .toList(growable: false);
+    final liveIds = visibleTabs.map((tab) => tab.id).toSet();
+    _selectedIds.removeWhere((id) => !liveIds.contains(id));
+
+    // O ChangeNotifier também recebe atualizações de abas fora da vista atual.
+    // Só reconstruímos a grelha se algum cartão visível realmente mudou.
+    final nextHash = Object.hashAll(visibleTabs.map((tab) => Object.hash(
+          tab.id,
+          tab.url,
+          tab.title,
+          tab.thumbnail == null ? 0 : identityHashCode(tab.thumbnail!),
+          tab.canGoBack,
+          tab.canGoForward,
+        )));
+    if (visibleTabs.length == _visibleTabsCount && nextHash == _visibleTabsHash) {
+      return;
+    }
+    _visibleTabsCount = visibleTabs.length;
+    _visibleTabsHash = nextHash;
     setState(() {});
   }
 
@@ -78,7 +112,11 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
         widget.onNewIncognitoTab();
         break;
       case 'new':
-        widget.onNewTab();
+        if (_showIncognitoTabs) {
+          widget.onNewIncognitoTab();
+        } else {
+          widget.onNewTab();
+        }
         break;
       case 'select':
         _toggleSelectionMode();
@@ -86,7 +124,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
       case 'close_all':
         _selectedIds.clear();
         setState(() => _selectionMode = false);
-        widget.onCloseAllTabs();
+        widget.onCloseAllTabs(_showIncognitoTabs);
         break;
     }
   }
@@ -112,13 +150,41 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_showIncognitoTabs) {
+      return Theme(
+        data: buildLooplyTheme(Brightness.dark),
+        child: Builder(builder: _buildGrid),
+      );
+    }
+    return _buildGrid(context);
+  }
+
+  Widget _buildGrid(BuildContext context) {
     final bg = softColor(context);
     final text = mainText(context);
     final muted = mutedText(context);
-    final tabs = tabsController.tabs;
+    final tabs = tabsController.tabs
+        .where((tab) => tab.isIncognito == _showIncognitoTabs)
+        .toList(growable: false);
 
-    return Material(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: isDark
+          ? SystemUiOverlayStyle.light.copyWith(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.light,
+              statusBarBrightness: Brightness.dark,
+              systemNavigationBarColor: bg,
+              systemNavigationBarIconBrightness: Brightness.light,
+            )
+          : SystemUiOverlayStyle.dark.copyWith(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness: Brightness.dark,
+              statusBarBrightness: Brightness.light,
+              systemNavigationBarColor: bg,
+              systemNavigationBarIconBrightness: Brightness.dark,
+            ),
+      child: Material(
       color: bg,
       child: SafeArea(
         child: Stack(
@@ -164,8 +230,35 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                         ),
                       ),
                       const Spacer(),
-                      // Contador quadrado alinhado à direita, junto ao menu,
-                      // em vez de ficar solto no centro da AppBar.
+                      IconButton(
+                        tooltip: appText(_showIncognitoTabs ? 'normal_tabs' : 'incognito_tabs'),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(() {
+                          _showIncognitoTabs = !_showIncognitoTabs;
+                          _initialScrollScheduled = false;
+                          _visibleTabsHash = 0;
+                          _visibleTabsCount = -1;
+                          if (_gridScrollController.hasClients) {
+                            _gridScrollController.jumpTo(0);
+                          }
+                          _selectedIds.clear();
+                          _selectionMode = false;
+                          if (!_showIncognitoTabs) {
+                            for (final tab in tabsController.tabs) {
+                              if (!tab.isIncognito && tab.kind != TabKind.appScreen) {
+                                unawaited(browserFaviconCache.fetchForUrl(tab.url));
+                              }
+                            }
+                          }
+                        }),
+                        icon: PhosphorSvgIcon(
+                          PhosphorIcons.incognito,
+                          size: 22,
+                          color: text,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      // O contador representa apenas o conjunto atualmente visível.
                       _TabsCountBadge(count: tabs.length, color: text),
                       const SizedBox(width: 6),
                       if (_selectionMode) ...[
@@ -202,47 +295,62 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                   child: tabs.isEmpty
                       ? Center(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            PhosphorSvgIcon(PhosphorIcons.browser, size: 44, color: muted),
+                            PhosphorSvgIcon(_showIncognitoTabs ? PhosphorIcons.incognito : PhosphorIcons.browser, size: 44, color: muted),
                             const SizedBox(height: 10),
-                            Text(appText('no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                            Text(appText(_showIncognitoTabs ? 'no_private_tabs' : 'no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                            if (_showIncognitoTabs) ...[
+                              const SizedBox(height: 6),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 36),
+                                child: Text(appText('private_mode_description'), textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12, height: 1.45)),
+                              ),
+                            ],
                           ]),
                         )
                       : LayoutBuilder(
                           builder: (context, constraints) {
                             final columns = constraints.maxWidth >= 700 ? 3 : 2;
+                            const spacing = 12.0;
                             const horizontalPadding = 14.0;
-                            const gap = 12.0;
-                            const verticalPadding = 12.0;
-                            final availableWidth = constraints.maxWidth - horizontalPadding * 2;
-                            final cardWidth = (availableWidth - gap * (columns - 1)) / columns;
-                            final cardHeight = cardWidth / .77;
-                            final rows = (tabs.length / columns).ceil();
-                            final contentHeight = verticalPadding * 2 + rows * cardHeight + (rows - 1) * gap;
+                            final itemWidth = (constraints.maxWidth -
+                                    horizontalPadding * 2 - spacing * (columns - 1)) /
+                                columns;
+                            final itemHeight = itemWidth / .77;
+                            _scheduleInitialGridScroll(
+                              tabs: tabs,
+                              columns: columns,
+                              itemExtent: itemHeight + spacing,
+                            );
+                            final tabIndexById = <String, int>{
+                              for (var i = 0; i < tabs.length; i++) tabs[i].id: i,
+                            };
 
-                            return SingleChildScrollView(
-                              padding: const EdgeInsets.only(bottom: 100),
-                              child: SizedBox(
-                                height: contentHeight,
-                                width: constraints.maxWidth,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    for (var index = 0; index < tabs.length; index++)
-                                      _positionedTab(
-                                        context: context,
-                                        tab: tabs[index],
-                                        index: index,
-                                        columns: columns,
-                                        cardWidth: cardWidth,
-                                        cardHeight: cardHeight,
-                                        gap: gap,
-                                        horizontalPadding: horizontalPadding,
-                                        verticalPadding: verticalPadding,
-                                        selected: _selectedIds.contains(tabs[index].id),
-                                      ),
-                                  ],
-                                ),
+                            return GridView.builder(
+                              controller: _gridScrollController,
+                              padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
+                              cacheExtent: 420,
+                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: columns,
+                                crossAxisSpacing: spacing,
+                                mainAxisSpacing: spacing,
+                                childAspectRatio: .77,
                               ),
+                              itemCount: tabs.length,
+                              addAutomaticKeepAlives: false,
+                              addRepaintBoundaries: true,
+                              findChildIndexCallback: (key) {
+                                if (key is ValueKey<String>) {
+                                  return tabIndexById[key.value];
+                                }
+                                return null;
+                              },
+                              itemBuilder: (context, index) {
+                                final tab = tabs[index];
+                                return KeyedSubtree(
+                                  key: ValueKey<String>(tab.id),
+                                  child: _tabGridItem(context, tab),
+                                );
+                              },
                             );
                           },
                         ),
@@ -254,51 +362,75 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
               bottom: 18,
               child: FloatingActionButton(
                 heroTag: 'looply-tabs-new-tab-fab',
-                tooltip: appText('new_tab'),
-                backgroundColor: looplyPrimary,
-                foregroundColor: Colors.white,
+                tooltip: appText(_showIncognitoTabs ? 'new_private_tab' : 'new_tab'),
+                backgroundColor: _showIncognitoTabs ? Colors.white : looplyPrimary,
+                foregroundColor: _showIncognitoTabs ? Colors.black : Colors.white,
                 shape: const CircleBorder(),
                 elevation: 4,
-                onPressed: widget.onNewTab,
-                child: const PhosphorSvgIcon(PhosphorIcons.plus, size: 27),
+                onPressed: _showIncognitoTabs ? widget.onNewIncognitoTab : widget.onNewTab,
+                child: PhosphorSvgIcon(PhosphorIcons.plus, size: 27, color: _showIncognitoTabs ? Colors.black : Colors.white),
               ),
             ),
           ],
         ),
       ),
+      ),
     );
   }
 
-  Widget _positionedTab({
-    required BuildContext context,
-    required BrowserTab tab,
-    required int index,
+  void _scheduleInitialGridScroll({
+    required List<BrowserTab> tabs,
     required int columns,
-    required double cardWidth,
-    required double cardHeight,
-    required double gap,
-    required double horizontalPadding,
-    required double verticalPadding,
-    required bool selected,
+    required double itemExtent,
   }) {
-    final left = horizontalPadding + (index % columns) * (cardWidth + gap);
-    final top = verticalPadding + (index ~/ columns) * (cardHeight + gap);
+    if (_initialScrollScheduled) return;
+    _initialScrollScheduled = true;
+
+    var targetIndex = -1;
+    final preferredId = widget.initialActiveTabId;
+    if (preferredId != null) {
+      targetIndex = tabs.indexWhere((tab) => tab.id == preferredId);
+    }
+    // Ao alternar entre abas normais e privadas, mantém a grelha próxima da
+    // aba mais recente daquele conjunto em vez de deixar a seleção fora de vista.
+    if (targetIndex < 0 && preferredId != null && tabs.isNotEmpty) {
+      targetIndex = tabs.length - 1;
+    }
+    if (targetIndex < 0) return;
+
+    final targetOffset = (targetIndex ~/ columns) * itemExtent;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_gridScrollController.hasClients) return;
+      final max = _gridScrollController.position.maxScrollExtent;
+      final offset = targetOffset.clamp(0.0, max).toDouble();
+      if ((_gridScrollController.offset - offset).abs() > 1) {
+        _gridScrollController.jumpTo(offset);
+      }
+    });
+  }
+
+  Widget _tabGridItem(BuildContext context, BrowserTab tab) {
     final previewKey = widget.previewKeys.putIfAbsent(tab.id, GlobalKey.new);
     final cardKey = widget.cardKeys.putIfAbsent(tab.id, GlobalKey.new);
 
-    Widget card({required bool forFeedback}) => TabGridCard(
-      key: ValueKey('${tab.id}${forFeedback ? '-drag' : ''}'),
-      tab: tab,
-      previewKey: forFeedback ? GlobalKey() : previewKey,
-      cardKey: forFeedback ? GlobalKey() : cardKey,
-      selected: selected,
-      selectionMode: _selectionMode,
-      onTap: () => _openOrSelect(tab),
-      onClose: tab.kind != TabKind.appScreen ? () => tabsController.closeTab(tab.id) : null,
-    );
+    Widget card({required bool forFeedback}) => RepaintBoundary(
+          child: TabGridCard(
+            key: ValueKey('${tab.id}${forFeedback ? '-drag' : ''}'),
+            tab: tab,
+            previewKey: forFeedback ? GlobalKey() : previewKey,
+            cardKey: forFeedback ? GlobalKey() : cardKey,
+            selected: _selectedIds.contains(tab.id),
+            selectionMode: _selectionMode,
+            onTap: () => _openOrSelect(tab),
+            onClose: tab.kind != TabKind.appScreen
+                ? () => tabsController.closeTab(tab.id)
+                : null,
+          ),
+        );
 
-    Widget draggable = DragTarget<String>(
-      onWillAcceptWithDetails: (details) => !_selectionMode && details.data != tab.id,
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) =>
+          !_selectionMode && details.data != tab.id,
       onAcceptWithDetails: (details) {
         HapticFeedback.selectionClick();
         tabsController.reorderById(details.data, tab.id);
@@ -311,28 +443,21 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
           feedback: Material(
             color: Colors.transparent,
             child: SizedBox(
-              width: cardWidth,
-              height: cardHeight,
+              width: 240,
+              height: 312,
               child: Transform.scale(scale: .94, child: card(forFeedback: true)),
             ),
           ),
-          childWhenDragging: Opacity(opacity: .25, child: card(forFeedback: false)),
+          childWhenDragging: Opacity(
+            opacity: .25,
+            child: card(forFeedback: false),
+          ),
           child: card(forFeedback: false),
         ),
       ),
     );
-
-    return AnimatedPositioned(
-      key: ValueKey('position-${tab.id}'),
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeInOutCubic,
-      left: left,
-      top: top,
-      width: cardWidth,
-      height: cardHeight,
-      child: draggable,
-    );
   }
+
 }
 
 class _PressScale extends StatefulWidget {
@@ -453,6 +578,8 @@ class TabGridCard extends StatelessWidget {
               child: Row(children: [
                 if (isApp)
                   PhosphorSvgIcon(tab.appScreenIcon ?? PhosphorIcons.squaresFour, size: 17, color: muted)
+                else if (tab.isIncognito)
+                  PhosphorSvgIcon(PhosphorIcons.incognito, size: 18, color: muted)
                 else
                   AnimatedBuilder(
                     animation: browserFaviconCache,
@@ -494,7 +621,7 @@ class TabGridCard extends StatelessWidget {
                     width: double.infinity,
                     color: bg,
                     child: tab.thumbnail != null
-                        ? Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true,
+                        ? Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low, cacheWidth: 520, cacheHeight: 760,
                             errorBuilder: (_, __, ___) => Center(child: PhosphorSvgIcon(PhosphorIcons.globe, size: 32, color: muted.withOpacity(.55))))
                         : Center(child: PhosphorSvgIcon(isApp ? (tab.appScreenIcon ?? PhosphorIcons.squaresFour) : PhosphorIcons.globe, size: 34, color: muted.withOpacity(.40))),
                   ),

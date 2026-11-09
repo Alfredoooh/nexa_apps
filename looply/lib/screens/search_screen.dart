@@ -15,7 +15,8 @@ import '../localization.dart';
 import '../widgets/phosphor_svg_icon.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.isIncognito = false});
+  final bool isIncognito;
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
@@ -71,7 +72,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (mounted) setState(() {});
     final query = _controller.text.trim();
     _debounce?.cancel();
-    if (aiSearchModeEnabled.value || query.isEmpty) {
+    if (widget.isIncognito || aiSearchModeEnabled.value || query.isEmpty) {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = <String>[]);
       return;
     }
@@ -133,16 +134,23 @@ class _SearchScreenState extends State<SearchScreen> {
     if (value.isEmpty) return;
     FocusScope.of(context).unfocus();
     final isUrl = _looksLikeUrl(value);
-    if (!isUrl) searchHistoryController.add(value);
+    if (!widget.isIncognito && !isUrl) searchHistoryController.add(value);
     if (!isUrl && aiSearchModeEnabled.value) {
       final aiUrl = 'looply://ai-search?q=${Uri.encodeComponent(value)}';
-      final tab = tabsController.createBrowserTab(aiUrl);
+      final tab = tabsController.createBrowserTab(aiUrl, isIncognito: widget.isIncognito);
       tabsController.activate(tab.id);
       Navigator.of(context).popUntil((route) => route.isFirst);
       ShellTabRequest.instance.requestBrowser(tab.id);
       return;
     }
     final url = isUrl ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
+    if (widget.isIncognito) {
+      final tab = tabsController.createBrowserTab(url, title: value, isIncognito: true);
+      tabsController.activate(tab.id);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ShellTabRequest.instance.requestBrowser(tab.id);
+      return;
+    }
     unawaited(BrowserPreconnectHints.preconnect(url));
     openOrbitTab(context, url, title: value);
   }
@@ -170,6 +178,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _showSearchHistory() {
+    if (widget.isIncognito) return;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -438,7 +447,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         LooplyPopupAction(value: 'voice', label: appText('voice_search'), icon: PhosphorIcons.microphone),
                         LooplyPopupAction(value: 'image', label: appText('image_search'), icon: PhosphorIcons.image),
                         LooplyPopupAction(value: 'private', label: appText('new_private_tab'), icon: PhosphorIcons.eyeSlash),
-                        LooplyPopupAction(value: 'history', label: appText('search_history'), icon: PhosphorIcons.clockCounterClockwise),
+                        if (!widget.isIncognito) LooplyPopupAction(value: 'history', label: appText('search_history'), icon: PhosphorIcons.clockCounterClockwise),
                         LooplyPopupAction(value: 'engine', label: appText('search_engine'), icon: PhosphorIcons.compass),
                         ],
                         onSelected: _handleMenuSelection,
@@ -452,7 +461,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Divider(height: 1, color: lineColor(context)),
             Expanded(
               child: _controller.text.trim().isEmpty
-                  ? AnimatedBuilder(
+                  ? (widget.isIncognito ? const SizedBox.shrink() : AnimatedBuilder(
                       animation: searchHistoryController,
                       builder: (context, _) {
                         final queries = searchHistoryController.queries;
@@ -478,7 +487,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ],
                         );
                       },
-                    )
+                    ))
                   : _suggestions.isEmpty
                       ? const SizedBox.shrink()
                       : ListView.builder(
