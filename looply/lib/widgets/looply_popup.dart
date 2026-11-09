@@ -86,15 +86,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                   elevation: 14,
                   borderRadius: BorderRadius.circular(19),
                   clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    // Contorno suave e translúcido em vez de borda sólida:
-                    // dá profundidade ao painel sem desenhar uma linha
-                    // rígida à volta, acompanhando o mesmo tratamento
-                    // aplicado aos dialogs e à folha de long-press.
-                    decoration: BoxDecoration(
-                      border: Border.all(color: muted.withOpacity(.14), width: .6),
-                      borderRadius: BorderRadius.circular(19),
-                    ),
+                  child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxHeight: screen.height * .68),

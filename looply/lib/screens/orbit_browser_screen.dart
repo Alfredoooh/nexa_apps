@@ -150,11 +150,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   bool _isFindInPage = false;
   bool _isExpandingToSearch = false;
 
-  // Captura de miniatura: controla se uma captura está em curso para nunca
-  // disparar duas em simultâneo (é isso que causava o "piscar" visível —
-  // takeScreenshot() concorrente faz o WebView repintar/flash).
-  bool _thumbnailCaptureInFlight = false;
-
   // Evita re-perguntar tradução na mesma sessão de página se o utilizador
   // já respondeu (sim ou não) para a URL atual.
   String? _translationPromptedForUrl;
@@ -370,8 +365,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   /// Cor do pill de busca quando a toolbar adaptativa está ativa: mistura a
   /// cor do site com o tom de contraste (preto/branco) e aplica opacidade,
   /// para o pill ficar claramente distinguível do fundo sólido do appbar
-  /// em vez de se misturar nele (era esse o "mesmo valor" que tornava o
-  /// pill invisível sobre a appbar na imagem que mandaste).
+  /// em vez de se misturar nele.
   Color _adaptivePillColor(Color toolbarColor) {
     final mixTarget = _isLightSurface(toolbarColor) ? Colors.black : Colors.white;
     return Color.lerp(toolbarColor, mixTarget, .22)!.withOpacity(.86);
@@ -524,57 +518,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
-  /// Captura + redução da miniatura. Corre DEPOIS de a página ser marcada
-  /// como carregada e DEPOIS de dois frames em idle, para nunca competir
-  /// com animações de transição/scroll que estejam a decorrer nesse
-  /// instante. O guard _thumbnailCaptureInFlight impede duas capturas
-  /// simultâneas — era essa sobreposição que fazia o WebView "piscar"
-  /// (flash) quando o utilizador tocava em "Abas" logo após o carregamento
-  /// ter acabado de disparar a sua própria captura automática.
-  Future<Uint8List?> _captureThumbnail(InAppWebViewController controller) async {
-    if (_thumbnailCaptureInFlight) return null;
-    _thumbnailCaptureInFlight = true;
-    try {
-      await _waitForIdleFrame();
-      final raw = await controller
-          .takeScreenshot()
-          .timeout(const Duration(seconds: 2));
-      if (raw == null) return null;
-      return await _downscaleScreenshot(raw, targetWidth: 640);
-    } catch (_) {
-      return null;
-    } finally {
-      _thumbnailCaptureInFlight = false;
-    }
-  }
-
-  Future<void> _waitForIdleFrame() {
-    final completer = Completer<void>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!completer.isCompleted) completer.complete();
-      });
-    });
-    return completer.future;
-  }
-
-  Future<Uint8List?> _downscaleScreenshot(Uint8List bytes, {required int targetWidth}) async {
-    ui.Codec? codec;
-    ui.Image? image;
-    try {
-      codec = await ui.instantiateImageCodec(bytes, targetWidth: targetWidth);
-      final frame = await codec.getNextFrame();
-      image = frame.image;
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
-      return data?.buffer.asUint8List();
-    } catch (_) {
-      return bytes.length <= 165000 ? bytes : null;
-    } finally {
-      image?.dispose();
-      codec?.dispose();
-    }
-  }
-
   Rect? _rectInRootOverlay(GlobalKey key) {
     try {
       final overlay = Overlay.of(context, rootOverlay: true);
@@ -597,24 +540,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (_tabsRequestInProgress) return;
     _tabsRequestInProgress = true;
     try {
-      // Reaproveita a última miniatura já capturada em segundo plano em vez
-      // de disparar outro takeScreenshot() síncrono aqui: era esta segunda
-      // captura — a correr ao mesmo tempo que a animação de abertura da
-      // grelha de abas — que causava o flash visível no WebView. Só captura
-      // de novo se ainda não existir nenhuma miniatura guardada para a aba
-      // e nenhuma outra captura já estiver em curso.
-      final existingThumbnail = tabsController.getTab(widget.tabId)?.thumbnail;
-      Uint8List? screenshot = existingThumbnail;
-      if (screenshot == null && !_thumbnailCaptureInFlight) {
-        screenshot = await _captureScreenshot();
-        if (screenshot != null) _updateTabState(screenshot: screenshot);
-      }
+      // Esta é agora a ÚNICA captura de screenshot do browser — acontece
+      // exatamente quando o utilizador está a sair para a grelha de abas,
+      // nunca automaticamente a seguir a um carregamento de página. Sem
+      // nenhuma outra captura a correr em paralelo nesse instante, não há
+      // disputa pelo takeScreenshot() do WebView e por isso não há flash
+      // visível ao tocar em "Abas".
+      final screenshot = await _captureScreenshot();
+      if (screenshot != null) _updateTabState(screenshot: screenshot);
 
       if (!mounted) return;
       final viewportRect = _rectInRootOverlay(widget.viewportKey);
       ShellTabRequest.instance.requestCloseBrowser(
         tabId: widget.tabId,
-        screenshot: screenshot,
+        screenshot: screenshot ?? tabsController.getTab(widget.tabId)?.thumbnail,
         sourceRect: viewportRect,
       );
     } finally {
@@ -957,7 +896,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   // Long-press contextual: deteta o tipo de elemento tocado (imagem, vídeo,
   // link simples) via hitTestResult e mostra apenas as opções relevantes
   // a esse tipo, usando o LooplyPopupMenuButton já existente no projeto
-  // (mesmo componente sem bordas sólidas usado no resto da app).
+  // (mesmo componente sem bordas usado no resto da app).
   // ---------------------------------------------------------------------
 
   final GlobalKey _longPressAnchorKey = GlobalKey();
@@ -997,9 +936,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       actions.add(LooplyPopupAction(value: _OrbitLongPressAction.bookmarkLink, label: appText('add_bookmark'), icon: PhosphorIcons.bookmarkSimple));
     }
 
-    // Usa o LooplyPopupMenuButton existente, ancorado invisivelmente no
-    // ponto onde o utilizador pressionou — mantém a mesma aparência (sem
-    // bordas sólidas) do resto do browser em vez de um bottom sheet novo.
+    // Usa o mesmo estilo visual do LooplyPopupMenuButton (sem borda),
+    // ancorado invisivelmente no ponto onde o utilizador pressionou.
     await showGeneralDialog<void>(
       context: context,
       barrierColor: Colors.transparent,
@@ -1081,10 +1019,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final useAdaptiveToolbar = !_isAiSearchPage && adaptiveToolbarColorEnabled.value && _siteToolbarColor != null;
     final toolbarColor = _isAiSearchPage ? bg : (useAdaptiveToolbar ? _siteToolbarColor! : bg);
     final toolbarText = useAdaptiveToolbar ? _contrastForeground(toolbarColor) : text;
-    // Quando adaptativo, o pill usa uma mistura com preto/branco de contraste
-    // em cima da cor do site (com opacidade), em vez da cor fixa do tema ou
-    // da mesma cor sólida do appbar — assim o pill fica claramente separado
-    // visualmente da faixa da appbar, mesmo que a página seja monocromática.
     final pillBackground = useAdaptiveToolbar
         ? _adaptivePillColor(toolbarColor)
         : pillColor(context);
@@ -1207,8 +1141,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           child: IgnorePointer(
             ignoring: _isExpandingToSearch,
             // Modo IA: sem pill de fundo no botão — ícone solto, mais limpo,
-            // como pedido (interface de browser mais completa sem pills
-            // extra competindo com a UI de chat).
+            // interface de browser mais completa sem pills extra competindo
+            // com a UI de chat.
             child: _isAiSearchPage
                 ? IconButton(
                     tooltip: appText('home'),
@@ -1435,12 +1369,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 displayZoomControls: false,
                 preferredContentMode: UserPreferredContentMode.MOBILE,
 
-                // Scrollbar vertical modernizada: overlay fino que aparece
-                // só durante o scroll e desvanece, em vez da barra espessa
-                // clássica do WebView antigo. Esta propriedade/enum existe
-                // no flutter_inappwebview desde a série 6.x; se o build
-                // acusar erro aqui, é o único ponto a verificar contra a
-                // versão exata do pubspec.lock.
+                // Scrollbar vertical fina, estilo overlay: aparece só
+                // durante o scroll e desvanece, em vez da barra espessa
+                // clássica do WebView antigo.
                 verticalScrollBarEnabled: true,
                 horizontalScrollBarEnabled: false,
                 scrollBarStyle: ScrollBarStyle.SCROLLBARS_INSIDE_OVERLAY,
@@ -1652,14 +1583,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
                 if (!_isAiSearchPage) _maybeOfferTranslation();
 
-                // Miniatura em segundo plano, só depois de dois frames idle
-                // (ver _captureThumbnail), e só se nenhuma outra captura
-                // estiver já a decorrer — evita o "piscar" por sobreposição.
-                unawaited(() async {
-                  final screenshot = await _captureThumbnail(controller);
-                  if (!mounted || screenshot == null) return;
-                  _updateTabState(screenshot: screenshot);
-                }());
+                // A miniatura NÃO é mais capturada automaticamente aqui.
+                // A única captura de screenshot do browser acontece dentro
+                // de _openTabsGrid(), exatamente no momento em que o
+                // utilizador está de facto a sair para a grelha de abas —
+                // é aí, e só aí, que uma miniatura atualizada é necessária.
+                // Capturar em todo onLoadStop (incluindo navegações internas
+                // de SPA, âncoras e redirects que nunca chegam a ser vistas
+                // na grelha) era o que produzia o flash visível ao tocar em
+                // "Abas": o takeScreenshot() força um frame extra do
+                // WebView mesmo quando ninguém vai ver o resultado dessa
+                // captura automática.
               },
               onReceivedError: (controller, request, error) {
                 _pullToRefreshController?.endRefreshing();
@@ -1890,9 +1824,9 @@ class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
   }
 }
 
-/// Folha de ações do long-press (imagem/vídeo/link), reutilizando o mesmo
-/// visual sem bordas sólidas do LooplyPopupMenuButton — painel flutuante
-/// centrado, cantos arredondados, contorno suave em vez de borda rígida.
+/// Folha de ações do long-press (imagem/vídeo/link): painel flutuante
+/// centrado, cantos arredondados, sem nenhuma borda — igual ao tratamento
+/// zero-borda aplicado ao LooplyPopupMenuButton e aos dialogs.
 class _LongPressActionSheet<T> extends StatelessWidget {
   const _LongPressActionSheet({
     required this.subtitle,
@@ -1922,48 +1856,46 @@ class _LongPressActionSheet<T> extends StatelessWidget {
           elevation: 18,
           borderRadius: BorderRadius.circular(20),
           clipBehavior: Clip.antiAlias,
-          child: Container(
+          child: SizedBox(
             width: width,
-            decoration: BoxDecoration(
-              border: Border.all(color: muted.withOpacity(.14), width: .6),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                  child: Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: muted, fontSize: 12),
-                  ),
-                ),
-                for (final action in actions)
-                  InkWell(
-                    onTap: () => onSelected(action.value),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          PhosphorSvgIcon(action.icon, size: 20, color: muted),
-                          const SizedBox(width: 13),
-                          Expanded(
-                            child: Text(
-                              action.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        ],
-                      ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                    child: Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: muted, fontSize: 12),
                     ),
                   ),
-              ],
+                  for (final action in actions)
+                    InkWell(
+                      onTap: () => onSelected(action.value),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            PhosphorSvgIcon(action.icon, size: 20, color: muted),
+                            const SizedBox(width: 13),
+                            Expanded(
+                              child: Text(
+                                action.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
