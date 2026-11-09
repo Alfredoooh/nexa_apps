@@ -194,24 +194,34 @@ Future<void> restoreDrawerPageActivity(
   await SessionStore.instance.saveLastActivity(returnTo);
 }
 
-// Cabeçalho do drawer: apenas o título "Menu", no mesmo tamanho e peso
-// usados pelo título "Início" da home (26px, w500), alinhado à esquerda
-// na mesma posição horizontal. Sem logo e sem o nome do app aqui.
+// Cabeçalho do drawer: título "Menu" com M maiúsculo, alinhado à esquerda
+// e verticalmente centrado dentro da área do cabeçalho.
 class _DrawerHeader extends StatelessWidget {
   const _DrawerHeader();
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      child: Text(
-        appText('menu'),
-        style: TextStyle(
-          color: text,
-          fontSize: 26,
-          fontWeight: FontWeight.w500,
-          letterSpacing: -.2,
+    final raw = appText('menu');
+    // Garante inicial maiúscula ("menu" → "Menu").
+    final label = raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
+
+    return SizedBox(
+      height: 56,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: text,
+              fontSize: 26,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -.2,
+              height: 1.15,
+            ),
+          ),
         ),
       ),
     );

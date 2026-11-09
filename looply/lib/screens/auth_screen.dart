@@ -6,6 +6,8 @@ import '../localization.dart';
 import '../theme.dart';
 import '../widgets/phosphor_svg_icon.dart';
 
+enum _AuthBusy { none, email, google }
+
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -18,7 +20,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
-  bool _busy = false;
+  _AuthBusy _busy = _AuthBusy.none;
   bool _obscurePassword = true;
 
   @override
@@ -31,7 +33,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _googleSignIn() async {
-    setState(() => _busy = true);
+    setState(() => _busy = _AuthBusy.google);
     try {
       await authController.signInWithGoogle();
       if (!mounted) return;
@@ -45,7 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busy = _AuthBusy.none);
     }
   }
 
@@ -64,7 +66,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _emailSignIn() async {
-    setState(() => _busy = true);
+    setState(() => _busy = _AuthBusy.email);
     try {
       await authController.signInWithEmail(
         _emailController.text,
@@ -81,7 +83,7 @@ class _AuthScreenState extends State<AuthScreen> {
             : error.toString().replaceFirst('Invalid argument(s): ', ''),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busy = _AuthBusy.none);
     }
   }
 
@@ -91,40 +93,76 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(
-    BuildContext context, {
-    required String label,
+  /// Campo de texto com cápsula preenchida + borda tracejada desenhada
+  /// por CustomPainter (o Flutter só suporta `solid`/`none` nativamente).
+  Widget _dashedField({
+    required FocusNode focusNode,
+    required TextEditingController controller,
+    required String hint,
     required IconData icon,
     Widget? suffixIcon,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    List<String>? autofillHints,
+    ValueChanged<String>? onSubmitted,
   }) {
-    final muted = mutedText(context);
     final accent = accentColor(context);
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: lineColor(context).withOpacity(.9)),
-    );
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: PhosphorSvgIcon(icon, size: 20, color: muted),
-      suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: pillColor(context),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
-      border: border,
-      enabledBorder: border,
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: accent, width: 1.5),
+    final base = lineColor(context);
+    final textColor = mainText(context);
+    final muted = mutedText(context);
+    final enabled = _busy == _AuthBusy.none;
+
+    return AnimatedBuilder(
+      animation: focusNode,
+      builder: (context, child) {
+        final focused = focusNode.hasFocus && enabled;
+        final borderColor = !enabled
+            ? base.withOpacity(.35)
+            : focused
+                ? accent
+                : base.withOpacity(.75);
+        return Container(
+          decoration: BoxDecoration(
+            color: pillColor(context),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: CustomPaint(
+            foregroundPainter: _DashedRoundedBorderPainter(
+              color: borderColor,
+              strokeWidth: focused ? 1.5 : 1.1,
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        enabled: enabled,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        onSubmitted: onSubmitted,
+        style: TextStyle(color: textColor, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: muted.withOpacity(.85), fontSize: 14),
+          prefixIcon: PhosphorSvgIcon(icon, size: 20, color: muted),
+          suffixIcon: suffixIcon,
+          filled: false,
+          isCollapsed: false,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+        ),
       ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
-      ),
-      labelStyle: TextStyle(color: muted),
     );
   }
 
@@ -133,6 +171,9 @@ class _AuthScreenState extends State<AuthScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     final accent = accentColor(context);
+    final anyBusy = _busy != _AuthBusy.none;
+    final emailBusy = _busy == _AuthBusy.email;
+    final googleBusy = _busy == _AuthBusy.google;
 
     return Scaffold(
       backgroundColor: pageBg(context),
@@ -142,15 +183,53 @@ class _AuthScreenState extends State<AuthScreen> {
         backgroundColor: pageBg(context),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        titleSpacing: 4,
-        leading: IconButton(
-          tooltip: appText('close'),
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: PhosphorSvgIcon(PhosphorIcons.x, color: text, size: 23),
-        ),
-        title: Text(
-          appText('auth_title'),
-          style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w700),
+        titleSpacing: 0,
+        centerTitle: false,
+        title: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Título verdadeiramente centrado, independente do botão fechar.
+              Text(
+                appText('auth_title'),
+                style: TextStyle(
+                  color: text,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -.2,
+                  height: 1.15,
+                ),
+              ),
+              // Botão fechar dentro de um círculo, alinhado à esquerda.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Semantics(
+                  button: true,
+                  label: appText('close'),
+                  child: Material(
+                    color: pillColor(context),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).maybePop(),
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Center(
+                          child: PhosphorSvgIcon(
+                            PhosphorIcons.x,
+                            color: text,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       body: SafeArea(
@@ -200,47 +279,44 @@ class _AuthScreenState extends State<AuthScreen> {
                       style: TextStyle(color: muted, fontSize: 13, height: 1.45),
                     ),
                     const SizedBox(height: 30),
-                    TextField(
+                    _dashedField(
                       controller: _emailController,
                       focusNode: _emailFocus,
-                      enabled: !_busy,
+                      hint: appText('email'),
+                      icon: PhosphorIcons.envelopeSimple,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      autofillHints: const [AutofillHints.username, AutofillHints.email],
+                      autofillHints: const [
+                        AutofillHints.username,
+                        AutofillHints.email,
+                      ],
                       onSubmitted: (_) => _passwordFocus.requestFocus(),
-                      style: TextStyle(color: text, fontSize: 14),
-                      decoration: _inputDecoration(
-                        context,
-                        label: appText('email'),
-                        icon: PhosphorIcons.envelopeSimple,
-                      ),
                     ),
                     const SizedBox(height: 13),
-                    TextField(
+                    _dashedField(
                       controller: _passwordController,
                       focusNode: _passwordFocus,
-                      enabled: !_busy,
+                      hint: appText('password'),
+                      icon: PhosphorIcons.lockSimple,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.password],
                       onSubmitted: (_) {
-                        if (!_busy) _emailSignIn();
+                        if (!anyBusy) _emailSignIn();
                       },
-                      style: TextStyle(color: text, fontSize: 14),
-                      decoration: _inputDecoration(
-                        context,
-                        label: appText('password'),
-                        icon: PhosphorIcons.lockSimple,
-                        suffixIcon: IconButton(
-                          tooltip: _obscurePassword ? appText('show_password') : appText('hide_password'),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          icon: PhosphorSvgIcon(
-                            _obscurePassword
-                                ? PhosphorIcons.eye
-                                : PhosphorIcons.eyeSlash,
-                            size: 20,
-                            color: muted,
-                          ),
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePassword
+                            ? appText('show_password')
+                            : appText('hide_password'),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        icon: PhosphorSvgIcon(
+                          _obscurePassword
+                              ? PhosphorIcons.eye
+                              : PhosphorIcons.eyeSlash,
+                          size: 20,
+                          color: muted,
                         ),
                       ),
                     ),
@@ -248,7 +324,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     SizedBox(
                       height: 52,
                       child: FilledButton(
-                        onPressed: _busy ? null : _emailSignIn,
+                        onPressed: anyBusy ? null : _emailSignIn,
                         style: FilledButton.styleFrom(
                           backgroundColor: accent,
                           foregroundColor: Colors.white,
@@ -257,7 +333,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
-                        child: _busy
+                        child: emailBusy
                             ? const SizedBox(
                                 width: 21,
                                 height: 21,
@@ -268,7 +344,10 @@ class _AuthScreenState extends State<AuthScreen> {
                               )
                             : const Text(
                                 'Entrar',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
                               ),
                       ),
                     ),
@@ -289,31 +368,61 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 18),
                     SizedBox(
                       height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: _busy ? null : _googleSignIn,
-                        icon: Image.asset(
-                          'assets/images/quick_sites/google.webp',
-                          width: 20,
-                          height: 20,
-                          fit: BoxFit.contain,
-                        ),
-                        label: Text(appText('continue_google')),
+                      child: OutlinedButton(
+                        onPressed: anyBusy ? null : _googleSignIn,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: text,
                           side: BorderSide(color: lineColor(context)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
+                        child: googleBusy
+                            // Estado a carregar: logo mantém-se, texto
+                            // desaparece, loader aparece no centro.
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/quick_sites/google.webp',
+                                    width: 20,
+                                    height: 20,
+                                    fit: BoxFit.contain,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: accent,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            // Estado normal: logo + texto.
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/quick_sites/google.webp',
+                                    width: 20,
+                                    height: 20,
+                                    fit: BoxFit.contain,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(appText('continue_google')),
+                                ],
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    Text(
-                      appText('auth_info'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: muted.withOpacity(.9), fontSize: 11, height: 1.45),
-                    ),
+                    // auth_info removido a pedido.
                   ],
                 ),
               ),
@@ -322,5 +431,59 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Desenha uma borda tracejada com cantos arredondados (pill-shape por
+/// omissão, porque o raio é clampado automaticamente pelo RRect).
+class _DashedRoundedBorderPainter extends CustomPainter {
+  _DashedRoundedBorderPainter({
+    required this.color,
+    this.strokeWidth = 1,
+    this.dashLength = 6,
+    this.gapLength = 4,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double dashLength;
+  final double gapLength;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final inset = strokeWidth / 2;
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        inset,
+        inset,
+        size.width - strokeWidth,
+        size.height - strokeWidth,
+      ),
+      const Radius.circular(999),
+    );
+    final path = Path()..addRRect(rrect);
+
+    for (final metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final end = (distance + dashLength).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + gapLength;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRoundedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dashLength != dashLength ||
+        oldDelegate.gapLength != gapLength;
   }
 }
