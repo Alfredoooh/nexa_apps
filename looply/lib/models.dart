@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 
 import 'session_store.dart';
-import 'widgets/phosphor_svg_icon.dart';
+import 'widgets/svg_icon.dart';
 
 const Set<String> adBlockDomains = {
   'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
@@ -1207,14 +1207,14 @@ class DownloadEntry {
   bool get isDocument => _isGroup('doc');
 
   IconData get icon {
-    if (isImage) return PhosphorIcons.image;
-    if (isVideo) return PhosphorIcons.browser;
-    if (isAudio) return PhosphorIcons.microphone;
-    if (isArchive) return PhosphorIcons.downloadSimple;
-    if (isCode) return PhosphorIcons.list;
-    if (isPdf) return PhosphorIcons.fileArrowUp;
-    if (isDocument) return PhosphorIcons.fileArrowUp;
-    return PhosphorIcons.fileArrowUp;
+    if (isImage) return AppIcons.image;
+    if (isVideo) return AppIcons.browser;
+    if (isAudio) return AppIcons.microphone;
+    if (isArchive) return AppIcons.downloadSimple;
+    if (isCode) return AppIcons.list;
+    if (isPdf) return AppIcons.fileArrowUp;
+    if (isDocument) return AppIcons.fileArrowUp;
+    return AppIcons.fileArrowUp;
   }
 
   bool get canOpenLocally =>

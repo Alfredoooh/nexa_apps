@@ -7,7 +7,7 @@ import '../localization.dart';
 import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 /// Detalhe de uso por site: percentagem de visitas em relação aos restantes
 /// sites e tempo total desde a primeira visita registada até à última.
@@ -66,7 +66,7 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    PhosphorSvgIcon(PhosphorIcons.globe, size: 38, color: muted),
+                    AppSvgIcon(AppIcons.globe, size: 38, color: muted),
                     const SizedBox(height: 9),
                     Text(
                       appText('no_recent_activity'),
@@ -163,7 +163,7 @@ class _SiteUsageTile extends StatelessWidget {
     final accent = accentColor(context);
     final encoded = browserFaviconCache.forUrl('https://${item.host}');
 
-    Widget icon = PhosphorSvgIcon(PhosphorIcons.globe, color: accent, size: 19);
+    Widget icon = AppSvgIcon(AppIcons.globe, color: accent, size: 19);
     if (encoded != null) {
       try {
         icon = ClipOval(
@@ -172,7 +172,7 @@ class _SiteUsageTile extends StatelessWidget {
             width: 24,
             height: 24,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: accent, size: 19),
+            errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: accent, size: 19),
           ),
         );
       } catch (_) {}

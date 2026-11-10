@@ -27,7 +27,7 @@ import 'downloads_screen.dart';
 import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 /// Adaptador mínimo sobre flutter_inappwebview. Todas as plataformas usam
 /// o mesmo motor InAppWebView; não existe PlatformView/Kotlin WebView paralelo.
@@ -982,11 +982,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                     scrollDirection: Axis.horizontal,
                     child: Row(
                     children: [
-                      _BrowserQuickAction(icon: PhosphorIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
-                      _BrowserQuickAction(icon: PhosphorIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
-                      _BrowserQuickAction(icon: PhosphorIcons.plus, label: appText(widget.isIncognito ? 'new_private_tab' : 'new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
-                      _BrowserQuickAction(icon: PhosphorIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
-                      _BrowserQuickAction(icon: PhosphorIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
+                      _BrowserQuickAction(icon: AppIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
+                      _BrowserQuickAction(icon: AppIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
+                      _BrowserQuickAction(icon: AppIcons.plus, label: appText(widget.isIncognito ? 'new_private_tab' : 'new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
+                      _BrowserQuickAction(icon: AppIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
+                      _BrowserQuickAction(icon: AppIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
                       ],
                     ),
                   ),
@@ -997,15 +997,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
                     children: [
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+                      _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
+                      _BrowserSheetListItem(icon: AppIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
-                      _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
+                      _BrowserSheetListItem(icon: AppIcons.clockCounterClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(
-                        icon: PhosphorIcons.browser,
+                        icon: AppIcons.browser,
                         label: _desktopSiteRequested ? 'Desativar site de desktop' : 'Site de desktop',
                         onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.desktopSite),
                       ),
@@ -1013,16 +1013,16 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(
                           children: [
-                            Expanded(child: _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: 'Reduzir zoom (-)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomOut)))),
-                            Expanded(child: _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: 'Aumentar zoom (+)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomIn)))),
+                            Expanded(child: _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: 'Reduzir zoom (-)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomOut)))),
+                            Expanded(child: _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: 'Aumentar zoom (+)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomIn)))),
                           ],
                         ),
                       ),
-                      _BrowserSheetListItem(icon: PhosphorIcons.fileArrowUp, label: 'Imprimir', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.print)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.plus, label: 'Adicionar ao ecrã inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.addToHomeScreen)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.info, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
-                      _BrowserSheetListItem(icon: PhosphorIcons.house, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
+                      _BrowserSheetListItem(icon: AppIcons.fileArrowUp, label: 'Imprimir', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.print)),
+                      _BrowserSheetListItem(icon: AppIcons.plus, label: 'Adicionar ao ecrã inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.addToHomeScreen)),
+                      _BrowserSheetListItem(icon: AppIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
+                      _BrowserSheetListItem(icon: AppIcons.info, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+                      _BrowserSheetListItem(icon: AppIcons.house, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
                     ],
                   ),
                 ),
@@ -1071,7 +1071,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
     unawaited(showLooplyDialog<bool>(
       context: context,
       title: appText('site_info'),
-      icon: PhosphorIcons.info,
+      icon: AppIcons.info,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1112,22 +1112,22 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
     final kind = isImage ? MediaSheetKind.image : (isVideoOrAudio ? MediaSheetKind.video : MediaSheetKind.link);
     final options = <MediaSheetOption>[];
     if (isImage) {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir imagem num novo separador', icon: PhosphorIcons.arrowUpLeft));
-      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar imagem', icon: PhosphorIcons.eye));
-      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir imagem', icon: PhosphorIcons.downloadSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar imagem', icon: PhosphorIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar imagem', icon: PhosphorIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir imagem num novo separador', icon: AppIcons.arrowUpLeft));
+      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar imagem', icon: AppIcons.eye));
+      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir imagem', icon: AppIcons.downloadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar imagem', icon: AppIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar imagem', icon: AppIcons.uploadSimple));
     } else if (isVideoOrAudio) {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: PhosphorIcons.arrowUpLeft));
-      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir vídeo', icon: PhosphorIcons.downloadSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: PhosphorIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: PhosphorIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: AppIcons.arrowUpLeft));
+      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir vídeo', icon: AppIcons.downloadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: AppIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: AppIcons.uploadSimple));
     } else {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: PhosphorIcons.arrowUpLeft));
-      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar página', icon: PhosphorIcons.eye));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: PhosphorIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.bookmarkLink, label: 'Adicionar aos favoritos', icon: PhosphorIcons.bookmarkSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: PhosphorIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: AppIcons.arrowUpLeft));
+      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar página', icon: AppIcons.eye));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: AppIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.bookmarkLink, label: 'Adicionar aos favoritos', icon: AppIcons.bookmarkSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: AppIcons.uploadSimple));
     }
 
     Uint8List? faviconBytes;
@@ -1386,12 +1386,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
             child: _isAiSearchPage
                 ? IconButton(
                     tooltip: appText('home'),
-                    icon: PhosphorSvgIcon(PhosphorIcons.list, color: toolbarText),
+                    icon: AppSvgIcon(AppIcons.list, color: toolbarText),
                     onPressed: _openNativeDrawer,
                   )
                 : IconButton(
                     tooltip: appText('home'),
-                    icon: PhosphorSvgIcon(PhosphorIcons.house, color: toolbarText),
+                    icon: AppSvgIcon(AppIcons.house, color: toolbarText),
                     onPressed: () => ShellTabRequest.instance.request(0),
                   ),
           ),
@@ -1421,7 +1421,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         ),
                         IconButton(
                           tooltip: appText('new_chat'),
-                          icon: PhosphorSvgIcon(PhosphorIcons.plus, color: toolbarText),
+                          icon: AppSvgIcon(AppIcons.plus, color: toolbarText),
                           onPressed: _restartAiChat,
                         ),
                       ],
@@ -1439,7 +1439,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         ),
                         IconButton(
                           tooltip: appText('more_options'),
-                          icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
+                          icon: AppSvgIcon(AppIcons.dotsThreeVertical, color: toolbarText),
                           onPressed: _showBrowserOptionsSheet,
                         ),
                       ],
@@ -1476,19 +1476,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
           tooltip: appText('previous_result'),
           visualDensity: VisualDensity.compact,
           onPressed: () => _moveFindResult(false),
-          icon: PhosphorSvgIcon(PhosphorIcons.caretUp, color: toolbarText),
+          icon: AppSvgIcon(AppIcons.caretUp, color: toolbarText),
         ),
         IconButton(
           tooltip: appText('next_result'),
           visualDensity: VisualDensity.compact,
           onPressed: () => _moveFindResult(true),
-          icon: PhosphorSvgIcon(PhosphorIcons.caretDown, color: toolbarText),
+          icon: AppSvgIcon(AppIcons.caretDown, color: toolbarText),
         ),
         IconButton(
           tooltip: appText('close_search'),
           visualDensity: VisualDensity.compact,
           onPressed: _exitFindInPage,
-          icon: PhosphorSvgIcon(PhosphorIcons.x, color: toolbarText),
+          icon: AppSvgIcon(AppIcons.x, color: toolbarText),
         ),
       ],
     );
@@ -1506,9 +1506,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                 favicon,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: size),
+                errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: size),
               )
-            : PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: size),
+            : AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: size),
       ),
     );
   }
@@ -1971,8 +1971,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                PhosphorSvgIcon(
-                  _renderProcessCrashed ? PhosphorIcons.clockCounterClockwise : PhosphorIcons.wifiSlash,
+                AppSvgIcon(
+                  _renderProcessCrashed ? AppIcons.clockCounterClockwise : AppIcons.wifiSlash,
                   size: 42,
                   color: mutedText(context),
                 ),
@@ -2055,7 +2055,7 @@ class _BrowserQuickAction extends StatelessWidget {
                   color: pillColor(context),
                   shape: BoxShape.circle,
                 ),
-                child: PhosphorSvgIcon(icon, size: 23, color: enabled ? foreground : muted),
+                child: AppSvgIcon(icon, size: 23, color: enabled ? foreground : muted),
               ),
               const SizedBox(height: 8),
               Text(label, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
@@ -2086,7 +2086,7 @@ class _BrowserSheetListItem extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              SizedBox(width: 42, child: PhosphorSvgIcon(icon, size: 23, color: mainText(context))),
+              SizedBox(width: 42, child: AppSvgIcon(icon, size: 23, color: mainText(context))),
               const SizedBox(width: 12),
               Expanded(child: Text(label, style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w500))),
             ]),

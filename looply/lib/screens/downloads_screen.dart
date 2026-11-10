@@ -7,7 +7,7 @@ import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -70,7 +70,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('delete_downloads_selected'),
-      icon: PhosphorIcons.trash,
+      icon: AppIcons.trash,
       content: Text(appText('delete_downloads_count').replaceAll('{count}', _selectedIds.length.toString())),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -130,7 +130,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               entries.isEmpty
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        PhosphorSvgIcon(PhosphorIcons.downloadSimple, size: 48, color: muted),
+                        AppSvgIcon(AppIcons.downloadSimple, size: 48, color: muted),
                         const SizedBox(height: 12),
                         Text(
                           _query.isEmpty ? appText('no_downloads') : appText('no_results'),
@@ -192,7 +192,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           child: _CircularDownloadButton(
                             key: ValueKey<bool>(_isSelecting),
                             tooltip: _isSelecting ? appText('close') : appText('back'),
-                            icon: _isSelecting ? PhosphorIcons.x : PhosphorIcons.arrowLeft,
+                            icon: _isSelecting ? AppIcons.x : AppIcons.arrowLeft,
                             onTap: _clearSelectionOrPop,
                           ),
                         ),
@@ -208,19 +208,19 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         if (selectedCount > 0)
                           _CircularDownloadButton(
                             tooltip: '${appText('delete')} ($selectedCount)',
-                            icon: PhosphorIcons.trash,
+                            icon: AppIcons.trash,
                             foreground: const Color(0xFFFF453A),
                             onTap: _deleteSelected,
                           )
                         else if (entries.isNotEmpty)
                           _CircularDownloadButton(
                             tooltip: appText('clear_list'),
-                            icon: PhosphorIcons.trash,
+                            icon: AppIcons.trash,
                             onTap: () async {
                               final confirmed = await showLooplyDialog<bool>(
                                 context: context,
                                 title: appText('clear_list'),
-                                icon: PhosphorIcons.trash,
+                                icon: AppIcons.trash,
                                 content: Text(appText('clear_downloads_confirmation')),
                                 actions: <LooplyDialogAction<bool>>[
                                   LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -324,8 +324,8 @@ class _DownloadCard extends StatelessWidget {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                            child: PhosphorSvgIcon(
-                              isFailed ? PhosphorIcons.warningCircle : entry.icon,
+                            child: AppSvgIcon(
+                              isFailed ? AppIcons.warningCircle : entry.icon,
                               color: isFailed ? const Color(0xFFFF453A) : accent,
                               size: 20,
                             ),
@@ -435,7 +435,7 @@ class _DownloadsSearchBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 18),
+              AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: TextField(
@@ -453,7 +453,7 @@ class _DownloadsSearchBar extends StatelessWidget {
               if (controller.text.isNotEmpty)
                 GestureDetector(
                   onTap: controller.clear,
-                  child: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 16),
+                  child: AppSvgIcon(AppIcons.x, color: muted, size: 16),
                 ),
             ],
           ),
@@ -482,7 +482,7 @@ class _CircularDownloadButton extends StatelessWidget {
             child: SizedBox(
               width: 42,
               height: 42,
-              child: PhosphorSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: AppSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
             ),
           ),
         ),

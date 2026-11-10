@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../auth_service.dart';
 import '../localization.dart';
 import '../theme.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 enum _AuthBusy { none, email, google }
 
@@ -149,7 +149,7 @@ class _AuthScreenState extends State<AuthScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: muted.withOpacity(.85), fontSize: 14),
-          prefixIcon: PhosphorSvgIcon(icon, size: 20, color: muted),
+          prefixIcon: AppSvgIcon(icon, size: 20, color: muted),
           suffixIcon: suffixIcon,
           filled: false,
           isCollapsed: false,
@@ -217,8 +217,8 @@ class _AuthScreenState extends State<AuthScreen> {
                         width: 40,
                         height: 40,
                         child: Center(
-                          child: PhosphorSvgIcon(
-                            PhosphorIcons.x,
+                          child: AppSvgIcon(
+                            AppIcons.x,
                             color: text,
                             size: 20,
                           ),
@@ -283,7 +283,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       controller: _emailController,
                       focusNode: _emailFocus,
                       hint: appText('email'),
-                      icon: PhosphorIcons.envelopeSimple,
+                      icon: AppIcons.envelopeSimple,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [
@@ -297,7 +297,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       controller: _passwordController,
                       focusNode: _passwordFocus,
                       hint: appText('password'),
-                      icon: PhosphorIcons.lockSimple,
+                      icon: AppIcons.lockSimple,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.password],
@@ -311,10 +311,10 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: () => setState(
                           () => _obscurePassword = !_obscurePassword,
                         ),
-                        icon: PhosphorSvgIcon(
+                        icon: AppSvgIcon(
                           _obscurePassword
-                              ? PhosphorIcons.eye
-                              : PhosphorIcons.eyeSlash,
+                              ? AppIcons.eye
+                              : AppIcons.eyeSlash,
                           size: 20,
                           color: muted,
                         ),

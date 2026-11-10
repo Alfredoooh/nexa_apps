@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../localization.dart';
 import '../theme.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 class LanguageScreen extends StatelessWidget {
   const LanguageScreen({super.key});
@@ -17,7 +17,7 @@ class LanguageScreen extends StatelessWidget {
         leading: IconButton(
           tooltip: appText('back'),
           onPressed: () => Navigator.of(context).maybePop(),
-          icon: PhosphorSvgIcon(PhosphorIcons.arrowLeft, color: text),
+          icon: AppSvgIcon(AppIcons.arrowLeft, color: text),
         ),
         title: Text(appText('select_language')),
         backgroundColor: pageBg(context),
@@ -48,8 +48,8 @@ class LanguageScreen extends StatelessWidget {
                   title: Text(language.nativeName, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
                   subtitle: Text(language.name, style: TextStyle(color: muted, fontSize: 12)),
                   trailing: isSelected
-                      ? PhosphorSvgIcon(PhosphorIcons.checkCircle, color: accentColor(context))
-                      : PhosphorSvgIcon(PhosphorIcons.circle, color: muted),
+                      ? AppSvgIcon(AppIcons.checkCircle, color: accentColor(context))
+                      : AppSvgIcon(AppIcons.circle, color: muted),
                 ),
               ),
             );

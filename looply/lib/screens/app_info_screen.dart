@@ -4,7 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../localization.dart';
 import '../theme.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 // Tela simples de informações do app, aberta a partir do botão de
 // informação na appbar da Settings. Usa o mesmo appbar com fade
@@ -70,7 +70,7 @@ class AppInfoScreen extends StatelessWidget {
             child: _FadeAppBar(
               topInset: topInset,
               leading: _CircleBarButton(
-                icon: PhosphorIcons.caretLeft,
+                icon: AppIcons.caretLeft,
                 tooltip: appText('back'),
                 onTap: () => Navigator.of(context).maybePop(),
               ),
@@ -155,7 +155,7 @@ class _CircleBarButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: SizedBox(width: 42, height: 42, child: PhosphorSvgIcon(icon, size: 19, color: muted)),
+          child: SizedBox(width: 42, height: 42, child: AppSvgIcon(icon, size: 19, color: muted)),
         ),
       ),
     );

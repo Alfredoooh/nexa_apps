@@ -6,7 +6,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -77,7 +77,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('delete_history_selected'),
-      icon: PhosphorIcons.trash,
+      icon: AppIcons.trash,
       content: Text(appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString())),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
@@ -130,7 +130,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               entries.isEmpty
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, size: 48, color: muted),
+                        AppSvgIcon(AppIcons.clockCounterClockwise, size: 48, color: muted),
                         const SizedBox(height: 12),
                         Text(
                           _query.isEmpty ? appText('no_history') : appText('no_results'),
@@ -191,7 +191,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           child: _CircularHistoryButton(
                             key: ValueKey<bool>(_isSelecting),
                             tooltip: _isSelecting ? appText('close') : appText('back'),
-                            icon: _isSelecting ? PhosphorIcons.x : PhosphorIcons.arrowLeft,
+                            icon: _isSelecting ? AppIcons.x : AppIcons.arrowLeft,
                             onTap: _clearSelectionOrPop,
                           ),
                         ),
@@ -207,7 +207,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         if (selectedCount > 0)
                           _CircularHistoryButton(
                             tooltip: '${appText('delete')} ($selectedCount)',
-                            icon: PhosphorIcons.trash,
+                            icon: AppIcons.trash,
                             foreground: const Color(0xFFFF453A),
                             onTap: _deleteSelected,
                           ),
@@ -287,8 +287,8 @@ class _HistoryCard extends StatelessWidget {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                        child: PhosphorSvgIcon(
-                          isSite ? PhosphorIcons.globe : PhosphorIcons.magnifyingGlass,
+                        child: AppSvgIcon(
+                          isSite ? AppIcons.globe : AppIcons.magnifyingGlass,
                           color: accent,
                           size: 18,
                         ),
@@ -340,7 +340,7 @@ class _HistoryCard extends StatelessWidget {
                 width: 18,
                 height: 18,
                 colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
-                placeholderBuilder: (context) => PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, color: muted, size: 18),
+                placeholderBuilder: (context) => AppSvgIcon(AppIcons.arrowUpLeft, color: muted, size: 18),
               ),
             ],
           ),
@@ -386,7 +386,7 @@ class _HistorySearchBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: 18),
+              AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: TextField(
@@ -404,7 +404,7 @@ class _HistorySearchBar extends StatelessWidget {
               if (controller.text.isNotEmpty)
                 GestureDetector(
                   onTap: controller.clear,
-                  child: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 16),
+                  child: AppSvgIcon(AppIcons.x, color: muted, size: 16),
                 ),
             ],
           ),
@@ -433,7 +433,7 @@ class _CircularHistoryButton extends StatelessWidget {
             child: SizedBox(
               width: 42,
               height: 42,
-              child: PhosphorSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: AppSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
             ),
           ),
         ),

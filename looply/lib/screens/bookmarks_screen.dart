@@ -7,7 +7,7 @@ import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/looply_dialog.dart';
 import '../localization.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -45,14 +45,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
           if (entries.isNotEmpty)
             IconButton(
               tooltip: appText('clear_bookmarks'),
-              icon: PhosphorSvgIcon(PhosphorIcons.trash, color: text),
+              icon: AppSvgIcon(AppIcons.trash, color: text),
               onPressed: () => _confirmClear(context),
             ),
         ],
       ),
       body: entries.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              PhosphorSvgIcon(PhosphorIcons.bookmarksSimple, size: 48, color: muted),
+              AppSvgIcon(AppIcons.bookmarksSimple, size: 48, color: muted),
               const SizedBox(height: 12),
               Text(appText('no_bookmarks'), style: TextStyle(color: text, fontWeight: FontWeight.w700)),
               const SizedBox(height: 5),
@@ -65,11 +65,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               itemBuilder: (context, index) {
                 final entry = entries[index];
                 final iconData = browserFaviconCache.forUrl(entry.url);
-                Widget leading = PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 20);
+                Widget leading = AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 20);
                 if (iconData != null) {
                   try {
                     leading = Image.memory(base64Decode(iconData), width: 23, height: 23, fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 20));
+                      errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 20));
                   } catch (_) {}
                 }
                 return Material(
@@ -91,7 +91,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                         IconButton(
                           tooltip: appText('remove'),
                           onPressed: () => bookmarksController.remove(entry.id),
-                          icon: PhosphorSvgIcon(PhosphorIcons.x, color: muted, size: 20),
+                          icon: AppSvgIcon(AppIcons.x, color: muted, size: 20),
                         ),
                       ]),
                     ),
@@ -106,7 +106,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('clear_bookmarks_question'),
-      icon: PhosphorIcons.trash,
+      icon: AppIcons.trash,
       content: Text(appText('clear_bookmarks_confirm')),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),

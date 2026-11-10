@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../theme.dart';
-import 'phosphor_svg_icon.dart';
+import 'svg_icon.dart';
 
 enum MediaSheetKind { image, video, link }
 
@@ -110,7 +110,7 @@ class _MediaSheetBody extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                         child: Row(
                           children: [
-                            PhosphorSvgIcon(options[i].icon, size: 21, color: scheme.onSurfaceVariant),
+                            AppSvgIcon(options[i].icon, size: 21, color: scheme.onSurfaceVariant),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Text(
@@ -150,7 +150,7 @@ class _MediaSheetBody extends StatelessWidget {
                 : ColoredBox(
                     color: scheme.surfaceContainerHighest,
                     child: Center(
-                      child: PhosphorSvgIcon(PhosphorIcons.link, size: 26, color: scheme.onSurfaceVariant),
+                      child: AppSvgIcon(AppIcons.link, size: 26, color: scheme.onSurfaceVariant),
                     ),
                   ),
           ),
@@ -162,7 +162,7 @@ class _MediaSheetBody extends StatelessWidget {
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Center(
           child: kind == MediaSheetKind.image
-              ? PhosphorSvgIcon(PhosphorIcons.image, size: 36, color: scheme.onSurfaceVariant)
+              ? AppSvgIcon(AppIcons.image, size: 36, color: scheme.onSurfaceVariant)
               : Icon(Icons.play_circle_outline, size: 36, color: scheme.onSurfaceVariant),
         ),
       );
@@ -229,13 +229,13 @@ class PagePreviewModal extends StatelessWidget {
           style: TextStyle(color: scheme.onSurface, fontSize: 15, fontWeight: FontWeight.w600),
         ),
         leading: IconButton(
-          icon: PhosphorSvgIcon(PhosphorIcons.x, color: scheme.onSurface),
+          icon: AppSvgIcon(AppIcons.x, color: scheme.onSurface),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
             tooltip: 'Abrir num novo separador',
-            icon: PhosphorSvgIcon(PhosphorIcons.arrowUpLeft, color: scheme.onSurface),
+            icon: AppSvgIcon(AppIcons.arrowUpLeft, color: scheme.onSurface),
             onPressed: () {
               Navigator.of(context).pop();
               onOpenInNewTab();

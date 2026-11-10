@@ -36,9 +36,9 @@ flutter:
     - assets/images/logo.svg
     - assets/images/
     - assets/apps/ai_search/
-    - assets/icons/phosphor/
-    - assets/icons/phosphor/fill/
-    - assets/icons/phosphor/regular/
+    - assets/icons/svg/
+    - assets/icons/svg/fill/
+    - assets/icons/svg/regular/
     - assets/images/avatar.png
     - assets/images/looply_original_icon.png
     - assets/images/looply_icon.png

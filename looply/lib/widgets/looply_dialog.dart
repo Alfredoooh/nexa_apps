@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
-import 'phosphor_svg_icon.dart';
+import 'svg_icon.dart';
 
 class LooplyDialogAction<T> {
   const LooplyDialogAction({required this.label, required this.value, this.isPrimary = false, this.isDestructive = false});
@@ -71,7 +71,7 @@ Future<T?> showLooplyDialog<T>({
                                     ),
                                   ),
                                   alignment: Alignment.center,
-                                  child: PhosphorSvgIcon(
+                                  child: AppSvgIcon(
                                     icon,
                                     color: scheme.onSecondaryContainer,
                                     size: 23,
@@ -253,9 +253,9 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
         ),
         const SizedBox(height: 12),
         Row(children: [
-          const SizedBox(width: 28, height: 28, child: PhosphorSvgIcon(PhosphorIcons.plus, size: 22)),
+          const SizedBox(width: 28, height: 28, child: AppSvgIcon(AppIcons.plus, size: 22)),
           const SizedBox(width: 14),
-          const SizedBox(width: 28, height: 28, child: PhosphorSvgIcon(PhosphorIcons.slidersHorizontal, size: 20)),
+          const SizedBox(width: 28, height: 28, child: AppSvgIcon(AppIcons.slidersHorizontal, size: 20)),
           const Spacer(),
           Material(
             color: _controller.text.trim().isNotEmpty ? accentColor(context) : pillColor(context),
@@ -266,7 +266,7 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
               child: SizedBox(
                 width: 32,
                 height: 32,
-                child: PhosphorSvgIcon(PhosphorIcons.arrowUp, size: 19,
+                child: AppSvgIcon(AppIcons.arrowUp, size: 19,
                     color: _controller.text.trim().isNotEmpty ? Colors.white : muted),
               ),
             ),

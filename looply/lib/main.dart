@@ -22,7 +22,7 @@ import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
 import 'localization.dart';
-import 'widgets/phosphor_svg_icon.dart';
+import 'widgets/svg_icon.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -140,7 +140,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   // As páginas principais são Início e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
   List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
-  final List<IconData> _screenIcons = const [PhosphorIcons.house, PhosphorIcons.clockCounterClockwise];
+  final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
   late final AnimationController _drawerController;
@@ -1560,7 +1560,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
                       child: Row(
                         children: [
                           _FloatingBarItem(
-                            icon: PhosphorIcons.house,
+                            icon: AppIcons.house,
                             label: appText('home'),
                             selected: widget.selectedIndex == 0,
                             selectedColor: selected,
@@ -1568,7 +1568,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
                             onTapUp: () => _onTapUpItem(0),
                           ),
                           _FloatingBarItem(
-                            icon: PhosphorIcons.clockCounterClockwise,
+                            icon: AppIcons.clockCounterClockwise,
                             label: appText('activity'),
                             selected: widget.selectedIndex == 1,
                             selectedColor: selected,
@@ -1585,7 +1585,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
                             onTapUp: () => _onTapUpItem(2),
                           ),
                           _FloatingBarItem(
-                            icon: PhosphorIcons.magnifyingGlass,
+                            icon: AppIcons.magnifyingGlass,
                             label: appText('search'),
                             selected: false,
                             selectedColor: selected,
@@ -1643,7 +1643,7 @@ class _FloatingBarItem extends StatelessWidget {
               scale: selected ? 1.06 : 1.0,
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOutCubic,
-              child: tabsCountIcon ?? PhosphorSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
+              child: tabsCountIcon ?? AppSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
             ),
             const SizedBox(height: 3),
             AnimatedDefaultTextStyle(

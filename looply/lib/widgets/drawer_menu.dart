@@ -11,7 +11,7 @@ import '../theme.dart';
 import '../session_store.dart';
 import '../auth_service.dart';
 import '../localization.dart';
-import 'phosphor_svg_icon.dart';
+import 'svg_icon.dart';
 
 /// Ponte entre os botões da interface e o drawer push/drag do shell.
 /// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
@@ -59,7 +59,7 @@ class LooplyDrawer extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
                         _DrawerOption(
-                          icon: PhosphorIcons.moon,
+                          icon: AppIcons.moon,
                           label: appText('change_theme'),
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(24),
@@ -77,7 +77,7 @@ class LooplyDrawer extends StatelessWidget {
                         AnimatedBuilder(
                           animation: activityController,
                           builder: (context, _) => _DrawerOption(
-                            icon: PhosphorIcons.clockCounterClockwise,
+                            icon: AppIcons.clockCounterClockwise,
                             label: appText('history'),
                             borderRadius: BorderRadius.circular(8),
                             badge: activityController.entries.length,
@@ -88,7 +88,7 @@ class LooplyDrawer extends StatelessWidget {
                         AnimatedBuilder(
                           animation: downloadsController,
                           builder: (context, _) => _DrawerOption(
-                            icon: PhosphorIcons.downloadSimple,
+                            icon: AppIcons.downloadSimple,
                             label: appText('downloads'),
                             borderRadius: BorderRadius.circular(8),
                             badge: downloadsController.entries.length,
@@ -99,7 +99,7 @@ class LooplyDrawer extends StatelessWidget {
                         AnimatedBuilder(
                           animation: bookmarksController,
                           builder: (context, _) => _DrawerOption(
-                            icon: PhosphorIcons.bookmarkSimple,
+                            icon: AppIcons.bookmarkSimple,
                             label: appText('bookmarks'),
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(8),
@@ -264,7 +264,7 @@ class _DrawerOption extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: PhosphorSvgIcon(icon, color: accentColor(context), size: 19),
+              child: AppSvgIcon(icon, color: accentColor(context), size: 19),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -384,8 +384,8 @@ void showThemeSheet(BuildContext context) {
           Widget option({required String label, required bool selected, required VoidCallback onTap}) =>
               ListTile(
                 dense: true,
-                leading: PhosphorSvgIcon(
-                  selected ? PhosphorIcons.circleDot : PhosphorIcons.circle,
+                leading: AppSvgIcon(
+                  selected ? AppIcons.circleDot : AppIcons.circle,
                   color: selected ? accent : mutedForMode(context, mode),
                 ),
                 title: Text(label, style: TextStyle(color: text)),

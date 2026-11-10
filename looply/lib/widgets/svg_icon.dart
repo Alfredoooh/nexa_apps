@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import 'phosphor_svg_fallback_data.dart';
+import 'svg_fallback_data.dart';
 
-/// Stable identifiers for BrowseIt's local Phosphor-style SVG icon set.
+/// Stable identifiers for BrowseIt's local SVG icon set.
 /// These IconData instances are keys only; all visible icons are painted from SVG.
-class PhosphorIcons {
+class AppIcons {
   static const IconData arrowClockwise = IconData(0xF0001, fontFamily: 'BrowseItSvg');
   static const IconData arrowLeft = IconData(0xF0002, fontFamily: 'BrowseItSvg');
   static const IconData arrowRight = IconData(0xF0003, fontFamily: 'BrowseItSvg');
@@ -65,8 +65,8 @@ class PhosphorIcons {
   static const IconData incognito = IconData(0xF0039, fontFamily: 'BrowseItSvg');
 }
 
-class PhosphorSvgIcon extends StatelessWidget {
-  const PhosphorSvgIcon(
+class AppSvgIcon extends StatelessWidget {
+  const AppSvgIcon(
     this.icon, {
     super.key,
     this.size,
@@ -98,60 +98,60 @@ class PhosphorSvgIcon extends StatelessWidget {
   static const double _visualScale = 0.88;
 
   static const Map<int, String> _assets = <int, String>{
-    0xF0001: 'arrow-clockwise',
-    0xF0002: 'arrow-left',
-    0xF0003: 'arrow-right',
-    0xF0004: 'arrow-up',
-    0xF0005: 'arrow-up-left',
-    0xF0006: 'bookmark-simple',
-    0xF0007: 'bookmarks-simple',
+    0xF0001: 'refresh',
+    0xF0002: 'back',
+    0xF0003: 'forward',
+    0xF0004: 'up',
+    0xF0005: 'back-diagonal',
+    0xF0006: 'save',
+    0xF0007: 'saved',
     0xF0008: 'browser',
-    0xF0009: 'caret-down',
-    0xF000A: 'caret-left',
-    0xF000B: 'caret-right',
-    0xF000C: 'caret-up',
+    0xF0009: 'chevron-down',
+    0xF000A: 'chevron-left',
+    0xF000B: 'chevron-right',
+    0xF000C: 'chevron-up',
     0xF000D: 'check',
-    0xF000E: 'check-circle',
+    0xF000E: 'success',
     0xF000F: 'circle',
-    0xF0010: 'circle-dot',
-    0xF0011: 'clock-counter-clockwise',
-    0xF0012: 'compass',
+    0xF0010: 'selected',
+    0xF0011: 'history',
+    0xF0012: 'explore',
     0xF0013: 'copy',
-    0xF0014: 'dots-three-vertical',
-    0xF0015: 'download-simple',
-    0xF0016: 'envelope-simple',
-    0xF0017: 'eye',
-    0xF0018: 'eye-slash',
-    0xF0019: 'file-arrow-up',
-    0xF001A: 'gauge',
-    0xF001B: 'gear',
-    0xF001C: 'globe',
-    0xF001D: 'house',
+    0xF0014: 'more',
+    0xF0015: 'download',
+    0xF0016: 'email',
+    0xF0017: 'view',
+    0xF0018: 'hide',
+    0xF0019: 'upload-file',
+    0xF001A: 'dashboard',
+    0xF001B: 'settings',
+    0xF001C: 'language',
+    0xF001D: 'home',
     0xF001E: 'image',
     0xF001F: 'info',
     0xF0020: 'link',
     0xF0021: 'list',
-    0xF0022: 'list-checks',
-    0xF0023: 'lock-simple',
-    0xF0024: 'magnifying-glass',
-    0xF0025: 'map-pin',
-    0xF0026: 'microphone',
-    0xF0027: 'moon',
-    0xF0028: 'palette',
-    0xF0029: 'pencil-simple',
-    0xF002A: 'plus',
-    0xF002B: 'seal-check',
+    0xF0022: 'tasks',
+    0xF0023: 'locked',
+    0xF0024: 'search',
+    0xF0025: 'location',
+    0xF0026: 'mic',
+    0xF0027: 'dark-mode',
+    0xF0028: 'theme',
+    0xF0029: 'edit',
+    0xF002A: 'add',
+    0xF002B: 'verified',
     0xF002C: 'shield',
-    0xF002D: 'shield-check',
-    0xF002E: 'sign-in',
-    0xF002F: 'sign-out',
-    0xF0030: 'sliders-horizontal',
-    0xF0031: 'sparkles',
-    0xF0032: 'squares-four',
-    0xF0033: 'trash',
-    0xF0034: 'upload-simple',
-    0xF0035: 'wifi-slash',
-    0xF0036: 'x',
+    0xF002D: 'secure',
+    0xF002E: 'login',
+    0xF002F: 'logout',
+    0xF0030: 'filters',
+    0xF0031: 'ai',
+    0xF0032: 'grid',
+    0xF0033: 'delete',
+    0xF0034: 'upload',
+    0xF0035: 'no-wifi',
+    0xF0036: 'close',
     0xF0037: 'calendar',
     0xF0038: 'warning-circle',
     0xF0039: 'incognito',
@@ -166,7 +166,7 @@ class PhosphorSvgIcon extends StatelessWidget {
     // fariam com um Icon normal do Flutter.
     final iconSize = size ?? IconTheme.of(context).size ?? 24.0;
     final visualSize = iconSize * _visualScale;
-    final svgAsset = 'assets/icons/phosphor/$variant/$slug.svg';
+    final svgAsset = 'assets/icons/svg/$variant/$slug.svg';
     final tint = color ?? IconTheme.of(context).color ?? Theme.of(context).iconTheme.color ?? Colors.black;
 
     SvgPicture svgFromString(String source) => SvgPicture.string(
@@ -194,8 +194,8 @@ class PhosphorSvgIcon extends StatelessWidget {
             semanticsLabel: semanticLabel,
             placeholderBuilder: (_) => SizedBox(width: visualSize, height: visualSize),
             errorBuilder: (context, error, stackTrace) {
-              final fallback = phosphorSvgFallbackData['$variant:$slug'] ??
-                  phosphorSvgFallbackData['$variant:question'];
+              final fallback = svgFallbackData['$variant:$slug'] ??
+                  svgFallbackData['$variant:question'];
               debugPrint('BrowseIt SVG asset fallback: $svgAsset ($error)');
               if (fallback == null) return SizedBox(width: visualSize, height: visualSize);
               return svgFromString(fallback);

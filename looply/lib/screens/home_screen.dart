@@ -11,7 +11,7 @@ import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../auth_service.dart';
 import 'all_sites_screen.dart';
 import 'auth_screen.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -204,7 +204,7 @@ class _MoreSitesTile extends StatelessWidget {
                 child: SizedBox(
                   width: 40,
                   height: 40,
-                  child: PhosphorSvgIcon(PhosphorIcons.plus, size: 22, color: accent),
+                  child: AppSvgIcon(AppIcons.plus, size: 22, color: accent),
                 ),
               ),
               const SizedBox(height: 5),
@@ -282,7 +282,7 @@ class _LoginButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              PhosphorSvgIcon(PhosphorIcons.signIn, color: text, size: 18),
+              AppSvgIcon(AppIcons.signIn, color: text, size: 18),
               const SizedBox(width: 8),
               Text(appText('sign_in'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
             ],
@@ -338,7 +338,7 @@ Widget _siteIcon(QuickSite site, Color fallbackColor) {
       return Image.memory(
         base64Decode(site.iconBase64!),
         fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
+        errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: fallbackColor, size: 18),
       );
     } catch (_) {
       // Se um ícone importado ficar inválido, tenta o favicon do site.
@@ -348,17 +348,17 @@ Widget _siteIcon(QuickSite site, Color fallbackColor) {
     return Image.network(
       site.faviconUrl!,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
+      errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: fallbackColor, size: 18),
     );
   }
   if (site.assetPath != null) {
     return Image.asset(
       site.assetPath!,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18),
+      errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: fallbackColor, size: 18),
     );
   }
-  return PhosphorSvgIcon(PhosphorIcons.globe, color: fallbackColor, size: 18);
+  return AppSvgIcon(AppIcons.globe, color: fallbackColor, size: 18);
 }
 
 void openNewTab(BuildContext context, String url, {String? title}) {

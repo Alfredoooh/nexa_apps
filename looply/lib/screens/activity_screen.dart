@@ -11,7 +11,7 @@ import '../theme.dart';
 import '../shell/browser_navigation.dart';
 import 'history_screen.dart';
 import 'site_usage_detail_screen.dart';
-import '../widgets/phosphor_svg_icon.dart';
+import '../widgets/svg_icon.dart';
 
 enum _ChartRange { day, week, month, year }
 
@@ -112,7 +112,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               padding: const EdgeInsets.symmetric(vertical: 30),
               child: Column(
                 children: [
-                  PhosphorSvgIcon(PhosphorIcons.clockCounterClockwise, size: 38, color: muted),
+                  AppSvgIcon(AppIcons.clockCounterClockwise, size: 38, color: muted),
                   const SizedBox(height: 9),
                   Text(
                     appText('no_recent_activity'),
@@ -311,7 +311,7 @@ class _DayStreakCardState extends State<_DayStreakCard> {
         children: [
           Row(
             children: [
-              PhosphorSvgIcon(PhosphorIcons.calendar, color: text, size: 19),
+              AppSvgIcon(AppIcons.calendar, color: text, size: 19),
               const SizedBox(width: 8),
               Text(
                 appText('day_streak'),
@@ -502,7 +502,7 @@ class ActivityTile extends StatelessWidget {
               animation: browserFaviconCache,
               builder: (context, _) {
                 final encoded = browserFaviconCache.forUrl(entry.url);
-                Widget icon = PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 19);
+                Widget icon = AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 19);
                 if (encoded != null) {
                   try {
                     icon = Image.memory(
@@ -510,7 +510,7 @@ class ActivityTile extends StatelessWidget {
                       width: 22,
                       height: 22,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.globe, color: accentColor(context), size: 19),
+                      errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 19),
                     );
                   } catch (_) {}
                 }
@@ -530,8 +530,8 @@ class ActivityTile extends StatelessWidget {
                 Text(formatActivityTime(entry.timestamp), style: TextStyle(color: muted, fontSize: 11)),
               ]),
             ),
-            PhosphorSvgIcon(
-              selected ? PhosphorIcons.checkCircle : PhosphorIcons.caretRight,
+            AppSvgIcon(
+              selected ? AppIcons.checkCircle : AppIcons.caretRight,
               color: selected ? accentColor(context) : muted,
               size: 19,
             ),
