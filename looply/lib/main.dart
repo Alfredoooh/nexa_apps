@@ -1188,6 +1188,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                   position: _browserSlidePosition,
                   child: RepaintBoundary(
                     child: SafeArea(
+                      top: false,
                       bottom: false,
                       child: SizedBox.expand(
                         child: activeBrowserPage ?? const SizedBox.expand(),
