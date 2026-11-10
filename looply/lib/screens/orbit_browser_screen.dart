@@ -27,7 +27,7 @@ import 'downloads_screen.dart';
 import 'bookmarks_screen.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/phosphor_svg_icon.dart';
 
 /// Adaptador mínimo sobre flutter_inappwebview. Todas as plataformas usam
 /// o mesmo motor InAppWebView; não existe PlatformView/Kotlin WebView paralelo.
@@ -184,9 +184,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
   // Esconder/mostrar a toolbar ao deslizar: 1 = totalmente visível,
   // 0 = totalmente escondida. É controlado DIRETAMENTE pelo delta do
   // gesto de scroll (sem animação temporizada) para a toolbar seguir o
-  // dedo 1:1, exatamente como Chrome/Firefox/Safari fazem. Só anima
-  // (via AnimationController.animateTo) no "settle" quando o dedo larga,
-  // decidindo snap para 0 ou para 1 consoante a posição em que ficou.
+  // dedo 1:1, exatamente como Chrome/Firefox/Safari fazem. A altura real
+  // que ela ocupa no layout (Column) é ligada a este mesmo valor, por
+  // isso quando ela encolhe o espaço dela desaparece de verdade e o
+  // WebView por baixo cresce para preencher — nada fica escondido atrás
+  // da appbar, porque não há sobreposição nenhuma: é redimensionamento.
   // ---------------------------------------------------------------------
   late final AnimationController _toolbarVisibility;
   double _lastScrollY = 0;
@@ -244,7 +246,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
       vsync: this,
       value: 1.0,
       duration: const Duration(milliseconds: 180),
-    );
+    )..addListener(() {
+        if (mounted) setState(() {});
+      });
 
     final existingTab = tabsController.getTab(widget.tabId);
     _currentUrl = existingTab != null && existingTab.url.isNotEmpty
@@ -404,13 +408,6 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
   Color _adaptivePillColor(Color toolbarColor) {
     final mixTarget = _isLightSurface(toolbarColor) ? Colors.black : Colors.white;
     return Color.lerp(toolbarColor, mixTarget, .22)!.withOpacity(.86);
-  }
-
-  /// Status bar: versão mais fraca/dessaturada da cor dominante do site,
-  /// nunca idêntica ao appbar — mistura a cor do site com o fundo da
-  /// Scaffold para suavizar.
-  Color _statusBarSurfaceColor(Color toolbarColor, Color bg) {
-    return Color.lerp(toolbarColor, bg, .35)!;
   }
 
   Future<void> _applyWebsiteAppearance(_OrbitWebViewController controller) async {
@@ -982,11 +979,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                     scrollDirection: Axis.horizontal,
                     child: Row(
                     children: [
-                      _BrowserQuickAction(icon: AppIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
-                      _BrowserQuickAction(icon: AppIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
-                      _BrowserQuickAction(icon: AppIcons.plus, label: appText(widget.isIncognito ? 'new_private_tab' : 'new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
-                      _BrowserQuickAction(icon: AppIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
-                      _BrowserQuickAction(icon: AppIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
+                      _BrowserQuickAction(icon: PhosphorIcons.arrowLeft, label: appText('go_back'), enabled: _canGoBack, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.back)),
+                      _BrowserQuickAction(icon: PhosphorIcons.arrowRight, label: appText('go_forward'), enabled: _canGoForward, onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.forward)),
+                      _BrowserQuickAction(icon: PhosphorIcons.plus, label: appText(widget.isIncognito ? 'new_private_tab' : 'new_tab'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.newTab)),
+                      _BrowserQuickAction(icon: PhosphorIcons.bookmarksSimple, label: appText('bookmarks'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmarks)),
+                      _BrowserQuickAction(icon: PhosphorIcons.gear, label: appText('settings'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.settings)),
                       ],
                     ),
                   ),
@@ -997,15 +994,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(10, 8, 10, 18),
                     children: [
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
-                      _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
-                      _BrowserSheetListItem(icon: AppIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
-                      if (!widget.isIncognito) _BrowserSheetListItem(icon: AppIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('history'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.history)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.downloadSimple, label: appText('downloads'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.downloads)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: appText('find_in_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.findInPage)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.bookmarkSimple, label: appText('add_bookmark'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.bookmark)),
+                      if (!widget.isIncognito) _BrowserSheetListItem(icon: PhosphorIcons.sparkles, label: appText('translate'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.translate)),
                       Divider(height: 18, color: muted.withOpacity(.18), indent: 12, endIndent: 12),
-                      _BrowserSheetListItem(icon: AppIcons.clockCounterClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.clockCounterClockwise, label: appText('reload_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.reload)),
                       _BrowserSheetListItem(
-                        icon: AppIcons.browser,
+                        icon: PhosphorIcons.browser,
                         label: _desktopSiteRequested ? 'Desativar site de desktop' : 'Site de desktop',
                         onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.desktopSite),
                       ),
@@ -1013,16 +1010,16 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(
                           children: [
-                            Expanded(child: _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: 'Reduzir zoom (-)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomOut)))),
-                            Expanded(child: _BrowserSheetListItem(icon: AppIcons.magnifyingGlass, label: 'Aumentar zoom (+)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomIn)))),
+                            Expanded(child: _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: 'Reduzir zoom (-)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomOut)))),
+                            Expanded(child: _BrowserSheetListItem(icon: PhosphorIcons.magnifyingGlass, label: 'Aumentar zoom (+)', onTap: () => unawaited(_runShortcut(_OrbitMenuAction.zoomIn)))),
                           ],
                         ),
                       ),
-                      _BrowserSheetListItem(icon: AppIcons.fileArrowUp, label: 'Imprimir', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.print)),
-                      _BrowserSheetListItem(icon: AppIcons.plus, label: 'Adicionar ao ecrã inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.addToHomeScreen)),
-                      _BrowserSheetListItem(icon: AppIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
-                      _BrowserSheetListItem(icon: AppIcons.info, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
-                      _BrowserSheetListItem(icon: AppIcons.house, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.fileArrowUp, label: 'Imprimir', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.print)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.plus, label: 'Adicionar ao ecrã inicial', onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.addToHomeScreen)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.copy, label: appText('copy_address'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.copyAddress)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.info, label: appText('site_info'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.siteInfo)),
+                      _BrowserSheetListItem(icon: PhosphorIcons.house, label: appText('home_page'), onTap: () => _selectSheetAction(sheetContext, _OrbitMenuAction.goHome)),
                     ],
                   ),
                 ),
@@ -1071,7 +1068,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
     unawaited(showLooplyDialog<bool>(
       context: context,
       title: appText('site_info'),
-      icon: AppIcons.info,
+      icon: PhosphorIcons.info,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1112,22 +1109,22 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
     final kind = isImage ? MediaSheetKind.image : (isVideoOrAudio ? MediaSheetKind.video : MediaSheetKind.link);
     final options = <MediaSheetOption>[];
     if (isImage) {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir imagem num novo separador', icon: AppIcons.arrowUpLeft));
-      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar imagem', icon: AppIcons.eye));
-      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir imagem', icon: AppIcons.downloadSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar imagem', icon: AppIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar imagem', icon: AppIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir imagem num novo separador', icon: PhosphorIcons.arrowUpLeft));
+      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar imagem', icon: PhosphorIcons.eye));
+      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir imagem', icon: PhosphorIcons.downloadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar imagem', icon: PhosphorIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar imagem', icon: PhosphorIcons.uploadSimple));
     } else if (isVideoOrAudio) {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: AppIcons.arrowUpLeft));
-      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir vídeo', icon: AppIcons.downloadSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: AppIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: AppIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: PhosphorIcons.arrowUpLeft));
+      if (!widget.isIncognito) options.add(const MediaSheetOption(action: MediaSheetAction.download, label: 'Transferir vídeo', icon: PhosphorIcons.downloadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: PhosphorIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: PhosphorIcons.uploadSimple));
     } else {
-      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: AppIcons.arrowUpLeft));
-      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar página', icon: AppIcons.eye));
-      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: AppIcons.copy));
-      options.add(const MediaSheetOption(action: MediaSheetAction.bookmarkLink, label: 'Adicionar aos favoritos', icon: AppIcons.bookmarkSimple));
-      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: AppIcons.uploadSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.openNewTab, label: 'Abrir num novo separador', icon: PhosphorIcons.arrowUpLeft));
+      options.add(const MediaSheetOption(action: MediaSheetAction.preview, label: 'Pré-visualizar página', icon: PhosphorIcons.eye));
+      options.add(const MediaSheetOption(action: MediaSheetAction.copyLink, label: 'Copiar ligação', icon: PhosphorIcons.copy));
+      options.add(const MediaSheetOption(action: MediaSheetAction.bookmarkLink, label: 'Adicionar aos favoritos', icon: PhosphorIcons.bookmarkSimple));
+      options.add(const MediaSheetOption(action: MediaSheetAction.shareLink, label: 'Partilhar ligação', icon: PhosphorIcons.uploadSimple));
     }
 
     Uint8List? faviconBytes;
@@ -1190,11 +1187,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
   }
 
   // ---------------------------------------------------------------------
-  // Toolbar que esconde/mostra conforme o scroll da página — ligada 1:1
-  // ao gesto do dedo (sem animação temporizada durante o arrasto). O
-  // NotificationListener recebe os eventos de scroll que o próprio
-  // InAppWebView emite via onScrollChanged (encaminhados manualmente
-  // abaixo, já que WebView nativa não gera ScrollNotification do Flutter).
+  // Toolbar que esconde/mostra conforme o scroll da página, ligada 1:1
+  // ao gesto do dedo. Ao contrário da versão anterior (Transform.translate
+  // sobre um Stack), aqui a appbar faz parte de uma Column normal com o
+  // WebView; o valor de _toolbarVisibility controla diretamente a ALTURA
+  // que ela ocupa no layout. Isto significa que quando ela encolhe, o
+  // espaço dela desaparece de verdade e o Expanded do WebView cresce
+  // para ocupar esse espaço — nunca há conteúdo do site escondido atrás
+  // da appbar, porque não existe sobreposição nenhuma.
   // ---------------------------------------------------------------------
 
   void _onWebViewScrollChanged(int x, int y) {
@@ -1220,17 +1220,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
 
     // Sem animação: o valor segue o delta do dedo diretamente, frame a
     // frame, tal como o scroll físico da página — por isso não há atraso.
-    final toolbarHeight = kToolbarHeight + 1;
+    final toolbarHeight = kToolbarHeight + 2.4;
     final next = (_toolbarVisibility.value - (delta / toolbarHeight)).clamp(0.0, 1.0);
     _toolbarVisibility.value = next;
-  }
-
-  void _settleToolbarVisibility() {
-    if (_isFindInPage || _isExpandingToSearch) return;
-    // Ao soltar o dedo, decide para que lado "encaixa": mais de metade
-    // visível -> mostra completamente; menos de metade -> esconde.
-    final target = _toolbarVisibility.value >= 0.5 ? 1.0 : 0.0;
-    _toolbarVisibility.animateTo(target, curve: Curves.easeOutCubic);
   }
 
   @override
@@ -1250,12 +1242,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
         ? appText('research_ai')
         : (parsedUri?.host.isNotEmpty == true ? parsedUri!.host : 'Orbit Browser');
 
-    // A status bar segue uma versão dessaturada/mais fraca da cor do
-    // appbar (nunca idêntica), misturada com o fundo da Scaffold.
-    final statusBarSurface = useAdaptiveToolbar
-        ? _statusBarSurfaceColor(toolbarColor, bg)
-        : bg;
+    // A status bar usa EXATAMENTE a mesma cor da appbar — sem mistura,
+    // sem dessaturação. Se o site mudar de tom, a status bar muda junto,
+    // 100% do mesmo valor, no mesmo frame.
+    final statusBarSurface = toolbarColor;
     final statusBarIsLight = _isLightSurface(statusBarSurface);
+
+    final fullToolbarHeight = kToolbarHeight + 2.4;
+    final currentToolbarHeight = fullToolbarHeight * _toolbarVisibility.value;
 
     return PopScope<void>(
       // Esta tela só existe para a aba ativa; por isso apenas ela intercepta
@@ -1276,86 +1270,76 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
         child: Scaffold(
           backgroundColor: bg,
           extendBodyBehindAppBar: false,
-          // O WebView ocupa o ecrã inteiro por baixo de tudo — a toolbar
-          // flutua por cima dele via Stack, para que, quando ela desliza
-          // para fora com o scroll, o conteúdo da página já esteja lá por
-          // trás a ocupar o espaço (e não um vazio em branco). Isto é o
-          // oposto de "WebView sempre atrás da toolbar": a toolbar é que
-          // está sempre por cima do WebView, nunca o contrário.
-          body: Stack(
+          // Column normal: status bar, appbar (altura variável, nunca
+          // sobreposta a nada), e o WebView a ocupar o resto do espaço
+          // via Expanded. Sem Stack, sem flutuação — redimensionamento
+          // real, como os browsers nativos fazem.
+          body: Column(
             children: [
-              // Faixa de status bar com a cor dessaturada, fixa no topo,
-              // por trás da toolbar (que pode deslizar para cima por cima
-              // dela ou libertar o espaço quando esconde).
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
+              // Faixa de status bar: sempre a MESMA cor exata da appbar,
+              // sempre visível (não esconde com o scroll).
+              Container(
+                color: statusBarSurface,
                 height: MediaQuery.paddingOf(context).top,
-                child: Container(color: statusBarSurface),
+                width: double.infinity,
               ),
-              Positioned.fill(
-                top: MediaQuery.paddingOf(context).top,
+              // Appbar com altura controlada diretamente por
+              // _toolbarVisibility: quando ela chega a 0, a altura real
+              // no layout é 0 — o espaço dela desaparece de verdade.
+              ClipRect(
+                child: SizedBox(
+                  height: currentToolbarHeight,
+                  child: OverflowBox(
+                    maxHeight: fullToolbarHeight,
+                    alignment: Alignment.topCenter,
+                    child: Material(
+                      color: toolbarColor,
+                      elevation: 0,
+                      child: SizedBox(
+                        height: fullToolbarHeight,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              height: kToolbarHeight,
+                              child: _buildAppBarContent(
+                                context: context,
+                                toolbarText: toolbarText,
+                                pillBackground: pillBackground,
+                                muted: muted,
+                                fallbackTitle: fallbackTitle,
+                              ),
+                            ),
+                            SizedBox(
+                              height: 2.4,
+                              child: AnimatedOpacity(
+                                opacity: _showProgress ? 1 : 0,
+                                duration: const Duration(milliseconds: 180),
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
+                                  duration: const Duration(milliseconds: 180),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, animatedProgress, _) => LinearProgressIndicator(
+                                    value: animatedProgress,
+                                    minHeight: 2.4,
+                                    color: accentColor(context),
+                                    backgroundColor: Colors.transparent,
+                                    borderRadius: BorderRadius.zero,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
                 child: RepaintBoundary(
                   key: widget.viewportKey,
                   child: _buildWebView(context),
-                ),
-              ),
-              // Toolbar flutuante no topo: sobe/desce em sincronia 1:1 com
-              // o gesto de scroll do dedo via AnimatedBuilder ligado a
-              // _toolbarVisibility (controlado diretamente em
-              // _onWebViewScrollChanged, sem Tween temporizado).
-              Positioned(
-                left: 0,
-                right: 0,
-                top: MediaQuery.paddingOf(context).top,
-                child: AnimatedBuilder(
-                  animation: _toolbarVisibility,
-                  builder: (context, child) {
-                    final offset = -(kToolbarHeight + 2.4) * (1 - _toolbarVisibility.value);
-                    return Transform.translate(
-                      offset: Offset(0, offset),
-                      child: child,
-                    );
-                  },
-                  child: Material(
-                    color: toolbarColor,
-                    elevation: 0,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: kToolbarHeight,
-                          child: _buildAppBarContent(
-                            context: context,
-                            toolbarText: toolbarText,
-                            pillBackground: pillBackground,
-                            muted: muted,
-                            fallbackTitle: fallbackTitle,
-                          ),
-                        ),
-                        SizedBox(
-                          height: 2.4,
-                          child: AnimatedOpacity(
-                            opacity: _showProgress ? 1 : 0,
-                            duration: const Duration(milliseconds: 180),
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, animatedProgress, _) => LinearProgressIndicator(
-                                value: animatedProgress,
-                                minHeight: 2.4,
-                                color: accentColor(context),
-                                backgroundColor: Colors.transparent,
-                                borderRadius: BorderRadius.zero,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -1386,12 +1370,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
             child: _isAiSearchPage
                 ? IconButton(
                     tooltip: appText('home'),
-                    icon: AppSvgIcon(AppIcons.list, color: toolbarText),
+                    icon: PhosphorSvgIcon(PhosphorIcons.list, color: toolbarText),
                     onPressed: _openNativeDrawer,
                   )
                 : IconButton(
                     tooltip: appText('home'),
-                    icon: AppSvgIcon(AppIcons.house, color: toolbarText),
+                    icon: PhosphorSvgIcon(PhosphorIcons.house, color: toolbarText),
                     onPressed: () => ShellTabRequest.instance.request(0),
                   ),
           ),
@@ -1421,7 +1405,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         ),
                         IconButton(
                           tooltip: appText('new_chat'),
-                          icon: AppSvgIcon(AppIcons.plus, color: toolbarText),
+                          icon: PhosphorSvgIcon(PhosphorIcons.plus, color: toolbarText),
                           onPressed: _restartAiChat,
                         ),
                       ],
@@ -1439,7 +1423,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                         ),
                         IconButton(
                           tooltip: appText('more_options'),
-                          icon: AppSvgIcon(AppIcons.dotsThreeVertical, color: toolbarText),
+                          icon: PhosphorSvgIcon(PhosphorIcons.dotsThreeVertical, color: toolbarText),
                           onPressed: _showBrowserOptionsSheet,
                         ),
                       ],
@@ -1476,19 +1460,19 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
           tooltip: appText('previous_result'),
           visualDensity: VisualDensity.compact,
           onPressed: () => _moveFindResult(false),
-          icon: AppSvgIcon(AppIcons.caretUp, color: toolbarText),
+          icon: PhosphorSvgIcon(PhosphorIcons.caretUp, color: toolbarText),
         ),
         IconButton(
           tooltip: appText('next_result'),
           visualDensity: VisualDensity.compact,
           onPressed: () => _moveFindResult(true),
-          icon: AppSvgIcon(AppIcons.caretDown, color: toolbarText),
+          icon: PhosphorSvgIcon(PhosphorIcons.caretDown, color: toolbarText),
         ),
         IconButton(
           tooltip: appText('close_search'),
           visualDensity: VisualDensity.compact,
           onPressed: _exitFindInPage,
-          icon: AppSvgIcon(AppIcons.x, color: toolbarText),
+          icon: PhosphorSvgIcon(PhosphorIcons.x, color: toolbarText),
         ),
       ],
     );
@@ -1506,9 +1490,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                 favicon,
                 fit: BoxFit.cover,
                 gaplessPlayback: true,
-                errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: size),
+                errorBuilder: (_, __, ___) => PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: size),
               )
-            : AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: size),
+            : PhosphorSvgIcon(PhosphorIcons.magnifyingGlass, color: muted, size: size),
       ),
     );
   }
@@ -1572,19 +1556,20 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
   Widget _buildWebView(BuildContext context) => _buildPluginWebView(context);
 
   Widget _buildPluginWebView(BuildContext context) {
+    // Fundo igual ao fundo real do tema atual (claro ou escuro) — nunca
+    // uma cor escura fixa independente do tema. É isto que fica visível
+    // por trás da WebView durante o instante inicial do carregamento,
+    // antes de o HTML/CSS da página pintar o próprio fundo.
     final bg = pageBg(context);
     return Stack(
       fit: StackFit.expand,
       children: [
         ColoredBox(color: bg),
         if (!_renderProcessCrashed && (!_isAiSearchPage || _aiPageHtml != null))
-          // Offset manual simples em vez do antigo _PixelSnappedViewport:
-          // a WebView é posicionada ligeiramente FORA das margens à
-          // direita e em baixo (Positioned negativo), e o Stack pai
-          // (fit: StackFit.expand + ClipRect implícito do Scaffold) corta
-          // o excesso. Isto desloca a WebView 2px lógicos para a direita
-          // e para baixo, cobrindo exatamente onde a fresta branca
-          // aparecia nessas duas bordas.
+          // Overscan: a WebView é desenhada 2px lógicos além da margem
+          // direita e inferior reais; o Stack pai corta esse excesso. O
+          // arredondamento de sub-pixel que causava a linha branca cai
+          // agora na parte cortada, fora do que é visível.
           Positioned(
             left: 0,
             top: 0,
@@ -1609,7 +1594,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
                 databaseEnabled: true,
                 mediaPlaybackRequiresUserGesture: false,
 
-                // Fundo opaco: evita composição com alpha sobre o Flutter.
+                // Fundo OPACO, nunca transparente: um WebView transparente
+                // deixaria ver o que está por trás dele (que, antes do
+                // body/CSS da página pintar, seria o fundo do app) — mas
+                // crucialmente a cor por trás (ColoredBox acima) já segue
+                // o tema atual, então aqui o importante é não somar uma
+                // segunda camada transparente que possa escurecer por
+                // composição. O WebView pinta a própria cor real da
+                // página assim que ela carrega, por cima desta base.
                 transparentBackground: false,
 
                 // A sessão privada desativa cache HTTP e gravação de formulários.
@@ -1971,8 +1963,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppSvgIcon(
-                  _renderProcessCrashed ? AppIcons.clockCounterClockwise : AppIcons.wifiSlash,
+                PhosphorSvgIcon(
+                  _renderProcessCrashed ? PhosphorIcons.clockCounterClockwise : PhosphorIcons.wifiSlash,
                   size: 42,
                   color: mutedText(context),
                 ),
@@ -1997,11 +1989,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
 }
 
 /// Quantos pixels lógicos a WebView é desenhada além da margem direita e
-/// inferior reais do ecrã. O ClipRect/Material do Scaffold corta o
-/// excesso, então o único efeito visível é cobrir a fresta de 1px onde
-/// a fronteira entre a PlatformView nativa e o Flutter deixava a cor de
-/// fundo (branco) aparecer. Se a linha persistir no teu aparelho, sobe
-/// este valor para 3.0 ou 4.0.
+/// inferior reais do ecrã. O Stack pai corta o excesso, então o único
+/// efeito visível é cobrir a fresta de 1px onde a fronteira entre a
+/// PlatformView nativa e o Flutter deixava a cor de fundo aparecer. Se a
+/// linha persistir no teu aparelho, sobe este valor para 3.0 ou 4.0.
 const double _kWebViewOverscan = 2.0;
 
 enum _OrbitMenuAction {
@@ -2055,7 +2046,7 @@ class _BrowserQuickAction extends StatelessWidget {
                   color: pillColor(context),
                   shape: BoxShape.circle,
                 ),
-                child: AppSvgIcon(icon, size: 23, color: enabled ? foreground : muted),
+                child: PhosphorSvgIcon(icon, size: 23, color: enabled ? foreground : muted),
               ),
               const SizedBox(height: 8),
               Text(label, maxLines: 2, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis,
@@ -2086,7 +2077,7 @@ class _BrowserSheetListItem extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              SizedBox(width: 42, child: AppSvgIcon(icon, size: 23, color: mainText(context))),
+              SizedBox(width: 42, child: PhosphorSvgIcon(icon, size: 23, color: mainText(context))),
               const SizedBox(width: 12),
               Expanded(child: Text(label, style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w500))),
             ]),

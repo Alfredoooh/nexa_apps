@@ -336,7 +336,7 @@ class _HistoryCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               SvgPicture.asset(
-                'assets/images/launch.svg',
+                'assets/svgs/regular/expand.svg',
                 width: 18,
                 height: 18,
                 colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
