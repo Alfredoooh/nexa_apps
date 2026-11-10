@@ -30,19 +30,19 @@ Future<MediaSheetAction?> showMediaContextSheet({
   required List<MediaSheetOption> options,
 }) {
   final scheme = Theme.of(context).colorScheme;
-  return showModalBottomSheet<MediaSheetAction>(
+    return showModalBottomSheet<MediaSheetAction>(
     context: context,
     backgroundColor: scheme.surfaceContainerLow,
-    surfaceTintColor: Colors.transparent,
     useSafeArea: true,
     isScrollControlled: true,
     showDragHandle: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => _MediaSheetBody(
+    builder: (sheetContext) => _MediaSheetBody(
       kind: kind,
       url: url,
+      previewImageUrl: previewImageUrl,
       faviconBytes: faviconBytes,
       options: options,
     ),
