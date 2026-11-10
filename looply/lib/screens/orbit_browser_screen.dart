@@ -144,7 +144,8 @@ class OrbitBrowserScreen extends StatefulWidget {
   State<OrbitBrowserScreen> createState() => _OrbitBrowserScreenState();
 }
 
-class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
+class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
+    with SingleTickerProviderStateMixin {
   _OrbitWebViewController? _controller;
   bool _isAiSearchPage = false;
   String? _aiPageHtml;
@@ -178,6 +179,18 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   Key _webViewKey = UniqueKey();
   bool _tabsRequestInProgress = false;
   bool _firstLoadSignaled = false;
+
+  // ---------------------------------------------------------------------
+  // Esconder/mostrar a toolbar ao deslizar: 1 = totalmente visível,
+  // 0 = totalmente escondida. É controlado DIRETAMENTE pelo delta do
+  // gesto de scroll (sem animação temporizada) para a toolbar seguir o
+  // dedo 1:1, exatamente como Chrome/Firefox/Safari fazem. Só anima
+  // (via AnimationController.animateTo) no "settle" quando o dedo larga,
+  // decidindo snap para 0 ou para 1 consoante a posição em que ficou.
+  // ---------------------------------------------------------------------
+  late final AnimationController _toolbarVisibility;
+  double _lastScrollY = 0;
+  bool _hasScrollBaseline = false;
 
   static const MethodChannel _nativeUi = MethodChannel('looply/native_ui');
   bool _nativeDrawerRequestInProgress = false;
@@ -227,6 +240,12 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   @override
   void initState() {
     super.initState();
+    _toolbarVisibility = AnimationController(
+      vsync: this,
+      value: 1.0,
+      duration: const Duration(milliseconds: 180),
+    );
+
     final existingTab = tabsController.getTab(widget.tabId);
     _currentUrl = existingTab != null && existingTab.url.isNotEmpty
         ? existingTab.url
@@ -287,6 +306,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
   @override
   void dispose() {
+    _toolbarVisibility.dispose();
     _progressHideTimer?.cancel();
     _findDebounce?.cancel();
     _findController.dispose();
@@ -620,6 +640,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (!mounted) return;
     _findController.clear();
     setState(() => _isFindInPage = true);
+    _toolbarVisibility.animateTo(1.0, curve: Curves.easeOutCubic);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _findFocusNode.requestFocus();
     });
@@ -1167,6 +1188,51 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         break;
     }
   }
+
+  // ---------------------------------------------------------------------
+  // Toolbar que esconde/mostra conforme o scroll da página — ligada 1:1
+  // ao gesto do dedo (sem animação temporizada durante o arrasto). O
+  // NotificationListener recebe os eventos de scroll que o próprio
+  // InAppWebView emite via onScrollChanged (encaminhados manualmente
+  // abaixo, já que WebView nativa não gera ScrollNotification do Flutter).
+  // ---------------------------------------------------------------------
+
+  void _onWebViewScrollChanged(int x, int y) {
+    if (_isFindInPage || _isExpandingToSearch) return;
+    final yd = y.toDouble();
+    if (!_hasScrollBaseline) {
+      _lastScrollY = yd;
+      _hasScrollBaseline = true;
+      return;
+    }
+    final delta = yd - _lastScrollY;
+    _lastScrollY = yd;
+    if (delta == 0) return;
+
+    // Perto do topo da página a toolbar fica sempre visível, como nos
+    // browsers nativos (evita escondê-la logo no primeiro pixel de scroll).
+    if (yd <= 4) {
+      if (_toolbarVisibility.value != 1.0) {
+        _toolbarVisibility.value = 1.0;
+      }
+      return;
+    }
+
+    // Sem animação: o valor segue o delta do dedo diretamente, frame a
+    // frame, tal como o scroll físico da página — por isso não há atraso.
+    final toolbarHeight = kToolbarHeight + 1;
+    final next = (_toolbarVisibility.value - (delta / toolbarHeight)).clamp(0.0, 1.0);
+    _toolbarVisibility.value = next;
+  }
+
+  void _settleToolbarVisibility() {
+    if (_isFindInPage || _isExpandingToSearch) return;
+    // Ao soltar o dedo, decide para que lado "encaixa": mais de metade
+    // visível -> mostra completamente; menos de metade -> esconde.
+    final target = _toolbarVisibility.value >= 0.5 ? 1.0 : 0.0;
+    _toolbarVisibility.animateTo(target, curve: Curves.easeOutCubic);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1210,62 +1276,86 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         child: Scaffold(
           backgroundColor: bg,
           extendBodyBehindAppBar: false,
-          body: Column(
+          // O WebView ocupa o ecrã inteiro por baixo de tudo — a toolbar
+          // flutua por cima dele via Stack, para que, quando ela desliza
+          // para fora com o scroll, o conteúdo da página já esteja lá por
+          // trás a ocupar o espaço (e não um vazio em branco). Isto é o
+          // oposto de "WebView sempre atrás da toolbar": a toolbar é que
+          // está sempre por cima do WebView, nunca o contrário.
+          body: Stack(
             children: [
-              // Faixa de status bar com a cor dessaturada, visualmente
-              // distinta do appbar sólido logo abaixo dela.
-              Container(
-                color: statusBarSurface,
+              // Faixa de status bar com a cor dessaturada, fixa no topo,
+              // por trás da toolbar (que pode deslizar para cima por cima
+              // dela ou libertar o espaço quando esconde).
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
                 height: MediaQuery.paddingOf(context).top,
-                width: double.infinity,
+                child: Container(color: statusBarSurface),
               ),
-              SizedBox(
-                height: 2.4,
-                child: AnimatedOpacity(
-                  opacity: _showProgress ? 1 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, animatedProgress, _) => LinearProgressIndicator(
-                      value: animatedProgress,
-                      minHeight: 2.4,
-                      color: accentColor(context),
-                      backgroundColor: Colors.transparent,
-                      borderRadius: BorderRadius.zero,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
+              Positioned.fill(
+                top: MediaQuery.paddingOf(context).top,
                 child: RepaintBoundary(
                   key: widget.viewportKey,
                   child: _buildWebView(context),
                 ),
               ),
-              Material(
-                color: toolbarColor,
-                elevation: 0,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(height: 1, color: Colors.black.withOpacity(.08)),
-                    SafeArea(
-                      top: false,
-                      bottom: true,
-                      child: SizedBox(
-                        height: kToolbarHeight,
-                        child: _buildAppBarContent(
-                          context: context,
-                          toolbarText: toolbarText,
-                          pillBackground: pillBackground,
-                          muted: muted,
-                          fallbackTitle: fallbackTitle,
+              // Toolbar flutuante no topo: sobe/desce em sincronia 1:1 com
+              // o gesto de scroll do dedo via AnimatedBuilder ligado a
+              // _toolbarVisibility (controlado diretamente em
+              // _onWebViewScrollChanged, sem Tween temporizado).
+              Positioned(
+                left: 0,
+                right: 0,
+                top: MediaQuery.paddingOf(context).top,
+                child: AnimatedBuilder(
+                  animation: _toolbarVisibility,
+                  builder: (context, child) {
+                    final offset = -(kToolbarHeight + 2.4) * (1 - _toolbarVisibility.value);
+                    return Transform.translate(
+                      offset: Offset(0, offset),
+                      child: child,
+                    );
+                  },
+                  child: Material(
+                    color: toolbarColor,
+                    elevation: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: kToolbarHeight,
+                          child: _buildAppBarContent(
+                            context: context,
+                            toolbarText: toolbarText,
+                            pillBackground: pillBackground,
+                            muted: muted,
+                            fallbackTitle: fallbackTitle,
+                          ),
                         ),
-                      ),
+                        SizedBox(
+                          height: 2.4,
+                          child: AnimatedOpacity(
+                            opacity: _showProgress ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween<double>(end: _progress.clamp(0.0, 1.0)),
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, animatedProgress, _) => LinearProgressIndicator(
+                                value: animatedProgress,
+                                minHeight: 2.4,
+                                color: accentColor(context),
+                                backgroundColor: Colors.transparent,
+                                borderRadius: BorderRadius.zero,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -1488,11 +1578,18 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       children: [
         ColoredBox(color: bg),
         if (!_renderProcessCrashed && (!_isAiSearchPage || _aiPageHtml != null))
-          // O _PixelSnappedViewport alinha a WebView à grelha de pixels
-          // físicos (origem e tamanho). É isto que elimina as linhas brancas
-          // à direita/em baixo e o leve desfoque causado por posições
-          // fracionárias, exatamente como os browsers nativos fazem.
-          _PixelSnappedViewport(
+          // Offset manual simples em vez do antigo _PixelSnappedViewport:
+          // a WebView é posicionada ligeiramente FORA das margens à
+          // direita e em baixo (Positioned negativo), e o Stack pai
+          // (fit: StackFit.expand + ClipRect implícito do Scaffold) corta
+          // o excesso. Isto desloca a WebView 2px lógicos para a direita
+          // e para baixo, cobrindo exatamente onde a fresta branca
+          // aparecia nessas duas bordas.
+          Positioned(
+            left: 0,
+            top: 0,
+            right: -_kWebViewOverscan,
+            bottom: -_kWebViewOverscan,
             child: InAppWebView(
               key: _webViewKey,
               initialUrlRequest: _isAiSearchPage ? null : URLRequest(
@@ -1574,6 +1671,9 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
               onLongPressHitTestResult: (controller, hitTestResult) {
                 unawaited(_handleLongPressHitTest(hitTestResult));
               },
+              onScrollChanged: (controller, x, y) {
+                _onWebViewScrollChanged(x, y);
+              },
               shouldOverrideUrlLoading: (controller, action) async {
                 final uri = action.request.url;
                 if (uri == null) return NavigationActionPolicy.ALLOW;
@@ -1649,6 +1749,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
                 if (_isAiSearchPage && nextUrl != null && !nextUrl.startsWith('https://browseit.local/')) {
                   _isAiSearchPage = false;
                   _siteToolbarColor = null;
+                }
+                _hasScrollBaseline = false;
+                if (_toolbarVisibility.value != 1.0) {
+                  _toolbarVisibility.animateTo(1.0, curve: Curves.easeOutCubic);
                 }
                 setState(() {
                   if (!_isAiSearchPage) _siteToolbarColor = null;
@@ -1892,116 +1996,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   }
 }
 
-/// Alinha o filho (a WebView) à grelha de pixels físicos do ecrã.
-///
-/// Problema: AppBar + barra de progresso + status bar podem deixar a origem
-/// da WebView num pixel físico fracionário (ex.: 157.5px em dpr 2.8125) e o
-/// tamanho lógico multiplicado pelo devicePixelRatio também não é inteiro.
-/// A PlatformView é então arredondada para baixo: sobra 1px de fundo à
-/// direita/em baixo (linha branca) e o conteúdo é reamostrado (desfoque).
-///
-/// Solução: mede a origem real no ecrã, recua o filho para o pixel inteiro
-/// anterior e EXPANDE o tamanho 1 pixel físico extra além do necessário
-/// (em vez de só arredondar para cima). Isto garante que, mesmo que o
-/// Hybrid Composition recorte a PlatformView pela caixa delimitadora do
-/// Flutter, sobra sempre conteúdo da WebView a cobrir esse pixel — a
-/// imagem nunca "falta" na borda, no máximo sangra 1-2px para fora de uma
-/// área que o ClipRect do pai já esconde.
-class _PixelSnappedViewport extends StatefulWidget {
-  const _PixelSnappedViewport({required this.child});
-
-  final Widget child;
-
-  @override
-  State<_PixelSnappedViewport> createState() => _PixelSnappedViewportState();
-}
-
-class _PixelSnappedViewportState extends State<_PixelSnappedViewport>
-    with WidgetsBindingObserver {
-  /// Deslocamento em pixels lógicos (sempre <= 0) para cair no pixel inteiro.
-  Offset _shift = Offset.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeMetrics() => _scheduleMeasure();
-
-  void _scheduleMeasure() {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-  }
-
-  double _fraction(double physical) {
-    final nearest = physical.roundToDouble();
-    // Tolera ruído de ponto flutuante (146.99999 / 147.00001).
-    if ((physical - nearest).abs() < 0.02) return 0;
-    return physical - physical.floorToDouble();
-  }
-
-  void _measure() {
-    if (!mounted) return;
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.attached || !box.hasSize) return;
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final origin = box.localToGlobal(Offset.zero);
-    final next = Offset(
-      -_fraction(origin.dx * dpr) / dpr,
-      -_fraction(origin.dy * dpr) / dpr,
-    );
-    if ((next - _shift).distance > 0.0005) {
-      setState(() => _shift = next);
-    }
-  }
-
-  /// Arredonda um tamanho lógico PARA CIMA para um número inteiro de pixels
-  /// físicos, devolvendo o valor em pixels lógicos, e acrescenta 1 pixel
-  /// físico extra de folga — essa folga é o que impede a linha branca de
-  /// voltar a aparecer quando o recorte da PlatformView é 1px conservador
-  /// em relação ao Positioned do Flutter.
-  double _snapUpWithBleed(double logical, double dpr) {
-    final physicalCeil = ((logical * dpr) - 0.001).ceilToDouble();
-    return (physicalCeil + 2) / dpr;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    _scheduleMeasure();
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = _snapUpWithBleed(constraints.maxWidth - _shift.dx, dpr);
-        final height = _snapUpWithBleed(constraints.maxHeight - _shift.dy, dpr);
-        return ClipRect(
-          clipBehavior: Clip.hardEdge,
-          child: RepaintBoundary(
-            child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: _shift.dx,
-                top: _shift.dy,
-                width: width,
-                height: height,
-                child: widget.child,
-              ),
-            ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+/// Quantos pixels lógicos a WebView é desenhada além da margem direita e
+/// inferior reais do ecrã. O ClipRect/Material do Scaffold corta o
+/// excesso, então o único efeito visível é cobrir a fresta de 1px onde
+/// a fronteira entre a PlatformView nativa e o Flutter deixava a cor de
+/// fundo (branco) aparecer. Se a linha persistir no teu aparelho, sobe
+/// este valor para 3.0 ou 4.0.
+const double _kWebViewOverscan = 2.0;
 
 enum _OrbitMenuAction {
   back,
