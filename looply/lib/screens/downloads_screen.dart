@@ -71,7 +71,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       context: context,
       title: appText('delete_downloads_selected'),
       icon: AppIcons.trash,
-      content: Text(appText('delete_downloads_count').replaceAll('{count}', _selectedIds.length.toString())),
+      message: appText('delete_downloads_count').replaceAll('{count}', _selectedIds.length.toString()),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('delete'), value: true, isDestructive: true),
@@ -221,7 +221,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 context: context,
                                 title: appText('clear_list'),
                                 icon: AppIcons.trash,
-                                content: Text(appText('clear_downloads_confirmation')),
+                                message: appText('clear_downloads_confirmation'),
                                 actions: <LooplyDialogAction<bool>>[
                                   LooplyDialogAction<bool>(label: appText('cancel'), value: false),
                                   LooplyDialogAction<bool>(label: appText('delete'), value: true, isDestructive: true),

@@ -29,7 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       title: appText('sign_out'),
       icon: AppIcons.signOut,
-      content: Text(appText('sign_out_confirm')),
+      message: appText('sign_out_confirm'),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('sign_out'), value: true, isDestructive: true),

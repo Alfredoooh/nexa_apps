@@ -48,9 +48,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
     super.dispose();
   }
 
+  // Janela de scroll ampliada de 24px para 100px: dá uma trilha de
+  // transição bem mais longa e perceptível para o fade do appbar, em vez
+  // de um salto quase instantâneo nos primeiros toques de deslize.
   void _onScroll() {
     if (!mounted) return;
-    final offset = _scrollController.hasClients ? _scrollController.offset.clamp(0.0, 24.0) : 0.0;
+    final offset = _scrollController.hasClients ? _scrollController.offset.clamp(0.0, 100.0) : 0.0;
     if ((offset - _scrollOffset).abs() > 0.5) {
       setState(() => _scrollOffset = offset.toDouble());
     }
@@ -184,12 +187,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
           // Appbar flutuante com o mesmo gradiente de esmaecimento usado em
           // HomeScreen/HistoryScreen: opaca no topo, transparente na base,
           // e com uma opacidade extra ligada ao scroll (fica mais sólida
-          // assim que a lista começa a deslizar por baixo dela).
+          // assim que a lista começa a deslizar por baixo dela). A janela
+          // de 100px (ver _onScroll) e a curva easeOut aplicada dentro de
+          // _ActivityAppBar tornam essa transição bem mais longa e suave
+          // do que o salto quase instantâneo de antes.
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: _ActivityAppBar(scrollProgress: _scrollOffset / 24.0),
+            child: _ActivityAppBar(scrollProgress: _scrollOffset / 100.0),
           ),
         ],
       ),
@@ -209,7 +215,10 @@ class _ActivityAppBar extends StatelessWidget {
     final bg = pageBg(context);
     final text = mainText(context);
     final topInset = MediaQuery.of(context).padding.top;
-    final solidness = scrollProgress.clamp(0.0, 1.0);
+    // Easing aplicado sobre o progresso linear de scroll: a transição do
+    // gradiente fica curva (acelera e desacelera) em vez de andar em
+    // linha reta com o dedo, o que lê como bem mais suave.
+    final solidness = Curves.easeOut.transform(scrollProgress.clamp(0.0, 1.0));
 
     return Container(
       padding: EdgeInsets.only(top: topInset),
@@ -217,7 +226,12 @@ class _ActivityAppBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0.55 + 0.45 * solidness).withOpacity(solidness == 0 ? 0.0 : bg.opacity)],
+          // Corrigido: antes havia um .withOpacity() encadeado em cima de
+          // outro, e o segundo sempre substituía o primeiro em vez de
+          // combiná-los — isso fazia a base do gradiente saltar entre
+          // dois valores fixos em vez de variar continuamente com o
+          // scroll. Agora a opacidade final é proporcional a solidness.
+          colors: [bg, bg, bg.withOpacity(bg.opacity * solidness)],
           stops: const [0.0, 0.55, 1.0],
         ),
       ),
@@ -249,7 +263,9 @@ class _ActivityAppBar extends StatelessWidget {
 /// Seletor de período (Day / Week / Month / Year), em cápsula arredondada.
 /// O indicador deslizante usa AnimatedPositioned sobre os rótulos fixos,
 /// em vez de recriar o fundo a cada item — isto evita o "salto" e dá um
-/// movimento contínuo de um item para o outro.
+/// movimento contínuo de um item para o outro. Duração aumentada e curva
+/// trocada para easeOutQuint: a desaceleração final fica mais longa e
+/// macia do que o easeOutCubic anterior, lendo como um motion mais suave.
 class _RangeSelector extends StatelessWidget {
   const _RangeSelector({required this.value, required this.onChanged});
   final _ChartRange value;
@@ -285,8 +301,8 @@ class _RangeSelector extends StatelessWidget {
           return Stack(
             children: [
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeOutQuint,
                 left: segmentWidth * index,
                 top: 0,
                 bottom: 0,
@@ -309,8 +325,8 @@ class _RangeSelector extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 9),
                         child: Center(
                           child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutQuint,
                             style: TextStyle(
                               color: selected ? text : muted,
                               fontSize: 13,
@@ -335,8 +351,9 @@ class _RangeSelector extends StatelessWidget {
 /// Gráfico de barras com anúncios bloqueados por período, com bordas
 /// totalmente arredondadas (estilo cápsula) em cada barra. A troca de
 /// período agora anima a altura E a cor de cada barra ao reconstruir
-/// (chave por range para disparar uma nova animação do zero), em vez de
-/// aparecer instantaneamente.
+/// (chave por range para disparar uma nova animação do zero). Curva
+/// trocada para easeOutQuint e durações alongadas para um motion mais
+/// suave na subida das barras.
 class _AdBlockBarChart extends StatelessWidget {
   const _AdBlockBarChart({required this.data, required this.range});
   final List<MapEntry<String, int>> data;
@@ -358,7 +375,7 @@ class _AdBlockBarChart extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 420),
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOutQuint,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
@@ -382,11 +399,11 @@ class _AdBlockBarChart extends StatelessWidget {
                     TweenAnimationBuilder<double>(
                       key: ValueKey('$range-$index-$barHeight'),
                       tween: Tween<double>(begin: 0, end: barHeight),
-                      duration: Duration(milliseconds: 560 + index * 35),
-                      curve: Curves.easeOutCubic,
+                      duration: Duration(milliseconds: 680 + index * 45),
+                      curve: Curves.easeOutQuint,
                       builder: (context, value, _) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeOutCubic,
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeOutQuint,
                         height: value,
                         width: double.infinity,
                         decoration: BoxDecoration(
@@ -397,7 +414,8 @@ class _AdBlockBarChart extends StatelessWidget {
                     ),
                     const SizedBox(height: 9),
                     AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 220),
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutQuint,
                       style: TextStyle(
                         color: isHighlighted ? text : muted,
                         fontSize: 11.5,
@@ -417,9 +435,12 @@ class _AdBlockBarChart extends StatelessWidget {
 }
 
 /// Sequência de dias de uso da semana atual, com check animado nos dias em
-/// que o Looply registou pelo menos uma visita a um site. O círculo agora
-/// faz uma transição de cor suave (não só escala) e um leve "pop" elástico
-/// ao marcar, em vez de só trocar de cor instantaneamente.
+/// que o Looply registou pelo menos uma visita a um site. Além da
+/// transição de cor/escala já existente ao marcar, os 7 círculos agora
+/// entram com um stagger (fade + leve subida), atrasado por índice, igual
+/// ao padrão já usado nos cartões de "Recentes" mais abaixo na mesma tela
+/// — dá uma sensação de sequência sendo "desenhada" da esquerda para a
+/// direita ao abrir o ecrã, em vez de aparecer tudo de uma vez.
 class _DayStreakCard extends StatefulWidget {
   const _DayStreakCard();
   @override
@@ -462,53 +483,65 @@ class _DayStreakCardState extends State<_DayStreakCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: List.generate(7, (index) {
               final used = usage[index];
-              return Column(
-                children: [
-                  Text(
-                    _weekdayLabels[index],
-                    style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600),
+              return TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: Duration(milliseconds: 360 + index * 60),
+                curve: Curves.easeOutQuint,
+                builder: (context, entryValue, child) => Opacity(
+                  opacity: entryValue,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - entryValue) * 10),
+                    child: child,
                   ),
-                  const SizedBox(height: 8),
-                  TweenAnimationBuilder<double>(
-                    key: ValueKey(used),
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 420),
-                    curve: used ? Curves.elasticOut : Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      final scale = used ? (0.6 + 0.4 * value).clamp(0.0, 1.15) : 1.0;
-                      return Transform.scale(
-                        scale: scale,
-                        child: child,
-                      );
-                    },
-                    child: TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(
-                        begin: pillColor(context),
-                        end: used ? accent : pillColor(context),
-                      ),
-                      duration: const Duration(milliseconds: 380),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, color, _) => Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color,
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _weekdayLabels[index],
+                      style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey(used),
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 420),
+                      curve: used ? Curves.elasticOut : Curves.easeOutQuint,
+                      builder: (context, value, child) {
+                        final scale = used ? (0.6 + 0.4 * value).clamp(0.0, 1.15) : 1.0;
+                        return Transform.scale(
+                          scale: scale,
+                          child: child,
+                        );
+                      },
+                      child: TweenAnimationBuilder<Color?>(
+                        tween: ColorTween(
+                          begin: pillColor(context),
+                          end: used ? accent : pillColor(context),
                         ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          transitionBuilder: (child, animation) => ScaleTransition(
-                            scale: animation,
-                            child: FadeTransition(opacity: animation, child: child),
+                        duration: const Duration(milliseconds: 380),
+                        curve: Curves.easeOutQuint,
+                        builder: (context, color, _) => Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: color,
                           ),
-                          child: used
-                              ? const Icon(Icons.check_rounded, key: ValueKey('check'), color: Colors.white, size: 18)
-                              : const SizedBox.shrink(key: ValueKey('empty')),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            transitionBuilder: (child, animation) => ScaleTransition(
+                              scale: animation,
+                              child: FadeTransition(opacity: animation, child: child),
+                            ),
+                            child: used
+                                ? const Icon(Icons.check_rounded, key: ValueKey('check'), color: Colors.white, size: 18)
+                                : const SizedBox.shrink(key: ValueKey('empty')),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             }),
           ),
@@ -530,10 +563,11 @@ class _DayStreakCardState extends State<_DayStreakCard> {
   }
 }
 
-/// Favicons dos últimos sites visitados, em pilha bem próxima (overlap
-/// maior, como no exemplo de referência), com bordas 100% circulares em
-/// todos os elementos — o avatar individual, a moldura entre eles e o
-/// próprio card.
+/// Favicons dos últimos sites visitados, em pilha bem próxima (overlap de
+/// ~75%, só ~25% de cada avatar fica visível atrás do seguinte — estilo
+/// "grupo de avatares" bem compacto), com bordas 100% circulares em todos
+/// os elementos: o avatar individual, a moldura entre eles e o próprio
+/// card (que usa borderRadius 999, ou seja, pílula/circular nas pontas).
 class _VisitedSitesCard extends StatelessWidget {
   const _VisitedSitesCard();
 
@@ -557,11 +591,12 @@ class _VisitedSitesCard extends StatelessWidget {
     final accent = accentColor(context);
     final hosts = _recentUniqueHosts(context);
 
-    // Overlap bem mais pronunciado (avatares quase a tocar-se, como na
-    // referência) — cada avatar seguinte avança só 15px em vez de 20px
-    // sobre um diâmetro de 34px, deixando pouco mais de metade visível.
+    // Overlap bem mais apertado que antes: cada avatar seguinte avança só
+    // 8px sobre um diâmetro de 34px — deixa cerca de 25% de cada círculo
+    // visível, bem mais próximo de um grupo compacto do que a versão
+    // anterior (15px de avanço, ~56% visível).
     const avatarSize = 34.0;
-    const overlapStep = 15.0;
+    const overlapStep = 8.0;
 
     return Material(
       color: settingsCardColor(context),
@@ -614,7 +649,7 @@ class _VisitedSitesCard extends StatelessWidget {
                                 left: index * overlapStep,
                                 child: TweenAnimationBuilder<double>(
                                   tween: Tween<double>(begin: 0, end: 1),
-                                  duration: Duration(milliseconds: 280 + index * 60),
+                                  duration: Duration(milliseconds: 320 + index * 70),
                                   curve: Curves.easeOutBack,
                                   builder: (context, value, child) => Transform.scale(
                                     scale: value.clamp(0.0, 1.0),

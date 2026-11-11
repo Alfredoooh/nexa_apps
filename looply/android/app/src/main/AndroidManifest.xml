@@ -57,6 +57,13 @@
 
         </activity>
 
+        <activity
+            android:name=".GoogleNativeBrowserActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/NormalTheme"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

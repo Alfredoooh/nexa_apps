@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/svg_icon.dart';
+import 'activity_screen.dart' show SiteFaviconAvatar;
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -78,7 +79,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       title: appText('delete_history_selected'),
       icon: AppIcons.trash,
-      content: Text(appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString())),
+      message: appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString()),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('delete'), value: true, isDestructive: true),
@@ -237,7 +238,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 // aparece com animação de escala + fade (TweenAnimationBuilder), sem
 // depender de nenhum pacote externo de ícones animados. À direita, um
 // ícone de "abrir" (launch.svg, com fallback para arrowSquareOut) no
-// lugar do antigo chevron.
+// lugar do antigo chevron. À esquerda, agora usa SiteFaviconAvatar (o
+// mesmo widget já usado nos cartões de "Recentes" da tela de Atividade)
+// para entradas de site: mostra o favicon real quando disponível, ou um
+// círculo cinza com a inicial do host — nunca mais o ícone de globo
+// genérico. Entradas de jogo mantêm o ícone fixo de lupa, já que não há
+// favicon de URL de jogo para buscar.
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({
     required this.entry,
@@ -283,16 +289,18 @@ class _HistoryCard extends StatelessWidget {
                     AnimatedOpacity(
                       duration: const Duration(milliseconds: 160),
                       opacity: selected ? 0 : 1,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                        child: AppSvgIcon(
-                          isSite ? AppIcons.globe : AppIcons.magnifyingGlass,
-                          color: accent,
-                          size: 18,
-                        ),
-                      ),
+                      child: isSite
+                          ? SiteFaviconAvatar(url: entry.url, size: 38)
+                          : Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
+                              child: AppSvgIcon(
+                                AppIcons.magnifyingGlass,
+                                color: accent,
+                                size: 18,
+                              ),
+                            ),
                     ),
                     TweenAnimationBuilder<double>(
                       tween: Tween<double>(begin: 0, end: selected ? 1 : 0),

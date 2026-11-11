@@ -36,12 +36,15 @@ import android.view.SubMenu
 import android.view.ViewGroup
 import android.view.View
 import android.widget.ImageView
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.FrameLayout
 import android.widget.PopupWindow
 import android.widget.TextView
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.PopupMenu
@@ -132,6 +135,8 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "showNativePopup" -> showNativePopup(call, result)
+                    "showNativeDialog" -> showNativeDialog(call, result)
+                    "openGoogleNativeBrowser" -> openGoogleNativeBrowser(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -638,6 +643,149 @@ class MainActivity : FlutterActivity() {
      * SwitchCompat, a forma suportada pelo Android de colocar um controlo
      * interativo dentro de um item de menu nativo.
      */
+    /** Opens the separate Kotlin WebView used by the Google quick-site tile. */
+    private fun openGoogleNativeBrowser(call: MethodCall, result: MethodChannel.Result) {
+        val rawUrl = call.argument<String>("url") ?: "https://www.google.com"
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull()
+        val host = uri?.host?.lowercase(Locale.ROOT).orEmpty()
+        val isGoogleHost = host == "google.com" || host == "www.google.com" || host.endsWith(".google.com")
+        if (uri == null || (uri.scheme != "https" && uri.scheme != "http") || !isGoogleHost) {
+            result.error("invalid_native_browser_url", "A tela nativa de teste só aceita endereços do Google.", null)
+            return
+        }
+        try {
+            startActivity(Intent(this, GoogleNativeBrowserActivity::class.java).apply {
+                putExtra(GoogleNativeBrowserActivity.EXTRA_URL, uri.toString())
+            })
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("native_browser_unavailable", error.message, null)
+        }
+    }
+
+    /** Mostra um diálogo Android real, mantendo o conteúdo de texto em Views nativas. */
+    private fun showNativeDialog(call: MethodCall, result: MethodChannel.Result) {
+        val title = call.argument<String>("title")
+        val message = call.argument<String>("message")
+        val actions = call.argument<List<Map<String, Any?>>>("actions")
+        if (title == null || message == null || actions.isNullOrEmpty()) {
+            result.error("invalid_dialog", "Título, mensagem ou ações do diálogo são inválidos.", null)
+            return
+        }
+
+        val secondaryMessage = call.argument<String>("secondaryMessage")
+        val barrierDismissible = call.argument<Boolean>("barrierDismissible") ?: true
+        val dark = isAppDarkTheme()
+        val backgroundColor = if (dark) Color.rgb(33, 35, 37) else Color.WHITE
+        val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
+        val mutedColor = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
+        val accentColor = if (dark) Color.rgb(138, 180, 248) else Color.rgb(26, 115, 232)
+        val destructiveColor = Color.rgb(255, 69, 58)
+        val themedContext = ContextThemeWrapper(
+            this,
+            if (dark) R.style.LooplyDialog_Dark else R.style.LooplyDialog_Light,
+        )
+        val dialogView = LayoutInflater.from(themedContext).inflate(R.layout.dialog_native, null, false)
+        val titleView = dialogView.findViewById<TextView>(R.id.dialog_title)
+        val messageView = dialogView.findViewById<TextView>(R.id.dialog_message)
+        val secondaryView = dialogView.findViewById<TextView>(R.id.dialog_secondary_message)
+        val actionsContainer = dialogView.findViewById<LinearLayout>(R.id.dialog_actions)
+
+        titleView.text = title
+        titleView.setTextColor(textColor)
+        messageView.text = message
+        messageView.setTextColor(mutedColor)
+        if (!secondaryMessage.isNullOrBlank()) {
+            // No diálogo de informação do site, a primeira linha é o nome/título
+            // e a segunda é o endereço, com peso e contraste secundário.
+            messageView.setTextColor(textColor)
+            messageView.setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+            secondaryView.text = secondaryMessage
+            secondaryView.setTextColor(mutedColor)
+            secondaryView.visibility = View.VISIBLE
+        } else {
+            secondaryView.visibility = View.GONE
+        }
+
+        dialogView.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dpToPx(20).toFloat()
+            setColor(backgroundColor)
+        }
+
+        val dialog = AlertDialog.Builder(themedContext)
+            .setView(dialogView)
+            .setCancelable(barrierDismissible)
+            .create()
+
+        var completed = false
+        fun finish(value: Any?) {
+            if (completed) return
+            completed = true
+            result.success(value)
+        }
+
+        actions.forEach { action ->
+            val label = action["label"]?.toString().orEmpty()
+            val value = action["value"]
+            val isPrimary = action["isPrimary"] as? Boolean ?: false
+            val isDestructive = action["isDestructive"] as? Boolean ?: false
+            val button = Button(themedContext).apply {
+                text = label
+                isAllCaps = false
+                textSize = 14f
+                minWidth = 0
+                minimumWidth = dpToPx(52)
+                minHeight = 0
+                minimumHeight = dpToPx(40)
+                setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+                when {
+                    isPrimary -> {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.RECTANGLE
+                            cornerRadius = dpToPx(22).toFloat()
+                            setColor(accentColor)
+                        }
+                        setTextColor(Color.WHITE)
+                    }
+                    else -> {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.RECTANGLE
+                            cornerRadius = dpToPx(22).toFloat()
+                            setColor(Color.TRANSPARENT)
+                        }
+                        setTextColor(if (isDestructive) destructiveColor else accentColor)
+                    }
+                }
+                setOnClickListener {
+                    finish(value)
+                    dialog.dismiss()
+                }
+            }
+            actionsContainer.addView(button, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                marginStart = dpToPx(6)
+            })
+        }
+
+        dialog.setOnDismissListener { finish(null) }
+        dialog.setOnCancelListener { finish(null) }
+        try {
+            dialog.show()
+            dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            val maxWidth = dpToPx(560)
+            val screenWidth = resources.displayMetrics.widthPixels - dpToPx(40)
+            dialog.window?.setLayout(minOf(maxWidth, screenWidth), ViewGroup.LayoutParams.WRAP_CONTENT)
+        } catch (error: RuntimeException) {
+            finish(null)
+        }
+    }
+
+    private fun dpToPx(value: Int): Int =
+        (value * resources.displayMetrics.density).roundToInt()
+
     private fun showNativePopup(call: MethodCall, result: MethodChannel.Result) {
         val items = call.argument<List<Map<String, Any?>>>("items")
         val anchor = call.argument<Map<String, Any>>("anchor")

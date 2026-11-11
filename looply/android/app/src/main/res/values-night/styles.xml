@@ -25,4 +25,10 @@
         <item name="android:textSize">14sp</item>
         <item name="android:fontFamily">sans-serif-medium</item>
     </style>
+
+    <style name="LooplyDialog.Dark" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorAccent">#8AB4F8</item>
+    </style>
+
 </resources>

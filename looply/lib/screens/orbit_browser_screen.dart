@@ -1068,15 +1068,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen>
       context: context,
       title: appText('site_info'),
       icon: AppIcons.info,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(_currentTitle.isEmpty ? host : _currentTitle, style: TextStyle(color: mainText(context), fontWeight: FontWeight.w700)),
-          const SizedBox(height: 7),
-          SelectableText(_currentUrl, style: TextStyle(color: mutedText(context), fontSize: 13)),
-        ],
-      ),
+      message: _currentTitle.isEmpty ? host : _currentTitle,
+      secondaryMessage: _currentUrl,
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('close'), value: true),
       ],

@@ -225,7 +225,7 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       title: appText('import_data'),
       icon: AppIcons.fileArrowUp,
-      content: Text(appText('import_confirmation')),
+      message: appText('import_confirmation'),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('continue'), value: true, isPrimary: true),
