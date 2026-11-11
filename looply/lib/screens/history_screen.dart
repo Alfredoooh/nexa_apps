@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../models.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 import 'activity_screen.dart' show SiteFaviconAvatar;
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -132,7 +131,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               entries.isEmpty
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        AppSvgIcon(AppIcons.clockCounterClockwise, size: 48, color: muted),
+                        AppMaterialIcon(AppIcons.clockCounterClockwise, size: 48, color: muted),
                         const SizedBox(height: 12),
                         Text(
                           _query.isEmpty ? appText('no_history') : appText('no_results'),
@@ -238,7 +237,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 // Card de histórico: toque ativa a seleção com um ícone de check que
 // aparece com animação de escala + fade (TweenAnimationBuilder), sem
 // depender de nenhum pacote externo de ícones animados. À direita, um
-// ícone de "abrir" (launch.svg, com fallback para arrowSquareOut) no
+// ícone de abertura externa em Material Symbols Rounded no
 // lugar do antigo chevron. À esquerda, agora usa SiteFaviconAvatar (o
 // mesmo widget já usado nos cartões de "Recentes" da tela de Atividade)
 // para entradas de site: mostra o favicon real quando disponível, ou um
@@ -296,7 +295,7 @@ class _HistoryCard extends StatelessWidget {
                               width: 38,
                               height: 38,
                               decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                              child: AppSvgIcon(
+                              child: AppMaterialIcon(
                                 AppIcons.magnifyingGlass,
                                 color: accent,
                                 size: 18,
@@ -344,13 +343,7 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              SvgPicture.asset(
-                'assets/svgs/regular/expand.svg',
-                width: 18,
-                height: 18,
-                colorFilter: ColorFilter.mode(muted, BlendMode.srcIn),
-                placeholderBuilder: (context) => AppSvgIcon(AppIcons.arrowUpLeft, color: muted, size: 18),
-              ),
+              Icon(Symbols.open_in_new_rounded, size: 18, color: muted),
             ],
           ),
         ),
@@ -395,7 +388,7 @@ class _HistorySearchBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
+              AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: TextField(
@@ -413,7 +406,7 @@ class _HistorySearchBar extends StatelessWidget {
               if (controller.text.isNotEmpty)
                 GestureDetector(
                   onTap: controller.clear,
-                  child: AppSvgIcon(AppIcons.x, color: muted, size: 16),
+                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 16),
                 ),
             ],
           ),
@@ -442,7 +435,7 @@ class _CircularHistoryButton extends StatelessWidget {
             child: SizedBox(
               width: 42,
               height: 42,
-              child: AppSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
             ),
           ),
         ),

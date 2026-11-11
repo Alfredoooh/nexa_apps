@@ -4,7 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../localization.dart';
 import '../theme.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 // Tela simples de informações do app, aberta a partir do botão de
 // informação na appbar da Settings. Usa o mesmo appbar com fade
@@ -155,7 +155,7 @@ class _CircleBarButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: SizedBox(width: 42, height: 42, child: AppSvgIcon(icon, size: 19, color: muted)),
+          child: SizedBox(width: 42, height: 42, child: AppMaterialIcon(icon, size: 19, color: muted)),
         ),
       ),
     );

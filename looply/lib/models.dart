@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 
 import 'session_store.dart';
-import 'widgets/svg_icon.dart';
+import 'widgets/material_symbols.dart';
 
 const Set<String> adBlockDomains = {
   'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',

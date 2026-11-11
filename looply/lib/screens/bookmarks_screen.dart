@@ -7,7 +7,7 @@ import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/looply_dialog.dart';
 import '../localization.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -45,14 +45,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
           if (entries.isNotEmpty)
             IconButton(
               tooltip: appText('clear_bookmarks'),
-              icon: AppSvgIcon(AppIcons.trash, color: text),
+              icon: AppMaterialIcon(AppIcons.trash, color: text),
               onPressed: () => _confirmClear(context),
             ),
         ],
       ),
       body: entries.isEmpty
           ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-              AppSvgIcon(AppIcons.bookmarksSimple, size: 48, color: muted),
+              AppMaterialIcon(AppIcons.bookmarksSimple, size: 48, color: muted),
               const SizedBox(height: 12),
               Text(appText('no_bookmarks'), style: TextStyle(color: text, fontWeight: FontWeight.w700)),
               const SizedBox(height: 5),
@@ -65,11 +65,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               itemBuilder: (context, index) {
                 final entry = entries[index];
                 final iconData = browserFaviconCache.forUrl(entry.url);
-                Widget leading = AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 20);
+                Widget leading = AppMaterialIcon(AppIcons.globe, color: accentColor(context), size: 20);
                 if (iconData != null) {
                   try {
                     leading = Image.memory(base64Decode(iconData), width: 23, height: 23, fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: accentColor(context), size: 20));
+                      errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: accentColor(context), size: 20));
                   } catch (_) {}
                 }
                 return Material(
@@ -91,7 +91,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                         IconButton(
                           tooltip: appText('remove'),
                           onPressed: () => bookmarksController.remove(entry.id),
-                          icon: AppSvgIcon(AppIcons.x, color: muted, size: 20),
+                          icon: AppMaterialIcon(AppIcons.x, color: muted, size: 20),
                         ),
                       ]),
                     ),

@@ -10,7 +10,7 @@ import '../theme.dart';
 import '../session_store.dart';
 import '../auth_service.dart';
 import '../localization.dart';
-import 'svg_icon.dart';
+import 'material_symbols.dart';
 
 /// Ponte entre os botões da interface e o drawer push/drag do shell.
 /// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
@@ -263,7 +263,7 @@ class _DrawerOption extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: AppSvgIcon(icon, color: accentColor(context), size: 19),
+              child: AppMaterialIcon(icon, color: accentColor(context), size: 19),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -383,7 +383,7 @@ void showThemeSheet(BuildContext context) {
           Widget option({required String label, required bool selected, required VoidCallback onTap}) =>
               ListTile(
                 dense: true,
-                leading: AppSvgIcon(
+                leading: AppMaterialIcon(
                   selected ? AppIcons.circleDot : AppIcons.circle,
                   color: selected ? accent : mutedForMode(context, mode),
                 ),

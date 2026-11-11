@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../auth_service.dart';
 import '../localization.dart';
 import '../theme.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 enum _AuthBusy { none, email, google }
 
@@ -149,7 +149,7 @@ class _AuthScreenState extends State<AuthScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: muted.withOpacity(.85), fontSize: 14),
-          prefixIcon: AppSvgIcon(icon, size: 20, color: muted),
+          prefixIcon: AppMaterialIcon(icon, size: 20, color: muted),
           suffixIcon: suffixIcon,
           filled: false,
           isCollapsed: false,
@@ -217,7 +217,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         width: 40,
                         height: 40,
                         child: Center(
-                          child: AppSvgIcon(
+                          child: AppMaterialIcon(
                             AppIcons.x,
                             color: text,
                             size: 20,
@@ -311,7 +311,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: () => setState(
                           () => _obscurePassword = !_obscurePassword,
                         ),
-                        icon: AppSvgIcon(
+                        icon: AppMaterialIcon(
                           _obscurePassword
                               ? AppIcons.eye
                               : AppIcons.eyeSlash,

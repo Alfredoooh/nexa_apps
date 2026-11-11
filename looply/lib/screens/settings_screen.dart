@@ -19,7 +19,7 @@ import '../auth_service.dart';
 import 'app_info_screen.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
 // cinza-branco no tema claro (settingsCardColor), em vez de
@@ -313,7 +313,7 @@ class _AccountSummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              AppSvgIcon(AppIcons.caretRight, color: muted, size: 20),
+              AppMaterialIcon(AppIcons.caretRight, color: muted, size: 20),
             ],
           ),
         ),
@@ -362,7 +362,7 @@ class _SettingsFadeAppBar extends StatelessWidget {
                     child: SizedBox(
                       width: 42,
                       height: 42,
-                      child: AppSvgIcon(AppIcons.caretLeft, size: 19, color: muted),
+                      child: AppMaterialIcon(AppIcons.caretLeft, size: 19, color: muted),
                     ),
                   ),
                 ),
@@ -520,7 +520,7 @@ class _SettingsTile extends StatelessWidget {
                     color: iconBadge,
                   ),
                   alignment: Alignment.center,
-                  child: AppSvgIcon(icon, color: iconColor, size: 19),
+                  child: AppMaterialIcon(icon, color: iconColor, size: 19),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -568,7 +568,7 @@ class _SettingsTile extends StatelessWidget {
                 ],
                 if (showChevron) ...[
                   const SizedBox(width: 6),
-                  AppSvgIcon(AppIcons.caretRight, color: muted, size: 18),
+                  AppMaterialIcon(AppIcons.caretRight, color: muted, size: 18),
                 ],
               ],
             ),
@@ -643,7 +643,7 @@ class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile
         label: appText('default_browser'),
         subtitle: snapshot.data == true ? appText('browser_default_yes') : appText('browser_default_no'),
         trailing: snapshot.data == true
-            ? AppSvgIcon(AppIcons.checkCircle, color: accentColor(context), size: 21)
+            ? AppMaterialIcon(AppIcons.checkCircle, color: accentColor(context), size: 21)
             : null,
         showChevron: true,
         onTap: _requestDefaultBrowser,

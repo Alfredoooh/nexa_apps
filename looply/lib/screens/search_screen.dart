@@ -12,7 +12,7 @@ import '../shell/shell_tab_request.dart';
 import '../widgets/looply_popup.dart';
 import '../widgets/search_engine_picker.dart';
 import '../localization.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isIncognito = false});
@@ -216,9 +216,9 @@ class _SearchScreenState extends State<SearchScreen> {
                       itemBuilder: (context, index) {
                         final query = searchHistoryController.queries[index];
                         return ListTile(
-                          leading: AppSvgIcon(AppIcons.clockCounterClockwise, color: mutedText(context)),
+                          leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: mutedText(context)),
                           title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context))),
-                          trailing: AppSvgIcon(AppIcons.arrowUpLeft, size: 18, color: mutedText(context)),
+                          trailing: AppMaterialIcon(AppIcons.arrowUpLeft, size: 18, color: mutedText(context)),
                           onTap: () {
                             Navigator.of(sheetContext).pop();
                             _submitSearch(query);
@@ -366,7 +366,7 @@ class _SearchScreenState extends State<SearchScreen> {
       width: 34,
       height: 34,
       decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-      child: AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+      child: AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
     );
   }
 
@@ -399,7 +399,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       tooltip: appText('back'),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-                      icon: AppSvgIcon(AppIcons.arrowLeft, color: muted, size: 19),
+                      icon: AppMaterialIcon(AppIcons.arrowLeft, color: muted, size: 19),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                     Expanded(
@@ -428,7 +428,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         tooltip: appText('clear'),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints.tightFor(width: 32, height: 38),
-                        icon: AppSvgIcon(AppIcons.x, color: muted, size: 17),
+                        icon: AppMaterialIcon(AppIcons.x, color: muted, size: 17),
                         onPressed: () {
                           _controller.clear();
                           _focusNode.requestFocus();
@@ -475,11 +475,11 @@ class _SearchScreenState extends State<SearchScreen> {
                             ),
                             for (final query in queries)
                               ListTile(
-                                leading: AppSvgIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
+                                leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
                                 title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                                 trailing: IconButton(
                                   tooltip: appText('fill_search'),
-                                  icon: AppSvgIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
                                   onPressed: () => _fillSuggestion(query),
                                 ),
                                 onTap: () => _submitSearch(query),
@@ -500,7 +500,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
                               trailing: IconButton(
                                 tooltip: appText('fill_search'),
-                                icon: AppSvgIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                                icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
                                 onPressed: () => _fillSuggestion(suggestion),
                               ),
                               onTap: () => _submitSearch(suggestion),
@@ -536,7 +536,7 @@ class _SuggestionImage extends StatelessWidget {
             fit: BoxFit.cover,
             cacheWidth: 96,
             cacheHeight: 96,
-            errorBuilder: (_, __, ___) => AppSvgIcon(fallback, color: muted, size: 17),
+            errorBuilder: (_, __, ___) => AppMaterialIcon(fallback, color: muted, size: 17),
           ),
         ),
       );

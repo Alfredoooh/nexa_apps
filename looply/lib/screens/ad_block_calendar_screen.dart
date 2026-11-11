@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 class AdBlockCalendarScreen extends StatefulWidget {
   const AdBlockCalendarScreen({super.key});
@@ -73,7 +73,7 @@ class _AdBlockCalendarScreenState extends State<AdBlockCalendarScreen> {
             fixedSize: const Size(42, 42),
             shape: const CircleBorder(),
           ),
-          icon: const AppSvgIcon(AppIcons.arrowLeft),
+          icon: const AppMaterialIcon(AppIcons.arrowLeft),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         centerTitle: true,

@@ -7,7 +7,7 @@ import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class DownloadsScreen extends StatefulWidget {
@@ -131,7 +131,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               entries.isEmpty
                   ? Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        AppSvgIcon(AppIcons.downloadSimple, size: 48, color: muted),
+                        AppMaterialIcon(AppIcons.downloadSimple, size: 48, color: muted),
                         const SizedBox(height: 12),
                         Text(
                           _query.isEmpty ? appText('no_downloads') : appText('no_results'),
@@ -325,7 +325,7 @@ class _DownloadCard extends StatelessWidget {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                            child: AppSvgIcon(
+                            child: AppMaterialIcon(
                               isFailed ? AppIcons.warningCircle : entry.icon,
                               color: isFailed ? const Color(0xFFFF453A) : accent,
                               size: 20,
@@ -436,7 +436,7 @@ class _DownloadsSearchBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              AppSvgIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
+              AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
               const SizedBox(width: 9),
               Expanded(
                 child: TextField(
@@ -454,7 +454,7 @@ class _DownloadsSearchBar extends StatelessWidget {
               if (controller.text.isNotEmpty)
                 GestureDetector(
                   onTap: controller.clear,
-                  child: AppSvgIcon(AppIcons.x, color: muted, size: 16),
+                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 16),
                 ),
             ],
           ),
@@ -483,7 +483,7 @@ class _CircularDownloadButton extends StatelessWidget {
             child: SizedBox(
               width: 42,
               height: 42,
-              child: AppSvgIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
             ),
           ),
         ),

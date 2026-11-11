@@ -7,7 +7,7 @@ import '../localization.dart';
 import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 /// Detalhe de uso por site: percentagem de visitas em relação aos restantes
@@ -67,7 +67,7 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    AppSvgIcon(AppIcons.globe, size: 38, color: muted),
+                    AppMaterialIcon(AppIcons.globe, size: 38, color: muted),
                     const SizedBox(height: 9),
                     Text(
                       appText('no_recent_activity'),
@@ -164,7 +164,7 @@ class _SiteUsageTile extends StatelessWidget {
     final accent = accentColor(context);
     final encoded = browserFaviconCache.forUrl('https://${item.host}');
 
-    Widget icon = AppSvgIcon(AppIcons.globe, color: accent, size: 19);
+    Widget icon = AppMaterialIcon(AppIcons.globe, color: accent, size: 19);
     if (encoded != null) {
       try {
         icon = ClipOval(
@@ -173,7 +173,7 @@ class _SiteUsageTile extends StatelessWidget {
             width: 24,
             height: 24,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: accent, size: 19),
+            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: accent, size: 19),
           ),
         );
       } catch (_) {}

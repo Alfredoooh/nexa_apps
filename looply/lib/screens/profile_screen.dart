@@ -5,7 +5,7 @@ import '../auth_service.dart';
 import '../theme.dart';
 import '../widgets/m3_switch.dart';
 import '../widgets/looply_dialog.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -57,7 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Center(
                   child: FilledButton.icon(
                     onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const AppSvgIcon(AppIcons.signIn),
+                    icon: const AppMaterialIcon(AppIcons.signIn),
                     label: Text(appText('sign_in')),
                   ),
                 ),
@@ -94,7 +94,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               shape: BoxShape.circle,
                               border: Border.all(color: bg, width: 3),
                             ),
-                            child: const AppSvgIcon(AppIcons.sealCheck, size: 14, color: Colors.white),
+                            child: const AppMaterialIcon(AppIcons.sealCheck, size: 14, color: Colors.white),
                           ),
                         ),
                       ],
@@ -117,7 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                       child: Row(
                         children: [
-                          AppSvgIcon(AppIcons.shieldCheck, color: accentColor(context), size: 19),
+                          AppMaterialIcon(AppIcons.shieldCheck, color: accentColor(context), size: 19),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -236,7 +236,7 @@ class _ProfileFadeAppBar extends StatelessWidget {
                     child: SizedBox(
                       width: 42,
                       height: 42,
-                      child: AppSvgIcon(AppIcons.caretLeft, size: 19, color: muted),
+                      child: AppMaterialIcon(AppIcons.caretLeft, size: 19, color: muted),
                     ),
                   ),
                 ),
@@ -289,7 +289,7 @@ class _ProfileFadeBottomBar extends StatelessWidget {
             foregroundColor: Colors.white,
           ),
           onPressed: onSignOut,
-          icon: const AppSvgIcon(AppIcons.signOut),
+          icon: const AppMaterialIcon(AppIcons.signOut),
           label: Text(appText('sign_out'), style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
@@ -334,7 +334,7 @@ class _ProfileToggleTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                AppSvgIcon(icon, color: accent, size: 20),
+                AppMaterialIcon(icon, color: accent, size: 20),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

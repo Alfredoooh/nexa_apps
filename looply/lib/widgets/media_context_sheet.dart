@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../theme.dart';
-import 'svg_icon.dart';
+import 'material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 enum MediaSheetKind { image, video, link }
@@ -111,7 +111,7 @@ class _MediaSheetBody extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
                         child: Row(
                           children: [
-                            AppSvgIcon(options[i].icon, size: 21, color: scheme.onSurfaceVariant),
+                            AppMaterialIcon(options[i].icon, size: 21, color: scheme.onSurfaceVariant),
                             const SizedBox(width: 16),
                             Expanded(
                               child: Text(
@@ -151,7 +151,7 @@ class _MediaSheetBody extends StatelessWidget {
                 : ColoredBox(
                     color: scheme.surfaceContainerHighest,
                     child: Center(
-                      child: AppSvgIcon(AppIcons.link, size: 26, color: scheme.onSurfaceVariant),
+                      child: AppMaterialIcon(AppIcons.link, size: 26, color: scheme.onSurfaceVariant),
                     ),
                   ),
           ),
@@ -163,7 +163,7 @@ class _MediaSheetBody extends StatelessWidget {
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => Center(
           child: kind == MediaSheetKind.image
-              ? AppSvgIcon(AppIcons.image, size: 36, color: scheme.onSurfaceVariant)
+              ? AppMaterialIcon(AppIcons.image, size: 36, color: scheme.onSurfaceVariant)
               : Icon(Symbols.play_circle_rounded, size: 36, color: scheme.onSurfaceVariant),
         ),
       );
@@ -230,13 +230,13 @@ class PagePreviewModal extends StatelessWidget {
           style: TextStyle(color: scheme.onSurface, fontSize: 15, fontWeight: FontWeight.w600),
         ),
         leading: IconButton(
-          icon: AppSvgIcon(AppIcons.x, color: scheme.onSurface),
+          icon: AppMaterialIcon(AppIcons.x, color: scheme.onSurface),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [
           IconButton(
             tooltip: 'Abrir num novo separador',
-            icon: AppSvgIcon(AppIcons.arrowUpLeft, color: scheme.onSurface),
+            icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: scheme.onSurface),
             onPressed: () {
               Navigator.of(context).pop();
               onOpenInNewTab();

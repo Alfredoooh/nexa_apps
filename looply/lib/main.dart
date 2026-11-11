@@ -22,7 +22,7 @@ import 'shell/shell_tab_request.dart';
 import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
 import 'localization.dart';
-import 'widgets/svg_icon.dart';
+import 'widgets/material_symbols.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1643,7 +1643,7 @@ class _FloatingBarItem extends StatelessWidget {
               scale: selected ? 1.06 : 1.0,
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOutCubic,
-              child: tabsCountIcon ?? AppSvgIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
+              child: tabsCountIcon ?? AppMaterialIcon(icon!, color: color, size: 21, fill: selected ? 1 : 0),
             ),
             const SizedBox(height: 3),
             AnimatedDefaultTextStyle(

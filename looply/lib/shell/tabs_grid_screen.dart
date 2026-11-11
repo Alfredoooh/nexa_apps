@@ -9,7 +9,7 @@ import '../browser_library.dart';
 import '../models.dart';
 import '../theme.dart';
 import '../widgets/looply_popup.dart';
-import '../widgets/svg_icon.dart';
+import '../widgets/material_symbols.dart';
 
 class TabsGridScreen extends StatefulWidget {
   const TabsGridScreen({
@@ -211,7 +211,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                                 tooltip: appText('back'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
-                                icon: AppSvgIcon(AppIcons.arrowLeft, size: 22, color: text),
+                                icon: AppMaterialIcon(AppIcons.arrowLeft, size: 22, color: text),
                                 onPressed: widget.onClose,
                               ),
                             ),
@@ -222,7 +222,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                                 tooltip: appText('home'),
                                 padding: EdgeInsets.zero,
                                 visualDensity: VisualDensity.compact,
-                                icon: AppSvgIcon(AppIcons.house, size: 20, color: text),
+                                icon: AppMaterialIcon(AppIcons.house, size: 20, color: text),
                                 onPressed: widget.onHome,
                               ),
                             ),
@@ -251,7 +251,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                             }
                           }
                         }),
-                        icon: AppSvgIcon(
+                        icon: AppMaterialIcon(
                           AppIcons.incognito,
                           size: 22,
                           color: text,
@@ -266,12 +266,12 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           tooltip: _selectedIds.isEmpty ? 'Seleciona separadores' : 'Eliminar selecionados',
                           visualDensity: VisualDensity.compact,
                           onPressed: _selectedIds.isEmpty ? null : _removeSelected,
-                          icon: AppSvgIcon(AppIcons.trash, color: _selectedIds.isEmpty ? muted : text),
+                          icon: AppMaterialIcon(AppIcons.trash, color: _selectedIds.isEmpty ? muted : text),
                         ),
                         IconButton(
                           tooltip: appText('finish_selection'),
                           visualDensity: VisualDensity.compact,
-                          icon: AppSvgIcon(AppIcons.check, color: text),
+                          icon: AppMaterialIcon(AppIcons.check, color: text),
                           onPressed: _toggleSelectionMode,
                         ),
                       ] else
@@ -295,7 +295,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                   child: tabs.isEmpty
                       ? Center(
                           child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            AppSvgIcon(_showIncognitoTabs ? AppIcons.incognito : AppIcons.browser, size: 44, color: muted),
+                            AppMaterialIcon(_showIncognitoTabs ? AppIcons.incognito : AppIcons.browser, size: 44, color: muted),
                             const SizedBox(height: 10),
                             Text(appText(_showIncognitoTabs ? 'no_private_tabs' : 'no_tabs'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
                             if (_showIncognitoTabs) ...[
@@ -368,7 +368,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                 shape: const CircleBorder(),
                 elevation: 4,
                 onPressed: _showIncognitoTabs ? widget.onNewIncognitoTab : widget.onNewTab,
-                child: AppSvgIcon(AppIcons.plus, size: 27, color: _showIncognitoTabs ? Colors.black : Colors.white),
+                child: AppMaterialIcon(AppIcons.plus, size: 27, color: _showIncognitoTabs ? Colors.black : Colors.white),
               ),
             ),
           ],
@@ -577,9 +577,9 @@ class TabGridCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(10, 8, 6, 7),
               child: Row(children: [
                 if (isApp)
-                  AppSvgIcon(tab.appScreenIcon ?? AppIcons.squaresFour, size: 17, color: muted)
+                  AppMaterialIcon(tab.appScreenIcon ?? AppIcons.squaresFour, size: 17, color: muted)
                 else if (tab.isIncognito)
-                  AppSvgIcon(AppIcons.incognito, size: 18, color: muted)
+                  AppMaterialIcon(AppIcons.incognito, size: 18, color: muted)
                 else
                   AnimatedBuilder(
                     animation: browserFaviconCache,
@@ -588,16 +588,16 @@ class TabGridCard extends StatelessWidget {
                       if (encoded != null) {
                         try {
                           return Image.memory(base64Decode(encoded), width: 18, height: 18, fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => AppSvgIcon(AppIcons.globe, color: muted, size: 17));
+                            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted, size: 17));
                         } catch (_) {}
                       }
-                      return AppSvgIcon(AppIcons.globe, color: muted, size: 17);
+                      return AppMaterialIcon(AppIcons.globe, color: muted, size: 17);
                     },
                   ),
                 const SizedBox(width: 7),
                 Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w600))),
                 if (selectionMode)
-                  AppSvgIcon(selected ? AppIcons.checkCircle : AppIcons.circle, color: selected ? accentColor(context) : muted, size: 20)
+                  AppMaterialIcon(selected ? AppIcons.checkCircle : AppIcons.circle, color: selected ? accentColor(context) : muted, size: 20)
                 else if (onClose != null)
                   SizedBox(
                     width: 28, height: 28,
@@ -605,7 +605,7 @@ class TabGridCard extends StatelessWidget {
                       padding: EdgeInsets.zero,
                       tooltip: appText('close_tab'),
                       style: IconButton.styleFrom(backgroundColor: pillColor(context), foregroundColor: muted),
-                      icon: const AppSvgIcon(AppIcons.x, size: 15),
+                      icon: const AppMaterialIcon(AppIcons.x, size: 15),
                       onPressed: onClose,
                     ),
                   ),
@@ -622,8 +622,8 @@ class TabGridCard extends StatelessWidget {
                     color: bg,
                     child: tab.thumbnail != null
                         ? Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low, cacheWidth: 520, cacheHeight: 760,
-                            errorBuilder: (_, __, ___) => Center(child: AppSvgIcon(AppIcons.globe, size: 32, color: muted.withOpacity(.55))))
-                        : Center(child: AppSvgIcon(isApp ? (tab.appScreenIcon ?? AppIcons.squaresFour) : AppIcons.globe, size: 34, color: muted.withOpacity(.40))),
+                            errorBuilder: (_, __, ___) => Center(child: AppMaterialIcon(AppIcons.globe, size: 32, color: muted.withOpacity(.55))))
+                        : Center(child: AppMaterialIcon(isApp ? (tab.appScreenIcon ?? AppIcons.squaresFour) : AppIcons.globe, size: 34, color: muted.withOpacity(.40))),
                   ),
                 ),
               ),
