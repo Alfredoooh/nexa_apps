@@ -140,6 +140,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
   List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
   final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise];
+  // Widgets reais das páginas principais da shell (Início e Atividade),
+  // na mesma ordem de _screenKeys/_screenLabels/_screenIcons.
+  // Getter que corrige o erro de build "shellPages isn't defined".
+  List<Widget> get shellPages => <Widget>[
+        HomeScreen(onOpenDrawer: _openShellDrawer),
+        const ActivityScreen(),
+      ];
   late final AnimationController _morphController;
   late final AnimationController _browserSlideController;
   late final AnimationController _drawerController;
