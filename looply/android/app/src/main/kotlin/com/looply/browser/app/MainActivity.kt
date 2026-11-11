@@ -64,6 +64,8 @@ import kotlin.math.roundToInt
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "looply/native_ui"
+        private const val ORBIT_BROWSER_CHANNEL = "looply/orbit_browser"
+        private const val ORBIT_BROWSER_REQUEST_CODE = 7410
         private const val PREFS_NAME = "FlutterSharedPreferences"
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val PREF_AD_BLOCK_ENABLED = "flutter.looply_ad_block_enabled"
@@ -91,6 +93,8 @@ class MainActivity : FlutterActivity() {
     private var pendingNativeBlocks = 0
     private var nativeStatsChannel: MethodChannel? = null
     private var nativeUiChannel: MethodChannel? = null
+    private var orbitBrowserChannel: MethodChannel? = null
+    private var pendingOrbitBrowserResult: MethodChannel.Result? = null
     private lateinit var appPreferences: SharedPreferences
     private val flushNativeBlocksRunnable = Runnable { flushNativeBlockCount() }
     private val adBlockPreferenceListener =
@@ -136,7 +140,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
-                    "openGoogleNativeBrowser" -> openGoogleNativeBrowser(call, result)
+                    "openOrbitBrowser" -> openOrbitBrowser(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -183,6 +187,11 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        orbitBrowserChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ORBIT_BROWSER_CHANNEL).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                if (call.method == "openOrbitBrowser") openOrbitBrowser(call, result) else result.notImplemented()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -193,6 +202,8 @@ class MainActivity : FlutterActivity() {
         }
         nativeStatsChannel = null
         nativeUiChannel = null
+        orbitBrowserChannel = null
+        pendingOrbitBrowserResult = null
         defaultBrowserIntentChannel = null
         defaultBrowserBridgeReady = false
         nativeAuthScope.cancel()
@@ -644,22 +655,30 @@ class MainActivity : FlutterActivity() {
      * interativo dentro de um item de menu nativo.
      */
     /** Opens the separate Kotlin WebView used by the Google quick-site tile. */
-    private fun openGoogleNativeBrowser(call: MethodCall, result: MethodChannel.Result) {
-        val rawUrl = call.argument<String>("url") ?: "https://www.google.com"
-        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull()
-        val host = uri?.host?.lowercase(Locale.ROOT).orEmpty()
-        val isGoogleHost = host == "google.com" || host == "www.google.com" || host.endsWith(".google.com")
-        if (uri == null || (uri.scheme != "https" && uri.scheme != "http") || !isGoogleHost) {
-            result.error("invalid_native_browser_url", "A tela nativa de teste só aceita endereços do Google.", null)
+    private fun openOrbitBrowser(call: MethodCall, result: MethodChannel.Result) {
+        val tabId = call.argument<String>("tabId")
+        val rawUrl = call.argument<String>("url") ?: ""
+        if (tabId.isNullOrBlank()) {
+            result.error("invalid_orbit_tab", "O tabId é obrigatório para abrir o browser.", null)
+            return
+        }
+        if (pendingOrbitBrowserResult != null) {
+            result.error("orbit_browser_busy", "Já existe um pedido de abertura do browser em curso.", null)
             return
         }
         try {
-            startActivity(Intent(this, GoogleNativeBrowserActivity::class.java).apply {
-                putExtra(GoogleNativeBrowserActivity.EXTRA_URL, uri.toString())
-            })
-            result.success(true)
+            pendingOrbitBrowserResult = result
+            val intent = Intent(this, OrbitBrowserActivity::class.java).apply {
+                putExtra(OrbitBrowserActivity.EXTRA_TAB_ID, tabId)
+                putExtra(OrbitBrowserActivity.EXTRA_URL, rawUrl)
+                putExtra(OrbitBrowserActivity.EXTRA_TITLE, call.argument<String>("title"))
+                putExtra(OrbitBrowserActivity.EXTRA_IS_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
+            }
+            startActivityForResult(intent, ORBIT_BROWSER_REQUEST_CODE)
+            overridePendingTransition(R.anim.orbit_slide_up_enter, R.anim.orbit_hold_420)
         } catch (error: Exception) {
-            result.error("native_browser_unavailable", error.message, null)
+            pendingOrbitBrowserResult = null
+            result.error("orbit_browser_unavailable", error.message, null)
         }
     }
 

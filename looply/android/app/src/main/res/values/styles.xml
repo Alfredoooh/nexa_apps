@@ -33,4 +33,16 @@
         <item name="android:colorAccent">#1A73E8</item>
     </style>
 
+    <!-- Bottom sheet nativo do Orbit Browser. -->
+    <style name="LooplyBottomSheet.Light" parent="Widget.Material3.BottomSheet">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+    </style>
+    <style name="LooplyBottomSheetDialog.Light" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/LooplyBottomSheet.Light</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
 </resources>

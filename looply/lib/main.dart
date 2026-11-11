@@ -13,7 +13,6 @@ import 'cloud_sync.dart';
 import 'browser_library.dart';
 import 'screens/activity_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/orbit_browser_screen.dart';
 import 'screens/search_screen.dart';
 import 'shell/fade_page_route.dart';
 import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
@@ -156,6 +155,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   int _lastObservedTabCount = 0;
   late final List<Listenable> _cloudSyncSources;
   static const MethodChannel _defaultBrowserIntentChannel = MethodChannel('browseit/default_browser');
+  static const MethodChannel _orbitBrowserChannel = MethodChannel('looply/orbit_browser');
+  bool _orbitBrowserOpenInProgress = false;
 
   void _onCloudSyncSourceChanged() {
     BrowseItCloudSync.scheduleAppBackup();
@@ -492,39 +493,41 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
   void _activateBrowserTab(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
-    // A abertura pela grelha usa exclusivamente o Container Transform.
-    // Repor a posição final do slide normal impede que a WebView fique
-    // deslocada para fora do ecrã depois de uma navegação Home -> Browser.
-    _browserSlideController.stop();
-    _browserSlideController.value = 1;
-    setState(() {
-      _activeBrowserTabId = tab.id;
-      _showingTabsGrid = false;
-    });
     tabsController.activate(tab.id);
     _persistCurrentActivity();
+    unawaited(_launchOrbitBrowserActivity(tab));
   }
-
-  // Transição vertical usada apenas na navegação normal entre Home e Browser.
-  // O Container Transform dos separadores continua a usar o seu overlay/captura
-  // original, sem passar por este controlador.
   void _activateBrowserTabWithSlide(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
-    final browserAlreadyVisible =
-        _activeBrowserTabId != null && !_showingTabsGrid;
-    _browserSlideController.stop();
-    _browserSlideController.value = browserAlreadyVisible ? 1 : 0;
-    setState(() {
-      _activeBrowserTabId = tab.id;
-      _showingTabsGrid = false;
-    });
     tabsController.activate(tab.id);
     _persistCurrentActivity();
-    if (!browserAlreadyVisible) {
-      unawaited(_playBrowserEntranceWhenReady(tab.id));
+    unawaited(_launchOrbitBrowserActivity(tab));
+  }
+  Future<void> _launchOrbitBrowserActivity(BrowserTab tab) async {
+    if (_orbitBrowserOpenInProgress) return;
+    _orbitBrowserOpenInProgress = true;
+    try {
+      final result = await _orbitBrowserChannel.invokeMapMethod<dynamic, dynamic>(
+        'openOrbitBrowser', <String, Object?>{
+          'tabId': tab.id, 'url': tab.url, 'title': tab.title, 'isIncognito': tab.isIncognito,
+        },
+      );
+      if (!mounted || result == null || result['tabId']?.toString() != tab.id) return;
+      final rawThumbnail = result['thumbnail'];
+      tabsController.updateTab(
+        tab.id,
+        url: result['url']?.toString(),
+        title: result['title']?.toString(),
+        canGoBack: result['canGoBack'] as bool?,
+        canGoForward: result['canGoForward'] as bool?,
+        thumbnail: rawThumbnail is Uint8List ? rawThumbnail : null,
+      );
+    } on PlatformException {
+      // Activity nativa indisponível: mantém a shell funcional.
+    } finally {
+      _orbitBrowserOpenInProgress = false;
     }
   }
-
   Future<void> _playBrowserEntranceWhenReady(String tabId) async {
     final ready = _browserPlatformReady[tabId];
     if (ready != null && !ready.isCompleted) {
@@ -1101,33 +1104,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _ensureBrowserTabMounted(activeBrowserTab);
     }
 
-    // A shell principal e os separadores do Orbit são duas camadas reais.
-    // Isto permite que o browser suba por cima da página anterior enquanto
-    // a página de trás é empurrada ligeiramente para baixo, sem substituir
-    // nem reconstruir a WebView persistente. O Container Transform da grelha
-    // continua independente e inalterado.
-    final shellPages = <Widget>[
-      HomeScreen(onOpenDrawer: _openShellDrawer),
-      const ActivityScreen(),
-    ];
-    final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
-        ? null
-        : Theme(
-            data: activeBrowserTab.isIncognito
-                ? buildLooplyTheme(Brightness.dark)
-                : Theme.of(context),
-            child: OrbitBrowserScreen(
-              key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
-              tabId: activeBrowserTab.id,
-              initialUrl: activeBrowserTab.url,
-              isActive: true,
-              viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
-              firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
-              browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
-              isIncognito: activeBrowserTab.isIncognito,
-            ),
-          );
-
+    final Widget? activeBrowserPage = null;
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
@@ -1176,25 +1153,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                       ),
                     );
                   },
-                ),
-              ),
-            ),
-            // Só a WebView da aba ativa existe na árvore. Ao abrir a grelha,
-            // ela é desmontada e a próxima só é criada quando for selecionada.
-            Positioned.fill(
-              child: Offstage(
-                offstage: _activeBrowserTabId == null || _showingTabsGrid,
-                child: SlideTransition(
-                  position: _browserSlidePosition,
-                  child: RepaintBoundary(
-                    child: SafeArea(
-                      top: false,
-                      bottom: false,
-                      child: SizedBox.expand(
-                        child: activeBrowserPage ?? const SizedBox.expand(),
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
