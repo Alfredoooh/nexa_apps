@@ -8,6 +8,7 @@ import '../localization.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/svg_icon.dart';
 import 'activity_screen.dart' show SiteFaviconAvatar;
+import 'package:material_symbols_icons/symbols.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -314,7 +315,7 @@ class _HistoryCard extends StatelessWidget {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                        child: const Icon(Icons.check, color: Colors.white, size: 20),
+                        child: const Icon(Symbols.check_rounded, color: Colors.white, size: 20),
                       ),
                     ),
                   ],

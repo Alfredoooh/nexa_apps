@@ -8,6 +8,7 @@ import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
 import '../widgets/svg_icon.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 /// Detalhe de uso por site: percentagem de visitas em relação aos restantes
 /// sites e tempo total desde a primeira visita registada até à última.
@@ -240,14 +241,14 @@ class _SiteUsageTile extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.bar_chart_rounded, size: 14, color: muted),
+              Icon(Symbols.bar_chart_rounded, size: 14, color: muted),
               const SizedBox(width: 4),
               Text(
                 appText('visit_count').replaceAll('{count}', item.visitCount.toString()),
                 style: TextStyle(color: muted, fontSize: 11.5, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 14),
-              Icon(Icons.schedule_rounded, size: 14, color: muted),
+              Icon(Symbols.schedule_rounded, size: 14, color: muted),
               const SizedBox(width: 4),
               Text(
                 _formatSpan(item.activeSpan),

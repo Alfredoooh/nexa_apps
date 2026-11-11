@@ -8,6 +8,7 @@ import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/svg_icon.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
@@ -343,7 +344,7 @@ class _DownloadCard extends StatelessWidget {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                            child: const Icon(Icons.check, color: Colors.white, size: 20),
+                            child: const Icon(Symbols.check_rounded, color: Colors.white, size: 20),
                           ),
                         ),
                       ],
@@ -373,7 +374,7 @@ class _DownloadCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   if (entry.canOpenLocally)
-                    Icon(Icons.open_in_new, color: muted, size: 18)
+                    Icon(Symbols.open_in_new_rounded, color: muted, size: 18)
                   else if (isDownloading)
                     SizedBox(
                       width: 18,

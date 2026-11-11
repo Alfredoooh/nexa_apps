@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../theme.dart';
 import 'svg_icon.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 enum MediaSheetKind { image, video, link }
 
@@ -163,7 +164,7 @@ class _MediaSheetBody extends StatelessWidget {
         errorBuilder: (_, __, ___) => Center(
           child: kind == MediaSheetKind.image
               ? AppSvgIcon(AppIcons.image, size: 36, color: scheme.onSurfaceVariant)
-              : Icon(Icons.play_circle_outline, size: 36, color: scheme.onSurfaceVariant),
+              : Icon(Symbols.play_circle_rounded, size: 36, color: scheme.onSurfaceVariant),
         ),
       );
       content = kind == MediaSheetKind.video
@@ -176,7 +177,7 @@ class _MediaSheetBody extends StatelessWidget {
                     width: 52,
                     height: 52,
                     decoration: BoxDecoration(color: Colors.black.withOpacity(.45), shape: BoxShape.circle),
-                    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+                    child: const Icon(Symbols.play_arrow_rounded, color: Colors.white, size: 30),
                   ),
                 ),
               ],

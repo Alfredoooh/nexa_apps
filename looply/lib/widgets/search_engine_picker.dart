@@ -53,7 +53,7 @@ void showSearchEnginePicker(BuildContext context) {
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18),
                             )
-                          : const Icon(Icons.eco_rounded, color: Color(0xFF4CAF50), size: 20),
+                          : const Icon(Symbols.eco_rounded, color: Color(0xFF4CAF50), size: 20),
                     ),
                     title: Text(engine.name, style: TextStyle(color: textForMode(context, mode))),
                     trailing: ValueListenableBuilder<SearchEngine>(
