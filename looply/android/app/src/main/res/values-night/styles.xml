@@ -1,5 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Equivalentes em modo escuro de LooplyPopupMenu.Light e
+         LooplyDialog.Light (values/styles.xml). Sem eles o Kotlin não
+         compila: R.style.LooplyPopupMenu_Dark / R.style.LooplyDialog_Dark
+         não existiam em nenhum styles.xml. -->
+    <style name="LooplyPopupMenu.Dark" parent="@style/Widget.AppCompat.PopupMenu">
+        <item name="android:popupBackground">@drawable/popup_menu_background_dark</item>
+        <item name="android:popupElevation">8dp</item>
+        <item name="overlapAnchor">false</item>
+    </style>
+
+    <style name="LooplyPopupMenuItemText.Dark" parent="@android:style/TextAppearance.Widget.PopupMenu.Large">
+        <item name="android:textColor">#FFE6E6E8</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="LooplyDialog.Dark" parent="@android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorAccent">#8AB4F8</item>
+    </style>
+
     <style name="OrbitBrowserTheme" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">#8AB4F8</item>
         <item name="colorOnPrimary">#FF101114</item>

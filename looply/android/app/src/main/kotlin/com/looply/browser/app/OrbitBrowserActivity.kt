@@ -1913,7 +1913,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.stopLoading()
             webView.webChromeClient = null
-            webView.webViewClient = null
+            // webViewClient não é nulável neste WebView; um client vazio
+            // evita callbacks na view já destacada sem violar o tipo.
+            webView.webViewClient = object : WebViewClient() {}
             webView.destroy()
         }
 
