@@ -136,7 +136,7 @@ class GoogleNativeBrowserActivity : Activity() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or
                 android.text.InputType.TYPE_TEXT_VARIATION_URI
             background = roundedBackground(toolbarSurface, 22)
-            isSelectAllOnFocus = true
+            setSelectAllOnFocus(true)
             setOnEditorActionListener { _, actionId, event ->
                 val enterPressed = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
                     event.action == KeyEvent.ACTION_UP
