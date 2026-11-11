@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' show Rect, Offset;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -82,6 +83,21 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
+  Rect? _nativeBrowserSourceRect() {
+    try {
+      final overlay = Overlay.of(context, rootOverlay: true);
+      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+      final viewportBox = widget.viewportKey.currentContext?.findRenderObject() as RenderBox?;
+      if (overlayBox == null || viewportBox == null || !viewportBox.attached) {
+        return null;
+      }
+      final topLeft = viewportBox.localToGlobal(Offset.zero, ancestor: overlayBox);
+      return topLeft & viewportBox.size;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _openNativeBrowser() async {
     if (_opening || _disposed || !mounted) return;
 
@@ -139,11 +155,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       final title = (data['title'] as String?)?.trim();
 
       final thumbnailValue = data['thumbnail'];
+      final transitionScreenshotValue = data['transitionScreenshot'];
 
       final Uint8List? thumbnail = thumbnailValue is Uint8List
           ? thumbnailValue
           : thumbnailValue is List<int>
               ? Uint8List.fromList(thumbnailValue)
+              : null;
+      final Uint8List? transitionScreenshot = transitionScreenshotValue is Uint8List
+          ? transitionScreenshotValue
+          : transitionScreenshotValue is List<int>
+              ? Uint8List.fromList(transitionScreenshotValue)
               : null;
 
       final currentUrl =
@@ -177,8 +199,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         case 'tabs':
           ShellTabRequest.instance.requestCloseBrowser(
             tabId: widget.tabId,
-            screenshot: thumbnail,
-            sourceRect: null,
+            screenshot: transitionScreenshot ?? thumbnail,
+            sourceRect: _nativeBrowserSourceRect(),
           );
           return;
 

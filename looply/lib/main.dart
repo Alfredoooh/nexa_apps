@@ -64,7 +64,28 @@ class LooplyApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             builder: (context, child) => Directionality(
               textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-              child: child ?? const SizedBox.shrink(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  // Offstage mantém os glifos Rounded necessários à Activity
+                  // Kotlin dentro da fonte submetida ao icon tree-shaker.
+                  Positioned(
+                    left: -10000,
+                    top: -10000,
+                    child: ExcludeSemantics(
+                      child: Offstage(
+                        child: Row(
+                          children: [
+                            for (final symbol in AppIcons.nativeBrowserGlyphs)
+                              Icon(symbol),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             locale: language.locale,
             supportedLocales: supportedAppLanguages.map((item) => item.locale).toList(growable: false),
@@ -1187,6 +1208,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 child: SlideTransition(
                   position: _browserSlidePosition,
                   child: RepaintBoundary(
+                    key: activeBrowserTab == null
+                        ? null
+                        : _browserViewportKeys[activeBrowserTab.id],
                     child: SafeArea(
                       top: false,
                       bottom: false,

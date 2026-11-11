@@ -498,7 +498,7 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final iconColor = accentColor(context);
+    final iconColor = text;
     final iconBadge = pillColor(context);
 
     return SizedBox(
@@ -643,7 +643,7 @@ class _DefaultBrowserSettingsTileState extends State<_DefaultBrowserSettingsTile
         label: appText('default_browser'),
         subtitle: snapshot.data == true ? appText('browser_default_yes') : appText('browser_default_no'),
         trailing: snapshot.data == true
-            ? AppMaterialIcon(AppIcons.checkCircle, color: accentColor(context), size: 21)
+            ? AppMaterialIcon(AppIcons.checkCircle, color: mainText(context), size: 21)
             : null,
         showChevron: true,
         onTap: _requestDefaultBrowser,

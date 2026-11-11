@@ -508,6 +508,7 @@ class MainActivity : FlutterActivity() {
                 "action" to data?.getStringExtra(OrbitBrowserActivity.RESULT_ACTION),
                 "newUrl" to data?.getStringExtra(OrbitBrowserActivity.RESULT_NEW_URL),
                 "thumbnail" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_THUMBNAIL),
+                "transitionScreenshot" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_TRANSITION_SCREENSHOT),
             ))
         } else callback.success(hashMapOf("action" to "home"))
     }
@@ -858,8 +859,14 @@ class MainActivity : FlutterActivity() {
 
         label.text = "Pesquisa com IA"
         label.setTextColor(textColor)
-        icon.setImageResource(android.R.drawable.ic_menu_search)
-        icon.setColorFilter(iconTint)
+        icon.setImageDrawable(
+            MaterialSymbolsRounded.bitmapDrawable(
+                this,
+                "search",
+                iconTint,
+                dpToPx(20),
+            )
+        )
         toggle.isChecked = readAiSearchEnabled()
         toggle.setOnCheckedChangeListener { _, isChecked ->
             writeAiSearchEnabled(isChecked)

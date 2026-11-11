@@ -509,23 +509,29 @@ class _TabsCountBadge extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
     width: 24,
     height: 24,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      border: Border.all(color: color.withOpacity(.88), width: 1.6),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        AppMaterialIcon(AppIcons.tab, size: 20, color: color),
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              count > 99 ? '99+' : '$count',
+              style: TextStyle(
+                color: color,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                height: 1,
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     ),
   );
 }

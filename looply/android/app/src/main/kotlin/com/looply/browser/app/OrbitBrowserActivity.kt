@@ -66,6 +66,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         const val RESULT_TAB_ID = "com.looply.browser.app.orbit.RESULT_TAB_ID"
         const val RESULT_ACTION = "com.looply.browser.app.orbit.RESULT_ACTION"
         const val RESULT_THUMBNAIL = "com.looply.browser.app.orbit.RESULT_THUMBNAIL"
+        const val RESULT_TRANSITION_SCREENSHOT = "com.looply.browser.app.orbit.RESULT_TRANSITION_SCREENSHOT"
         const val RESULT_NEW_URL = "com.looply.browser.app.orbit.RESULT_NEW_URL"
 
         private const val PREFS = "FlutterSharedPreferences"
@@ -173,7 +174,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var findBar: LinearLayout
     private lateinit var findField: EditText
-    private lateinit var tabsButton: TextView
+    private lateinit var tabsButton: android.widget.FrameLayout
 
     private var currentUrl = "https://www.google.com"
     private var currentTitle = "Google"
@@ -342,7 +343,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             setBackgroundColor(toolbarBg)
         }
 
-        val home = actionButton("⌂", "Início") {
+        val home = actionButton("home", "Início") {
             finishToFlutter("home")
         }
 
@@ -360,7 +361,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         faviconView = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(android.R.drawable.ic_menu_search)
+            setImageDrawable(
+                MaterialSymbolsRounded.bitmapDrawable(
+                    this@OrbitBrowserActivity,
+                    "search",
+                    secondaryText,
+                    dp(18),
+                )
+            )
         }
 
         titlePill.addView(
@@ -394,7 +402,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
         )
 
-        tabsButton = actionButton(tabCount.toString(), "Separadores") {
+        tabsButton = tabCountButton(tabCount) {
             finishToFlutter("tabs")
         }
 
@@ -404,7 +412,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         )
 
         toolbar.addView(
-            actionButton("⋮", "Mais opções") { showBrowserSheet() },
+            actionButton("more_vert", "Mais opções") { showBrowserSheet() },
             LinearLayout.LayoutParams(dp(42), dp(46))
         )
 
@@ -481,21 +489,21 @@ class OrbitBrowserActivity : AppCompatActivity() {
         )
 
         findBar.addView(
-            actionButton("↑", "Resultado anterior") {
+            actionButton("arrow_upward", "Resultado anterior") {
                 webView.findNext(false)
             },
             LinearLayout.LayoutParams(dp(38), dp(42))
         )
 
         findBar.addView(
-            actionButton("↓", "Resultado seguinte") {
+            actionButton("arrow_downward", "Resultado seguinte") {
                 webView.findNext(true)
             },
             LinearLayout.LayoutParams(dp(38), dp(42))
         )
 
         findBar.addView(
-            actionButton("×", "Fechar pesquisa") {
+            actionButton("close", "Fechar pesquisa") {
                 closeFindBar()
             },
             LinearLayout.LayoutParams(dp(38), dp(42))
@@ -747,18 +755,56 @@ class OrbitBrowserActivity : AppCompatActivity() {
         symbol: String,
         description: String,
         onClick: () -> Unit
-    ): TextView {
-        return TextView(this).apply {
-            text = symbol
+    ): android.widget.FrameLayout {
+        return android.widget.FrameLayout(this).apply {
             contentDescription = description
-            gravity = Gravity.CENTER
-            textSize = if (symbol.length > 1) 17f else 23f
-            setTextColor(toolbarText())
             isClickable = true
             isFocusable = true
             background = selectableBackground()
+            addView(
+                MaterialSymbolsRounded.textView(
+                    this@OrbitBrowserActivity,
+                    symbol,
+                    toolbarText(),
+                    23f,
+                ),
+                android.widget.FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER),
+            )
             setOnClickListener { onClick() }
         }
+    }
+
+    private fun tabCountButton(count: Int, onClick: () -> Unit): android.widget.FrameLayout {
+        return android.widget.FrameLayout(this).apply {
+            contentDescription = "Separadores: $count"
+            isClickable = true
+            isFocusable = true
+            background = selectableBackground()
+            val glyph = MaterialSymbolsRounded.textView(
+                this@OrbitBrowserActivity,
+                "tab",
+                toolbarText(),
+                24f,
+            )
+            val number = TextView(this@OrbitBrowserActivity).apply {
+                text = if (count > 99) "99+" else count.toString()
+                setTextColor(toolbarText())
+                textSize = 9f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                isSingleLine = true
+            }
+            addView(glyph, android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER))
+            addView(number, android.widget.FrameLayout.LayoutParams(dp(17), dp(13), Gravity.CENTER))
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun tintTabCountButton(color: Int) {
+        if (!::tabsButton.isInitialized) return
+        (tabsButton.getChildAt(0) as? TextView)?.setTextColor(color)
+        (tabsButton.getChildAt(1) as? TextView)?.setTextColor(color)
     }
 
     private fun showAddressDialog() {
@@ -886,60 +932,60 @@ class OrbitBrowserActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
         }
 
-        addQuickAction(quick, "‹", "Voltar", webView.canGoBack()) {
+        addQuickAction(quick, "arrow_back", "Voltar", webView.canGoBack()) {
             webView.goBack()
         }
 
-        addQuickAction(quick, "›", "Avançar", webView.canGoForward()) {
+        addQuickAction(quick, "arrow_forward", "Avançar", webView.canGoForward()) {
             webView.goForward()
         }
 
-        addQuickAction(quick, "+", "Novo separador", true) {
+        addQuickAction(quick, "add", "Novo separador", true) {
             finishToFlutter("newTab")
         }
 
-        addQuickAction(quick, "▣", "Separadores", true) {
+        addQuickAction(quick, "tab", "Separadores", true) {
             finishToFlutter("tabs")
         }
 
         content.addView(quick, LinearLayout.LayoutParams(-1, dp(78)))
         content.addView(sheetDivider())
 
-        addSheetItem(content, "☆", "Adicionar aos favoritos") {
+        addSheetItem(content, "star", "Adicionar aos favoritos") {
             dialog.dismiss()
             finishToFlutter("bookmark")
         }
 
         if (!incognito) {
-            addSheetItem(content, "★", "Ver favoritos") {
+            addSheetItem(content, "bookmarks", "Ver favoritos") {
                 dialog.dismiss()
                 finishToFlutter("bookmarks")
             }
 
-            addSheetItem(content, "◷", "Histórico") {
+            addSheetItem(content, "history", "Histórico") {
                 dialog.dismiss()
                 finishToFlutter("history")
             }
 
-            addSheetItem(content, "⇩", "Transferências") {
+            addSheetItem(content, "download", "Transferências") {
                 dialog.dismiss()
                 showDownloadsSheet()
             }
         }
 
-        addSheetItem(content, "↻", "Recarregar página") {
+        addSheetItem(content, "refresh", "Recarregar página") {
             dialog.dismiss()
             webView.reload()
         }
 
-        addSheetItem(content, "⌕", "Localizar na página") {
+        addSheetItem(content, "search", "Localizar na página") {
             dialog.dismiss()
             openFindBar()
         }
 
         addSheetItem(
             content,
-            "▤",
+            "desktop_windows",
             if (desktopMode) {
                 "Desativar site para computador"
             } else {
@@ -950,47 +996,47 @@ class OrbitBrowserActivity : AppCompatActivity() {
             toggleDesktopMode()
         }
 
-        addSheetItem(content, "文", "Traduzir página") {
+        addSheetItem(content, "translate", "Traduzir página") {
             dialog.dismiss()
             translatePage()
         }
 
-        addSheetItem(content, "−", "Reduzir texto") {
+        addSheetItem(content, "text_decrease", "Reduzir texto") {
             dialog.dismiss()
             setZoom(-10)
         }
 
-        addSheetItem(content, "+", "Aumentar texto") {
+        addSheetItem(content, "text_increase", "Aumentar texto") {
             dialog.dismiss()
             setZoom(10)
         }
 
-        addSheetItem(content, "▣", "Imprimir") {
+        addSheetItem(content, "print", "Imprimir") {
             dialog.dismiss()
             printPage()
         }
 
-        addSheetItem(content, "⧉", "Copiar endereço") {
+        addSheetItem(content, "content_copy", "Copiar endereço") {
             dialog.dismiss()
             copyAddress()
         }
 
-        addSheetItem(content, "↗", "Partilhar página") {
+        addSheetItem(content, "share", "Partilhar página") {
             dialog.dismiss()
             shareAddress()
         }
 
-        addSheetItem(content, "ⓘ", "Informações do site") {
+        addSheetItem(content, "info", "Informações do site") {
             dialog.dismiss()
             showSiteInfo()
         }
 
-        addSheetItem(content, "⚙", "Definições") {
+        addSheetItem(content, "settings", "Definições") {
             dialog.dismiss()
             finishToFlutter("settings")
         }
 
-        addSheetItem(content, "⌂", "Início") {
+        addSheetItem(content, "home", "Início") {
             dialog.dismiss()
             finishToFlutter("home")
         }
@@ -1018,11 +1064,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
         }
 
-        val iconView = TextView(this).apply {
-            text = icon
-            gravity = Gravity.CENTER
-            textSize = 22f
-            setTextColor(accent)
+        val iconView = MaterialSymbolsRounded.textView(
+            this,
+            icon,
+            toolbarText(),
+            24f,
+        ).apply {
             background = rounded(toolbarPillColor(), 18)
         }
 
@@ -1059,12 +1106,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         row.addView(
-            TextView(this).apply {
-                text = icon
-                textSize = 21f
-                setTextColor(secondaryText)
-                gravity = Gravity.CENTER
-            },
+            MaterialSymbolsRounded.textView(this, icon, secondaryText, 23f),
             LinearLayout.LayoutParams(dp(42), dp(48))
         )
 
@@ -1134,30 +1176,30 @@ class OrbitBrowserActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(-1, dp(44))
         )
 
-        addSheetItem(content, "↗", "Abrir num novo separador") {
+        addSheetItem(content, "open_in_new", "Abrir num novo separador") {
             dialog.dismiss()
             finishToFlutter("newTab", target)
         }
 
-        addSheetItem(content, "⧉", "Copiar ligação") {
+        addSheetItem(content, "content_copy", "Copiar ligação") {
             dialog.dismiss()
             copyText(target)
         }
 
-        addSheetItem(content, "↗", "Partilhar") {
+        addSheetItem(content, "share", "Partilhar") {
             dialog.dismiss()
             shareText(target)
         }
 
         if (isLink && !incognito) {
-            addSheetItem(content, "☆", "Adicionar aos favoritos") {
+            addSheetItem(content, "star", "Adicionar aos favoritos") {
                 dialog.dismiss()
                 finishToFlutter("bookmarkUrl", target)
             }
         }
 
         if (isImage && !incognito) {
-            addSheetItem(content, "⇩", "Transferir imagem") {
+            addSheetItem(content, "download", "Transferir imagem") {
                 dialog.dismiss()
                 startDownload(target, null, null, null)
             }
@@ -1684,7 +1726,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 titlePill.background = rounded(toolbarPillColor(), 24)
 
                 titleView.setTextColor(toolbarText())
-                tabsButton.setTextColor(toolbarText())
+                tintTabCountButton(toolbarText())
             }
         }
     }
@@ -1809,11 +1851,27 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     putExtra(RESULT_THUMBNAIL, it)
                 }
             }
+
+            // A animação de Container Transform precisa da captura da Activity
+            // completa (barra, progresso e página), não apenas da WebView usada
+            // como miniatura do cartão. A imagem é transitória e não é guardada.
+            if (action == "tabs" && !previewOnly) {
+                takeBrowserTransitionScreenshot()?.let {
+                    putExtra(RESULT_TRANSITION_SCREENSHOT, it)
+                }
+            }
         }
 
         setResult(Activity.RESULT_OK, output)
         finish()
-        overridePendingTransition(0, R.anim.browser_slide_down)
+        // Ao abrir a grelha, o Flutter executa o mesmo Container Transform
+        // usado pela navegação principal. Uma animação de saída da Activity
+        // aqui criava um segundo movimento e quebrava a continuidade visual.
+        if (action == "tabs") {
+            overridePendingTransition(0, 0)
+        } else {
+            overridePendingTransition(0, R.anim.browser_slide_down)
+        }
     }
 
     private fun tabStateKey(): String? {
@@ -1920,6 +1978,24 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         super.onDestroy()
+    }
+
+    private fun takeBrowserTransitionScreenshot(): ByteArray? {
+        return try {
+            val target = root
+            val width = target.width.coerceAtLeast(1)
+            val height = target.height.coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            target.draw(Canvas(bitmap))
+
+            ByteArrayOutputStream().use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 56, stream)
+                bitmap.recycle()
+                stream.toByteArray()
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun takeThumbnail(): ByteArray? {

@@ -61,7 +61,50 @@ class AppIcons {
   static const IconData wifiSlash = Symbols.wifi_off_rounded;
   static const IconData x = Symbols.close_rounded;
   static const IconData warningCircle = Symbols.warning_rounded;
-  static const IconData incognito = Symbols.masks_rounded;
+  static const IconData incognito = Symbols.domino_mask_rounded;
+
+  // Mantém também os glifos usados diretamente pela Activity Kotlin na fonte
+  // Rounded empacotada pelo Flutter (o Android reutiliza a mesma fonte).
+  static const List<IconData> nativeBrowserGlyphs = [
+    Symbols.home_rounded,
+    Symbols.tab_rounded,
+    Symbols.more_vert_rounded,
+    Symbols.arrow_upward_rounded,
+    Symbols.arrow_downward_rounded,
+    Symbols.close_rounded,
+    Symbols.arrow_back_rounded,
+    Symbols.arrow_forward_rounded,
+    Symbols.add_rounded,
+    Symbols.bookmark_rounded,
+    Symbols.bookmarks_rounded,
+    Symbols.history_rounded,
+    Symbols.download_rounded,
+    Symbols.refresh_rounded,
+    Symbols.search_rounded,
+    Symbols.desktop_windows_rounded,
+    Symbols.translate_rounded,
+    Symbols.text_decrease_rounded,
+    Symbols.text_increase_rounded,
+    Symbols.print_rounded,
+    Symbols.content_copy_rounded,
+    Symbols.share_rounded,
+    Symbols.info_rounded,
+    Symbols.settings_rounded,
+    Symbols.open_in_new_rounded,
+    Symbols.star_rounded,
+    Symbols.domino_mask_rounded,
+  ];
+  static const IconData tab = Symbols.tab_rounded;
+  static const IconData arrowDown = Symbols.arrow_downward_rounded;
+  static const IconData desktopWindows = Symbols.desktop_windows_rounded;
+  static const IconData translate = Symbols.translate_rounded;
+  static const IconData textDecrease = Symbols.text_decrease_rounded;
+  static const IconData textIncrease = Symbols.text_increase_rounded;
+  static const IconData print = Symbols.print_rounded;
+  static const IconData share = Symbols.share_rounded;
+  static const IconData openInNew = Symbols.open_in_new_rounded;
+  static const IconData star = Symbols.star_rounded;
+  static const IconData dominoMask = Symbols.domino_mask_rounded;
 }
 
 /// Wrapper compatível com os antigos pontos de utilização de ícones.
@@ -99,7 +142,7 @@ class AppMaterialIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Icon(
       icon,
-      size: size,
+      size: size == null ? 26 : (size! * 1.20).clamp(18, 48).toDouble(),
       color: color,
       fill: fill,
       weight: weight,

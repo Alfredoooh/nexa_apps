@@ -263,7 +263,7 @@ class _DrawerOption extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-              child: AppMaterialIcon(icon, color: accentColor(context), size: 19),
+              child: AppMaterialIcon(icon, color: text, size: 19),
             ),
             const SizedBox(width: 12),
             Expanded(
