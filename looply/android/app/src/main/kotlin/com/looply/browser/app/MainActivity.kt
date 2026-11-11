@@ -49,8 +49,6 @@ import androidx.appcompat.widget.SwitchCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.renderer.FlutterRenderer
-import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import com.pichillilorenzo.flutter_inappwebview_android.webview.in_app_webview.InAppWebView
@@ -72,31 +70,6 @@ class MainActivity : FlutterActivity() {
 
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var flutterRenderer: FlutterRenderer? = null
-    private var hasFlutterUiDisplayed = false
-    private var shimmerSplashOverlay: ShimmerSplashView? = null
-    private val splashHideRunnable = Runnable { hideShimmerSplash() }
-    private val splashFallbackRunnable = Runnable { hideShimmerSplash() }
-    // Duração mínima garantida do shimmer, contada a partir do onCreate.
-    // Mesmo que o Flutter termine de inicializar antes disso (aparelhos
-    // rápidos), o shimmer continua visível até completar este tempo, para
-    // que o efeito seja sempre perceptível e nunca pareça "piscar uma vez".
-    private val minShimmerDurationMs = 3000L
-    private var shimmerStartUptimeMs = 0L
-    private val flutterUiDisplayListener = object : FlutterUiDisplayListener {
-        override fun onFlutterUiDisplayed() {
-            hasFlutterUiDisplayed = true
-            // Mantém o shimmer visível até cumprir o tempo mínimo garantido
-            // e, só depois disso, mais 700ms para a transição de saída do
-            // splash transparente do sistema terminar sem sobreposição.
-            val elapsed = android.os.SystemClock.uptimeMillis() - shimmerStartUptimeMs
-            val remaining = (minShimmerDurationMs - elapsed).coerceAtLeast(0L)
-            mainHandler.removeCallbacks(splashHideRunnable)
-            mainHandler.postDelayed(splashHideRunnable, remaining + 700L)
-        }
-
-        override fun onFlutterUiNoLongerDisplayed() = Unit
-    }
     private val nativeAuthScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val pendingExternalUrls = java.util.ArrayDeque<String>()
     private var defaultBrowserIntentChannel: MethodChannel? = null
@@ -136,13 +109,10 @@ class MainActivity : FlutterActivity() {
         extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
 
-        // O splash nativo do Android contém apenas o fundo. Colocar a camada
-        // animada antes de qualquer inicialização adicional garante que o
-        // primeiro conteúdo da Activity já seja o logótipo com shimmer.
+        // Splash agora é 100% nativo (LaunchTheme / windowSplashScreen*):
+        // nenhuma View Kotlin é desenhada por cima. applyWindowTheme só
+        // ajusta as cores de status/navigation bar para a Activity.
         applyWindowTheme(savedMode, savedPureBlack)
-        if (savedInstanceState == null) {
-            showShimmerSplash(savedMode, savedPureBlack)
-        }
 
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
@@ -150,8 +120,6 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        flutterRenderer = flutterEngine.renderer
-        flutterRenderer?.addIsDisplayingFlutterUiListener(flutterUiDisplayListener)
         super.configureFlutterEngine(flutterEngine)
         nativeUiChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         nativeUiChannel?.setMethodCallHandler { call, result ->
@@ -214,15 +182,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(flushNativeBlocksRunnable)
-        mainHandler.removeCallbacks(splashHideRunnable)
-        mainHandler.removeCallbacks(splashFallbackRunnable)
-        shimmerSplashOverlay?.let { overlay ->
-            (overlay.parent as? ViewGroup)?.removeView(overlay)
-            overlay.dispose()
-        }
-        shimmerSplashOverlay = null
-        flutterRenderer?.removeIsDisplayingFlutterUiListener(flutterUiDisplayListener)
-        flutterRenderer = null
         if (::appPreferences.isInitialized) {
             flushNativeBlockCount()
             appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
@@ -244,60 +203,6 @@ class MainActivity : FlutterActivity() {
         } else {
             pendingExternalUrls.addLast(url)
         }
-    }
-
-    private fun showShimmerSplash(mode: String, pureBlack: Boolean) {
-        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
-        if (shimmerSplashOverlay != null) return
-
-        val dark = when (mode) {
-            "dark" -> true
-            "light" -> false
-            else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-                Configuration.UI_MODE_NIGHT_YES
-        }
-        val overlay = ShimmerSplashView(this, dark, pureBlack)
-        shimmerSplashOverlay = overlay
-        shimmerStartUptimeMs = android.os.SystemClock.uptimeMillis()
-        content.addView(
-            overlay,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        overlay.bringToFront()
-        mainHandler.removeCallbacks(splashHideRunnable)
-        mainHandler.removeCallbacks(splashFallbackRunnable)
-        // Evita deixar a camada presa caso uma falha externa impeça o primeiro
-        // frame Flutter de ser apresentado. Sempre maior que o mínimo garantido.
-        mainHandler.postDelayed(splashFallbackRunnable, minShimmerDurationMs + 12000L)
-        if (hasFlutterUiDisplayed) {
-            val elapsed = android.os.SystemClock.uptimeMillis() - shimmerStartUptimeMs
-            val remaining = (minShimmerDurationMs - elapsed).coerceAtLeast(0L)
-            mainHandler.postDelayed(splashHideRunnable, remaining + 700L)
-        }
-    }
-
-    private fun hideShimmerSplash() {
-        mainHandler.removeCallbacks(splashHideRunnable)
-        mainHandler.removeCallbacks(splashFallbackRunnable)
-        val overlay = shimmerSplashOverlay ?: return
-        shimmerSplashOverlay = null
-
-        if (overlay.parent == null) {
-            overlay.dispose()
-            return
-        }
-
-        overlay.animate()
-            .alpha(0f)
-            .setDuration(160L)
-            .withEndAction {
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-                overlay.dispose()
-            }
-            .start()
     }
 
     private fun extractBrowsableUrl(source: Intent?): String? {
