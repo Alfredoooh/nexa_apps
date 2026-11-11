@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -12,8 +11,6 @@ import '../auth_service.dart';
 import 'all_sites_screen.dart';
 import 'auth_screen.dart';
 import '../widgets/svg_icon.dart';
-
-const MethodChannel _nativeBrowserChannel = MethodChannel('looply/native_ui');
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -303,28 +300,11 @@ class QuickSiteTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? pillColor(context) : Colors.white;
-    final isOrbitBrowserShortcut = site.name == 'Wikipedia';
-    final siteUri = Uri.tryParse(site.url);
-    final isGoogleNativeShortcut = site.name.trim().toLowerCase() == 'google' &&
-        (siteUri?.host == 'google.com' || siteUri?.host == 'www.google.com' ||
-            (siteUri?.host.endsWith('.google.com') ?? false));
     return GestureDetector(
-      onTapDown: (_) {
-        if (!isGoogleNativeShortcut) BrowserPreconnectHints.preconnect(site.url);
-      },
+      onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          if (isGoogleNativeShortcut) {
-            _openGoogleNativeBrowser(context, site.url);
-            return;
-          }
-          if (isOrbitBrowserShortcut) {
-            openOrbitBrowserTab(context);
-            return;
-          }
-          openNewTab(context, site.url, title: site.name);
-        },
+        onTap: () => openNewTab(context, site.url, title: site.name),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 40, height: 40,
@@ -340,25 +320,6 @@ class QuickSiteTile extends StatelessWidget {
           Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: text)),
         ]),
       ),
-    );
-  }
-}
-
-Future<void> _openGoogleNativeBrowser(BuildContext context, String url) async {
-  try {
-    await _nativeBrowserChannel.invokeMethod<bool>(
-      'openGoogleNativeBrowser',
-      <String, Object>{'url': url},
-    );
-  } on PlatformException catch (error) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.message ?? 'Não foi possível abrir o browser Kotlin.')),
-    );
-  } on MissingPluginException {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('O browser Kotlin está disponível apenas na versão Android.')),
     );
   }
 }

@@ -111,11 +111,6 @@ dependencies {
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.12.0"
-    // Usado em OrbitBrowserActivity.kt (pull-to-refresh do browser). Sem esta
-    // dependência, "SwipeRefreshLayout" e os métodos que dependem dela
-    // (setColorSchemeColors, setOnRefreshListener, isRefreshing, etc.) não
-    // resolvem no compilador Kotlin.
-    implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
 }
 
 flutter {

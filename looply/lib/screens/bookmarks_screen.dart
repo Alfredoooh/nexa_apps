@@ -107,7 +107,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       context: context,
       title: appText('clear_bookmarks_question'),
       icon: AppIcons.trash,
-      message: appText('clear_bookmarks_confirm'),
+      content: Text(appText('clear_bookmarks_confirm')),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('clear'), value: true, isDestructive: true),

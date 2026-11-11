@@ -54,7 +54,6 @@ import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import com.pichillilorenzo.flutter_inappwebview_android.webview.in_app_webview.InAppWebView
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,12 +63,9 @@ import kotlin.math.roundToInt
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "looply/native_ui"
-        private const val ORBIT_BROWSER_CHANNEL = "looply/orbit_browser"
-        private const val ORBIT_BROWSER_REQUEST_CODE = 7410
         private const val PREFS_NAME = "FlutterSharedPreferences"
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
-        private const val PREF_AD_BLOCK_ENABLED = "flutter.looply_ad_block_enabled"
-        private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
+        private const val ORBIT_BROWSER_REQUEST_CODE = 7418
         private const val PREF_AI_SEARCH_ENABLED = "looply_ai_search_enabled"
     }
 
@@ -89,22 +85,10 @@ class MainActivity : FlutterActivity() {
         getSharedPreferences("looply_native_ui", Context.MODE_PRIVATE)
     }
     private val runtimePermissionRequestCode = 7401
-    private val nativeStatsLock = Any()
-    private var pendingNativeBlocks = 0
+    private var pendingOrbitBrowserResult: MethodChannel.Result? = null
     private var nativeStatsChannel: MethodChannel? = null
     private var nativeUiChannel: MethodChannel? = null
-    private var orbitBrowserChannel: MethodChannel? = null
-    private var pendingOrbitBrowserResult: MethodChannel.Result? = null
     private lateinit var appPreferences: SharedPreferences
-    private val flushNativeBlocksRunnable = Runnable { flushNativeBlockCount() }
-    private val adBlockPreferenceListener =
-        SharedPreferences.OnSharedPreferenceChangeListener { preferences, key ->
-            if (key == PREF_AD_BLOCK_ENABLED) {
-                val enabled = preferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
-                LooplyNativeAdBlockState.enabled = enabled
-                mainHandler.post { updateNativeAdBlockerOnCurrentWebViews(enabled) }
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // O Android guarda o modo de aparência escolhido pela aplicação.
@@ -122,8 +106,6 @@ class MainActivity : FlutterActivity() {
         applyWindowTheme(savedMode, savedPureBlack)
 
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        LooplyNativeAdBlockState.enabled = appPreferences.getBoolean(PREF_AD_BLOCK_ENABLED, true)
-        appPreferences.registerOnSharedPreferenceChangeListener(adBlockPreferenceListener)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -140,7 +122,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
-                    "openOrbitBrowser" -> openOrbitBrowser(call, result)
+                    "openNativeBrowser" -> openNativeBrowser(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -178,32 +160,16 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "install" -> {
-                        val count = installNativeAdBlockerOnCurrentWebViews()
-                        if (count == 0) scheduleNativeAdBlockerInstallRetry(0)
-                        result.success(count > 0)
-                    }
+                    "install" -> result.success(false)
                     else -> result.notImplemented()
                 }
-            }
-        }
-        orbitBrowserChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ORBIT_BROWSER_CHANNEL).also { channel ->
-            channel.setMethodCallHandler { call, result ->
-                if (call.method == "openOrbitBrowser") openOrbitBrowser(call, result) else result.notImplemented()
             }
         }
     }
 
     override fun onDestroy() {
-        mainHandler.removeCallbacks(flushNativeBlocksRunnable)
-        if (::appPreferences.isInitialized) {
-            flushNativeBlockCount()
-            appPreferences.unregisterOnSharedPreferenceChangeListener(adBlockPreferenceListener)
-        }
         nativeStatsChannel = null
         nativeUiChannel = null
-        orbitBrowserChannel = null
-        pendingOrbitBrowserResult = null
         defaultBrowserIntentChannel = null
         defaultBrowserBridgeReady = false
         nativeAuthScope.cancel()
@@ -226,118 +192,6 @@ class MainActivity : FlutterActivity() {
         val uri = source.data ?: return null
         if (uri.scheme != "http" && uri.scheme != "https") return null
         return uri.toString().takeIf { it.isNotBlank() }
-    }
-
-    /** Instala a implementação nativa diretamente em cada InAppWebView ativo. */
-    private fun installNativeAdBlockerOnCurrentWebViews(): Int {
-        val root = findViewById<View>(android.R.id.content) ?: return 0
-        var found = 0
-
-        fun visit(view: View) {
-            if (view is InAppWebView) {
-                found++
-                val currentHandler = view.contentBlockerHandler
-                if (currentHandler !is LooplyNativeContentBlockerHandler) {
-                    val nativeHandler = LooplyNativeContentBlockerHandler(::recordNativeBlockedRequest)
-                    nativeHandler.setRuleList(currentHandler.getRuleList())
-                    view.contentBlockerHandler = nativeHandler
-                }
-            }
-            if (view is ViewGroup) {
-                for (index in 0 until view.childCount) visit(view.getChildAt(index))
-            }
-        }
-
-        visit(root)
-        return found
-    }
-
-    /** Atualiza os filtros cosméticos das WebViews sem recarregar a página. */
-    private fun updateNativeAdBlockerOnCurrentWebViews(enabled: Boolean) {
-        val root = findViewById<View>(android.R.id.content) ?: return
-        val script = "window.__looplyAdBlockSetEnabled && window.__looplyAdBlockSetEnabled($enabled);"
-
-        fun visit(view: View) {
-            if (view is InAppWebView) {
-                val handler = view.contentBlockerHandler
-                if (handler is LooplyNativeContentBlockerHandler) {
-                    handler.updateCosmeticFilter(view, enabled)
-                } else {
-                    try {
-                        view.evaluateJavascript(script, null)
-                    } catch (_: RuntimeException) {
-                        // A WebView pode estar a ser destruída durante a alteração.
-                    }
-                }
-            }
-            if (view is ViewGroup) {
-                for (index in 0 until view.childCount) visit(view.getChildAt(index))
-            }
-        }
-
-        visit(root)
-    }
-
-    private fun scheduleNativeAdBlockerInstallRetry(attempt: Int) {
-        if (attempt >= 7) return
-        val delay = 70L + (attempt * 70L)
-        mainHandler.postDelayed({
-            val installed = installNativeAdBlockerOnCurrentWebViews()
-            if (installed == 0) scheduleNativeAdBlockerInstallRetry(attempt + 1)
-        }, delay)
-    }
-
-    /** Chamado no worker thread do WebView; só acumula um contador em memória. */
-    private fun recordNativeBlockedRequest(isIncognito: Boolean) {
-        if (isIncognito) return
-        synchronized(nativeStatsLock) {
-            pendingNativeBlocks++
-            if (pendingNativeBlocks == 1) {
-                mainHandler.postDelayed(flushNativeBlocksRunnable, 420L)
-            }
-        }
-    }
-
-    /** Persiste os bloqueios em lote no mesmo JSON que o widget Flutter lê. */
-    private fun flushNativeBlockCount() {
-        val increment = synchronized(nativeStatsLock) {
-            val value = pendingNativeBlocks
-            pendingNativeBlocks = 0
-            value
-        }
-        if (increment <= 0) return
-
-        try {
-            val raw = appPreferences.getString(PREF_ADBLOCK_STATS, "{}") ?: "{}"
-            val daily = try {
-                JSONObject(raw)
-            } catch (_: Exception) {
-                JSONObject()
-            }
-            val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            daily.put(day, daily.optInt(day, 0) + increment)
-
-            val cutoff = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                .format(Date(System.currentTimeMillis() - 730L * 24L * 60L * 60L * 1000L))
-            val staleKeys = ArrayList<String>()
-            val keys = daily.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                if (key.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && key < cutoff) {
-                    staleKeys.add(key)
-                }
-            }
-            staleKeys.forEach { daily.remove(it) }
-            appPreferences.edit().putString(PREF_ADBLOCK_STATS, daily.toString()).apply()
-
-            try {
-                nativeStatsChannel?.invokeMethod("statsChanged", null)
-            } catch (_: RuntimeException) {
-                // A persistência local não depende da tela Flutter estar visível.
-            }
-        } catch (_: Exception) {
-            // Uma falha de estatísticas nunca deve interromper a navegação.
-        }
     }
 
     private fun readSavedThemeMode(): String {
@@ -639,9 +493,23 @@ class MainActivity : FlutterActivity() {
         callback?.invoke(granted)
     }
 
-    @Deprecated("Deprecated in Android API; retained for compatibility with the FlutterActivity permission callback")
+    @Deprecated("Deprecated in Android API; retained for Flutter compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != ORBIT_BROWSER_REQUEST_CODE) return
+        val callback = pendingOrbitBrowserResult
+        pendingOrbitBrowserResult = null
+        if (callback == null) return
+        if (resultCode == android.app.Activity.RESULT_OK) {
+            callback.success(hashMapOf<String, Any?>(
+                "url" to data?.getStringExtra(OrbitBrowserActivity.RESULT_URL),
+                "title" to data?.getStringExtra(OrbitBrowserActivity.RESULT_TITLE),
+                "tabId" to data?.getStringExtra(OrbitBrowserActivity.RESULT_TAB_ID),
+                "action" to data?.getStringExtra(OrbitBrowserActivity.RESULT_ACTION),
+                "newUrl" to data?.getStringExtra(OrbitBrowserActivity.RESULT_NEW_URL),
+                "thumbnail" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_THUMBNAIL),
+            ))
+        } else callback.success(hashMapOf("action" to "home"))
     }
 
     /**
@@ -654,31 +522,32 @@ class MainActivity : FlutterActivity() {
      * SwitchCompat, a forma suportada pelo Android de colocar um controlo
      * interativo dentro de um item de menu nativo.
      */
-    /** Opens the separate Kotlin WebView used by the Google quick-site tile. */
-    private fun openOrbitBrowser(call: MethodCall, result: MethodChannel.Result) {
-        val tabId = call.argument<String>("tabId")
-        val rawUrl = call.argument<String>("url") ?: ""
-        if (tabId.isNullOrBlank()) {
-            result.error("invalid_orbit_tab", "O tabId é obrigatório para abrir o browser.", null)
-            return
-        }
+    private fun openNativeBrowser(call: MethodCall, result: MethodChannel.Result) {
         if (pendingOrbitBrowserResult != null) {
-            result.error("orbit_browser_busy", "Já existe um pedido de abertura do browser em curso.", null)
+            result.error("browser_already_open", "O browser nativo já está aberto.", null)
             return
         }
+        val rawUrl = call.argument<String>("url")?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: "https://www.google.com"
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull()
+        if (uri == null || uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
+            result.error("invalid_native_browser_url", "O endereço do browser é inválido.", null)
+            return
+        }
+        val intent = Intent(this, OrbitBrowserActivity::class.java).apply {
+            putExtra(OrbitBrowserActivity.EXTRA_URL, uri.toString())
+            putExtra(OrbitBrowserActivity.EXTRA_TAB_ID, call.argument<String>("tabId") ?: "")
+            putExtra(OrbitBrowserActivity.EXTRA_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
+            putExtra(OrbitBrowserActivity.EXTRA_TAB_COUNT, call.argument<Int>("tabCount") ?: 1)
+            putExtra(OrbitBrowserActivity.EXTRA_PREVIEW_ONLY, call.argument<Boolean>("previewOnly") ?: false)
+        }
+        pendingOrbitBrowserResult = result
         try {
-            pendingOrbitBrowserResult = result
-            val intent = Intent(this, OrbitBrowserActivity::class.java).apply {
-                putExtra(OrbitBrowserActivity.EXTRA_TAB_ID, tabId)
-                putExtra(OrbitBrowserActivity.EXTRA_URL, rawUrl)
-                putExtra(OrbitBrowserActivity.EXTRA_TITLE, call.argument<String>("title"))
-                putExtra(OrbitBrowserActivity.EXTRA_IS_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
-            }
             startActivityForResult(intent, ORBIT_BROWSER_REQUEST_CODE)
-            overridePendingTransition(R.anim.orbit_slide_up_enter, R.anim.orbit_hold_420)
+            overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
         } catch (error: Exception) {
             pendingOrbitBrowserResult = null
-            result.error("orbit_browser_unavailable", error.message, null)
+            result.error("native_browser_unavailable", error.message, null)
         }
     }
 

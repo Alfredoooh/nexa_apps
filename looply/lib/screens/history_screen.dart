@@ -79,7 +79,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       context: context,
       title: appText('delete_history_selected'),
       icon: AppIcons.trash,
-      message: appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString()),
+      content: Text(appText('delete_history_count').replaceAll('{count}', _selectedKeys.length.toString())),
       actions: <LooplyDialogAction<bool>>[
         LooplyDialogAction<bool>(label: appText('cancel'), value: false),
         LooplyDialogAction<bool>(label: appText('delete'), value: true, isDestructive: true),
