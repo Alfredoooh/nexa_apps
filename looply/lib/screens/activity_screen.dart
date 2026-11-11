@@ -738,7 +738,7 @@ class SiteFaviconAvatar extends StatelessWidget {
               width: size * 0.58,
               height: size * 0.58,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => null,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               gaplessPlayback: true,
             );
           } catch (_) {
