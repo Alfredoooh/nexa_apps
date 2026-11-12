@@ -1,6 +1,5 @@
 plugins {
     id "com.android.application"
-    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -20,24 +19,12 @@ def browseItSigningConfigured =
 android {
     namespace = "com.looply.browser.app"
     compileSdk = 36
-    // Fixada em vez de "flutter.ndkVersion": o projeto não tem nenhum código
-    // nativo C/C++ próprio (todo o lado nativo aqui é Kotlin puro), por isso
-    // não depende de uma versão específica do NDK. "flutter.ndkVersion" segue
-    // a versão mais recente embutida no Flutter SDK (28.2.13676358 no momento
-    // deste build), cujo download falhou no runner do GitHub Actions com
-    // "Error reading Zip content from a SeekableByteChannel" — um pacote
-    // corrompido/truncado do lado do servidor de SDKs, não um erro de código.
-    // 27.0.12077973 é uma versão LTS do NDK, amplamente usada e já presente
-    // no cache de imagens do GitHub Actions, evitando esse download.
+    // Alinhado com os plugins Android usados pelo projeto.
     ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -74,6 +61,12 @@ android {
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

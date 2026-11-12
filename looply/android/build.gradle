@@ -12,18 +12,6 @@ subprojects {
 }
 
 subprojects {
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            project.android {
-                if (compileSdkVersion == null || compileSdkVersion.toString().replace("android-", "").toInteger() < 36) {
-                    compileSdkVersion 36
-                }
-            }
-        }
-    }
-}
-
-subprojects {
     project.evaluationDependsOn(":app")
 }
 

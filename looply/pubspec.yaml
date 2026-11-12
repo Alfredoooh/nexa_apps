@@ -4,7 +4,8 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.8.1 <4.0.0'
+  sdk: '>=3.10.0 <4.0.0'
+  flutter: '>=3.50.0'
 
 dependencies:
   flutter:
@@ -12,7 +13,7 @@ dependencies:
   material_symbols_icons: ^4.2815.0
   cupertino_icons: ^1.0.8
   animations: any
-  package_info_plus: ^8.1.2
+  package_info_plus: ^10.2.2
   http: ^1.2.0
   cached_network_image: any
   shared_preferences: ^2.3.3
@@ -20,7 +21,7 @@ dependencies:
   image_picker: ^1.2.4
   material3_expressive_loading_indicator: ^0.1.2
   path_provider: ^2.1.5
-  file_picker: any
+  file_picker: ^13.3.3
   flutter_svg: ^2.0.10+1
 
 dev_dependencies:
