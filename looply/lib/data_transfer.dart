@@ -97,20 +97,19 @@ class LooplyDataTransfer {
   }
 
   static Future<bool> importFromFile() async {
-    final picked = await FilePicker.pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: 'Importar dados do BrowseIt',
       type: FileType.custom,
       allowedExtensions: const ['json'],
-      allowMultiple: false,
     );
 
     // O utilizador pode cancelar a seleção.
-    if (picked == null || picked.files.isEmpty) {
+    if (picked == null) {
       return false;
     }
 
-    // Lê o ficheiro através da API XFile suportada pelo file_picker 11.
-    final bytes = await picked.files.first.xFile.readAsBytes();
+    // file_picker 12+ expõe a leitura diretamente em PlatformFile.
+    final bytes = await picked.readAsBytes();
 
     if (bytes.isEmpty) {
       throw const FormatException(
