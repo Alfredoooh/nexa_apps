@@ -25,21 +25,35 @@ class LooplyDataTransfer {
       downloadsController.flushPersistence(),
       AdBlockStats.instance.flushPersistence(),
     ]);
+
     final prefs = await SharedPreferences.getInstance();
     final appPreferences = <String, Object?>{};
+
     for (final key in prefs.getKeys()) {
-      if (!key.startsWith('looply_') || key.startsWith(_authPrefix)) continue;
+      if (!key.startsWith('looply_') || key.startsWith(_authPrefix)) {
+        continue;
+      }
+
       final value = prefs.get(key);
-      if (value is String || value is bool || value is int || value is double || value is List<String>) {
+
+      if (value is String ||
+          value is bool ||
+          value is int ||
+          value is double ||
+          value is List<String>) {
         appPreferences[key] = value;
       }
     }
 
-    // Snapshot exportado em Base64 para que a grelha de separadores também
-    // possa ser reconstruída quando o backup é importado noutro dispositivo.
     final snapshots = <String, String>{};
+
     for (final tab in tabsController.tabs) {
-      if (tab.kind == TabKind.appScreen || tab.isIncognito || tab.thumbnail == null) continue;
+      if (tab.kind == TabKind.appScreen ||
+          tab.isIncognito ||
+          tab.thumbnail == null) {
+        continue;
+      }
+
       snapshots[tab.id] = base64Encode(tab.thumbnail!);
     }
 
@@ -57,12 +71,23 @@ class LooplyDataTransfer {
       'tabSnapshots': snapshots,
       'favicons': browserFaviconCache.exportCache(),
     };
-    return Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(payload)));
+
+    return Uint8List.fromList(
+      utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(payload),
+      ),
+    );
   }
 
   static Future<String?> exportToFile() async {
     final bytes = await buildExportBytes();
-    final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .split('.')
+        .first;
+
     return FilePicker.saveFile(
       dialogTitle: 'Exportar dados do BrowseIt',
       fileName: 'browseit-backup-$stamp.json',
@@ -78,33 +103,73 @@ class LooplyDataTransfer {
       type: FileType.custom,
       allowedExtensions: const ['json'],
     );
-    if (picked.isEmpty) return false;
-    final bytes = await picked.first.readAsBytes();
-    if (bytes.isEmpty) throw const FormatException('O ficheiro JSON está vazio ou não pode ser lido.');
+
+    // O utilizador pode cancelar a seleção.
+    if (picked == null || picked.files.isEmpty) {
+      return false;
+    }
+
+    // FilePickerResult contém os ficheiros na propriedade files.
+    final bytes = await picked.files.first.readAsBytes();
+
+    if (bytes.isEmpty) {
+      throw const FormatException(
+        'O ficheiro JSON está vazio ou não pode ser lido.',
+      );
+    }
 
     final decoded = jsonDecode(utf8.decode(bytes));
+
     if (decoded is! Map || decoded['format'] != 'looply-backup') {
-      throw const FormatException('Este ficheiro não é um backup válido do BrowseIt.');
+      throw const FormatException(
+        'Este ficheiro não é um backup válido do BrowseIt.',
+      );
     }
+
     final version = decoded['schemaVersion'];
-    if (version is! num || version > schemaVersion || version < 1) {
-      throw const FormatException('A versão deste backup não é compatível com esta versão do BrowseIt.');
+
+    if (version is! num ||
+        version > schemaVersion ||
+        version < 1) {
+      throw const FormatException(
+        'A versão deste backup não é compatível com esta versão do BrowseIt.',
+      );
     }
+
     final data = decoded['preferences'];
-    if (data is! Map) throw const FormatException('O backup não contém dados de preferências válidos.');
+
+    if (data is! Map) {
+      throw const FormatException(
+        'O backup não contém dados de preferências válidos.',
+      );
+    }
 
     final prefs = await SharedPreferences.getInstance();
+
     await tabsController.clearStoredSnapshots();
-    // Remove dados anteriores da aplicação, mantendo a sessão de autenticação
-    // atual. Assim a importação representa uma restauração e não uma mistura.
-    for (final key in prefs.getKeys().where((key) => key.startsWith('looply_') && !key.startsWith(_authPrefix)).toList()) {
+
+    // Remove dados anteriores da aplicação, mantendo a sessão atual.
+    for (final key in prefs
+        .getKeys()
+        .where(
+          (key) =>
+              key.startsWith('looply_') &&
+              !key.startsWith(_authPrefix),
+        )
+        .toList()) {
       await prefs.remove(key);
     }
 
     for (final entry in data.entries) {
       final key = entry.key;
       final value = entry.value;
-      if (key is! String || !key.startsWith('looply_') || key.startsWith(_authPrefix)) continue;
+
+      if (key is! String ||
+          !key.startsWith('looply_') ||
+          key.startsWith(_authPrefix)) {
+        continue;
+      }
+
       if (value is String) {
         await prefs.setString(key, value);
       } else if (value is bool) {
@@ -113,12 +178,16 @@ class LooplyDataTransfer {
         await prefs.setInt(key, value);
       } else if (value is double) {
         await prefs.setDouble(key, value);
-      } else if (value is List && value.every((item) => item is String)) {
-        await prefs.setStringList(key, value.cast<String>());
+      } else if (value is List &&
+          value.every((item) => item is String)) {
+        await prefs.setStringList(
+          key,
+          value.cast<String>(),
+        );
       }
     }
 
-    // Atualiza imediatamente os controladores em memória, sem reiniciar a app.
+    // Atualiza imediatamente os controladores em memória.
     await Future.wait<void>([
       themeController.restore(),
       tabsController.restore(),
@@ -134,23 +203,34 @@ class LooplyDataTransfer {
     ]);
 
     final faviconData = decoded['favicons'];
+
     if (faviconData is Map) {
       await browserFaviconCache.importCache(faviconData);
     }
 
     final snapshotData = decoded['tabSnapshots'];
+
     if (snapshotData is Map) {
       for (final entry in snapshotData.entries) {
         final id = entry.key;
         final encoded = entry.value;
-        if (id is! String || encoded is! String) continue;
+
+        if (id is! String || encoded is! String) {
+          continue;
+        }
+
         try {
-          final bytes = base64Decode(encoded);
-          tabsController.updateTab(id, thumbnail: bytes);
+          final snapshotBytes = base64Decode(encoded);
+          tabsController.updateTab(
+            id,
+            thumbnail: snapshotBytes,
+          );
         } catch (_) {}
       }
+
       await tabsController.flushPersistence();
     }
+
     return true;
   }
 }
