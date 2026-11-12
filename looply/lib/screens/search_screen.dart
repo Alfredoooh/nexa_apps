@@ -515,7 +515,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ValueListenableBuilder<bool>(
                         valueListenable: aiSearchModeEnabled,
                         builder: (context, aiEnabled, _) => _actionPill(
-                          icon: AppIcons.sparkle,
+                          icon: AppIcons.sparkles,
                           label: appText('ai_mode'),
                           active: aiEnabled,
                           onTap: () => aiSearchModeEnabled.value = !aiEnabled,
