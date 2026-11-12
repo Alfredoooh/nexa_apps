@@ -20,7 +20,7 @@ dependencies:
   image_picker: ^1.2.4
   material3_expressive_loading_indicator: ^0.1.2
   path_provider: ^2.1.5
-  file_picker: ^8.1.7
+  file_picker: any
   flutter_svg: ^2.0.10+1
 
 dev_dependencies:
