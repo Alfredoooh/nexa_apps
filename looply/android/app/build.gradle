@@ -19,7 +19,7 @@ def browseItSigningConfigured =
 
 android {
     namespace = "com.looply.browser.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     // Fixada em vez de "flutter.ndkVersion": o projeto não tem nenhum código
     // nativo C/C++ próprio (todo o lado nativo aqui é Kotlin puro), por isso
     // não depende de uma versão específica do NDK. "flutter.ndkVersion" segue
