@@ -4,17 +4,22 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.widget.TextView
 import android.view.Gravity
+import com.caverock.androidsvg.SVG
+import com.looply.browser.app.icons.svg.regular.TABS_COUNTER_SVG
 import io.flutter.FlutterInjector
 
 /**
  * Utiliza a própria fonte oficial Material Symbols Rounded já empacotada pelo
  * Flutter através de material_symbols_icons. Assim o browser Kotlin e a UI
- * Flutter desenham os mesmos glifos, sem SVGs ou ícones Android clássicos.
+ * Flutter desenham os mesmos glifos, sem SVGs ou ícones Android clássicos
+ * — exceto o contador de abas, que usa o SVG próprio tabs-counter.svg,
+ * igual ao widget _TabsCountIcon do lado Flutter.
  */
 internal object MaterialSymbolsRounded {
     private const val FONT_ASSET =
@@ -22,7 +27,6 @@ internal object MaterialSymbolsRounded {
 
     private val codePoints = mapOf(
         "home" to 0xE9B2,
-        "tab" to 0xE8D8,
         "more_vert" to 0xE5D4,
         "arrow_upward" to 0xE5D8,
         "arrow_downward" to 0xE5DB,
@@ -52,6 +56,7 @@ internal object MaterialSymbolsRounded {
     )
 
     private val fontCache = mutableMapOf<Int, Typeface>()
+    private var tabsCounterSvg: SVG? = null
 
     private fun font(context: Context): Typeface {
         val key = System.identityHashCode(context.applicationContext)
@@ -113,6 +118,44 @@ internal object MaterialSymbolsRounded {
         }
         val baseline = dimension / 2f - (paint.ascent() + paint.descent()) / 2f
         canvas.drawText(glyph(name), dimension / 2f, baseline, paint)
+        return BitmapDrawable(context.resources, bitmap)
+    }
+
+    private fun tabsCounterSvg(): SVG {
+        return tabsCounterSvg ?: SVG.getFromString(TABS_COUNTER_SVG).also {
+            tabsCounterSvg = it
+        }
+    }
+
+    /**
+     * Desenha o quadrado tabs-counter.svg com o número de abas centralizado
+     * dentro dele, equivalente ao widget _TabsCountIcon do lado Flutter.
+     */
+    fun tabsCounterDrawable(
+        context: Context,
+        count: Int,
+        color: Int,
+        sizePx: Int,
+    ): Drawable {
+        val dimension = sizePx.coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(dimension, dimension, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val svg = tabsCounterSvg()
+        svg.documentWidth = dimension.toFloat()
+        svg.documentHeight = dimension.toFloat()
+        svg.renderToCanvas(canvas, RectF(0f, 0f, dimension.toFloat(), dimension.toFloat()))
+
+        val text = if (count > 99) "99+" else count.toString()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            textAlign = Paint.Align.CENTER
+            textSize = dimension * .42f
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val baseline = dimension / 2f - (paint.ascent() + paint.descent()) / 2f
+        canvas.drawText(text, dimension / 2f, baseline, paint)
+
         return BitmapDrawable(context.resources, bitmap)
     }
 }

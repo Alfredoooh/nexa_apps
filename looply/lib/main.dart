@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
-
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -1367,23 +1367,32 @@ class _TabsCountIcon extends StatelessWidget {
   final int count;
   final Color color;
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => SizedBox(
     width: 24,
     height: 24,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      border: Border.all(color: color.withOpacity(.88), width: 1.6),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        SvgPicture.asset(
+          'assets/icons/svg/regular/tabs-counter.svg',
+          width: 24,
+          height: 24,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 1),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

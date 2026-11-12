@@ -780,31 +780,26 @@ class OrbitBrowserActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             background = selectableBackground()
-            val glyph = MaterialSymbolsRounded.textView(
-                this@OrbitBrowserActivity,
-                "tab",
-                toolbarText(),
-                24f,
-            )
-            val number = TextView(this@OrbitBrowserActivity).apply {
-                text = if (count > 99) "99+" else count.toString()
-                setTextColor(toolbarText())
-                textSize = 9f
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                isSingleLine = true
+            val icon = ImageView(this@OrbitBrowserActivity).apply {
+                setImageDrawable(
+                    MaterialSymbolsRounded.tabsCounterDrawable(
+                        this@OrbitBrowserActivity,
+                        count,
+                        toolbarText(),
+                        dp(25),
+                    )
+                )
             }
-            addView(glyph, android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER))
-            addView(number, android.widget.FrameLayout.LayoutParams(dp(17), dp(13), Gravity.CENTER))
+            addView(icon, android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER))
             setOnClickListener { onClick() }
         }
     }
 
     private fun tintTabCountButton(color: Int) {
         if (!::tabsButton.isInitialized) return
-        (tabsButton.getChildAt(0) as? TextView)?.setTextColor(color)
-        (tabsButton.getChildAt(1) as? TextView)?.setTextColor(color)
+        (tabsButton.getChildAt(0) as? ImageView)?.setImageDrawable(
+            MaterialSymbolsRounded.tabsCounterDrawable(this, tabCount, color, dp(25))
+        )
     }
 
     private fun showAddressDialog() {
