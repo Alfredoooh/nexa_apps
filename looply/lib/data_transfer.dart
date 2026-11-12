@@ -63,27 +63,25 @@ class LooplyDataTransfer {
   static Future<String?> exportToFile() async {
     final bytes = await buildExportBytes();
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-    return FilePicker().saveFile(
+    final outputFile = await FilePicker.saveFile(
       dialogTitle: 'Exportar dados do BrowseIt',
       fileName: 'browseit-backup-$stamp.json',
       type: FileType.custom,
       allowedExtensions: const ['json'],
       bytes: bytes,
     );
+    return outputFile?.path;
   }
 
   static Future<bool> importFromFile() async {
-    final selection = await FilePicker().pickFiles(
+    final picked = await FilePicker.pickFile(
       dialogTitle: 'Importar dados do BrowseIt',
       type: FileType.custom,
       allowedExtensions: const ['json'],
-      allowMultiple: false,
-      withData: true,
     );
-    if (selection == null || selection.files.isEmpty) return false;
-    final picked = selection.files.single;
-    final bytes = picked.bytes ?? (picked.path == null ? null : await File(picked.path!).readAsBytes());
-    if (bytes == null || bytes.isEmpty) throw const FormatException('O ficheiro JSON está vazio ou não pode ser lido.');
+    if (picked == null) return false;
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty) throw const FormatException('O ficheiro JSON está vazio ou não pode ser lido.');
 
     final decoded = jsonDecode(utf8.decode(bytes));
     if (decoded is! Map || decoded['format'] != 'looply-backup') {
