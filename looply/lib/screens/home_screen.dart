@@ -33,13 +33,6 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 18),
                 const QuickSiteGridCard(),
-                const SizedBox(height: 10),
-                ValueListenableBuilder<LooplyUser?>(
-                  valueListenable: authController,
-                  builder: (context, user, _) => user == null
-                      ? const _LoginButton()
-                      : const SizedBox.shrink(),
-                ),
                 const SizedBox(height: 14),
                 Text(
                   'Navegação simples, rápida e privada.',
@@ -61,9 +54,10 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// Título "Início" à esquerda com peso leve, avatar compacto à direita
-// abrindo o drawer. Sem logo central e sem botão de busca — a busca
-// agora vive como aba própria na bottom bar.
+// Barra superior: à esquerda, o botão do drawer (ícone de hambúrguer
+// customizado, duas linhas só — a de cima mais longa que a de baixo).
+// À direita, onde antes ficava o avatar de perfil, agora fica o botão
+// de Entrar (compacto, sem ícone) — só aparece sem sessão ativa.
 class LooplyHomeAppBar extends StatelessWidget {
   const LooplyHomeAppBar({super.key, this.onOpenDrawer});
 
@@ -72,7 +66,6 @@ class LooplyHomeAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = pageBg(context);
-    final text = mainText(context);
     final topInset = MediaQuery.of(context).padding.top;
 
     return Container(
@@ -91,19 +84,15 @@ class LooplyHomeAppBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Expanded(
-                child: Text(
-                  appText('home'),
-                  style: TextStyle(
-                    color: text,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: -.2,
-                  ),
-                ),
-              ),
-              _ProfileAvatarButton(
+              _DrawerMenuButton(
                 onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
+              ),
+              const Spacer(),
+              ValueListenableBuilder<LooplyUser?>(
+                valueListenable: authController,
+                builder: (context, user, _) => user == null
+                    ? const _CompactSignInButton()
+                    : const SizedBox.shrink(),
               ),
             ],
           ),
@@ -113,37 +102,36 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
-// Avatar compacto (36px): foto da conta quando há sessão, ou o asset local
-// avatar.png quando não há. O toque abre o drawer — nunca navega direto
-// para Login/Perfil a partir daqui.
-class _ProfileAvatarButton extends StatelessWidget {
-  const _ProfileAvatarButton({required this.onTap});
+// Botão do drawer: círculo com o mesmo tamanho/toque do antigo avatar,
+// mas com um ícone próprio de duas linhas (sem usar AppIcons nem Symbols),
+// desenhado via CustomPaint. Linha de cima mais longa que a de baixo.
+class _DrawerMenuButton extends StatelessWidget {
+  const _DrawerMenuButton({required this.onTap});
 
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<LooplyUser?>(
-      valueListenable: authController,
-      builder: (context, user, _) => Semantics(
-        button: true,
-        label: appText('open_menu'),
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: pillColor(context),
-                foregroundImage: user?.photoUrl != null
-                    ? NetworkImage(user!.photoUrl!)
-                    : const AssetImage('assets/images/avatar.png') as ImageProvider,
-                child: null,
+    final iconColor = mainText(context);
+    return Semantics(
+      button: true,
+      label: appText('open_menu'),
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 14,
+                child: CustomPaint(
+                  painter: _TwoLineMenuPainter(color: iconColor),
+                ),
               ),
             ),
           ),
@@ -153,26 +141,63 @@ class _ProfileAvatarButton extends StatelessWidget {
   }
 }
 
+class _TwoLineMenuPainter extends CustomPainter {
+  const _TwoLineMenuPainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+
+    // Linha de cima: comprimento total da largura disponível.
+    canvas.drawLine(
+      Offset(0, 0),
+      Offset(size.width, 0),
+      paint,
+    );
+
+    // Linha de baixo: mais curta, centralizada, cerca de 62% da largura
+    // da linha de cima.
+    final bottomWidth = size.width * 0.62;
+    final bottomStart = (size.width - bottomWidth) / 2;
+    canvas.drawLine(
+      Offset(bottomStart, size.height),
+      Offset(bottomStart + bottomWidth, size.height),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TwoLineMenuPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+// Linha única, deslizável horizontalmente, com bordas totalmente curvas
+// (formato pill). Mostra todos os quickSites em sequência; ao arrastar,
+// revela mais itens. O botão "Mais sites" é o último item dentro da
+// mesma linha de rolagem, não um elemento separado fora dela.
 class QuickSiteGridCard extends StatelessWidget {
   const QuickSiteGridCard({super.key});
   @override
   Widget build(BuildContext context) {
-    final firstRow = quickSites.sublist(0, 5);
-    final secondRow = quickSites.sublist(5);
     return Container(
+      height: 76,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(24)),
-      child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: firstRow.map((site) => QuickSiteTile(site: site)).toList()),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            ...secondRow.map((site) => QuickSiteTile(site: site)),
-            const _MoreSitesTile(),
-          ],
-        ),
-      ]),
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          for (final site in quickSites) QuickSiteTile(site: site),
+          const _MoreSitesTile(),
+        ],
+      ),
     );
   }
 }
@@ -182,7 +207,6 @@ class _MoreSitesTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = mainText(context);
     final accent = accentColor(context);
     return Semantics(
       button: true,
@@ -192,28 +216,16 @@ class _MoreSitesTile extends StatelessWidget {
         onTap: () => Navigator.of(context).push<void>(
           MaterialPageRoute<void>(builder: (_) => const AllSitesScreen()),
         ),
-        child: SizedBox(
-          width: 54,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CustomPaint(
-                size: const Size(40, 40),
-                painter: _DashedCirclePainter(color: accent),
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: AppMaterialIcon(AppIcons.plus, size: 22, color: accent),
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                appText('more'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10, color: text),
-              ),
-            ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          child: CustomPaint(
+            size: const Size(40, 40),
+            painter: _DashedCirclePainter(color: accent),
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: AppMaterialIcon(AppIcons.plus, size: 22, color: accent),
+            ),
           ),
         ),
       ),
@@ -247,15 +259,17 @@ class _DashedCirclePainter extends CustomPainter {
   bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) => oldDelegate.color != color;
 }
 
-class _LoginButton extends StatelessWidget {
-  const _LoginButton();
+// Botão de Entrar compacto: sem ícone, sem largura cheia — encolhe ao
+// conteúdo do texto. Fica no canto direito do appbar.
+class _CompactSignInButton extends StatelessWidget {
+  const _CompactSignInButton();
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     return Material(
       color: pillColor(context),
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(999),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push<void>(
@@ -277,14 +291,10 @@ class _LoginButton extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppMaterialIcon(AppIcons.signIn, color: text, size: 18),
-              const SizedBox(width: 8),
-              Text(appText('sign_in'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
-            ],
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: Text(
+            appText('sign_in'),
+            style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700),
           ),
         ),
       ),
@@ -292,6 +302,8 @@ class _LoginButton extends StatelessWidget {
   }
 }
 
+// Sem label (nome do site) embaixo do ícone — só o ícone, já que estes
+// serão sites próprios da empresa exibidos direto na tela inicial.
 class QuickSiteTile extends StatelessWidget {
   const QuickSiteTile({super.key, required this.site});
   final QuickSite site;
@@ -300,14 +312,16 @@ class QuickSiteTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = mainText(context);
     final circleBg = isDark ? pillColor(context) : Colors.white;
-    return GestureDetector(
-      onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => openNewTab(context, site.url, title: site.name),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 40, height: 40,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      child: GestureDetector(
+        onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () => openNewTab(context, site.url, title: site.name),
+          child: Container(
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
             child: ClipOval(
               child: Transform.scale(
@@ -316,9 +330,7 @@ class QuickSiteTile extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 5),
-          Text(site.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: text)),
-        ]),
+        ),
       ),
     );
   }
