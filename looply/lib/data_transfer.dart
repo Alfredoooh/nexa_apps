@@ -78,7 +78,7 @@ class LooplyDataTransfer {
     );
   }
 
-  static Future<String?> exportToFile() async {
+  static Future<Uri?> exportToFile() async {
     final bytes = await buildExportBytes();
 
     final stamp = DateTime.now()
