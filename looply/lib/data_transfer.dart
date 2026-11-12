@@ -63,7 +63,7 @@ class LooplyDataTransfer {
   static Future<String?> exportToFile() async {
     final bytes = await buildExportBytes();
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
-    return FilePicker.platform.saveFile(
+    return FilePicker().saveFile(
       dialogTitle: 'Exportar dados do BrowseIt',
       fileName: 'browseit-backup-$stamp.json',
       type: FileType.custom,
@@ -73,7 +73,7 @@ class LooplyDataTransfer {
   }
 
   static Future<bool> importFromFile() async {
-    final selection = await FilePicker.platform.pickFiles(
+    final selection = await FilePicker().pickFiles(
       dialogTitle: 'Importar dados do BrowseIt',
       type: FileType.custom,
       allowedExtensions: const ['json'],
