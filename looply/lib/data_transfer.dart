@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -102,6 +101,7 @@ class LooplyDataTransfer {
       dialogTitle: 'Importar dados do BrowseIt',
       type: FileType.custom,
       allowedExtensions: const ['json'],
+      allowMultiple: false,
     );
 
     // O utilizador pode cancelar a seleção.
@@ -109,8 +109,8 @@ class LooplyDataTransfer {
       return false;
     }
 
-    // FilePickerResult contém os ficheiros na propriedade files.
-    final bytes = await picked.files.first.readAsBytes();
+    // Lê o ficheiro através da API XFile suportada pelo file_picker 11.
+    final bytes = await picked.files.first.xFile.readAsBytes();
 
     if (bytes.isEmpty) {
       throw const FormatException(
@@ -221,6 +221,7 @@ class LooplyDataTransfer {
 
         try {
           final snapshotBytes = base64Decode(encoded);
+
           tabsController.updateTab(
             id,
             thumbnail: snapshotBytes,
