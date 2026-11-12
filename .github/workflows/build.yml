@@ -101,10 +101,7 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           rm -f pubspec.lock
-          rm -rf "$PUB_CACHE/hosted/pub.dev/flutter_inappwebview"*
           flutter pub get
-          echo "=== Versão resolvida do flutter_inappwebview ==="
-          grep -A3 "^  flutter_inappwebview:" pubspec.lock
 
       - name: Configure BrowseIt release keystore
         shell: bash
