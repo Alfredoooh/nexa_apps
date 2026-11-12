@@ -64,7 +64,7 @@ jobs:
 
           WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
           GRADLEW="$PROJECT_DIR/android/gradlew"
-          TARGET_VERSION="8.14.6"
+          TARGET_VERSION="9.5.0"
 
           if [[ ! -f "$WRAPPER" ]]; then
             echo "ERROR: Gradle wrapper properties not found."
@@ -80,7 +80,7 @@ jobs:
             "s#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-${TARGET_VERSION}-bin.zip#" \
             "$WRAPPER"
           sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
-          sed -i "s#^VERSION=\"8.13\"#VERSION=\"${TARGET_VERSION}\"#" "$GRADLEW"
+          sed -i -E "s#^VERSION=\"[^\"]*\"#VERSION=\"${TARGET_VERSION}\"#" "$GRADLEW"
 
           echo "=== gradle-wrapper.properties ==="
           cat "$WRAPPER"
