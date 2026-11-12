@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Context isolado para o slider M3 Expressive Large do browser. -->
+    <style name="ThemeOverlay.BrowseIt.ExpressiveSlider" parent="Theme.Material3Expressive.DayNight">
+        <item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Large</item>
+    </style>
+</resources>

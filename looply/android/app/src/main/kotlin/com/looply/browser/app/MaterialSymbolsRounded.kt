@@ -2,6 +2,7 @@ package com.looply.browser.app
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
@@ -34,6 +35,7 @@ internal object MaterialSymbolsRounded {
         "arrow_back" to 0xE5C4,
         "arrow_forward" to 0xE5C8,
         "add" to 0xE145,
+        "tab" to 0xE8D8,
         "bookmark" to 0xE8E7,
         "bookmarks" to 0xE98B,
         "history" to 0xE8B3,
@@ -44,6 +46,8 @@ internal object MaterialSymbolsRounded {
         "translate" to 0xE8E2,
         "text_decrease" to 0xEADD,
         "text_increase" to 0xEAE2,
+        "text_fields" to 0xE262,
+        "zoom_in" to 0xE8FF,
         "print" to 0xE8AD,
         "content_copy" to 0xE14D,
         "share" to 0xE80D,
@@ -71,6 +75,15 @@ internal object MaterialSymbolsRounded {
         }
     }
 
+    /**
+     * Material Symbols Rounded é uma fonte variável. Reduzimos o eixo de peso
+     * e o grade sem alterar o desenho SVG específico do contador de separadores.
+     */
+    private fun fontVariationSettings(opticalSizeSp: Float): String {
+        val opticalSize = opticalSizeSp.coerceIn(20f, 48f)
+        return "'FILL' 0, 'wght' 300, 'GRAD' -25, 'opsz' $opticalSize"
+    }
+
     fun glyph(name: String): String {
         val codePoint = codePoints[name]
             ?: throw IllegalArgumentException("Símbolo Material não registado: $name")
@@ -89,6 +102,10 @@ internal object MaterialSymbolsRounded {
             typeface = font(context)
             textSize = sizeSp
             setTextColor(color)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                this.fontVariationSettings = this@MaterialSymbolsRounded
+                    .fontVariationSettings(sizeSp)
+            }
             gravity = Gravity.CENTER
             includeFontPadding = false
             contentDescription = description
@@ -115,6 +132,13 @@ internal object MaterialSymbolsRounded {
             textAlign = Paint.Align.CENTER
             textSize = dimension * .88f
             this.color = color
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setFontVariationSettings(
+                    fontVariationSettings(
+                        dimension / context.resources.displayMetrics.density
+                    )
+                )
+            }
         }
         val baseline = dimension / 2f - (paint.ascent() + paint.descent()) / 2f
         canvas.drawText(glyph(name), dimension / 2f, baseline, paint)

@@ -1,6 +1,7 @@
 package com.looply.browser.app
 
 import android.app.Activity
+import android.animation.ValueAnimator
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -19,6 +20,7 @@ import android.print.PrintAttributes
 import android.print.PrintManager
 import android.text.InputType
 import android.view.Gravity
+import android.view.animation.DecelerateInterpolator
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -45,12 +47,16 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.slider.Slider
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.URLConnection
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class OrbitBrowserActivity : AppCompatActivity() {
 
@@ -167,6 +173,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
     private lateinit var toolbar: LinearLayout
+    private lateinit var appBarContainer: LinearLayout
     private lateinit var titlePill: LinearLayout
     private lateinit var faviconView: ImageView
     private lateinit var titleView: TextView
@@ -186,7 +193,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var toolbarHidden = false
     private var pageToolbarColor: Int? = null
     private var originalUserAgent: String? = null
-    private var pageZoom = 100
+    private var textSizePercent = 100
+    private var pageZoomPercent = 100
+    private var appBarAnimator: ValueAnimator? = null
+    private var lastScrollDirection = 0
+    private var accumulatedScrollDelta = 0
     private var isFinishingWithResult = false
 
     private var customView: View? = null
@@ -416,8 +427,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(dp(42), dp(46))
         )
 
-        root.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
-
         progress = ProgressBar(
             this,
             null,
@@ -432,7 +441,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
             visibility = View.GONE
         }
 
-        root.addView(progress, LinearLayout.LayoutParams(-1, dp(2)))
+        // A barra e a linha de progresso pertencem ao mesmo contentor. Ao
+        // recolher o app bar, a altura real do contentor passa a zero; não
+        // fica uma faixa vazia entre a barra e a página.
+        appBarContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(toolbarBg)
+            clipChildren = true
+            clipToPadding = true
+            addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
+            addView(progress, LinearLayout.LayoutParams(-1, dp(2)))
+        }
+        root.addView(appBarContainer, LinearLayout.LayoutParams(-1, dp(58)))
 
         findBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -524,11 +544,28 @@ class OrbitBrowserActivity : AppCompatActivity() {
             webView.setOnScrollChangeListener {
                     _, _, scrollY, _, oldScrollY ->
                 val delta = scrollY - oldScrollY
+                if (delta == 0) return@setOnScrollChangeListener
 
-                if (scrollY > dp(90) && delta > dp(7)) {
-                    hideToolbar(true)
-                } else if (delta < -dp(5)) {
+                // Só reage depois de uma deslocação acumulada consistente.
+                // Pequenos saltos de layout/ads não fazem o app bar tremer.
+                val direction = if (delta > 0) 1 else -1
+                if (direction != lastScrollDirection) {
+                    lastScrollDirection = direction
+                    accumulatedScrollDelta = 0
+                }
+                accumulatedScrollDelta += abs(delta)
+
+                if (scrollY <= dp(4)) {
+                    accumulatedScrollDelta = 0
                     hideToolbar(false)
+                } else if (direction > 0 && scrollY > dp(90) &&
+                    accumulatedScrollDelta >= dp(22)
+                ) {
+                    hideToolbar(true)
+                    accumulatedScrollDelta = 0
+                } else if (direction < 0 && accumulatedScrollDelta >= dp(16)) {
+                    hideToolbar(false)
+                    accumulatedScrollDelta = 0
                 }
             }
         }
@@ -546,7 +583,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         settings.setSupportZoom(true)
         settings.builtInZoomControls = true
         settings.displayZoomControls = false
-        settings.textZoom = pageZoom
+        settings.textZoom = textSizePercent
 
         settings.cacheMode = if (incognito) {
             WebSettings.LOAD_NO_CACHE
@@ -636,6 +673,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
             ) {
                 currentUrl = url
                 pageToolbarColor = null
+                lastScrollDirection = 0
+                accumulatedScrollDelta = 0
+                hideToolbar(false)
                 progress.progress = 0
                 progress.visibility = View.VISIBLE
                 refreshTitle()
@@ -655,6 +695,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
                 refreshTitle()
                 updateToolbarColors()
+                view.post { applyPageZoomToCurrentPage() }
             }
 
             override fun onReceivedError(
@@ -710,7 +751,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 root.removeView(webView)
                 root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
 
-                toolbar.visibility = View.GONE
+                appBarContainer.visibility = View.GONE
                 progress.visibility = View.GONE
 
                 window.decorView.systemUiVisibility =
@@ -996,14 +1037,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
             translatePage()
         }
 
-        addSheetItem(content, "text_decrease", "Reduzir texto") {
+        addSheetItem(content, "text_fields", "Tamanho da fonte") {
+            dialog.setOnDismissListener {
+                if (!isFinishing) showScaleCard(pageScale = false)
+            }
             dialog.dismiss()
-            setZoom(-10)
         }
 
-        addSheetItem(content, "text_increase", "Aumentar texto") {
+        addSheetItem(content, "zoom_in", "Zoom da página") {
+            dialog.setOnDismissListener {
+                if (!isFinishing) showScaleCard(pageScale = true)
+            }
             dialog.dismiss()
-            setZoom(10)
         }
 
         addSheetItem(content, "print", "Imprimir") {
@@ -1038,6 +1083,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         scroll.addView(content)
         dialog.setContentView(scroll)
+        dialog.setOnShowListener {
+            val sheet = dialog.findViewById<android.widget.FrameLayout>(
+                com.google.android.material.R.id.design_bottom_sheet
+            ) ?: return@setOnShowListener
+            val behavior = BottomSheetBehavior.from(sheet)
+            behavior.isFitToContents = false
+            // O limite superior fica sempre abaixo da barra de estado. Assim,
+            // a fila dos quatro botões circulares nunca desliza por trás dela.
+            behavior.expandedOffset = statusBarInsetPx() + dp(8)
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
         dialog.show()
     }
 
@@ -1050,25 +1106,34 @@ class OrbitBrowserActivity : AppCompatActivity() {
     ) {
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
             alpha = if (enabled) 1f else .38f
             isClickable = enabled
             isFocusable = enabled
+            contentDescription = label
             setOnClickListener {
                 if (enabled) action()
             }
         }
 
-        val iconView = MaterialSymbolsRounded.textView(
-            this,
-            icon,
-            toolbarText(),
-            24f,
-        ).apply {
-            background = rounded(toolbarPillColor(), 18)
+        val circle = android.widget.FrameLayout(this).apply {
+            background = rounded(toolbarPillColor(), 99)
+            addView(
+                MaterialSymbolsRounded.textView(
+                    this@OrbitBrowserActivity,
+                    icon,
+                    toolbarText(),
+                    24f,
+                ),
+                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
+            )
         }
-
-        column.addView(iconView, LinearLayout.LayoutParams(dp(48), dp(44)))
+        column.addView(
+            circle,
+            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+        )
 
         column.addView(
             TextView(this).apply {
@@ -1076,9 +1141,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 textSize = 10.5f
                 setTextColor(secondaryText)
                 gravity = Gravity.CENTER
+                includeFontPadding = false
                 maxLines = 1
+                isSingleLine = true
             },
-            LinearLayout.LayoutParams(-1, dp(24))
+            LinearLayout.LayoutParams(-1, dp(23))
         )
 
         parent.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
@@ -1093,28 +1160,42 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(10), 0)
+            setPadding(dp(12), 0, dp(12), 0)
             background = selectableBackground()
             isClickable = true
             isFocusable = true
+            minimumHeight = dp(56)
             setOnClickListener { action() }
         }
 
-        row.addView(
-            MaterialSymbolsRounded.textView(this, icon, secondaryText, 23f),
-            LinearLayout.LayoutParams(dp(42), dp(48))
-        )
+        val iconCell = android.widget.FrameLayout(this).apply {
+            addView(
+                MaterialSymbolsRounded.textView(
+                    this@OrbitBrowserActivity,
+                    icon,
+                    secondaryText,
+                    23f,
+                ),
+                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
+            )
+        }
+        row.addView(iconCell, LinearLayout.LayoutParams(dp(44), dp(56)))
 
         row.addView(
             TextView(this).apply {
                 text = label
                 textSize = 14f
                 setTextColor(primaryText)
+                gravity = Gravity.CENTER_VERTICAL
+                includeFontPadding = false
+                maxLines = 2
             },
-            LinearLayout.LayoutParams(0, dp(48), 1f)
+            LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                marginStart = dp(4)
+            }
         )
 
-        parent.addView(row, LinearLayout.LayoutParams(-1, dp(48)))
+        parent.addView(row, LinearLayout.LayoutParams(-1, dp(56)))
     }
 
     private fun sheetDivider(): View {
@@ -1489,9 +1570,183 @@ class OrbitBrowserActivity : AppCompatActivity() {
         webView.loadUrl(translateUrl)
     }
 
-    private fun setZoom(delta: Int) {
-        pageZoom = (pageZoom + delta).coerceIn(50, 200)
-        webView.settings.textZoom = pageZoom
+    private fun showScaleCard(pageScale: Boolean) {
+        if (pageScale) {
+            val actual = (webView.scale * 100f).roundToInt().coerceIn(50, 200)
+            pageZoomPercent = ((actual / 5f).roundToInt() * 5).coerceIn(50, 200)
+        }
+        val title = if (pageScale) "Zoom da página" else "Tamanho da fonte"
+        val initialValue = if (pageScale) pageZoomPercent else textSizePercent
+        val dialog = BottomSheetDialog(this)
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(18), dp(22), dp(18))
+            background = rounded(pageBg, 32)
+        }
+
+        val handle = View(this).apply {
+            background = rounded(
+                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
+                99
+            )
+        }
+        card.addView(
+            handle,
+            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(18)
+            }
+        )
+
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(
+            TextView(this).apply {
+                text = title
+                textSize = 18f
+                setTextColor(primaryText)
+                typeface = android.graphics.Typeface.create(
+                    "sans-serif-medium",
+                    android.graphics.Typeface.NORMAL
+                )
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(34), 1f)
+        )
+        val valueLabel = TextView(this).apply {
+            text = "$initialValue%"
+            textSize = 15f
+            setTextColor(primaryText)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            background = rounded(toolbarPillColor(), 99)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+        }
+        heading.addView(valueLabel, LinearLayout.LayoutParams(-2, dp(34)))
+        card.addView(heading)
+
+        val sliderContext = android.view.ContextThemeWrapper(
+            this,
+            R.style.ThemeOverlay_BrowseIt_ExpressiveSlider
+        )
+        val slider = Slider(
+            sliderContext,
+            null,
+            com.google.android.material.R.attr.sliderStyle
+        ).apply {
+            valueFrom = 50f
+            valueTo = 200f
+            stepSize = 5f
+            value = initialValue.toFloat()
+            contentDescription = title
+            setThumbTintList(android.content.res.ColorStateList.valueOf(accent))
+            setHaloTintList(android.content.res.ColorStateList.valueOf(
+                (accent and 0x00FFFFFF) or 0x26000000
+            ))
+            setTrackActiveTintList(android.content.res.ColorStateList.valueOf(accent))
+            setTrackInactiveTintList(android.content.res.ColorStateList.valueOf(
+                if (dark) 0xFF53565B.toInt() else 0xFFDADCE0.toInt()
+            ))
+        }
+        card.addView(
+            slider,
+            LinearLayout.LayoutParams(-1, dp(66)).apply {
+                topMargin = dp(10)
+            }
+        )
+
+        val rangeLabels = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        rangeLabels.addView(
+            TextView(this).apply {
+                text = "50%"
+                textSize = 12f
+                setTextColor(secondaryText)
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(22), 1f)
+        )
+        rangeLabels.addView(
+            TextView(this).apply {
+                text = "200%"
+                textSize = 12f
+                setTextColor(secondaryText)
+                gravity = Gravity.END
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(22), 1f)
+        )
+        card.addView(rangeLabels)
+
+        slider.addOnChangeListener { _, value, fromUser ->
+            val selected = (value.roundToInt() / 5 * 5).coerceIn(50, 200)
+            valueLabel.text = "$selected%"
+            if (fromUser) {
+                if (pageScale) {
+                    pageZoomPercent = selected
+                    applyPageZoomToCurrentPage()
+                } else {
+                    textSizePercent = selected
+                    webView.settings.textZoom = textSizePercent
+                }
+            }
+        }
+
+        dialog.setContentView(card)
+        dialog.setOnShowListener {
+            val sheet = dialog.findViewById<android.widget.FrameLayout>(
+                com.google.android.material.R.id.design_bottom_sheet
+            ) ?: return@setOnShowListener
+
+            sheet.setBackgroundColor(Color.TRANSPARENT)
+            val params = sheet.layoutParams as? ViewGroup.MarginLayoutParams
+            params?.let {
+                it.width = ViewGroup.LayoutParams.MATCH_PARENT
+                it.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                it.marginStart = dp(12)
+                it.marginEnd = dp(12)
+                it.bottomMargin = dp(12) + navigationBarInsetPx()
+                sheet.layoutParams = it
+            }
+
+            val behavior = BottomSheetBehavior.from(sheet)
+            behavior.skipCollapsed = true
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
+    private fun applyPageZoomToCurrentPage() {
+        if (!::webView.isInitialized) return
+        val targetScale = (pageZoomPercent / 100f).coerceIn(0.5f, 2f)
+        val currentScale = webView.scale.takeIf {
+            it.isFinite() && it > 0f
+        } ?: 1f
+        val factor = targetScale / currentScale
+        if (abs(factor - 1f) > 0.005f) {
+            webView.zoomBy(factor.coerceIn(0.01f, 100f))
+        }
+    }
+
+    private fun statusBarInsetPx(): Int {
+        val insets = ViewCompat.getRootWindowInsets(root)
+        return insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+            ?: systemDimension("status_bar_height")
+    }
+
+    private fun navigationBarInsetPx(): Int {
+        val insets = ViewCompat.getRootWindowInsets(root)
+        return insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+    }
+
+    private fun systemDimension(name: String): Int {
+        val id = resources.getIdentifier(name, "dimen", "android")
+        return if (id != 0) resources.getDimensionPixelSize(id) else dp(24)
     }
 
     private fun printPage() {
@@ -1718,6 +1973,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 pageToolbarColor = parsed
                 applySystemBars()
                 toolbar.setBackgroundColor(toolbarBg)
+                appBarContainer.setBackgroundColor(toolbarBg)
                 titlePill.background = rounded(toolbarPillColor(), 24)
 
                 titleView.setTextColor(toolbarText())
@@ -1795,14 +2051,56 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun hideToolbar(hide: Boolean) {
-        if (toolbarHidden == hide || previewOnly) return
+        if (previewOnly || !::appBarContainer.isInitialized) return
+        if (toolbarHidden == hide && appBarAnimator?.isRunning != true) return
 
         toolbarHidden = hide
+        appBarAnimator?.removeAllListeners()
+        appBarAnimator?.cancel()
+        appBarContainer.animate().cancel()
 
-        toolbar.animate()
-            .translationY(if (hide) -toolbar.height.toFloat() else 0f)
-            .setDuration(170)
-            .start()
+        val targetHeight = if (hide) 0 else dp(58)
+        val currentHeight = appBarContainer.layoutParams.height
+            .takeIf { it >= 0 } ?: appBarContainer.height
+
+        if (hide && currentHeight <= 0) {
+            appBarContainer.visibility = View.GONE
+            return
+        }
+
+        if (!hide) {
+            appBarContainer.visibility = View.VISIBLE
+            if (currentHeight <= 0) {
+                appBarContainer.layoutParams = appBarContainer.layoutParams.apply {
+                    height = 0
+                }
+            }
+        }
+
+        val startHeight = appBarContainer.layoutParams.height
+            .takeIf { it >= 0 } ?: appBarContainer.height
+        appBarAnimator = ValueAnimator.ofInt(startHeight, targetHeight).apply {
+            duration = 190L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { animator ->
+                val params = appBarContainer.layoutParams
+                params.height = animator.animatedValue as Int
+                appBarContainer.layoutParams = params
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (toolbarHidden) {
+                        appBarContainer.visibility = View.GONE
+                    } else {
+                        appBarContainer.visibility = View.VISIBLE
+                        appBarContainer.layoutParams = appBarContainer.layoutParams.apply {
+                            height = dp(58)
+                        }
+                    }
+                }
+            })
+            start()
+        }
     }
 
     private fun hideCustomView() {
@@ -1815,6 +2113,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
         customViewCallback = null
 
         toolbar.visibility = View.VISIBLE
+        toolbarHidden = false
+        appBarAnimator?.removeAllListeners()
+        appBarAnimator?.cancel()
+        appBarContainer.visibility = View.VISIBLE
+        appBarContainer.layoutParams = appBarContainer.layoutParams.apply {
+            height = dp(58)
+        }
 
         root.addView(
             webView,
