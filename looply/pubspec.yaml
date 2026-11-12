@@ -17,7 +17,7 @@ dependencies:
   http: ^1.2.0
   cached_network_image: any
   shared_preferences: ^2.3.3
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.2.0
   image_picker: ^1.2.4
   material3_expressive_loading_indicator: ^0.1.2
   path_provider: ^2.1.5

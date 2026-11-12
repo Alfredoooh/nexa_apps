@@ -100,7 +100,6 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          rm -f pubspec.lock
           flutter pub get
 
       - name: Configure BrowseIt release keystore

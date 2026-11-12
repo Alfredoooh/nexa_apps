@@ -19,7 +19,6 @@ def browseItSigningConfigured =
 android {
     namespace = "com.looply.browser.app"
     compileSdk = 36
-    // Alinhado com os plugins Android usados pelo projeto.
     ndkVersion = "28.2.13676358"
 
     compileOptions {
@@ -54,8 +53,6 @@ android {
 
     buildTypes {
         release {
-            // The release variant is configured with the BrowseIt keystore.
-            // A verification task below prevents silently shipping a debug-signed APK.
             signingConfig = browseItSigningConfigured ? signingConfigs.browseitRelease : signingConfigs.debug
             minifyEnabled = true
             shrinkResources = true
@@ -70,7 +67,6 @@ kotlin {
     }
 }
 
-// Do not allow a release build to fall back silently to the debug certificate.
 tasks.register("verifyBrowseItReleaseSigning") {
     doLast {
         def missing = []
@@ -84,8 +80,8 @@ tasks.register("verifyBrowseItReleaseSigning") {
 
         if (!missing.isEmpty()) {
             throw new GradleException(
-                    "BrowseIt RELEASE signing is not configured. Missing/invalid: ${missing.join(', ')}. " +
-                    "Configure the uploaded BrowseIt keystore and its GitHub Actions secrets before building a release."
+                "BrowseIt RELEASE signing is not configured. Missing/invalid: ${missing.join(', ')}. " +
+                "Configure the uploaded BrowseIt keystore and its GitHub Actions secrets before building a release."
             )
         }
     }
@@ -103,7 +99,6 @@ dependencies {
     implementation "com.google.android.libraries.identity.googleid:googleid:1.2.1"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
     implementation "androidx.appcompat:appcompat:1.7.0"
-    // 1.14.0 provides the official Material 3 Expressive Views theme and slider.
     implementation "com.google.android.material:material:1.14.0"
     implementation "com.caverock:androidsvg-aar:1.4"
 }

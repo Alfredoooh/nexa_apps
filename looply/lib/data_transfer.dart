@@ -103,12 +103,10 @@ class LooplyDataTransfer {
       allowedExtensions: const ['json'],
     );
 
-    // O utilizador pode cancelar a seleção.
     if (picked == null) {
       return false;
     }
 
-    // file_picker 12+ expõe a leitura diretamente em PlatformFile.
     final bytes = await picked.readAsBytes();
 
     if (bytes.isEmpty) {
@@ -186,7 +184,6 @@ class LooplyDataTransfer {
       }
     }
 
-    // Atualiza imediatamente os controladores em memória.
     await Future.wait<void>([
       themeController.restore(),
       tabsController.restore(),
@@ -220,7 +217,6 @@ class LooplyDataTransfer {
 
         try {
           final snapshotBytes = base64Decode(encoded);
-
           tabsController.updateTab(
             id,
             thumbnail: snapshotBytes,
