@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../localization.dart';
 import '../models.dart';
 import '../browser_library.dart';
+import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -26,20 +27,29 @@ class SiteUsageDetailScreen extends StatefulWidget {
 }
 
 class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
   @override
   void initState() {
     super.initState();
     activityController.addListener(_onChanged);
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
     activityController.removeListener(_onChanged);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
   void _onChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() => _query = _searchController.text.trim().toLowerCase());
   }
 
   @override
@@ -48,7 +58,8 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
     final muted = mutedText(context);
     final accent = accentColor(context);
 
-    final stats = _computeSiteStats();
+    final allStats = _computeSiteStats();
+    final stats = allStats.where((item) => _query.isEmpty || item.host.contains(_query) || item.title.toLowerCase().contains(_query)).toList(growable: false);
     final maxVisits = stats.isEmpty
         ? 0
         : stats.map((item) => item.visitCount).reduce((a, b) => a > b ? a : b);
@@ -60,7 +71,33 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
         centerTitle: true,
         title: Text(appText('visited_sites')),
       ),
-      body: stats.isEmpty
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            child: Container(
+              height: 48, padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(15)),
+              child: Row(children: [
+                AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 19),
+                const SizedBox(width: 10),
+                Expanded(child: TextField(controller: _searchController, style: TextStyle(color: text, fontSize: 14), decoration: InputDecoration(border: InputBorder.none, hintText: appText('search_history'), hintStyle: TextStyle(color: muted), isDense: true))),
+                if (_query.isNotEmpty) IconButton(onPressed: _searchController.clear, icon: Icon(Icons.close_rounded, color: muted, size: 18)),
+              ]),
+            ),
+          ),
+          if (allStats.isNotEmpty) Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+            child: Container(
+              width: double.infinity, padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(16)),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(appText('visited_sites'), style: TextStyle(color: muted, fontSize: 12)), const SizedBox(height: 4), Text('${allStats.length}', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w800))])),
+                AppMaterialIcon(AppIcons.globe, size: 26, color: accent),
+              ]),
+            ),
+          ),
+          Expanded(child: stats.isEmpty
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(30),
@@ -86,7 +123,9 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                 final fraction = maxVisits == 0 ? 0.0 : item.visitCount / maxVisits;
                 return _SiteUsageTile(item: item, fraction: fraction);
               },
-            ),
+            )),
+        ],
+      ),
     );
   }
 
@@ -179,7 +218,13 @@ class _SiteUsageTile extends StatelessWidget {
       } catch (_) {}
     }
 
-    return Container(
+    return Material(
+      color: settingsCardColor(context),
+      borderRadius: BorderRadius.circular(17),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+      onTap: () => openOrbitTab(context, item.url, title: item.title),
+      child: Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
@@ -257,6 +302,8 @@ class _SiteUsageTile extends StatelessWidget {
             ],
           ),
         ],
+      ),
+      ),
       ),
     );
   }

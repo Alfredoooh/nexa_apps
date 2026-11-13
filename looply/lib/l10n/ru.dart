@@ -131,4 +131,6 @@ const Map<String, String> ruTranslations = <String, String>{
     'no_private_tabs': 'Нет открытых вкладок инкогнито',
     'private_tab': 'Приватная вкладка',
     'exit_incognito': 'Выйти из режима инкогнито',
+  'recent_sites': 'Недавние сайты',
+  'home_tagline': 'Простой, быстрый и конфиденциальный просмотр.',
 };

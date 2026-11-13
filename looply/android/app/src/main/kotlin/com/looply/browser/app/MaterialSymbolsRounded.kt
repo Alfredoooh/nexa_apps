@@ -11,6 +11,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.widget.TextView
 import android.view.Gravity
+import java.util.Locale
 import com.caverock.androidsvg.SVG
 import com.looply.browser.app.icons.svg.regular.TABS_COUNTER_SVG
 import io.flutter.FlutterInjector
@@ -60,7 +61,6 @@ internal object MaterialSymbolsRounded {
     )
 
     private val fontCache = mutableMapOf<Int, Typeface>()
-    private var tabsCounterSvg: SVG? = null
 
     private fun font(context: Context): Typeface {
         val key = System.identityHashCode(context.applicationContext)
@@ -145,10 +145,23 @@ internal object MaterialSymbolsRounded {
         return BitmapDrawable(context.resources, bitmap)
     }
 
-    private fun tabsCounterSvg(): SVG {
-        return tabsCounterSvg ?: SVG.getFromString(TABS_COUNTER_SVG).also {
-            tabsCounterSvg = it
-        }
+    private fun tabsCounterSvg(color: Int): SVG {
+        val hex = String.format(
+            Locale.US,
+            "#%06X",
+            color and 0x00FFFFFF
+        )
+        val rgb = "rgb(${android.graphics.Color.red(color)}," +
+            "${android.graphics.Color.green(color)}," +
+            "${android.graphics.Color.blue(color)})"
+
+        // O SVG de origem contém preto fixo em fill/stroke. Substitui pela
+        // cor efetiva da barra antes de rasterizar, incluindo o modo escuro.
+        val tintedMarkup = TABS_COUNTER_SVG
+            .replace("#000000", hex)
+            .replace("rgb(0,0,0)", rgb)
+
+        return SVG.getFromString(tintedMarkup)
     }
 
     /**
@@ -165,7 +178,7 @@ internal object MaterialSymbolsRounded {
         val bitmap = Bitmap.createBitmap(dimension, dimension, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val svg = tabsCounterSvg()
+        val svg = tabsCounterSvg(color)
         svg.documentWidth = dimension.toFloat()
         svg.documentHeight = dimension.toFloat()
         svg.renderToCanvas(canvas, RectF(0f, 0f, dimension.toFloat(), dimension.toFloat()))

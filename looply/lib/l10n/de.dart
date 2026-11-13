@@ -133,4 +133,6 @@ const Map<String, String> deTranslations = <String, String>{
     'no_private_tabs': 'Keine Inkognito-Tabs geöffnet',
     'private_tab': 'Inkognito-Tab',
     'exit_incognito': 'Inkognito beenden',
+  'recent_sites': 'Zuletzt besuchte Websites',
+  'home_tagline': 'Einfaches, schnelles und privates Surfen.',
 };

@@ -388,8 +388,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Image.asset(
-                                    'assets/images/quick_sites/google.webp',
+                                  Image.network(
+                                    'https://www.google.com/s2/favicons?domain=google.com&sz=64',
                                     width: 20,
                                     height: 20,
                                     fit: BoxFit.contain,
@@ -410,8 +410,8 @@ class _AuthScreenState extends State<AuthScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Image.asset(
-                                    'assets/images/quick_sites/google.webp',
+                                  Image.network(
+                                    'https://www.google.com/s2/favicons?domain=google.com&sz=64',
                                     width: 20,
                                     height: 20,
                                     fit: BoxFit.contain,

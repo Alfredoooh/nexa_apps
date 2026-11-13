@@ -128,4 +128,6 @@ const Map<String, String> trTranslations = <String, String>{
     'no_private_tabs': 'Açık gizli sekme yok',
     'private_tab': 'Gizli sekme',
     'exit_incognito': 'Gizli moddan çık',
+  'recent_sites': 'Son ziyaret edilen siteler',
+  'home_tagline': 'Basit, hızlı ve gizli gezinme.',
 };

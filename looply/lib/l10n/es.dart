@@ -133,4 +133,6 @@ const Map<String, String> esTranslations = <String, String>{
     'no_private_tabs': 'No hay pestañas privadas abiertas',
     'private_tab': 'Pestaña privada',
     'exit_incognito': 'Salir del modo incógnito',
+  'recent_sites': 'Sitios recientes',
+  'home_tagline': 'Navegación sencilla, rápida y privada.',
 };

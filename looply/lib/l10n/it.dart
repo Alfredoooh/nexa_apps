@@ -133,4 +133,6 @@ const Map<String, String> itTranslations = <String, String>{
     'no_private_tabs': 'Nessuna scheda privata aperta',
     'private_tab': 'Scheda privata',
     'exit_incognito': 'Esci dalla modalità privata',
+  'recent_sites': 'Siti recenti',
+  'home_tagline': 'Navigazione semplice, veloce e privata.',
 };

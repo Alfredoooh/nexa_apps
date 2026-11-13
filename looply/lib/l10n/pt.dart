@@ -134,4 +134,6 @@ const Map<String, String> ptTranslations = <String, String>{
     'no_private_tabs': 'Não tens separadores anónimos abertos',
     'private_tab': 'Separador anónimo',
     'exit_incognito': 'Sair do modo anónimo',
+  'recent_sites': 'Sites recentes',
+  'home_tagline': 'Navegação simples, rápida e privada.',
 };

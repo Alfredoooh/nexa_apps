@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../localization.dart';
@@ -8,7 +6,8 @@ import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../auth_service.dart';
-import 'all_sites_screen.dart';
+import '../shell/shell_tab_request.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'auth_screen.dart';
 import '../widgets/material_symbols.dart';
 
@@ -33,9 +32,11 @@ class HomeScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 18),
                 const QuickSiteGridCard(),
+                const SizedBox(height: 12),
+                const RecentTabPreviewsCard(),
                 const SizedBox(height: 14),
                 Text(
-                  'Navegação simples, rápida e privada.',
+                  appText('home_tagline'),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: muted, fontSize: 12),
                 ),
@@ -102,161 +103,144 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
-// Botão do drawer: círculo com o mesmo tamanho/toque do antigo avatar,
-// mas com um ícone próprio de duas linhas (sem usar AppIcons nem Symbols),
-// desenhado via CustomPaint. Linha de cima mais longa que a de baixo.
+// Botão do drawer usa o SVG oficial do conjunto regular.
 class _DrawerMenuButton extends StatelessWidget {
   const _DrawerMenuButton({required this.onTap});
-
   final VoidCallback onTap;
-
   @override
   Widget build(BuildContext context) {
-    final iconColor = mainText(context);
+    final color = mainText(context);
     return Semantics(
-      button: true,
-      label: appText('open_menu'),
+      button: true, label: appText('open_menu'),
       child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
+        color: Colors.transparent, shape: const CircleBorder(), clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: SizedBox(
-            width: 36,
-            height: 36,
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 14,
-                child: CustomPaint(
-                  painter: _TwoLineMenuPainter(color: iconColor),
-                ),
-              ),
+          child: SizedBox(width: 40, height: 40, child: Center(
+            child: SvgPicture.asset(
+              'assets/icons/svg/regular/menu-options.svg', width: 23, height: 23,
+              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
             ),
-          ),
+          )),
         ),
       ),
     );
   }
 }
 
-class _TwoLineMenuPainter extends CustomPainter {
-  const _TwoLineMenuPainter({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round;
-
-    // Linha de cima: comprimento total da largura disponível.
-    canvas.drawLine(
-      Offset(0, 0),
-      Offset(size.width, 0),
-      paint,
-    );
-
-    // Linha de baixo: mais curta, centralizada, cerca de 62% da largura
-    // da linha de cima.
-    final bottomWidth = size.width * 0.62;
-    final bottomStart = (size.width - bottomWidth) / 2;
-    canvas.drawLine(
-      Offset(bottomStart, size.height),
-      Offset(bottomStart + bottomWidth, size.height),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _TwoLineMenuPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-// Linha única, deslizável horizontalmente, com bordas totalmente curvas
-// (formato pill). Mostra todos os quickSites em sequência; ao arrastar,
-// revela mais itens. O botão "Mais sites" é o último item dentro da
-// mesma linha de rolagem, não um elemento separado fora dela.
+// Quatro sites distintos mais recentemente visitados, sem catálogo adicional.
 class QuickSiteGridCard extends StatelessWidget {
   const QuickSiteGridCard({super.key});
   @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: activityController,
+    builder: (context, _) {
+      final recent = <ActivityEntry>[];
+      final hosts = <String>{};
+      for (final entry in activityController.entries) {
+        if (entry.kind != ActivityKind.site) continue;
+        final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
+        if (host.isEmpty || !hosts.add(host)) continue;
+        recent.add(entry);
+        if (recent.length == 4) break;
+      }
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
+        decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(17)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(appText('recent_sites'), style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          if (recent.isEmpty)
+            SizedBox(height: 64, child: Center(child: Text(appText('no_recent_activity'), style: TextStyle(color: mutedText(context), fontSize: 12))))
+          else
+            Row(children: [
+              for (final entry in recent) Expanded(child: _RecentSiteTile(entry: entry)),
+              for (var i = recent.length; i < 4; i++) const Expanded(child: SizedBox()),
+            ]),
+        ]),
+      );
+    },
+  );
+}
+
+class _RecentSiteTile extends StatelessWidget {
+  const _RecentSiteTile({required this.entry});
+  final ActivityEntry entry;
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 76,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(
-        color: pillColor(context),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        children: [
-          for (final site in quickSites) QuickSiteTile(site: site),
-          const _MoreSitesTile(),
-        ],
+    final host = Uri.tryParse(entry.url)?.host ?? entry.url;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => openNewTab(context, entry.url, title: entry.title),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SiteFaviconForHome(url: entry.url),
+          const SizedBox(height: 6),
+          Text(host.replaceFirst(RegExp(r'^www\.'), ''), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: mainText(context), fontSize: 10.5, fontWeight: FontWeight.w600)),
+        ]),
       ),
     );
   }
 }
 
-class _MoreSitesTile extends StatelessWidget {
-  const _MoreSitesTile();
-
+class SiteFaviconForHome extends StatelessWidget {
+  const SiteFaviconForHome({required this.url});
+  final String url;
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
-    return Semantics(
-      button: true,
-      label: appText('more_sites'),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(builder: (_) => const AllSitesScreen()),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 7),
-          child: CustomPaint(
-            size: const Size(40, 40),
-            painter: _DashedCirclePainter(color: accent),
-            child: SizedBox(
-              width: 40,
-              height: 40,
-              child: AppMaterialIcon(AppIcons.plus, size: 22, color: accent),
-            ),
+    final muted = mutedText(context);
+    return Container(
+      width: 39, height: 39, alignment: Alignment.center,
+      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(12)),
+      child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(
+        'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=64',
+        width: 23, height: 23, fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 20, color: muted),
+      )),
+    );
+  }
+}
+
+// Pré-visualizações exclusivamente visuais das abas já abertas.
+class RecentTabPreviewsCard extends StatelessWidget {
+  const RecentTabPreviewsCard({super.key});
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: tabsController,
+    builder: (context, _) {
+      final tabs = tabsController.tabs
+          .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito && tab.thumbnail != null)
+          .toList()..sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
+      final visible = tabs.take(5).toList();
+      if (visible.isEmpty) return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(17)),
+        child: SizedBox(
+          height: 116,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal, itemCount: visible.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 9),
+            itemBuilder: (context, index) {
+              final tab = visible[index];
+              return Material(
+                color: pillColor(context), borderRadius: BorderRadius.circular(10), clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    tabsController.activate(tab.id);
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    ShellTabRequest.instance.requestBrowser(tab.id);
+                  },
+                  child: SizedBox(width: 82, child: Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low)),
+                ),
+              );
+            },
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _DashedCirclePainter extends CustomPainter {
-  const _DashedCirclePainter({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final path = Path()..addOval(rect.deflate(1.3));
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final end = (distance + 4.2).clamp(0.0, metric.length).toDouble();
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance += 7.2;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedCirclePainter oldDelegate) => oldDelegate.color != color;
+      );
+    },
+  );
 }
 
 // Botão de Entrar compacto: sem ícone, sem largura cheia — encolhe ao
@@ -300,69 +284,6 @@ class _CompactSignInButton extends StatelessWidget {
       ),
     );
   }
-}
-
-// Sem label (nome do site) embaixo do ícone — só o ícone, já que estes
-// serão sites próprios da empresa exibidos direto na tela inicial.
-class QuickSiteTile extends StatelessWidget {
-  const QuickSiteTile({super.key, required this.site});
-  final QuickSite site;
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final text = mainText(context);
-    final circleBg = isDark ? pillColor(context) : Colors.white;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 7),
-      child: GestureDetector(
-        onTapDown: (_) => BrowserPreconnectHints.preconnect(site.url),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () => openNewTab(context, site.url, title: site.name),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: circleBg, shape: BoxShape.circle),
-            child: ClipOval(
-              child: Transform.scale(
-                scale: 1.232,
-                child: _siteIcon(site, text),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Widget _siteIcon(QuickSite site, Color fallbackColor) {
-  if (site.iconBase64 != null && site.iconBase64!.isNotEmpty) {
-    try {
-      return Image.memory(
-        base64Decode(site.iconBase64!),
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: fallbackColor, size: 18),
-      );
-    } catch (_) {
-      // Se um ícone importado ficar inválido, tenta o favicon do site.
-    }
-  }
-  if (site.faviconUrl != null && site.faviconUrl!.isNotEmpty) {
-    return Image.network(
-      site.faviconUrl!,
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: fallbackColor, size: 18),
-    );
-  }
-  if (site.assetPath != null) {
-    return Image.asset(
-      site.assetPath!,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: fallbackColor, size: 18),
-    );
-  }
-  return AppMaterialIcon(AppIcons.globe, color: fallbackColor, size: 18);
 }
 
 void openNewTab(BuildContext context, String url, {String? title}) {

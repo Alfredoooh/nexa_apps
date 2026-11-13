@@ -43,10 +43,13 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.slider.Slider
@@ -195,9 +198,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var originalUserAgent: String? = null
     private var textSizePercent = 100
     private var pageZoomPercent = 100
+    private var appliedPageZoomPercent = 100
     private var appBarAnimator: ValueAnimator? = null
     private var lastScrollDirection = 0
     private var accumulatedScrollDelta = 0
+    private var reverseScrollDelta = 0
     private var isFinishingWithResult = false
 
     private var customView: View? = null
@@ -268,6 +273,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
         get() = prefs.getBoolean(PREF_AD_BLOCK, true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // A WebView derives prefers-color-scheme from android:isLightTheme.
+        // Set this Activity's local mode before creating the WebView.
+        val requestedTheme = if (intent.getBooleanExtra(EXTRA_INCOGNITO, false)) {
+            "dark"
+        } else {
+            getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(PREF_THEME_MODE, "system") ?: "system"
+        }
+        delegate.localNightMode = when (requestedTheme) {
+            "dark" -> AppCompatDelegate.MODE_NIGHT_YES
+            "light" -> AppCompatDelegate.MODE_NIGHT_NO
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+
         super.onCreate(savedInstanceState)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -367,7 +386,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             background = rounded(toolbarPillColor(), 24)
             isClickable = true
             isFocusable = true
-            setOnClickListener { showAddressDialog() }
+            setOnClickListener { finishToFlutter("search") }
         }
 
         faviconView = ImageView(this).apply {
@@ -546,28 +565,116 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 val delta = scrollY - oldScrollY
                 if (delta == 0) return@setOnScrollChangeListener
 
-                // Só reage depois de uma deslocação acumulada consistente.
-                // Pequenos saltos de layout/ads não fazem o app bar tremer.
-                val direction = if (delta > 0) 1 else -1
-                if (direction != lastScrollDirection) {
-                    lastScrollDirection = direction
-                    accumulatedScrollDelta = 0
-                }
-                accumulatedScrollDelta += abs(delta)
-
+                // No topo, a barra fica sempre visível e a memória de direção
+                // é reiniciada para não transportar oscilações entre páginas.
                 if (scrollY <= dp(4)) {
+                    lastScrollDirection = 0
                     accumulatedScrollDelta = 0
+                    reverseScrollDelta = 0
                     hideToolbar(false)
-                } else if (direction > 0 && scrollY > dp(90) &&
-                    accumulatedScrollDelta >= dp(22)
+                    return@setOnScrollChangeListener
+                }
+
+                val direction = if (delta > 0) 1 else -1
+                val distance = abs(delta)
+
+                if (lastScrollDirection == 0) {
+                    lastScrollDirection = direction
+                    accumulatedScrollDelta = distance
+                    reverseScrollDelta = 0
+                } else if (direction == lastScrollDirection) {
+                    // Pequenas inversões em gestos lentos são descontadas,
+                    // em vez de trocar imediatamente o estado da barra.
+                    if (reverseScrollDelta > 0) {
+                        accumulatedScrollDelta =
+                            (accumulatedScrollDelta - reverseScrollDelta).coerceAtLeast(0)
+                        reverseScrollDelta = 0
+                    }
+                    accumulatedScrollDelta += distance
+                } else {
+                    // Só aceita a nova direção após movimento contrário
+                    // contínuo de 10dp: elimina o tremor por ruído de poucos px.
+                    reverseScrollDelta += distance
+                    val reversalThreshold = dp(10)
+                    if (reverseScrollDelta < reversalThreshold) {
+                        return@setOnScrollChangeListener
+                    }
+
+                    lastScrollDirection = direction
+                    accumulatedScrollDelta =
+                        (reverseScrollDelta - reversalThreshold).coerceAtLeast(0)
+                    reverseScrollDelta = 0
+                }
+
+                val triggerDistance = if (direction > 0) dp(28) else dp(18)
+                if (direction > 0 && scrollY > dp(90) &&
+                    accumulatedScrollDelta >= triggerDistance
                 ) {
                     hideToolbar(true)
                     accumulatedScrollDelta = 0
-                } else if (direction < 0 && accumulatedScrollDelta >= dp(16)) {
+                } else if (direction < 0 &&
+                    accumulatedScrollDelta >= triggerDistance
+                ) {
                     hideToolbar(false)
                     accumulatedScrollDelta = 0
                 }
             }
+        }
+    }
+
+    /**
+     * Usa o escurecimento moderno do Android System WebView.
+     *
+     * O algoritmo respeita o tema escuro implementado pelo próprio site e
+     * só tenta escurecer algoritmicamente páginas sem tema escuro próprio,
+     * quando o site não desativou explicitamente esta possibilidade.
+     */
+    private fun applyWebsiteDarkMode(settings: WebSettings) {
+        val shouldDarken = dark &&
+            (incognito || prefs.getBoolean(PREF_FORCE_DARK, false))
+
+        try {
+            if (WebViewFeature.isFeatureSupported(
+                    WebViewFeature.ALGORITHMIC_DARKENING
+                )
+            ) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(
+                    settings,
+                    shouldDarken
+                )
+                return
+            }
+
+            // Compatibilidade para WebViews antigos. Em apps com target SDK 33+
+            // a API FORCE_DARK é ignorada, por isso não é usada nesse cenário.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+                WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)
+            ) {
+                @Suppress("DEPRECATION")
+                WebSettingsCompat.setForceDark(
+                    settings,
+                    if (shouldDarken) {
+                        WebSettingsCompat.FORCE_DARK_ON
+                    } else {
+                        WebSettingsCompat.FORCE_DARK_OFF
+                    }
+                )
+
+                if (WebViewFeature.isFeatureSupported(
+                        WebViewFeature.FORCE_DARK_STRATEGY
+                    )
+                ) {
+                    @Suppress("DEPRECATION")
+                    WebSettingsCompat.setForceDarkStrategy(
+                        settings,
+                        WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+                    )
+                }
+            }
+        } catch (_: UnsupportedOperationException) {
+            // O WebView instalado pode não disponibilizar o recurso.
+        } catch (_: RuntimeException) {
+            // Uma implementação OEM incompatível não deve interromper a navegação.
         }
     }
 
@@ -591,17 +698,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             WebSettings.LOAD_DEFAULT
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            @Suppress("DEPRECATION")
-            run {
-                settings.forceDark =
-                    if (!incognito && prefs.getBoolean(PREF_FORCE_DARK, false)) {
-                        WebSettings.FORCE_DARK_ON
-                    } else {
-                        WebSettings.FORCE_DARK_OFF
-                    }
-            }
-        }
+        applyWebsiteDarkMode(settings)
 
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.mediaPlaybackRequiresUserGesture = true
@@ -675,6 +772,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 pageToolbarColor = null
                 lastScrollDirection = 0
                 accumulatedScrollDelta = 0
+                reverseScrollDelta = 0
+                appliedPageZoomPercent = 100
                 hideToolbar(false)
                 progress.progress = 0
                 progress.visibility = View.VISIBLE
@@ -927,12 +1026,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun showBrowserSheet() {
         val dialog = BottomSheetDialog(this)
-        val scroll = android.widget.ScrollView(this)
 
-        val content = LinearLayout(this).apply {
+        // Cabeçalho separado do ScrollView: os atalhos não acompanham o scroll.
+        val sheetRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(10), dp(18), dp(18))
             background = rounded(pageBg, 22)
+            clipToPadding = true
+            clipChildren = true
+        }
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(10), dp(18), 0)
         }
 
         val handle = View(this).apply {
@@ -942,15 +1047,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
             )
         }
 
-        content.addView(
+        header.addView(
             handle,
             LinearLayout.LayoutParams(dp(36), dp(4)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(16)
+                bottomMargin = dp(14)
             }
         )
 
-        content.addView(
+        header.addView(
             TextView(this).apply {
                 text = "Browser"
                 textSize = 17f
@@ -959,8 +1064,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     "sans-serif-medium",
                     android.graphics.Typeface.NORMAL
                 )
+                includeFontPadding = false
             },
-            LinearLayout.LayoutParams(-1, dp(38))
+            LinearLayout.LayoutParams(-1, dp(34))
         )
 
         val quick = LinearLayout(this).apply {
@@ -980,12 +1086,26 @@ class OrbitBrowserActivity : AppCompatActivity() {
             finishToFlutter("newTab")
         }
 
-        addQuickAction(quick, "tab", "Separadores", true) {
+        addTabCounterQuickAction(quick, "Separadores", true) {
             finishToFlutter("tabs")
         }
 
-        content.addView(quick, LinearLayout.LayoutParams(-1, dp(78)))
-        content.addView(sheetDivider())
+        header.addView(quick, LinearLayout.LayoutParams(-1, dp(78)))
+        sheetRoot.addView(header, LinearLayout.LayoutParams(-1, -2))
+        sheetRoot.addView(sheetDivider())
+
+        // Esta é a única região rolável do modal.
+        val scroll = android.widget.ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            scrollbarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+        }
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(6), dp(18), dp(18))
+        }
 
         addSheetItem(content, "star", "Adicionar aos favoritos") {
             dialog.dismiss()
@@ -1081,19 +1201,35 @@ class OrbitBrowserActivity : AppCompatActivity() {
             finishToFlutter("home")
         }
 
-        scroll.addView(content)
-        dialog.setContentView(scroll)
+        scroll.addView(content, ViewGroup.LayoutParams(-1, -2))
+        sheetRoot.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        dialog.setContentView(sheetRoot)
+
         dialog.setOnShowListener {
             val sheet = dialog.findViewById<android.widget.FrameLayout>(
                 com.google.android.material.R.id.design_bottom_sheet
             ) ?: return@setOnShowListener
+
+            sheet.setBackgroundColor(Color.TRANSPARENT)
+            val availableHeight = (
+                resources.displayMetrics.heightPixels -
+                    statusBarInsetPx() -
+                    navigationBarInsetPx() -
+                    dp(8)
+                ).coerceAtLeast(dp(420))
+
+            sheet.layoutParams = sheet.layoutParams.apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = availableHeight
+            }
+
             val behavior = BottomSheetBehavior.from(sheet)
             behavior.isFitToContents = false
-            // O limite superior fica sempre abaixo da barra de estado. Assim,
-            // a fila dos quatro botões circulares nunca desliza por trás dela.
+            behavior.skipCollapsed = true
             behavior.expandedOffset = statusBarInsetPx() + dp(8)
             behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
+
         dialog.show()
     }
 
@@ -1128,6 +1264,72 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
             )
         }
+        column.addView(
+            circle,
+            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+        )
+
+        column.addView(
+            TextView(this).apply {
+                text = label
+                textSize = 10.5f
+                setTextColor(secondaryText)
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                maxLines = 1
+                isSingleLine = true
+            },
+            LinearLayout.LayoutParams(-1, dp(23))
+        )
+
+        parent.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
+    }
+
+    private fun addTabCounterQuickAction(
+        parent: LinearLayout,
+        label: String,
+        enabled: Boolean,
+        action: () -> Unit
+    ) {
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
+            alpha = if (enabled) 1f else .38f
+            isClickable = enabled
+            isFocusable = enabled
+            contentDescription = label
+            setOnClickListener {
+                if (enabled) action()
+            }
+        }
+
+        val circle = android.widget.FrameLayout(this).apply {
+            background = rounded(toolbarPillColor(), 99)
+
+            val counter = ImageView(this@OrbitBrowserActivity).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setImageDrawable(
+                    MaterialSymbolsRounded.tabsCounterDrawable(
+                        this@OrbitBrowserActivity,
+                        tabCount,
+                        toolbarText(),
+                        dp(25)
+                    )
+                )
+            }
+
+            addView(
+                counter,
+                android.widget.FrameLayout.LayoutParams(
+                    dp(26),
+                    dp(26),
+                    Gravity.CENTER
+                )
+            )
+        }
+
         column.addView(
             circle,
             LinearLayout.LayoutParams(dp(48), dp(48)).apply {
@@ -1571,10 +1773,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun showScaleCard(pageScale: Boolean) {
-        if (pageScale) {
-            val actual = (webView.scale * 100f).roundToInt().coerceIn(50, 200)
-            pageZoomPercent = ((actual / 5f).roundToInt() * 5).coerceIn(50, 200)
-        }
         val title = if (pageScale) "Zoom da página" else "Tamanho da fonte"
         val initialValue = if (pageScale) pageZoomPercent else textSizePercent
         val dialog = BottomSheetDialog(this)
@@ -1591,6 +1789,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 99
             )
         }
+
         card.addView(
             handle,
             LinearLayout.LayoutParams(dp(36), dp(4)).apply {
@@ -1603,6 +1802,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+
+        heading.addView(
+            MaterialSymbolsRounded.textView(
+                this,
+                if (pageScale) "zoom_in" else "text_fields",
+                primaryText,
+                24f,
+                title
+            ),
+            LinearLayout.LayoutParams(dp(30), dp(30)).apply {
+                marginEnd = dp(12)
+            }
+        )
+
         heading.addView(
             TextView(this).apply {
                 text = title
@@ -1614,8 +1827,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 )
                 includeFontPadding = false
             },
-            LinearLayout.LayoutParams(0, dp(34), 1f)
+            LinearLayout.LayoutParams(0, dp(38), 1f)
         )
+
         val valueLabel = TextView(this).apply {
             text = "$initialValue%"
             textSize = 15f
@@ -1625,6 +1839,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             background = rounded(toolbarPillColor(), 99)
             setPadding(dp(14), dp(8), dp(14), dp(8))
         }
+
         heading.addView(valueLabel, LinearLayout.LayoutParams(-2, dp(34)))
         card.addView(heading)
 
@@ -1632,6 +1847,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             this,
             R.style.ThemeOverlay_BrowseIt_ExpressiveSlider
         )
+
         val slider = Slider(
             sliderContext,
             null,
@@ -1640,21 +1856,30 @@ class OrbitBrowserActivity : AppCompatActivity() {
             valueFrom = 50f
             valueTo = 200f
             stepSize = 5f
-            value = initialValue.toFloat()
+            value = initialValue.coerceIn(50, 200).toFloat()
             contentDescription = title
-            setThumbTintList(android.content.res.ColorStateList.valueOf(accent))
-            setHaloTintList(android.content.res.ColorStateList.valueOf(
-                (accent and 0x00FFFFFF) or 0x26000000
-            ))
-            setTrackActiveTintList(android.content.res.ColorStateList.valueOf(accent))
-            setTrackInactiveTintList(android.content.res.ColorStateList.valueOf(
-                if (dark) 0xFF53565B.toInt() else 0xFFDADCE0.toInt()
-            ))
+            setThumbTintList(
+                android.content.res.ColorStateList.valueOf(accent)
+            )
+            setHaloTintList(
+                android.content.res.ColorStateList.valueOf(
+                    (accent and 0x00FFFFFF) or 0x26000000
+                )
+            )
+            setTrackActiveTintList(
+                android.content.res.ColorStateList.valueOf(accent)
+            )
+            setTrackInactiveTintList(
+                android.content.res.ColorStateList.valueOf(
+                    if (dark) 0xFF53565B.toInt() else 0xFFDADCE0.toInt()
+                )
+            )
         }
+
         card.addView(
             slider,
-            LinearLayout.LayoutParams(-1, dp(66)).apply {
-                topMargin = dp(10)
+            LinearLayout.LayoutParams(-1, dp(58)).apply {
+                topMargin = dp(12)
             }
         )
 
@@ -1662,6 +1887,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+
         rangeLabels.addView(
             TextView(this).apply {
                 text = "50%"
@@ -1671,6 +1897,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             },
             LinearLayout.LayoutParams(0, dp(22), 1f)
         )
+
         rangeLabels.addView(
             TextView(this).apply {
                 text = "200%"
@@ -1681,18 +1908,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
             },
             LinearLayout.LayoutParams(0, dp(22), 1f)
         )
+
         card.addView(rangeLabels)
 
         slider.addOnChangeListener { _, value, fromUser ->
-            val selected = (value.roundToInt() / 5 * 5).coerceIn(50, 200)
+            val selected = ((value.roundToInt() / 5) * 5).coerceIn(50, 200)
             valueLabel.text = "$selected%"
+
             if (fromUser) {
                 if (pageScale) {
                     pageZoomPercent = selected
                     applyPageZoomToCurrentPage()
                 } else {
                     textSizePercent = selected
-                    webView.settings.textZoom = textSizePercent
+                    webView.settings.textZoom = selected
                 }
             }
         }
@@ -1718,19 +1947,22 @@ class OrbitBrowserActivity : AppCompatActivity() {
             behavior.skipCollapsed = true
             behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
+
         dialog.show()
     }
 
     private fun applyPageZoomToCurrentPage() {
-        if (!::webView.isInitialized) return
-        val targetScale = (pageZoomPercent / 100f).coerceIn(0.5f, 2f)
-        val currentScale = webView.scale.takeIf {
-            it.isFinite() && it > 0f
-        } ?: 1f
-        val factor = targetScale / currentScale
-        if (abs(factor - 1f) > 0.005f) {
-            webView.zoomBy(factor.coerceIn(0.01f, 100f))
-        }
+        if (!::webView.isInitialized || webView.url.isNullOrBlank()) return
+
+        val target = pageZoomPercent.coerceIn(50, 200)
+        val previouslyApplied = appliedPageZoomPercent.coerceIn(50, 200)
+        if (target == previouslyApplied) return
+
+        // WebView.zoomBy recebe um fator relativo. webView.scale não é a
+        // percentagem escolhida no slider: também muda com pinch-zoom e viewport.
+        val factor = target.toFloat() / previouslyApplied.toFloat()
+        appliedPageZoomPercent = target
+        webView.zoomBy(factor.coerceIn(0.01f, 100f))
     }
 
     private fun statusBarInsetPx(): Int {
@@ -2052,7 +2284,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun hideToolbar(hide: Boolean) {
         if (previewOnly || !::appBarContainer.isInitialized) return
-        if (toolbarHidden == hide && appBarAnimator?.isRunning != true) return
+        // Não cancelar/reiniciar a animação se a direção pedida já está ativa.
+        if (toolbarHidden == hide) return
 
         toolbarHidden = hide
         appBarAnimator?.removeAllListeners()

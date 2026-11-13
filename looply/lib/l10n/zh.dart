@@ -127,4 +127,6 @@ const Map<String, String> zhTranslations = <String, String>{
     'no_private_tabs': '没有打开的无痕标签页',
     'private_tab': '无痕标签页',
     'exit_incognito': '退出无痕模式',
+  'recent_sites': '最近访问的网站',
+  'home_tagline': '简单、快速且私密的浏览。',
 };

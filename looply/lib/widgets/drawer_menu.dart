@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../screens/history_screen.dart';
 import '../screens/downloads_screen.dart';
@@ -372,6 +373,12 @@ void showThemeSheet(BuildContext context) {
     showDragHandle: false,
     isScrollControlled: true,
     useSafeArea: true,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 420),
+      reverseDuration: Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    ),
     builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
@@ -381,14 +388,23 @@ void showThemeSheet(BuildContext context) {
           final text = textForMode(context, mode);
           final accent = accentForMode(context, mode);
           Widget option({required String label, required bool selected, required VoidCallback onTap}) =>
-              ListTile(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selected ? accent.withOpacity(.10) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: ListTile(
                 dense: true,
                 leading: AppMaterialIcon(
                   selected ? AppIcons.circleDot : AppIcons.circle,
                   color: selected ? accent : mutedForMode(context, mode),
                 ),
                 title: Text(label, style: TextStyle(color: text)),
-                onTap: onTap,
+                onTap: () { HapticFeedback.selectionClick(); onTap(); },
+              ),
               );
 
           return Material(

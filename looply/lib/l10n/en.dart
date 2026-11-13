@@ -133,4 +133,6 @@ const Map<String, String> enTranslations = <String, String>{
     'no_private_tabs': 'No incognito tabs open',
     'private_tab': 'Incognito tab',
     'exit_incognito': 'Exit incognito',
+  'recent_sites': 'Recent sites',
+  'home_tagline': 'Simple, fast and private browsing.',
 };

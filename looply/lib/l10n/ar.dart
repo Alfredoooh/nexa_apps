@@ -132,4 +132,6 @@ const Map<String, String> arTranslations = <String, String>{
     'no_private_tabs': 'لا توجد علامات تبويب خاصة مفتوحة',
     'private_tab': 'علامة تبويب خاصة',
     'exit_incognito': 'الخروج من التصفح الخاص',
+  'recent_sites': 'المواقع الأخيرة',
+  'home_tagline': 'تصفح بسيط وسريع وخاص.',
 };

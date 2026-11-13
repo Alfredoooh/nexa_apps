@@ -36,7 +36,7 @@ void showSearchEnginePicker(BuildContext context) {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Máquina de pesquisa',
+                    appText('search_engine'),
                     style: TextStyle(color: textForMode(context, mode), fontSize: 17, fontWeight: FontWeight.w800),
                   ),
                 ),
@@ -47,13 +47,10 @@ void showSearchEnginePicker(BuildContext context) {
                       height: 34,
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(shape: BoxShape.circle, color: pillForMode(context, mode)),
-                      child: engine.assetPath != null
-                          ? Image.asset(
-                              engine.assetPath!,
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18),
-                            )
-                          : const Icon(Symbols.eco_rounded, color: Color(0xFF4CAF50), size: 20),
+                      child: Image.network(
+                        engine.faviconUrl, fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: mutedForMode(context, mode), size: 18),
+                      ),
                     ),
                     title: Text(engine.name, style: TextStyle(color: textForMode(context, mode))),
                     trailing: ValueListenableBuilder<SearchEngine>(

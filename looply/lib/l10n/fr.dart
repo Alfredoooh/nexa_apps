@@ -133,4 +133,6 @@ const Map<String, String> frTranslations = <String, String>{
     'no_private_tabs': 'Aucun onglet privé ouvert',
     'private_tab': 'Onglet privé',
     'exit_incognito': 'Quitter le mode privé',
+  'recent_sites': 'Sites récents',
+  'home_tagline': 'Navigation simple, rapide et privée.',
 };

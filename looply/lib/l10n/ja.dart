@@ -129,4 +129,6 @@ const Map<String, String> jaTranslations = <String, String>{
     'no_private_tabs': 'シークレットタブはありません',
     'private_tab': 'シークレットタブ',
     'exit_incognito': 'シークレットモードを終了',
+  'recent_sites': '最近のサイト',
+  'home_tagline': 'シンプルで高速、プライベートなブラウジング。',
 };

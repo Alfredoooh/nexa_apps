@@ -7,6 +7,7 @@ import '../localization.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/material_symbols.dart';
 import 'activity_screen.dart' show SiteFaviconAvatar;
+import '../shell/browser_navigation.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -143,21 +144,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 92),
                       itemCount: entries.length,
                       itemBuilder: (context, index) {
-                        final isFirst = index == 0;
-                        final isLast = index == entries.length - 1;
                         final entry = entries[index];
+                        final previous = index > 0 ? entries[index - 1] : null;
+                        final day = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
+                        final previousDay = previous == null ? null : DateTime(previous.timestamp.year, previous.timestamp.month, previous.timestamp.day);
+                        final showDay = previousDay == null || day != previousDay;
+                        final card = _HistoryCard(
+                          entry: entry,
+                          selected: _selectedKeys.contains(_key(entry)),
+                          onTap: () {
+                            if (_isSelecting) { _toggle(entry); }
+                            else if (entry.kind == ActivityKind.site) {
+                              openOrbitTab(context, entry.url, title: entry.title);
+                            }
+                          },
+                          onLongPress: () => _toggle(entry),
+                          borderRadius: BorderRadius.circular(15),
+                        );
                         return Padding(
-                          padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
-                          child: _HistoryCard(
-                            entry: entry,
-                            selected: _selectedKeys.contains(_key(entry)),
-                            onTap: () => _isSelecting ? _toggle(entry) : _toggle(entry),
-                            onLongPress: () => _toggle(entry),
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(isFirst ? 22 : 8),
-                              bottom: Radius.circular(isLast ? 22 : 8),
-                            ),
-                          ),
+                          padding: EdgeInsets.only(bottom: index == entries.length - 1 ? 0 : 9),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            if (showDay) ...[
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                                child: Text(
+                                  '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}/${day.year}',
+                                  style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: .2),
+                                ),
+                              ),
+                            ],
+                            card,
+                          ]),
                         );
                       },
                     ),
@@ -205,6 +222,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
                           ),
                         ),
+                        if (!_isSelecting)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(99)),
+                            child: Text('${entries.length}', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
+                          ),
                         if (selectedCount > 0)
                           _CircularHistoryButton(
                             tooltip: '${appText('delete')} ($selectedCount)',
@@ -275,7 +298,7 @@ class _HistoryCard extends StatelessWidget {
         onTap: onTap,
         onLongPress: onLongPress,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: [
               // Ícone do site/atividade à esquerda, substituído pelo check
@@ -330,7 +353,7 @@ class _HistoryCard extends StatelessWidget {
                       entry.title.trim().isNotEmpty ? entry.title : entry.url,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: text, fontSize: 14.2, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
                     Text(

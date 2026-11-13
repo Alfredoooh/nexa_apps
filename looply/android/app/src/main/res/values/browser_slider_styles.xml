@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Context isolado para o slider M3 Expressive Large do browser. -->
+    <!-- M3 Expressive Medium: dimensões equilibradas para o modal do browser. -->
     <style name="ThemeOverlay.BrowseIt.ExpressiveSlider" parent="Theme.Material3Expressive.DayNight">
-        <item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Large</item>
+        <item name="sliderStyle">@style/Widget.Material3Expressive.Slider.Medium</item>
     </style>
 </resources>

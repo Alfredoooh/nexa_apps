@@ -127,4 +127,6 @@ const Map<String, String> hiTranslations = <String, String>{
     'no_private_tabs': 'कोई गुप्त टैब खुला नहीं है',
     'private_tab': 'गुप्त टैब',
     'exit_incognito': 'गुप्त मोड से बाहर निकलें',
+  'recent_sites': 'हाल की साइटें',
+  'home_tagline': 'सरल, तेज़ और निजी ब्राउज़िंग।',
 };
