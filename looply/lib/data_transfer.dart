@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
 
 import 'browser_library.dart';
 import 'models.dart';
@@ -11,8 +14,10 @@ import 'theme.dart';
 class LooplyDataTransfer {
   LooplyDataTransfer._();
 
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
   static const String _authPrefix = 'looply_auth_';
+  static const int _maxEmbeddedDownloadBytes = 128 * 1024 * 1024;
+  static const MethodChannel _nativeUiChannel = MethodChannel('looply/native_ui');
 
   static Future<Uint8List> buildExportBytes() async {
     await Future.wait<void>([
@@ -56,6 +61,45 @@ class LooplyDataTransfer {
       snapshots[tab.id] = base64Encode(tab.thumbnail!);
     }
 
+    // Um backup completo inclui também os ficheiros transferidos, não apenas
+    // a lista de nomes. O limite evita esgotar a memória ao criar um JSON
+    // gigante em telemóveis com armazenamento limitado.
+    final downloadFiles = <String, Object?>{};
+    var embeddedBytes = 0;
+    for (final entry in downloadsController.entries) {
+      final path = entry.localPath;
+      if (entry.status != DownloadStatus.completed || path == null || path.isEmpty) continue;
+      final file = File(path);
+      if (!await file.exists()) continue;
+      final size = await file.length();
+      if (size <= 0) continue;
+      if (embeddedBytes + size > _maxEmbeddedDownloadBytes) {
+        throw StateError(
+          'Os ficheiros transferidos excedem 128 MB. Remova temporariamente alguns downloads grandes e volte a exportar.',
+        );
+      }
+      final bytes = await file.readAsBytes();
+      embeddedBytes += bytes.length;
+      downloadFiles[entry.id] = <String, Object?>{
+        'filename': entry.filename,
+        'mimeType': entry.mimeType,
+        'bytes': base64Encode(bytes),
+        'size': bytes.length,
+      };
+    }
+
+    Map<String, String> nativeSessions = <String, String>{};
+    try {
+      nativeSessions = await _nativeUiChannel.invokeMapMethod<String, String>(
+            'exportOrbitSessions',
+          ) ??
+          <String, String>{};
+    } on MissingPluginException {
+      // Backups exportados fora do Android preservam todos os dados Flutter.
+    } on PlatformException {
+      // O motor nativo pode ainda não estar disponível.
+    }
+
     final payload = <String, Object?>{
       'format': 'looply-backup',
       'schemaVersion': schemaVersion,
@@ -69,6 +113,8 @@ class LooplyDataTransfer {
       'preferences': appPreferences,
       'tabSnapshots': snapshots,
       'favicons': browserFaviconCache.exportCache(),
+      'downloadFiles': downloadFiles,
+      'nativeBrowserSessions': nativeSessions,
     };
 
     return Uint8List.fromList(
@@ -181,6 +227,66 @@ class LooplyDataTransfer {
           key,
           value.cast<String>(),
         );
+      }
+    }
+
+    // Restaura os bytes dos downloads primeiro, para que o controlador
+    // valide os caminhos quando carregar a lista persistida.
+    final downloadFiles = decoded['downloadFiles'];
+    if (downloadFiles is Map && downloadFiles.isNotEmpty) {
+      final documents = await getApplicationDocumentsDirectory();
+      final directory = Directory('${documents.path}${Platform.pathSeparator}downloads');
+      await directory.create(recursive: true);
+      final restoredPaths = <String, String>{};
+      for (final item in downloadFiles.entries) {
+        if (item.key is! String || item.value is! Map) continue;
+        final id = item.key as String;
+        final data = item.value as Map;
+        final encoded = data['bytes'];
+        final filename = data['filename']?.toString() ?? 'download.bin';
+        if (encoded is! String || encoded.isEmpty || encoded.length > 180000000) continue;
+        try {
+          final bytes = base64Decode(encoded);
+          if (bytes.isEmpty || bytes.length > _maxEmbeddedDownloadBytes) continue;
+          final safeName = filename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+          final safeId = id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          final file = File('${directory.path}${Platform.pathSeparator}${safeId}_$safeName');
+          await file.writeAsBytes(bytes, flush: true);
+          restoredPaths[id] = file.path;
+        } catch (_) {}
+      }
+      if (restoredPaths.isNotEmpty) {
+        final rawDownloads = prefs.getString('looply_downloads_v1');
+        if (rawDownloads != null) {
+          try {
+            final entries = jsonDecode(rawDownloads);
+            if (entries is List) {
+              for (final item in entries) {
+                if (item is Map && item['id'] is String) {
+                  final path = restoredPaths[item['id'] as String];
+                  if (path != null) item['localPath'] = path;
+                }
+              }
+              await prefs.setString('looply_downloads_v1', jsonEncode(entries));
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    final nativeSessions = decoded['nativeBrowserSessions'];
+    if (nativeSessions is Map) {
+      try {
+        await _nativeUiChannel.invokeMethod<int>(
+          'importOrbitSessions',
+          <String, Object?>{
+            'sessions': nativeSessions.map((key, value) => MapEntry(key.toString(), value.toString())),
+          },
+        );
+      } on MissingPluginException {
+        // A importação Flutter continua possível fora do Android.
+      } on PlatformException {
+        // Os dados Flutter são restaurados mesmo sem o motor WebView.
       }
     }
 

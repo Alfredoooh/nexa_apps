@@ -141,4 +141,13 @@ const Map<String, String> enTranslations = <String, String>{
     'exit_incognito': 'Exit incognito',
   'recent_sites': 'Recent sites',
   'home_tagline': 'Simple, fast and private browsing.',
+  'privacy_policy': 'Privacy policy',
+  'privacy_policy_subtitle': 'How BrowseIt handles your information',
+  'terms_of_use': 'Terms of use',
+  'terms_of_use_subtitle': 'Rules for using the browser',
+  'open_source_licenses': 'Open-source licenses',
+  'open_source_licenses_subtitle': 'Libraries and third-party notices',
+  'before_publishing_note': 'Before publishing, provide a public privacy-policy URL and complete the Google Play Data safety form using the app’s actual data practices.',
+  'about_privacy_text': 'BrowseIt stores browsing information such as tabs, bookmarks, history, settings and downloaded files in the app’s private storage so the app can provide its features. When you use account sign-in, synchronization, cloud backup or external search services, information required by those features may be sent to the selected provider. Incognito tabs are intended not to be added to the normal browsing history; this does not make network activity invisible to websites or network providers. You can clear browsing data and manage downloads in the app settings. This in-app summary is not a substitute for a complete, publicly hosted privacy policy that identifies all SDKs, service providers, data collected, retention periods and user rights.',
+  'about_terms_text': 'Use BrowseIt lawfully and respect the terms, privacy rules and intellectual-property rights of the websites you visit. You are responsible for files you download and content you publish or share. Do not use the browser to violate the rights of others or disrupt services. Website content and services are provided by their respective operators; BrowseIt does not own or control third-party websites. Features may change as the app is updated. These general in-app terms should be reviewed and replaced or supplemented with terms appropriate to the publisher and the jurisdictions where the app is distributed.',
 };

@@ -163,6 +163,14 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
     splashColor: Colors.transparent,
     highlightColor: Colors.transparent,
     dividerColor: isDark ? (pureBlack ? looplyLineAmoled : looplyLineDark) : looplyLineLight,
+    dialogTheme: DialogThemeData(
+      backgroundColor: isDark ? panel : Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titleTextStyle: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w600),
+      contentTextStyle: TextStyle(color: text, fontSize: 14, height: 1.4),
+    ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: isDark
