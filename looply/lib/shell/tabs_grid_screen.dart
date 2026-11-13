@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../localization.dart';
 import '../browser_library.dart';
@@ -515,18 +516,26 @@ class _TabsCountBadge extends StatelessWidget {
     child: Stack(
       alignment: Alignment.center,
       children: [
-        AppMaterialIcon(AppIcons.tab, size: 20, color: color),
+        SvgPicture.asset(
+          'assets/icons/svg/regular/tabs-counter.svg',
+          width: 24,
+          height: 24,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        ),
         Padding(
-          padding: const EdgeInsets.only(top: 1),
+          padding: const EdgeInsets.only(bottom: 1),
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              count > 99 ? '99+' : '$count',
-              style: TextStyle(
-                color: color,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                height: 1,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
               ),
             ),
           ),

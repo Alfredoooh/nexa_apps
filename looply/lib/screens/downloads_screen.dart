@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../models.dart';
 import '../browser_library.dart';
-import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../localization.dart';
 import '../widgets/looply_dialog.dart';
@@ -92,13 +91,41 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     return all.where((entry) => entry.filename.toLowerCase().contains(_query)).toList(growable: false);
   }
 
-  // Ficheiros concluídos abrem dentro do próprio BrowseIt, reaproveitando
-  // o Orbit Browser já existente para renderizar o conteúdo local — sem
-  // depender de nenhum visualizador nativo externo ao app.
-  void _openEntry(DownloadEntry entry) {
-    if (!entry.canOpenLocally) return;
-    final uri = Uri.file(entry.localPath!);
-    openOrbitTab(context, uri.toString(), title: entry.filename);
+  static const MethodChannel _nativeFileViewerChannel =
+      MethodChannel('looply/native_ui');
+
+  // O leitor de ficheiros é uma Activity Kotlin independente. Não cria
+  // separadores nem inicializa o Orbit Browser.
+  Future<void> _openEntry(DownloadEntry entry) async {
+    if (!entry.canOpenLocally || entry.localPath == null) return;
+
+    if (Theme.of(context).platform != TargetPlatform.android) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appText('file_viewer_android_only'))),
+      );
+      return;
+    }
+
+    try {
+      await _nativeFileViewerChannel.invokeMethod<bool>(
+        'openNativeFileViewer',
+        <String, Object?>{
+          'path': entry.localPath!,
+          'filename': entry.filename,
+          'mimeType': entry.mimeType ?? '',
+        },
+      );
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message ?? appText('file_open_failed'))),
+      );
+    } on MissingPluginException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appText('file_open_failed'))),
+      );
+    }
   }
 
   @override
