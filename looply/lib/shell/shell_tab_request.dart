@@ -22,6 +22,11 @@ class ShellTabRequest extends ChangeNotifier {
 
   int? requestedIndex;
 
+  bool browserPreviewRequested = false;
+  String? browserPreviewTabId;
+  Uint8List? browserPreviewScreenshot;
+  Rect? browserPreviewSourceRect;
+
   void _clearBrowserCloseRequest() {
     browserCloseRequested = false;
     browserCloseScreenshot = null;
@@ -30,6 +35,7 @@ class ShellTabRequest extends ChangeNotifier {
   }
 
   void request(int index) {
+    clearBrowserPreviewRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = null;
@@ -39,6 +45,7 @@ class ShellTabRequest extends ChangeNotifier {
   }
 
   void requestTabs() {
+    clearBrowserPreviewRequest();
     tabsRequested = true;
     orbitBrowserRequested = false;
     browserTabRequested = null;
@@ -48,6 +55,7 @@ class ShellTabRequest extends ChangeNotifier {
   }
 
   void requestOrbitBrowser() {
+    clearBrowserPreviewRequest();
     tabsRequested = false;
     orbitBrowserRequested = true;
     browserTabRequested = null;
@@ -57,6 +65,7 @@ class ShellTabRequest extends ChangeNotifier {
   }
 
   void requestBrowser(String tabId) {
+    clearBrowserPreviewRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = tabId;
@@ -65,11 +74,36 @@ class ShellTabRequest extends ChangeNotifier {
     notifyListeners();
   }
 
+  void requestBrowserFromPreview({
+    required String tabId,
+    required Uint8List screenshot,
+    required Rect? sourceRect,
+  }) {
+    tabsRequested = false;
+    orbitBrowserRequested = false;
+    browserTabRequested = null;
+    _clearBrowserCloseRequest();
+    requestedIndex = null;
+    browserPreviewRequested = true;
+    browserPreviewTabId = tabId;
+    browserPreviewScreenshot = screenshot;
+    browserPreviewSourceRect = sourceRect;
+    notifyListeners();
+  }
+
+  void clearBrowserPreviewRequest() {
+    browserPreviewRequested = false;
+    browserPreviewTabId = null;
+    browserPreviewScreenshot = null;
+    browserPreviewSourceRect = null;
+  }
+
   void requestCloseBrowser({
     required String tabId,
     required Uint8List? screenshot,
     required Rect? sourceRect,
   }) {
+    clearBrowserPreviewRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = null;
