@@ -1,7 +1,10 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:m3e_progress_indicator/m3e_progress_indicator.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../browser_library.dart';
@@ -23,20 +26,25 @@ class SiteUsageDetailScreen extends StatefulWidget {
 
 class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _query = '';
+  bool _searchActive = false;
 
   @override
   void initState() {
     super.initState();
     activityController.addListener(_refresh);
     _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     activityController.removeListener(_refresh);
     _searchController.removeListener(_onSearchChanged);
+    _searchFocusNode.removeListener(_onFocusChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -46,6 +54,36 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
 
   void _onSearchChanged() {
     if (mounted) setState(() => _query = _searchController.text.trim().toLowerCase());
+  }
+
+  void _onFocusChanged() {
+    if (!mounted) return;
+    if (_searchFocusNode.hasFocus && !_searchActive) {
+      setState(() => _searchActive = true);
+    }
+  }
+
+  void _handleBack() {
+    if (_searchActive) {
+      _closeSearch();
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  void _openSearch() {
+    setState(() => _searchActive = true);
+    _searchFocusNode.requestFocus();
+  }
+
+  void _closeSearch() {
+    HapticFeedback.selectionClick();
+    _searchFocusNode.unfocus();
+    _searchController.clear();
+    setState(() {
+      _searchActive = false;
+      _query = '';
+    });
   }
 
   @override
@@ -62,113 +100,82 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
         .toList(growable: false);
     final maxVisits = stats.isEmpty ? 0 : stats.map((item) => item.visitCount).reduce((a, b) => a > b ? a : b);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: dark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
-      child: Scaffold(
-        backgroundColor: bg,
-        extendBody: true,
-        body: Stack(
-          children: [
-            if (stats.isEmpty)
-              Positioned.fill(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(26, topInset + 78, 26, bottomInset + 84),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AppMaterialIcon(AppIcons.globe, size: 46, color: muted),
-                      const SizedBox(height: 12),
-                      Text(
-                        _query.isEmpty ? appText('no_recent_activity') : appText('no_results'),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(14, topInset + 78, 14, bottomInset + 88),
-                itemCount: stats.length,
-                itemBuilder: (context, index) {
-                  final item = stats[index];
-                  final last = index == stats.length - 1;
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: last ? 0 : 9),
-                    child: _SiteUsageTile(
-                      item: item,
-                      fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  );
-                },
-              ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: EdgeInsets.only(top: topInset),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [bg, bg, bg.withOpacity(0)],
-                    stops: const [0, .58, 1],
-                  ),
-                ),
-                child: SizedBox(
-                  height: 64,
+    return PopScope<void>(
+      canPop: !_searchActive,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: dark
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+        child: Scaffold(
+          backgroundColor: bg,
+          extendBody: true,
+          body: Stack(
+            children: [
+              if (stats.isEmpty)
+                Positioned.fill(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Row(
+                    padding: EdgeInsets.fromLTRB(26, topInset + 78, 26, bottomInset + 24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _SiteUsageBackButton(
-                          tooltip: appText('back'),
-                          icon: AppIcons.arrowLeft,
-                          onTap: () => Navigator.of(context).maybePop(),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            appText('visited_sites'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                          decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(99)),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              AppMaterialIcon(AppIcons.globe, color: muted, size: 14),
-                              const SizedBox(width: 6),
-                              Text('${stats.length}', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
+                        AppMaterialIcon(AppIcons.globe, size: 46, color: muted),
+                        const SizedBox(height: 12),
+                        Text(
+                          _query.isEmpty ? appText('no_recent_activity') : appText('no_results'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                       ],
                     ),
                   ),
+                )
+              else
+                ListView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 24),
+                  children: [
+                    // M3ESegmentedColumn resolve sozinho os raios do
+                    // primeiro/último item (outerRadius) e dos itens do
+                    // meio (innerRadius), seguindo o padrão M3 Expressive
+                    // de "cards segmentados" — sem cálculo manual de
+                    // BorderRadius por índice.
+                    M3ESegmentedColumn(
+                      outerRadius: 22,
+                      innerRadius: 8,
+                      gap: 2,
+                      color: settingsCardColor(context),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      onTap: (index) => openOrbitTab(context, stats[index].url, title: stats[index].title),
+                      children: [
+                        for (final item in stats)
+                          _SiteUsageItemContent(
+                            item: item,
+                            fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
+                            onOpen: () => openOrbitTab(context, item.url, title: item.title),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _SiteUsageFadeAppBar(
+                  topInset: topInset,
+                  searchActive: _searchActive,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onBack: _handleBack,
+                  onOpenSearch: _openSearch,
                 ),
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _VisitedSitesSearchBar(
-                controller: _searchController,
-                bottomInset: bottomInset,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -235,15 +242,182 @@ String _formatVisitedSpan(Duration span) {
   return appText('time_days').replaceAll('{count}', span.inDays.toString());
 }
 
-class _SiteUsageTile extends StatelessWidget {
-  const _SiteUsageTile({required this.item, required this.fraction, required this.borderRadius});
-  final _SiteStat item;
-  final double fraction;
-  final BorderRadius borderRadius;
+// AppBar com o mesmo padrão de dois estados usado em Histórico/Downloads:
+// normal (título + voltar) e busca (input expandido no lugar do título).
+// Esta tela não tem modo de seleção, então não existe terceiro estado.
+// A contagem de sites que antes aparecia como pílula no canto direito foi
+// removida, como pedido.
+class _SiteUsageFadeAppBar extends StatelessWidget {
+  const _SiteUsageFadeAppBar({
+    required this.topInset,
+    required this.searchActive,
+    required this.searchController,
+    required this.searchFocusNode,
+    required this.onBack,
+    required this.onOpenSearch,
+  });
+
+  final double topInset;
+  final bool searchActive;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
+  final VoidCallback onBack;
+  final VoidCallback onOpenSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final text = mainText(context);
+    final muted = mutedText(context);
+
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0)],
+          stops: const [0, .58, 1],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              _SiteUsageHeaderButton(
+                key: ValueKey<String>(searchActive ? 'close' : 'back'),
+                tooltip: searchActive ? appText('close') : appText('back'),
+                icon: searchActive ? AppIcons.x : AppIcons.arrowLeft,
+                onTap: onBack,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axis: Axis.horizontal,
+                      axisAlignment: -1,
+                      child: child,
+                    ),
+                  ),
+                  child: searchActive
+                      ? _SiteUsageSearchField(
+                          key: const ValueKey<String>('search-field'),
+                          controller: searchController,
+                          focusNode: searchFocusNode,
+                        )
+                      : Text(
+                          appText('visited_sites'),
+                          key: const ValueKey<String>('title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: searchActive
+                    ? const SizedBox(key: ValueKey<String>('empty'), width: 42, height: 42)
+                    : _SiteUsageHeaderButton(
+                        key: const ValueKey<String>('search'),
+                        tooltip: appText('search_history'),
+                        icon: AppIcons.magnifyingGlass,
+                        onTap: onOpenSearch,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SiteUsageSearchField extends StatelessWidget {
+  const _SiteUsageSearchField({super.key, required this.controller, required this.focusNode});
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
+    final muted = mutedText(context);
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        borderRadius: BorderRadius.circular(21),
+      ),
+      child: Row(
+        children: [
+          AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              style: TextStyle(color: text, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: appText('search_history'),
+                hintStyle: TextStyle(color: muted, fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: controller.clear,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Conteúdo de cada item dentro do M3ESegmentedColumn. O card em si
+// (fundo, raios, splash, onTap) é resolvido pelo M3ESegmentedItem
+// interno do pacote; este widget só monta o conteúdo:
+// - M3EListItem para favicon/título/host
+// - M3EFilledButton.tonal (pílula xs) para a contagem de visitas,
+//   substituindo o antigo Container estático — agora com spring squish
+// - M3EButton estilo tonal, ícone apenas, para abrir o site
+// - M3ELinearWavyProgressIndicator (ondulada) no lugar da barra reta,
+//   para a proporção de visitas deste site frente ao mais visitado
+class _SiteUsageItemContent extends StatelessWidget {
+  const _SiteUsageItemContent({required this.item, required this.fraction, required this.onOpen});
+
+  final _SiteStat item;
+  final double fraction;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
     final muted = mutedText(context);
     final accent = accentColor(context);
     final encoded = browserFaviconCache.forUrl('https://${item.host}');
@@ -260,81 +434,85 @@ class _SiteUsageTile extends StatelessWidget {
       } catch (_) {}
     }
 
-    return Material(
-      color: settingsCardColor(context),
-      borderRadius: borderRadius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: borderRadius,
-        onTap: () => openOrbitTab(context, item.url, title: item.title),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        M3EListItem(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 40,
+            height: 40,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(14)),
+            child: ClipRRect(borderRadius: BorderRadius.circular(7), child: favicon),
+          ),
+          headline: Text(
+            item.title.trim().isEmpty ? item.host : item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          supportingText: Text(
+            item.host,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: muted, fontSize: 11.5),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(14)),
-                    child: ClipRRect(borderRadius: BorderRadius.circular(7), child: favicon),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title.trim().isEmpty ? item.host : item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(item.host, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: muted, fontSize: 11.5)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                    decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(99)),
-                    child: Text(
-                      appText('visit_count').replaceAll('{count}', item.visitCount.toString()),
-                      style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(width: 7),
-                  Icon(Symbols.open_in_new_rounded, size: 17, color: muted),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(99),
-                child: LinearProgressIndicator(
-                  minHeight: 3,
-                  value: fraction.clamp(0.0, 1.0),
-                  backgroundColor: pillColor(context),
-                  valueColor: AlwaysStoppedAnimation<Color>(accent),
+              // Pílula de contagem de visitas: antes era um Container
+              // estático com texto; agora é um botão M3E de verdade,
+              // com squish de spring ao toque (mesmo sem ação própria
+              // além de propagar o toque do card, ele já dá a textura
+              // tátil pedida).
+              M3EFilledButton.tonal(
+                onPressed: onOpen,
+                size: M3EButtonSize.xs,
+                shape: M3EButtonShape.round,
+                child: Text(
+                  appText('visit_count').replaceAll('{count}', item.visitCount.toString()),
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
                 ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _VisitedMeta(icon: AppIcons.calendar, label: '${item.firstVisit.day.toString().padLeft(2, '0')}/${item.firstVisit.month.toString().padLeft(2, '0')}/${item.firstVisit.year}'),
-                  const SizedBox(width: 14),
-                  _VisitedMeta(icon: AppIcons.clockCounterClockwise, label: _formatVisitedSpan(item.activeSpan)),
-                  const Spacer(),
-                  Text('${item.percentOfTotal.toStringAsFixed(0)}%', style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
-                ],
+              const SizedBox(width: 7),
+              M3EButton(
+                onPressed: onOpen,
+                style: M3EButtonStyle.text,
+                size: M3EButtonSize.xs,
+                shape: M3EButtonShape.round,
+                tooltip: appText('open'),
+                child: Icon(Symbols.open_in_new_rounded, size: 17, color: muted),
               ),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 10),
+        // Indicador ondulado M3 Expressive no lugar da barra reta
+        // anterior. A amplitude da onda acompanha o próprio valor do
+        // progresso (mais visitas = onda mais viva), usando o parâmetro
+        // amplitude do pacote em vez de um valor fixo.
+        M3ELinearWavyProgressIndicator(
+          value: fraction.clamp(0.0, 1.0),
+          color: accent,
+          backgroundColor: pillColor(context),
+          strokeWidth: 3,
+          trackStrokeWidth: 3,
+          wavelength: 18,
+          waveSpeed: 8,
+          height: 10,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _VisitedMeta(icon: AppIcons.calendar, label: '${item.firstVisit.day.toString().padLeft(2, '0')}/${item.firstVisit.month.toString().padLeft(2, '0')}/${item.firstVisit.year}'),
+            const SizedBox(width: 14),
+            _VisitedMeta(icon: AppIcons.clockCounterClockwise, label: _formatVisitedSpan(item.activeSpan)),
+            const Spacer(),
+            Text('${item.percentOfTotal.toStringAsFixed(0)}%', style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -355,67 +533,8 @@ class _VisitedMeta extends StatelessWidget {
       );
 }
 
-class _VisitedSitesSearchBar extends StatelessWidget {
-  const _VisitedSitesSearchBar({required this.controller, required this.bottomInset});
-  final TextEditingController controller;
-  final double bottomInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = pageBg(context);
-    final text = mainText(context);
-    final muted = mutedText(context);
-    return Container(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg.withOpacity(0), bg, bg],
-          stops: const [0, .45, 1],
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(23)),
-          child: Row(
-            children: [
-              AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
-              const SizedBox(width: 9),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: TextStyle(color: text, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: appText('search_history'),
-                    hintStyle: TextStyle(color: muted, fontSize: 14),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-              if (controller.text.isNotEmpty)
-                IconButton(
-                  onPressed: controller.clear,
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
-                  icon: AppMaterialIcon(AppIcons.x, color: muted, size: 16),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SiteUsageBackButton extends StatelessWidget {
-  const _SiteUsageBackButton({required this.tooltip, required this.icon, required this.onTap});
+class _SiteUsageHeaderButton extends StatelessWidget {
+  const _SiteUsageHeaderButton({super.key, required this.tooltip, required this.icon, required this.onTap});
   final String tooltip;
   final IconData icon;
   final VoidCallback onTap;
@@ -424,12 +543,15 @@ class _SiteUsageBackButton extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
         child: Material(
-          color: Colors.transparent,
+          color: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+          borderRadius: BorderRadius.circular(13),
+          clipBehavior: Clip.antiAlias,
           child: InkWell(
             borderRadius: BorderRadius.circular(13),
             onTap: onTap,
             child: SizedBox(
-              width: 42, height: 42,
+              width: 42,
+              height: 42,
               child: Center(child: AppMaterialIcon(icon, color: mutedText(context), size: 20)),
             ),
           ),
