@@ -332,7 +332,12 @@ class MainActivity : FlutterActivity() {
     private fun startGoogleSignIn(call: MethodCall, result: MethodChannel.Result) {
         nativeAuthScope.launch {
             try {
-                val nonce = generateNonce()
+                // Reutiliza o challenge devolvido pelo Worker. O token Google
+                // passa a conter exatamente o nonce que o backend vai validar.
+                val suppliedNonce = call.argument<String>("nonce")
+                val nonce = suppliedNonce?.takeIf {
+                    it.length in 16..256 && it.matches(Regex("^[A-Za-z0-9_-]+$"))
+                } ?: generateNonce()
                 val googleIdOption = GetGoogleIdOption.Builder()
                     .setFilterByAuthorizedAccounts(false)
                     .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)

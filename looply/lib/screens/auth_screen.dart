@@ -365,28 +365,17 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         ),
                         child: googleBusy
-                            // Estado a carregar: logo mantém-se, texto
-                            // desaparece, loader aparece no centro.
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Image.network(
-                                    'https://www.google.com/s2/favicons?domain=google.com&sz=64',
-                                    width: 20,
-                                    height: 20,
-                                    fit: BoxFit.contain,
+                            // Durante a autenticação, o botão mostra apenas o
+                            // indicador oficial M3 Expressive, centrado.
+                            ? Center(
+                                child: ExpressiveLoadingIndicator(
+                                  color: accent,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 28,
+                                    height: 28,
                                   ),
-                                  const SizedBox(width: 12),
-                                  ExpressiveLoadingIndicator(
-                                    color: accent,
-                                    constraints: const BoxConstraints.tightFor(
-                                      width: 22,
-                                      height: 22,
-                                    ),
-                                    semanticsLabel: appText('loading_sites'),
-                                  ),
-                                ],
+                                  semanticsLabel: appText('loading_sites'),
+                                ),
                               )
                             // Estado normal: logo + texto.
                             : Row(

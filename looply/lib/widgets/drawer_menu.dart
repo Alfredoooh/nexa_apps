@@ -68,7 +68,7 @@ class LooplyDrawer extends StatelessWidget {
                           onTap: () {
                             final navigator = Navigator.of(context);
                             onClose();
-                            Future<void>.delayed(const Duration(milliseconds: 470), () {
+                            Future<void>.delayed(const Duration(milliseconds: 520), () {
                               if (navigator.mounted) showThemeSheet(navigator.context);
                             });
                           },
@@ -143,7 +143,7 @@ class LooplyDrawer extends StatelessWidget {
 
     onClose();
     // Espera o movimento push terminar antes de apresentar a página.
-    await Future<void>.delayed(const Duration(milliseconds: 470));
+    await Future<void>.delayed(const Duration(milliseconds: 520));
     if (!navigator.mounted) return;
     await navigator.push<void>(MaterialPageRoute<void>(builder: (_) => page));
     if (routeKey != null) {

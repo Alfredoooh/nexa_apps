@@ -32,10 +32,11 @@ class HomeScreen extends StatelessWidget {
           SafeArea(
             child: ListView(
               padding: EdgeInsets.fromLTRB(12, topInset > 0 ? 68 : 72, 12, 28),
-              children: const [
-                SizedBox(height: 18),
-                HomeCardsDeck(),
-                SizedBox(height: 14),
+              children: [
+                const SizedBox(height: 12),
+                const QuickSiteGridCard(),
+                const SizedBox(height: 12),
+                const RecentTabPreviewsCard(),
               ],
             ),
           ),
@@ -124,8 +125,9 @@ class _DrawerMenuButton extends StatelessWidget {
   }
 }
 
-// Sites recentes: favicon redondo e compacto, sobre cinza neutro,
-// com o nome em peso regular. A faixa permite até dez entradas horizontais.
+// Sites usados recentemente: até dez entradas, em faixa horizontal, sem título.
+// O favicon fica inteiro dentro de um quadrado branco sobre um círculo maior,
+// evitando o recorte que existia na versão anterior.
 class QuickSiteGridCard extends StatelessWidget {
   const QuickSiteGridCard({super.key});
 
@@ -144,18 +146,18 @@ class QuickSiteGridCard extends StatelessWidget {
           }
 
           return Container(
-            padding: const EdgeInsets.fromLTRB(11, 8, 11, 8),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
             decoration: BoxDecoration(
               color: settingsCardColor(context),
-              borderRadius: BorderRadius.circular(29),
+              borderRadius: BorderRadius.circular(25),
             ),
             child: recent.isEmpty
                 ? SizedBox(
-                    height: 92,
+                    height: 68,
                     child: Center(
                       child: Text(
                         appText('no_recent_activity'),
-                        style: TextStyle(color: mutedText(context), fontSize: 12),
+                        style: TextStyle(color: mutedText(context), fontSize: 13),
                       ),
                     ),
                   )
@@ -165,9 +167,9 @@ class QuickSiteGridCard extends StatelessWidget {
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
                       itemCount: recent.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      separatorBuilder: (_, __) => const SizedBox(width: 9),
                       itemBuilder: (context, index) => SizedBox(
-                        width: 70,
+                        width: 76,
                         child: _RecentSiteTile(entry: recent[index]),
                       ),
                     ),
@@ -191,30 +193,29 @@ class _RecentSiteTile extends StatelessWidget {
       button: true,
       label: label,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         onTap: () => openNewTab(context, entry.url, title: entry.title),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SiteFaviconForHome(url: entry.url),
-            const SizedBox(height: 5),
-            SizedBox(
-              height: 25,
-              child: Text(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SiteFaviconForHome(url: entry.url),
+              const SizedBox(height: 5),
+              Text(
                 label,
                 maxLines: 2,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: mainText(context),
-                  fontSize: 10.5,
-                  height: 1.13,
+                  fontSize: 12.5,
+                  height: 1.16,
                   fontWeight: FontWeight.w400,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -236,7 +237,9 @@ class SiteFaviconForHome extends StatelessWidget {
             height: 35,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => AppMaterialIcon(
-              AppIcons.globe, size: 23, color: muted,
+              AppIcons.globe,
+              size: 24,
+              color: muted,
             ),
           )
         : Image.network(
@@ -245,151 +248,21 @@ class SiteFaviconForHome extends StatelessWidget {
             height: 35,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => AppMaterialIcon(
-              AppIcons.globe, size: 23, color: muted,
+              AppIcons.globe,
+              size: 24,
+              color: muted,
             ),
           );
-    final circleColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF383A3E)
-        : const Color(0xFFE3E5E8);
+
     return Container(
       width: 62,
       height: 62,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: circleColor,
+        color: pillColor(context),
         shape: BoxShape.circle,
       ),
-      child: favicon,
-    );
-  }
-}
-
-// Dois cartões empilhados: as miniaturas das abas começam à frente e os
-// sites recentes ficam ligeiramente visíveis por trás. A troca é vertical
-// e só responde a gestos iniciados dentro desta área.
-class HomeCardsDeck extends StatefulWidget {
-  const HomeCardsDeck({super.key});
-
-  @override
-  State<HomeCardsDeck> createState() => _HomeCardsDeckState();
-}
-
-class _HomeCardsDeckState extends State<HomeCardsDeck> {
-  bool _showTabs = true;
-  double _verticalDrag = 0;
-
-  void _finishVerticalDrag(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    final shouldChange = _verticalDrag.abs() >= 28 || velocity.abs() >= 260;
-    if (!shouldChange) {
-      _verticalDrag = 0;
-      return;
-    }
-    final direction = _verticalDrag.abs() >= 28 ? _verticalDrag : velocity;
-    setState(() => _showTabs = direction < 0);
-    _verticalDrag = 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activeHeight = _showTabs ? 148.0 : 116.0;
-    final backColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF34363A)
-        : const Color(0xFFE7E9EC);
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onVerticalDragUpdate: (details) => _verticalDrag += details.delta.dy,
-            onVerticalDragEnd: _finishVerticalDrag,
-            onVerticalDragCancel: () => _verticalDrag = 0,
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                height: activeHeight + 14,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      top: 13,
-                      left: 6,
-                      right: 6,
-                      height: activeHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: backColor,
-                          borderRadius: BorderRadius.circular(29),
-                          border: Border.all(
-                            color: lineColor(context).withOpacity(.42),
-                            width: .7,
-                          ),
-                        ),
-                      ),
-                    ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 280),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        final offset = Tween<Offset>(
-                          begin: Offset(0, _showTabs ? .08 : -.08),
-                          end: Offset.zero,
-                        ).animate(animation);
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(position: offset, child: child),
-                        );
-                      },
-                      child: SizedBox(
-                        key: ValueKey<bool>(_showTabs),
-                        height: activeHeight,
-                        child: _showTabs
-                            ? const RecentTabPreviewsCard()
-                            : const QuickSiteGridCard(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        SizedBox(
-          width: 5,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                width: 4,
-                height: _showTabs ? 17 : 6,
-                decoration: BoxDecoration(
-                  color: _showTabs ? accentColor(context) : mutedText(context).withOpacity(.48),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              const SizedBox(height: 5),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                width: 4,
-                height: _showTabs ? 6 : 17,
-                decoration: BoxDecoration(
-                  color: _showTabs ? mutedText(context).withOpacity(.48) : accentColor(context),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      child: ClipOval(child: favicon),
     );
   }
 }
