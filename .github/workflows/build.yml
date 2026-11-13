@@ -102,6 +102,13 @@ jobs:
           cd "$PROJECT_DIR"
           flutter pub get
 
+      - name: Patch m3e_haptics for AGP 9
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          python3 tools/patch_m3e_haptics_agp9.py
+
       - name: Configure BrowseIt release keystore
         shell: bash
         env:

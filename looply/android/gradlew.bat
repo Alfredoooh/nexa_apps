@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set VERSION=8.13
+set VERSION=9.5.0
 set DIST=%USERPROFILE%\.gradle\wrapper\dists\looply-gradle-%VERSION%
 set GRADLE=%DIST%\gradle-%VERSION%\bin\gradle.bat
 if exist "%GRADLE%" goto run_gradle
