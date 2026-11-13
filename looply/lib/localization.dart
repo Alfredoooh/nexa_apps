@@ -63,5 +63,8 @@ final AppLanguageController appLanguageController = AppLanguageController();
 String appText(String key) {
   final languageCode = appLanguageController.value.code;
   final language = appTranslations[languageCode] ?? appTranslations['pt']!;
-  return language[key] ?? appTranslations['en']?[key] ?? key;
+  final localized = language[key];
+  if (localized != null && localized.trim().isNotEmpty) return localized;
+  final fallback = appTranslations['en']?[key];
+  return (fallback != null && fallback.trim().isNotEmpty) ? fallback : key;
 }

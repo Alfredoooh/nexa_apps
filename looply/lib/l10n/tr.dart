@@ -7,8 +7,6 @@ const Map<String, String> trCoreTranslations = <String, String>{
     'clear': 'Temizle', 'close': 'Kapat', 'back': 'Geri', 'home': 'Ana sayfa', 'more_options': 'Diğer seçenekler',
     'ai_mode': 'Yapay zekâ modu', 'force_dark': 'Sitelerde koyu modu zorla', 'follow_app_theme': 'Siteler uygulama temasını izlesin',
     'adaptive_toolbar': 'Uyarlanabilir araç çubuğu', 'no_history': 'Geçmiş yok', 'select_language': 'Dil seçin',
-      'file_viewer_android_only': 'Bu dosya görüntüleyici yalnızca Android\'de kullanılabilir.',
-    'file_open_failed': 'Bu dosya açılamadı.',
   };
 
 const Map<String, String> trExtraTranslations = <String, String>{
@@ -90,6 +88,12 @@ const Map<String, String> trScreenTranslations = <String, String>{
   };
 
 const Map<String, String> trTranslations = <String, String>{
+    'desktop_site': 'Masaüstü sitesi',
+    'desktop_site_off': 'Masaüstü sitesini kapat',
+    'font_size': 'Yazı tipi boyutu',
+    'page_zoom': 'Sayfa yakınlaştırma',
+    'print_page': 'Sayfayı yazdır',
+    'share_page': 'Sayfayı paylaş',
   ...trScreenTranslations,
   ...trExtraTranslations,
   ...trCoreTranslations,

@@ -10,8 +10,6 @@ const Map<String, String> ptCoreTranslations = <String, String>{
     'more_options': 'Mais opções', 'ai_mode': 'Modo IA', 'force_dark': 'Forçar modo escuro nos sites',
     'follow_app_theme': 'Sites seguem o tema do app', 'adaptive_toolbar': 'Barra de ferramentas adaptável',
     'no_history': 'Sem histórico', 'select_language': 'Selecionar idioma',
-      'file_viewer_android_only': 'Este visualizador de ficheiros está disponível apenas no Android.',
-    'file_open_failed': 'Não foi possível abrir este ficheiro.',
   };
 
 const Map<String, String> ptExtraTranslations = <String, String>{
@@ -96,6 +94,12 @@ const Map<String, String> ptScreenTranslations = <String, String>{
   };
 
 const Map<String, String> ptTranslations = <String, String>{
+    'desktop_site': 'Site para computador',
+    'desktop_site_off': 'Desativar site para computador',
+    'font_size': 'Tamanho da fonte',
+    'page_zoom': 'Zoom da página',
+    'print_page': 'Imprimir página',
+    'share_page': 'Partilhar página',
   ...ptScreenTranslations,
   ...ptExtraTranslations,
   ...ptCoreTranslations,

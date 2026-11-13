@@ -7,8 +7,6 @@ const Map<String, String> jaCoreTranslations = <String, String>{
     'back': '戻る', 'home': 'ホーム', 'more_options': 'その他のオプション', 'ai_mode': 'AI モード',
     'force_dark': 'ウェブサイトをダークモードにする', 'follow_app_theme': 'サイトをアプリのテーマに合わせる',
     'adaptive_toolbar': 'アダプティブツールバー', 'no_history': '履歴はありません', 'select_language': '言語を選択',
-      'file_viewer_android_only': 'このファイルビューアは Android でのみ利用できます。',
-    'file_open_failed': 'このファイルを開けませんでした。',
   };
 
 const Map<String, String> jaExtraTranslations = <String, String>{
@@ -91,6 +89,12 @@ const Map<String, String> jaScreenTranslations = <String, String>{
   };
 
 const Map<String, String> jaTranslations = <String, String>{
+    'desktop_site': 'PC版サイト',
+    'desktop_site_off': 'PC版サイトをオフ',
+    'font_size': '文字サイズ',
+    'page_zoom': 'ページのズーム',
+    'print_page': 'ページを印刷',
+    'share_page': 'ページを共有',
   ...jaScreenTranslations,
   ...jaExtraTranslations,
   ...jaCoreTranslations,

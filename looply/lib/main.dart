@@ -148,6 +148,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   int _selectedTab = 0;
   bool _showingTabsGrid = false;
   bool _morphing = false;
+  bool _skipNextNativeEnterAnimation = false;
   String? _activeBrowserTabId;
   final Map<String, GlobalKey> _browserViewportKeys = {};
   final Map<String, Completer<void>> _browserFirstLoads = {};
@@ -588,6 +589,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (!mounted) return;
     final request = ShellTabRequest.instance;
 
+    if (request.browserPreviewRequested) {
+      final tabId = request.browserPreviewTabId;
+      final screenshot = request.browserPreviewScreenshot;
+      final sourceRect = request.browserPreviewSourceRect;
+      request.clearBrowserPreviewRequest();
+      if (tabId != null && screenshot != null) {
+        unawaited(_openBrowserFromHomePreview(
+          tabId: tabId,
+          screenshot: screenshot,
+          sourceRect: sourceRect,
+        ));
+      }
+      return;
+    }
+
     if (request.browserCloseRequested) {
       request.browserCloseRequested = false;
       final tabId = request.browserCloseTabId;
@@ -720,7 +736,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                           image: imageProvider,
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
-                          filterQuality: FilterQuality.medium,
+                          filterQuality: FilterQuality.low,
                         ),
                       ),
                     ),
@@ -775,7 +791,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }));
 
     final sourceRect = _rectInOverlay(_repaintKey);
-    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.4);
+    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.1);
     if (!mounted) {
       _morphing = false;
       return;
@@ -948,7 +964,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       bitmap = _lastScreenSnapshot;
     }
     if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.4);
+      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.1);
     }
     if (!mounted) {
       _morphing = false;
@@ -967,6 +983,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       // O slide de navegação normal deve começar já na posição final.
       _browserSlideController.stop();
       _browserSlideController.value = 1;
+      // A abertura já está a ser executada pelo Container Transform. Não
+      // permitir que a Activity Kotlin acrescente um segundo slide por cima.
+      _skipNextNativeEnterAnimation = true;
       setState(() {
         _activeBrowserTabId = targetTab.id;
         _showingTabsGrid = false;
@@ -1033,7 +1052,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         _removeSnapshotOverlay();
       }
 
-      if (mounted) setState(() => _morphing = false);
+      if (mounted) {
+        setState(() => _morphing = false);
+        await WidgetsBinding.instance.endOfFrame;
+        if (mounted) setState(() => _skipNextNativeEnterAnimation = false);
+      }
       return;
     }
 
@@ -1083,6 +1106,77 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (mounted) setState(() => _morphing = false);
   }
 
+
+  Future<void> _openBrowserFromHomePreview({
+    required String tabId,
+    required Uint8List screenshot,
+    required Rect? sourceRect,
+  }) async {
+    if (!mounted || _morphing || _showingTabsGrid) return;
+    final tab = tabsController.getTab(tabId);
+    if (tab == null || tab.kind == TabKind.appScreen) return;
+
+    _morphing = true;
+    _skipNextNativeEnterAnimation = true;
+    _ensureBrowserTabMounted(tab);
+    _browserSlideController.stop();
+    _browserSlideController.value = 1;
+    tabsController.activate(tab.id);
+    unawaited(SessionStore.instance.saveLastActivity({
+      'type': 'browser',
+      'tabId': tab.id,
+    }));
+
+    final provider = sourceRect == null
+        ? null
+        : await _prepareSnapshotImage(screenshot);
+    if (!mounted) {
+      _morphing = false;
+      _skipNextNativeEnterAnimation = false;
+      return;
+    }
+
+    setState(() {
+      _activeBrowserTabId = tab.id;
+      _showingTabsGrid = false;
+    });
+
+    if (provider != null && sourceRect != null) {
+      _insertSnapshotOverlay(
+        image: provider,
+        from: sourceRect,
+        opening: false,
+      );
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      _morphing = false;
+      _skipNextNativeEnterAnimation = false;
+      return;
+    }
+
+    if (provider != null && sourceRect != null) {
+      final viewport = _browserViewportKeys[tab.id];
+      final destination = viewport == null ? null : _rectInOverlay(viewport);
+      if (destination != null) {
+        await _animateSnapshot(to: destination);
+      } else {
+        _removeSnapshotOverlay();
+      }
+    } else {
+      _removeSnapshotOverlay();
+    }
+
+    if (!mounted) return;
+    setState(() => _morphing = false);
+    // O browser só é ativado depois de a captura terminar a expansão. O extra
+    // skipNativeEnterAnimation elimina o segundo slide da Activity Android.
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) setState(() => _skipNextNativeEnterAnimation = false);
+  }
 
   void _returnHomeFromTabs() {
     final homeTab = tabsController.getAppScreen(_screenKeys.first) ??
@@ -1141,7 +1235,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               key: ValueKey<String>('orbit-${activeBrowserTab.id}'),
               tabId: activeBrowserTab.id,
               initialUrl: activeBrowserTab.url,
-              isActive: true,
+              isActive: !_morphing,
+              skipNativeEnterAnimation: _skipNextNativeEnterAnimation,
               viewportKey: _browserViewportKeys[activeBrowserTab.id]!,
               firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
               browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
@@ -1541,12 +1636,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
       child: Material(
         color: pillSurface,
         elevation: 0,
-        shape: StadiumBorder(
-          side: BorderSide(
-            color: isDark ? Colors.transparent : const Color(0xFFDADCE0),
-            width: isDark ? 0 : 1,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(999),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: 60,

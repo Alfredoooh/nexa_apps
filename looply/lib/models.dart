@@ -1143,6 +1143,9 @@ class DownloadsController extends ChangeNotifier {
   final List<DownloadEntry> _entries = [];
   final Map<String, http.Client> _activeClients = {};
   Timer? _persistTimer;
+  bool _nativeBridgeAttached = false;
+
+  static const MethodChannel _nativeDownloadChannel = MethodChannel('looply/native_downloads');
 
   List<DownloadEntry> get entries => List.unmodifiable(_entries.reversed);
 
@@ -1202,13 +1205,50 @@ class DownloadsController extends ChangeNotifier {
     } catch (_) {
       // Downloads corrompidos não impedem a abertura do navegador.
     }
+    _attachNativeDownloadBridge();
     notifyListeners();
+  }
+
+  void _attachNativeDownloadBridge() {
+    if (_nativeBridgeAttached) return;
+    _nativeBridgeAttached = true;
+    _nativeDownloadChannel.setMethodCallHandler((call) async {
+      if (call.method != 'downloadRequested') return null;
+      final raw = call.arguments;
+      if (raw is! Map) return null;
+      final url = raw['url']?.toString() ?? '';
+      if (url.isEmpty) return null;
+      final rawHeaders = raw['headers'];
+      final headers = <String, String>{};
+      if (rawHeaders is Map) {
+        for (final entry in rawHeaders.entries) {
+          if (entry.key is String && entry.value != null) {
+            headers[entry.key as String] = entry.value.toString();
+          }
+        }
+      }
+      register(
+        url: url,
+        filename: raw['filename']?.toString(),
+        mimeType: raw['mimeType']?.toString(),
+        requestHeaders: headers,
+      );
+      return true;
+    });
+    // Confirma ao Kotlin que o handler Dart já está instalado. Pedidos feitos
+    // antes deste ponto ficam em fila nativa e são entregues após o ping.
+    unawaited(_nativeDownloadChannel.invokeMethod<bool>('ping').then<void>((_) {}).catchError((Object _) {}));
   }
 
   /// Ponto de entrada chamado pelo onDownloadStartRequest do WebView.
   /// Cria a entrada, dispara o download real em segundo plano e devolve
   /// imediatamente — a UI acompanha o progresso através dos listeners.
-  String register({required String url, String? filename, String? mimeType}) {
+  String register({
+    required String url,
+    String? filename,
+    String? mimeType,
+    Map<String, String>? requestHeaders,
+  }) {
     final id = _generateId();
     final resolvedName = (filename?.trim().isNotEmpty ?? false)
         ? filename!.trim()
@@ -1222,7 +1262,7 @@ class DownloadsController extends ChangeNotifier {
     );
     _entries.add(entry);
     notifyListeners();
-    unawaited(_download(entry));
+    unawaited(_download(entry, requestHeaders: requestHeaders ?? const <String, String>{}));
     _schedulePersist();
     return id;
   }
@@ -1236,7 +1276,10 @@ class DownloadsController extends ChangeNotifier {
     return 'ficheiro_${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  Future<void> _download(DownloadEntry entry) async {
+  Future<void> _download(
+    DownloadEntry entry, {
+    Map<String, String> requestHeaders = const <String, String>{},
+  }) async {
     final client = http.Client();
     _activeClients[entry.id] = client;
     entry.status = DownloadStatus.downloading;
@@ -1244,6 +1287,7 @@ class DownloadsController extends ChangeNotifier {
 
     try {
       final request = http.Request('GET', Uri.parse(entry.url));
+      request.headers.addAll(requestHeaders);
       final response = await client.send(request);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {

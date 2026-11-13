@@ -1,3 +1,5 @@
+import 'dart:ui' show Rect, Offset;
+
 import 'package:flutter/material.dart';
 
 import '../localization.dart';
@@ -128,57 +130,92 @@ class _DrawerMenuButton extends StatelessWidget {
   }
 }
 
-// Quatro sites distintos mais recentemente visitados, sem catálogo adicional.
+// Sites recentemente utilizados: conteúdo horizontal, sem título redundante.
 class QuickSiteGridCard extends StatelessWidget {
   const QuickSiteGridCard({super.key});
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: activityController,
-    builder: (context, _) {
-      final recent = <ActivityEntry>[];
-      final hosts = <String>{};
-      for (final entry in activityController.entries) {
-        if (entry.kind != ActivityKind.site) continue;
-        final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
-        if (host.isEmpty || !hosts.add(host)) continue;
-        recent.add(entry);
-        if (recent.length == 4) break;
-      }
-      return Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 11),
-        decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(17)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(appText('recent_sites'), style: TextStyle(color: mainText(context), fontSize: 14, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          if (recent.isEmpty)
-            SizedBox(height: 64, child: Center(child: Text(appText('no_recent_activity'), style: TextStyle(color: mutedText(context), fontSize: 12))))
-          else
-            Row(children: [
-              for (final entry in recent) Expanded(child: _RecentSiteTile(entry: entry)),
-              for (var i = recent.length; i < 4; i++) const Expanded(child: SizedBox()),
-            ]),
-        ]),
+        animation: activityController,
+        builder: (context, _) {
+          final recent = <ActivityEntry>[];
+          final hosts = <String>{};
+          for (final entry in activityController.entries) {
+            if (entry.kind != ActivityKind.site) continue;
+            final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
+            if (host.isEmpty || !hosts.add(host)) continue;
+            recent.add(entry);
+            if (recent.length == 10) break;
+          }
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            decoration: BoxDecoration(
+              color: settingsCardColor(context),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: recent.isEmpty
+                ? SizedBox(
+                    height: 82,
+                    child: Center(
+                      child: Text(
+                        appText('no_recent_activity'),
+                        style: TextStyle(color: mutedText(context), fontSize: 12),
+                      ),
+                    ),
+                  )
+                : SizedBox(
+                    height: 99,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: recent.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 15),
+                      itemBuilder: (context, index) => SizedBox(
+                        width: 72,
+                        child: _RecentSiteTile(entry: recent[index]),
+                      ),
+                    ),
+                  ),
+          );
+        },
       );
-    },
-  );
-}
 
 class _RecentSiteTile extends StatelessWidget {
   const _RecentSiteTile({required this.entry});
   final ActivityEntry entry;
+
   @override
   Widget build(BuildContext context) {
-    final host = Uri.tryParse(entry.url)?.host ?? entry.url;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => openNewTab(context, entry.url, title: entry.title),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SiteFaviconForHome(url: entry.url),
-          const SizedBox(height: 6),
-          Text(host.replaceFirst(RegExp(r'^www\.'), ''), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: TextStyle(color: mainText(context), fontSize: 10.5, fontWeight: FontWeight.w600)),
-        ]),
+    final host = (Uri.tryParse(entry.url)?.host ?? entry.url)
+        .replaceFirst(RegExp(r'^www\.'), '');
+    final title = entry.title.trim();
+    final hostLabel = host.split('.').first;
+    final label = title.isNotEmpty && title.length <= 22 ? title : hostLabel;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => openNewTab(context, entry.url, title: entry.title),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            SiteFaviconForHome(url: entry.url),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: mutedText(context),
+                fontSize: 11.2,
+                fontWeight: FontWeight.w400,
+                height: 1.15,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -187,60 +224,119 @@ class _RecentSiteTile extends StatelessWidget {
 class SiteFaviconForHome extends StatelessWidget {
   const SiteFaviconForHome({required this.url});
   final String url;
+
   @override
   Widget build(BuildContext context) {
     final muted = mutedText(context);
     return Container(
-      width: 39, height: 39, alignment: Alignment.center,
-      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(12)),
-      child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(
-        'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=64',
-        width: 23, height: 23, fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 20, color: muted),
-      )),
+      width: 64,
+      height: 64,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        shape: BoxShape.circle,
+      ),
+      child: Container(
+        width: 48,
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF303236)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Image.network(
+          'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=128',
+          width: 36,
+          height: 36,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => AppMaterialIcon(
+            AppIcons.globe,
+            size: 24,
+            color: muted,
+          ),
+        ),
+      ),
     );
   }
 }
 
-// Pré-visualizações exclusivamente visuais das abas já abertas.
+// Capturas puramente visuais: no máximo dez miniaturas, sem rótulos.
 class RecentTabPreviewsCard extends StatelessWidget {
   const RecentTabPreviewsCard({super.key});
+
+  Rect? _sourceRect(BuildContext context) {
+    try {
+      final overlay = Overlay.of(context, rootOverlay: true);
+      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+      final box = context.findRenderObject() as RenderBox?;
+      if (overlayBox == null || box == null || !box.attached) return null;
+      final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+      return origin & box.size;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: tabsController,
-    builder: (context, _) {
-      final tabs = tabsController.tabs
-          .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito && tab.thumbnail != null)
-          .toList()..sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
-      final visible = tabs.take(5).toList();
-      if (visible.isEmpty) return const SizedBox.shrink();
-      return Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(color: settingsCardColor(context), borderRadius: BorderRadius.circular(17)),
-        child: SizedBox(
-          height: 116,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal, itemCount: visible.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 9),
-            itemBuilder: (context, index) {
-              final tab = visible[index];
-              return Material(
-                color: pillColor(context), borderRadius: BorderRadius.circular(10), clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: () {
-                    tabsController.activate(tab.id);
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                    ShellTabRequest.instance.requestBrowser(tab.id);
-                  },
-                  child: SizedBox(width: 82, child: Image.memory(tab.thumbnail!, fit: BoxFit.cover, gaplessPlayback: true, filterQuality: FilterQuality.low)),
-                ),
-              );
-            },
-          ),
-        ),
+        animation: tabsController,
+        builder: (context, _) {
+          final tabs = tabsController.tabs
+              .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito && tab.thumbnail != null)
+              .toList()
+            ..sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
+          final visible = tabs.take(10).toList(growable: false);
+          if (visible.isEmpty) return const SizedBox.shrink();
+          return Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: settingsCardColor(context),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: SizedBox(
+              height: 126,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: visible.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final tab = visible[index];
+                  return Builder(
+                    builder: (tileContext) => Material(
+                      color: pillColor(context),
+                      borderRadius: BorderRadius.circular(15),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () {
+                          final rect = _sourceRect(tileContext);
+                          tabsController.activate(tab.id);
+                          ShellTabRequest.instance.requestBrowserFromPreview(
+                            tabId: tab.id,
+                            screenshot: tab.thumbnail!,
+                            sourceRect: rect,
+                          );
+                        },
+                        child: SizedBox(
+                          width: 92,
+                          child: Image.memory(
+                            tab.thumbnail!,
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            filterQuality: FilterQuality.medium,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        },
       );
-    },
-  );
 }
 
 // Botão de Entrar compacto: sem ícone, sem largura cheia — encolhe ao

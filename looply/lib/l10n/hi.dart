@@ -7,8 +7,6 @@ const Map<String, String> hiCoreTranslations = <String, String>{
     'clear': 'साफ़ करें', 'close': 'बंद करें', 'back': 'वापस', 'home': 'होम', 'more_options': 'अधिक विकल्प',
     'ai_mode': 'AI मोड', 'force_dark': 'वेबसाइट पर डार्क मोड लागू करें', 'follow_app_theme': 'वेबसाइट ऐप थीम का पालन करें',
     'adaptive_toolbar': 'अनुकूली टूलबार', 'no_history': 'कोई इतिहास नहीं', 'select_language': 'भाषा चुनें',
-      'file_viewer_android_only': 'यह फ़ाइल व्यूअर केवल Android पर उपलब्ध है।',
-    'file_open_failed': 'यह फ़ाइल नहीं खुल सकी।',
   };
 
 const Map<String, String> hiExtraTranslations = <String, String>{
@@ -89,6 +87,12 @@ const Map<String, String> hiScreenTranslations = <String, String>{
   };
 
 const Map<String, String> hiTranslations = <String, String>{
+    'desktop_site': 'डेस्कटॉप साइट',
+    'desktop_site_off': 'डेस्कटॉप साइट बंद करें',
+    'font_size': 'फ़ॉन्ट आकार',
+    'page_zoom': 'पेज ज़ूम',
+    'print_page': 'पेज प्रिंट करें',
+    'share_page': 'पेज साझा करें',
   ...hiScreenTranslations,
   ...hiExtraTranslations,
   ...hiCoreTranslations,

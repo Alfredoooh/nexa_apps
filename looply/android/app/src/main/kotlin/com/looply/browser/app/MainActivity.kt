@@ -67,6 +67,31 @@ class MainActivity : FlutterActivity() {
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val ORBIT_BROWSER_REQUEST_CODE = 7418
         private const val PREF_AI_SEARCH_ENABLED = "looply_ai_search_enabled"
+        private var nativeDownloadChannel: MethodChannel? = null
+        private var nativeDownloadBridgeReady = false
+        private val pendingNativeDownloadEvents = java.util.ArrayDeque<HashMap<String, Any?>>()
+
+        fun notifyNativeDownloadRequested(
+            url: String,
+            filename: String,
+            mimeType: String?,
+            headers: Map<String, String>,
+        ) {
+            Handler(Looper.getMainLooper()).post {
+                val payload = hashMapOf<String, Any?>(
+                    "url" to url,
+                    "filename" to filename,
+                    "mimeType" to mimeType,
+                    "headers" to HashMap(headers),
+                )
+                val channel = nativeDownloadChannel
+                if (channel != null && nativeDownloadBridgeReady) {
+                    channel.invokeMethod("downloadRequested", payload)
+                } else {
+                    pendingNativeDownloadEvents.addLast(payload)
+                }
+            }
+        }
     }
 
 
@@ -111,6 +136,21 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         nativeUiChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        nativeDownloadBridgeReady = false
+        nativeDownloadChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "looply/native_downloads").also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "ping" -> {
+                        nativeDownloadBridgeReady = true
+                        while (pendingNativeDownloadEvents.isNotEmpty()) {
+                            channel.invokeMethod("downloadRequested", pendingNativeDownloadEvents.removeFirst())
+                        }
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         nativeUiChannel?.setMethodCallHandler { call, result ->
                 when (call.method) {
                     "setAppThemeMode" -> {
@@ -123,7 +163,6 @@ class MainActivity : FlutterActivity() {
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
                     "openNativeBrowser" -> openNativeBrowser(call, result)
-                    "openNativeFileViewer" -> openNativeFileViewer(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -171,6 +210,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         nativeStatsChannel = null
         nativeUiChannel = null
+        nativeDownloadChannel = null
+        nativeDownloadBridgeReady = false
         defaultBrowserIntentChannel = null
         defaultBrowserBridgeReady = false
         nativeAuthScope.cancel()
@@ -542,44 +583,21 @@ class MainActivity : FlutterActivity() {
             putExtra(OrbitBrowserActivity.EXTRA_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
             putExtra(OrbitBrowserActivity.EXTRA_TAB_COUNT, call.argument<Int>("tabCount") ?: 1)
             putExtra(OrbitBrowserActivity.EXTRA_PREVIEW_ONLY, call.argument<Boolean>("previewOnly") ?: false)
+            val labels = call.argument<Map<String, String>>("menuLabels") ?: emptyMap()
+            putExtra(OrbitBrowserActivity.EXTRA_MENU_LABELS_JSON, JSONObject(labels).toString())
+            putExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", call.argument<Boolean>("skipNativeEnterAnimation") ?: false)
         }
         pendingOrbitBrowserResult = result
         try {
             startActivityForResult(intent, ORBIT_BROWSER_REQUEST_CODE)
-            overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+            if (intent.getBooleanExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", false)) {
+                overridePendingTransition(0, 0)
+            } else {
+                overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+            }
         } catch (error: Exception) {
             pendingOrbitBrowserResult = null
             result.error("native_browser_unavailable", error.message, null)
-        }
-    }
-
-    /** Abre um ficheiro local no WebView dedicado, sem Orbit, appbar ou separadores. */
-    private fun openNativeFileViewer(call: MethodCall, result: MethodChannel.Result) {
-        val rawPath = call.argument<String>("path")?.trim().orEmpty()
-        if (rawPath.isBlank()) {
-            result.error("invalid_file_path", "O caminho do ficheiro está vazio.", null)
-            return
-        }
-
-        val file = runCatching { java.io.File(rawPath).canonicalFile }.getOrNull()
-        val appDataRoot = runCatching { java.io.File(applicationInfo.dataDir).canonicalPath }.getOrNull()
-        if (file == null || appDataRoot.isNullOrBlank() || !file.isFile ||
-            !file.path.startsWith(appDataRoot + java.io.File.separator)) {
-            result.error("file_not_available", "O ficheiro local não está disponível.", null)
-            return
-        }
-
-        try {
-            val intent = Intent(this, NativeFileViewerActivity::class.java).apply {
-                putExtra(NativeFileViewerActivity.EXTRA_PATH, file.path)
-                putExtra(NativeFileViewerActivity.EXTRA_NAME, call.argument<String>("filename") ?: file.name)
-                putExtra(NativeFileViewerActivity.EXTRA_MIME, call.argument<String>("mimeType") ?: "")
-            }
-            startActivity(intent)
-            overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
-            result.success(true)
-        } catch (error: Exception) {
-            result.error("file_viewer_unavailable", error.message, null)
         }
     }
 

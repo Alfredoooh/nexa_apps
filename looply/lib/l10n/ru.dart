@@ -8,8 +8,6 @@ const Map<String, String> ruCoreTranslations = <String, String>{
     'close': 'Закрыть', 'back': 'Назад', 'home': 'Главная', 'more_options': 'Ещё', 'ai_mode': 'Режим ИИ',
     'force_dark': 'Принудительная тёмная тема сайтов', 'follow_app_theme': 'Сайты следуют теме приложения',
     'adaptive_toolbar': 'Адаптивная панель инструментов', 'no_history': 'Истории пока нет', 'select_language': 'Выбрать язык',
-      'file_viewer_android_only': 'Этот просмотрщик файлов доступен только на Android.',
-    'file_open_failed': 'Не удалось открыть этот файл.',
   };
 
 const Map<String, String> ruExtraTranslations = <String, String>{
@@ -93,6 +91,12 @@ const Map<String, String> ruScreenTranslations = <String, String>{
   };
 
 const Map<String, String> ruTranslations = <String, String>{
+    'desktop_site': 'Версия для компьютера',
+    'desktop_site_off': 'Отключить версию для компьютера',
+    'font_size': 'Размер шрифта',
+    'page_zoom': 'Масштаб страницы',
+    'print_page': 'Печать страницы',
+    'share_page': 'Поделиться страницей',
   ...ruScreenTranslations,
   ...ruExtraTranslations,
   ...ruCoreTranslations,

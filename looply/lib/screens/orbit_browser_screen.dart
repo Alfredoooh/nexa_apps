@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../browser_library.dart';
+import '../localization.dart';
 import '../models.dart';
 import '../shell/shell_tab_request.dart';
 import 'bookmarks_screen.dart';
@@ -27,6 +28,7 @@ class OrbitBrowserScreen extends StatefulWidget {
     this.browserReadyCompleter,
     this.isIncognito = false,
     this.previewOnly = false,
+    this.skipNativeEnterAnimation = false,
   });
 
   final String tabId;
@@ -37,6 +39,7 @@ class OrbitBrowserScreen extends StatefulWidget {
   final Completer<void>? browserReadyCompleter;
   final bool isIncognito;
   final bool previewOnly;
+  final bool skipNativeEnterAnimation;
 
   @override
   State<OrbitBrowserScreen> createState() => _OrbitBrowserScreenState();
@@ -137,6 +140,44 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           'isIncognito': widget.isIncognito,
           'tabCount': tabsController.count,
           'previewOnly': widget.previewOnly,
+          'skipNativeEnterAnimation': widget.skipNativeEnterAnimation,
+          'menuLabels': <String, String>{
+            'bookmark': appText('add_bookmark'),
+            'bookmarks': appText('bookmarks'),
+            'history': appText('history'),
+            'downloads': appText('downloads'),
+            'reload': appText('reload_page'),
+            'find': appText('search_in_page'),
+            'desktop': appText('desktop_site'),
+            'desktopOff': appText('desktop_site_off'),
+            'translate': appText('translate'),
+            'fontSize': appText('font_size'),
+            'pageZoom': appText('page_zoom'),
+            'print': appText('print_page'),
+            'copy': appText('copy_address'),
+            'share': appText('share_page'),
+            'siteInfo': appText('site_info'),
+            'settings': appText('settings'),
+            'home': appText('home'),
+            'back': appText('go_back'),
+            'forward': appText('go_forward'),
+            'newTab': appText('new_tab'),
+            'tabs': appText('tabs'),
+            'options': appText('more_options'),
+            'downloadReceived': appText('download_received'),
+            'close': appText('close'),
+            'closeSearch': appText('close_search'),
+            'searchHint': appText('search_hint'),
+            'validAddress': appText('valid_http_url'),
+            'loadingError': appText('loading_error'),
+            'copied': appText('copied'),
+            'downloadImage': appText('download_image'),
+            'newTabLabel': appText('new_tab'),
+            'downloadFailed': appText('download_failed'),
+            'remove': appText('remove'),
+            'cancel': appText('cancel'),
+            'targetLanguage': appLanguageController.value.code,
+          },
         },
       );
 
@@ -305,11 +346,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
   Future<void> _pushFlutterPage(Widget page) async {
     if (!mounted) return;
 
+    final routeTabId = widget.tabId;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(builder: (_) => page),
     );
 
-    if (mounted && widget.isActive) {
+    // A SearchScreen pode ter ativado outra aba. Não reabra a antiga por cima
+    // dela: isso provocava um segundo carregamento após escolher um resultado.
+    if (mounted &&
+        widget.isActive &&
+        tabsController.activeTabId == routeTabId &&
+        tabsController.getTab(routeTabId) != null) {
       await _reopen();
     }
   }

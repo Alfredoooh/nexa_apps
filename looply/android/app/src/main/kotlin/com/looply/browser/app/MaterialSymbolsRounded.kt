@@ -20,8 +20,8 @@ import io.flutter.FlutterInjector
  * Utiliza a própria fonte oficial Material Symbols Rounded já empacotada pelo
  * Flutter através de material_symbols_icons. Assim o browser Kotlin e a UI
  * Flutter desenham os mesmos glifos, sem SVGs ou ícones Android clássicos
- * — exceto o contador de abas, que usa o SVG próprio tabs-counter.svg,
- * igual ao widget _TabsCountIcon do lado Flutter.
+ * — exceto os ícones próprios menu-options.svg e tabs-counter.svg,
+ * partilhados com a interface Flutter.
  */
 internal object MaterialSymbolsRounded {
     private const val FONT_ASSET =
@@ -142,6 +142,30 @@ internal object MaterialSymbolsRounded {
         }
         val baseline = dimension / 2f - (paint.ascent() + paint.descent()) / 2f
         canvas.drawText(glyph(name), dimension / 2f, baseline, paint)
+        return BitmapDrawable(context.resources, bitmap)
+    }
+
+    private fun menuOptionsSvg(context: Context, color: Int): SVG {
+        val loader = FlutterInjector.instance().flutterLoader()
+        val assetKey = loader.getLookupKeyForAsset("assets/icons/svg/regular/menu-options.svg")
+        val markup = context.assets.open(assetKey).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val hex = String.format(Locale.US, "#%06X", color and 0x00FFFFFF)
+        val rgb = "rgb(${android.graphics.Color.red(color)}," +
+            "${android.graphics.Color.green(color)}," +
+            "${android.graphics.Color.blue(color)})"
+        return SVG.getFromString(
+            markup.replace("#000000", hex).replace("rgb(0,0,0)", rgb)
+        )
+    }
+
+    fun menuOptionsDrawable(context: Context, color: Int, sizePx: Int): Drawable {
+        val dimension = sizePx.coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(dimension, dimension, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val svg = menuOptionsSvg(context, color)
+        svg.documentWidth = dimension.toFloat()
+        svg.documentHeight = dimension.toFloat()
+        svg.renderToCanvas(canvas, RectF(0f, 0f, dimension.toFloat(), dimension.toFloat()))
         return BitmapDrawable(context.resources, bitmap)
     }
 

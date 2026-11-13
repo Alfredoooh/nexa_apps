@@ -10,8 +10,6 @@ const Map<String, String> enCoreTranslations = <String, String>{
     'more_options': 'More options', 'ai_mode': 'AI mode', 'force_dark': 'Force dark mode on websites',
     'follow_app_theme': 'Websites follow app theme', 'adaptive_toolbar': 'Adaptive toolbar color',
     'no_history': 'No history', 'select_language': 'Choose language',
-      'file_viewer_android_only': 'This file viewer is available on Android only.',
-    'file_open_failed': 'Could not open this file.',
   };
 
 const Map<String, String> enExtraTranslations = <String, String>{
@@ -95,6 +93,12 @@ const Map<String, String> enScreenTranslations = <String, String>{
   };
 
 const Map<String, String> enTranslations = <String, String>{
+    'desktop_site': 'Desktop site',
+    'desktop_site_off': 'Turn off desktop site',
+    'font_size': 'Font size',
+    'page_zoom': 'Page zoom',
+    'print_page': 'Print page',
+    'share_page': 'Share page',
   ...enScreenTranslations,
   ...enExtraTranslations,
   ...enCoreTranslations,

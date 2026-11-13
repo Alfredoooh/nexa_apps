@@ -10,8 +10,6 @@ const Map<String, String> deCoreTranslations = <String, String>{
     'more_options': 'Weitere Optionen', 'ai_mode': 'KI-Modus', 'force_dark': 'Dunkelmodus auf Websites erzwingen',
     'follow_app_theme': 'Websites folgen dem App-Design', 'adaptive_toolbar': 'Adaptive Symbolleiste',
     'no_history': 'Kein Verlauf', 'select_language': 'Sprache auswählen',
-      'file_viewer_android_only': 'Dieser Dateibetrachter ist nur unter Android verfügbar.',
-    'file_open_failed': 'Diese Datei konnte nicht geöffnet werden.',
   };
 
 const Map<String, String> deExtraTranslations = <String, String>{
@@ -95,6 +93,12 @@ const Map<String, String> deScreenTranslations = <String, String>{
   };
 
 const Map<String, String> deTranslations = <String, String>{
+    'desktop_site': 'Desktop-Version',
+    'desktop_site_off': 'Desktop-Version deaktivieren',
+    'font_size': 'Schriftgröße',
+    'page_zoom': 'Seitenzoom',
+    'print_page': 'Seite drucken',
+    'share_page': 'Seite teilen',
   ...deScreenTranslations,
   ...deExtraTranslations,
   ...deCoreTranslations,

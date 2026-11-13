@@ -10,8 +10,6 @@ const Map<String, String> esCoreTranslations = <String, String>{
     'more_options': 'Más opciones', 'ai_mode': 'Modo IA', 'force_dark': 'Forzar modo oscuro en sitios',
     'follow_app_theme': 'Los sitios siguen el tema de la app', 'adaptive_toolbar': 'Barra de herramientas adaptable',
     'no_history': 'Sin historial', 'select_language': 'Elegir idioma',
-      'file_viewer_android_only': 'Este visor de archivos solo está disponible en Android.',
-    'file_open_failed': 'No se pudo abrir este archivo.',
   };
 
 const Map<String, String> esExtraTranslations = <String, String>{
@@ -95,6 +93,12 @@ const Map<String, String> esScreenTranslations = <String, String>{
   };
 
 const Map<String, String> esTranslations = <String, String>{
+    'desktop_site': 'Sitio para ordenador',
+    'desktop_site_off': 'Desactivar sitio para ordenador',
+    'font_size': 'Tamaño de fuente',
+    'page_zoom': 'Zoom de página',
+    'print_page': 'Imprimir página',
+    'share_page': 'Compartir página',
   ...esScreenTranslations,
   ...esExtraTranslations,
   ...esCoreTranslations,

@@ -7,8 +7,6 @@ const Map<String, String> zhCoreTranslations = <String, String>{
     'more_options': '更多选项', 'ai_mode': 'AI 模式', 'force_dark': '强制网站使用深色模式',
     'follow_app_theme': '网站跟随应用主题', 'adaptive_toolbar': '自适应工具栏颜色', 'no_history': '没有历史记录',
     'select_language': '选择语言',
-      'file_viewer_android_only': '此文件查看器仅适用于 Android。',
-    'file_open_failed': '无法打开此文件。',
   };
 
 const Map<String, String> zhExtraTranslations = <String, String>{
@@ -89,6 +87,12 @@ const Map<String, String> zhScreenTranslations = <String, String>{
   };
 
 const Map<String, String> zhTranslations = <String, String>{
+    'desktop_site': '桌面版网站',
+    'desktop_site_off': '关闭桌面版网站',
+    'font_size': '字体大小',
+    'page_zoom': '页面缩放',
+    'print_page': '打印页面',
+    'share_page': '分享页面',
   ...zhScreenTranslations,
   ...zhExtraTranslations,
   ...zhCoreTranslations,
