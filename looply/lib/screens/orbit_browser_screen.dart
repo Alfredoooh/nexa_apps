@@ -9,6 +9,7 @@ import '../browser_library.dart';
 import '../localization.dart';
 import '../models.dart';
 import '../shell/shell_tab_request.dart';
+import '../shell/fade_page_route.dart';
 import 'bookmarks_screen.dart';
 import 'downloads_screen.dart';
 import 'history_screen.dart';
@@ -347,9 +348,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (!mounted) return;
 
     final routeTabId = widget.tabId;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => page),
-    );
+    final route = page is SearchScreen
+        ? FadePageRoute<void>(builder: (_) => page)
+        : MaterialPageRoute<void>(builder: (_) => page);
+    await Navigator.of(context).push<void>(route);
 
     // A SearchScreen pode ter ativado outra aba. Não reabra a antiga por cima
     // dela: isso provocava um segundo carregamento após escolher um resultado.

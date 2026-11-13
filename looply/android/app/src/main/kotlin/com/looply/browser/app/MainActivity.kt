@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
+import java.io.File
 import android.util.Base64
 import android.content.Context
 import android.content.Intent
@@ -67,6 +68,8 @@ class MainActivity : FlutterActivity() {
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val ORBIT_BROWSER_REQUEST_CODE = 7418
         private const val PREF_AI_SEARCH_ENABLED = "looply_ai_search_enabled"
+        private const val ORBIT_TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
+        private const val MAX_ORBIT_STATE_CHARS = 3_000_000
         private var nativeDownloadChannel: MethodChannel? = null
         private var nativeDownloadBridgeReady = false
         private val pendingNativeDownloadEvents = java.util.ArrayDeque<HashMap<String, Any?>>()
@@ -163,6 +166,9 @@ class MainActivity : FlutterActivity() {
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
                     "openNativeBrowser" -> openNativeBrowser(call, result)
+                    "openNativeFileViewer" -> openNativeFileViewer(call, result)
+                    "exportOrbitSessions" -> exportOrbitSessions(result)
+                    "importOrbitSessions" -> importOrbitSessions(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -599,6 +605,60 @@ class MainActivity : FlutterActivity() {
             pendingOrbitBrowserResult = null
             result.error("native_browser_unavailable", error.message, null)
         }
+    }
+
+    private fun openNativeFileViewer(call: MethodCall, result: MethodChannel.Result) {
+        val rawPath = call.argument<String>("path")?.takeIf { it.isNotBlank() }
+        if (rawPath == null) {
+            result.error("invalid_file_path", "O caminho do ficheiro está vazio.", null)
+            return
+        }
+        val file = runCatching { File(rawPath).canonicalFile }.getOrNull()
+        val root = runCatching { File(applicationInfo.dataDir).canonicalFile }.getOrNull()
+        if (file == null || root == null || !file.isFile ||
+            !file.path.startsWith(root.path + File.separator)) {
+            result.error("file_not_available", "O ficheiro não existe ou não pertence ao armazenamento privado da aplicação.", null)
+            return
+        }
+        try {
+            val viewer = Intent(this, NativeFileViewerActivity::class.java).apply {
+                putExtra(NativeFileViewerActivity.EXTRA_PATH, file.path)
+                putExtra(NativeFileViewerActivity.EXTRA_NAME, call.argument<String>("filename") ?: file.name)
+                putExtra(NativeFileViewerActivity.EXTRA_MIME, call.argument<String>("mimeType") ?: "")
+            }
+            startActivity(viewer)
+            overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("file_viewer_failed", error.message ?: "Não foi possível abrir o visualizador.", null)
+        }
+    }
+
+    private fun exportOrbitSessions(result: MethodChannel.Result) {
+        val sessions = getSharedPreferences(ORBIT_TAB_STATE_PREFS, Context.MODE_PRIVATE)
+            .all
+            .filter { (key, value) -> key.startsWith("tab_") && value is String && value.length <= MAX_ORBIT_STATE_CHARS }
+            .mapValues { it.value as String }
+        result.success(sessions)
+    }
+
+    private fun importOrbitSessions(call: MethodCall, result: MethodChannel.Result) {
+        val raw = call.argument<Map<*, *>>("sessions")
+        if (raw == null) {
+            result.error("invalid_orbit_sessions", "O backup não contém sessões nativas válidas.", null)
+            return
+        }
+        val editor = getSharedPreferences(ORBIT_TAB_STATE_PREFS, Context.MODE_PRIVATE).edit().clear()
+        var accepted = 0
+        raw.forEach { (key, value) ->
+            if (key is String && key.matches(Regex("tab_[A-Za-z0-9_-]{1,100}")) &&
+                value is String && value.length <= MAX_ORBIT_STATE_CHARS) {
+                editor.putString(key, value)
+                accepted++
+            }
+        }
+        editor.apply()
+        result.success(accepted)
     }
 
     /** Mostra um diálogo Android real, mantendo o conteúdo de texto em Views nativas. */

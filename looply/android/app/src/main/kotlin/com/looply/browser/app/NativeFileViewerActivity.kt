@@ -17,6 +17,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -44,6 +45,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var sourceFile: File
+    private lateinit var webViewAssetLoader: WebViewAssetLoader
     private var isDark = false
     private var isPureBlack = false
 
@@ -69,6 +71,25 @@ class NativeFileViewerActivity : AppCompatActivity() {
             finish()
             return
         }
+        val downloadsDirectory = sourceFile.parentFile?.canonicalFile
+        val internalRoot = File(applicationInfo.dataDir).canonicalFile
+        // path_provider grava em <dataDir>/app_flutter/downloads e não
+        // necessariamente em Context.filesDir. O AssetLoader pode servir
+        // uma subpasta dedicada de dataDir; nunca se expõe dataDir inteiro.
+        if (downloadsDirectory == null ||
+            !downloadsDirectory.path.startsWith(internalRoot.path + File.separator) ||
+            downloadsDirectory.name != "downloads") {
+            finish()
+            return
+        }
+
+        // WebViewAssetLoader publica somente a pasta de downloads através de
+        // uma origem HTTPS local. Isto evita as restrições e falhas de acesso
+        // entre file://android_asset e file://data/data, inclusive para WebP.
+        webViewAssetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/viewer/", WebViewAssetLoader.InternalStoragePathHandler(this, downloadsDirectory))
+            .build()
 
         val root = FrameLayout(this).apply {
             setBackgroundColor(surfaceColor)
@@ -90,9 +111,9 @@ class NativeFileViewerActivity : AppCompatActivity() {
             isHorizontalScrollBarEnabled = false
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.allowFileAccess = true
+            settings.allowFileAccess = false
             settings.allowContentAccess = false
-            settings.allowFileAccessFromFileURLs = true
+            settings.allowFileAccessFromFileURLs = false
             settings.allowUniversalAccessFromFileURLs = false
             settings.mediaPlaybackRequiresUserGesture = true
             settings.builtInZoomControls = false
@@ -100,13 +121,22 @@ class NativeFileViewerActivity : AppCompatActivity() {
             settings.loadsImagesAutomatically = true
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                ): android.webkit.WebResourceResponse? {
+                    val url = request?.url ?: return null
+                    return webViewAssetLoader.shouldInterceptRequest(url)
+                }
+
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean {
-                    val scheme = request?.url?.scheme?.lowercase(Locale.ROOT)
-                    // Mantém o visualizador isolado: apenas recursos locais e data URLs.
-                    return scheme !in setOf("file", "data", "about", "blob")
+                    val uri = request?.url ?: return true
+                    // Só permite navegação dentro do visualizador local.
+                    return uri.host != WebViewAssetLoader.DEFAULT_DOMAIN ||
+                        uri.scheme != "https"
                 }
             }
             addJavascriptInterface(ViewerBridge(this@NativeFileViewerActivity), "AndroidViewer")
@@ -170,15 +200,26 @@ class NativeFileViewerActivity : AppCompatActivity() {
             "audio" -> "audio-viewer.html"
             else -> "document-viewer.html"
         }
-        val params = Uri.Builder()
-            .appendQueryParameter("src", Uri.fromFile(sourceFile).toString())
+        val localFileUrl = Uri.Builder()
+            .scheme("https")
+            .authority(WebViewAssetLoader.DEFAULT_DOMAIN)
+            .appendPath("viewer")
+            .appendPath(sourceFile.name)
+            .build()
+            .toString()
+        val pageUri = Uri.Builder()
+            .scheme("https")
+            .authority(WebViewAssetLoader.DEFAULT_DOMAIN)
+            .appendPath("assets")
+            .appendPath("screens")
+            .appendPath(page)
+            .appendQueryParameter("src", localFileUrl)
             .appendQueryParameter("name", name)
             .appendQueryParameter("kind", kind)
             .appendQueryParameter("theme", if (isDark) "dark" else "light")
             .appendQueryParameter("pure", if (isPureBlack) "1" else "0")
             .build()
-            .encodedQuery
-        webView.loadUrl("file:///android_asset/screens/$page?$params")
+        webView.loadUrl(pageUri.toString())
     }
 
     private fun readTextDocument(): String {

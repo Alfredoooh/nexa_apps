@@ -21,6 +21,9 @@ import android.print.PrintAttributes
 import android.print.PrintManager
 import android.text.InputType
 import android.view.Gravity
+import android.widget.PopupWindow
+import android.widget.ScrollView
+import android.transition.Fade
 import android.view.animation.DecelerateInterpolator
 import android.view.KeyEvent
 import android.view.View
@@ -44,7 +47,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -97,7 +99,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         private const val STATE_SCROLL_Y = "orbit.scroll.y"
 
         private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
-        private const val MAX_TAB_STATE_CHARS = 1_400_000
+        private const val MAX_TAB_STATE_CHARS = 3_000_000
 
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -459,24 +461,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(dp(42), dp(46))
         )
 
+        // Mantém os três pontos verticais do Orbit; o menu usa PopupWindow
+        // arredondado, mas o botão original da barra não é substituído.
         moreButton = actionButton("more_vert", menuText("options", "More options")) {
             showBrowserPopupMenu(moreButton)
-        }.apply {
-            removeAllViews()
-            addView(
-                ImageView(this@OrbitBrowserActivity).apply {
-                    setImageDrawable(
-                        MaterialSymbolsRounded.menuOptionsDrawable(
-                            this@OrbitBrowserActivity,
-                            toolbarText(),
-                            dp(25),
-                        )
-                    )
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    contentDescription = menuText("options", "More options")
-                },
-                android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER),
-            )
         }
         toolbar.addView(moreButton, LinearLayout.LayoutParams(dp(42), dp(46)))
 
@@ -849,6 +837,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         pendingRestoredScrollY = null
                     }
                     applyPageZoomToCurrentPage()
+                    view.postDelayed({
+                        if (!isFinishing && !incognito && view.url == currentUrl) {
+                            persistTabState()
+                        }
+                    }, 350L)
                 }
             }
 
@@ -961,7 +954,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     symbol,
                     toolbarText(),
-                    23f,
+                    21f,
                 ),
                 android.widget.FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER),
             )
@@ -999,8 +992,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun tintMenuOptionsButton(color: Int) {
         if (!::moreButton.isInitialized) return
-        val icon = (moreButton as? ViewGroup)?.getChildAt(0) as? ImageView ?: return
-        icon.setImageDrawable(MaterialSymbolsRounded.menuOptionsDrawable(this, color, dp(25)))
+        val icon = (moreButton as? ViewGroup)?.getChildAt(0) as? TextView ?: return
+        icon.setTextColor(color)
     }
 
     private fun showAddressDialog() {
@@ -1091,863 +1084,226 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun showBrowserPopupMenu(anchor: View) {
         if (previewOnly || isFinishing || !anchor.isAttachedToWindow) return
-        val popup = PopupMenu(this, anchor, Gravity.END).apply {
-            setForceShowIcon(true)
+
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val popupWidth = minOf(dp(420), screenWidth - dp(24)).coerceAtLeast(dp(260))
+        // Não ocupar o ecrã todo: o menu é um painel compacto com a lista
+        // interna a rolar, sem empurrar o conteúdo até ao fundo do telemóvel.
+        val maxPopupHeight = (screenHeight * .62f).toInt().coerceAtLeast(dp(300))
+        val surface = when {
+            !dark -> Color.WHITE
+            pureBlack -> Color.rgb(16, 16, 16)
+            else -> Color.rgb(43, 45, 48)
         }
-        val menu = popup.menu
-        val iconSize = dp(22)
-        fun add(id: Int, label: String, glyph: String) {
-            menu.add(0, id, menu.size(), label).icon =
-                MaterialSymbolsRounded.bitmapDrawable(this, glyph, secondaryText, iconSize)
+        val quickSurface = when {
+            !dark -> Color.rgb(241, 243, 244)
+            pureBlack -> Color.rgb(25, 25, 25)
+            else -> Color.rgb(31, 33, 36)
         }
-
-        add(1, menuText("bookmark", "Add bookmark"), "star")
-        if (!incognito) {
-            add(2, menuText("bookmarks", "Bookmarks"), "bookmarks")
-            add(3, menuText("history", "History"), "history")
-            add(4, menuText("downloads", "Downloads"), "download")
-        }
-        menu.add(0, 5, menu.size(), menuText("reload", "Reload page"))
-            .setIcon(MaterialSymbolsRounded.bitmapDrawable(this, "refresh", secondaryText, iconSize))
-        add(6, menuText("find", "Find in page"), "search")
-        add(7, menuText(if (desktopMode) "desktopOff" else "desktop", if (desktopMode) "Turn off desktop site" else "Desktop site"), "desktop_windows")
-        add(8, menuText("translate", "Translate"), "translate")
-        add(9, menuText("fontSize", "Font size"), "text_fields")
-        add(10, menuText("pageZoom", "Page zoom"), "zoom_in")
-        add(11, menuText("print", "Print page"), "print")
-        add(12, menuText("copy", "Copy address"), "content_copy")
-        add(13, menuText("share", "Share page"), "share")
-        add(14, menuText("siteInfo", "Site information"), "info")
-        add(15, menuText("settings", "Settings"), "settings")
-        add(16, menuText("home", "Home"), "home")
-        add(17, menuText("newTab", "New tab"), "add")
-        add(18, menuText("tabs", "Tabs"), "tab")
-
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> finishToFlutter("bookmark")
-                2 -> finishToFlutter("bookmarks")
-                3 -> finishToFlutter("history")
-                4 -> finishToFlutter("downloads")
-                5 -> webView.reload()
-                6 -> openFindBar()
-                7 -> toggleDesktopMode()
-                8 -> translatePage()
-                9 -> showScaleCard(pageScale = false)
-                10 -> showScaleCard(pageScale = true)
-                11 -> printPage()
-                12 -> copyAddress()
-                13 -> shareAddress()
-                14 -> showSiteInfo()
-                15 -> finishToFlutter("settings")
-                16 -> finishToFlutter("home")
-                17 -> finishToFlutter("newTab")
-                18 -> finishToFlutter("tabs")
-            }
-            true
-        }
-        popup.show()
-    }
-
-    private fun addQuickAction(
-        parent: LinearLayout,
-        icon: String,
-        label: String,
-        enabled: Boolean,
-        action: () -> Unit
-    ) {
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
-            alpha = if (enabled) 1f else .38f
-            isClickable = enabled
-            isFocusable = enabled
-            contentDescription = label
-            setOnClickListener {
-                if (enabled) action()
-            }
-        }
-
-        val circle = android.widget.FrameLayout(this).apply {
-            background = rounded(toolbarPillColor(), 99)
-            addView(
-                MaterialSymbolsRounded.textView(
-                    this@OrbitBrowserActivity,
-                    icon,
-                    toolbarText(),
-                    24f,
-                ),
-                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
-            )
-        }
-        column.addView(
-            circle,
-            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
-        )
-
-        column.addView(
-            TextView(this).apply {
-                text = label
-                textSize = 10.5f
-                setTextColor(secondaryText)
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                maxLines = 1
-                isSingleLine = true
-            },
-            LinearLayout.LayoutParams(-1, dp(23))
-        )
-
-        parent.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
-    }
-
-    private fun addTabCounterQuickAction(
-        parent: LinearLayout,
-        label: String,
-        enabled: Boolean,
-        action: () -> Unit
-    ) {
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL
-            alpha = if (enabled) 1f else .38f
-            isClickable = enabled
-            isFocusable = enabled
-            contentDescription = label
-            setOnClickListener {
-                if (enabled) action()
-            }
-        }
-
-        val circle = android.widget.FrameLayout(this).apply {
-            background = rounded(toolbarPillColor(), 99)
-
-            val counter = ImageView(this@OrbitBrowserActivity).apply {
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setImageDrawable(
-                    MaterialSymbolsRounded.tabsCounterDrawable(
-                        this@OrbitBrowserActivity,
-                        tabCount,
-                        toolbarText(),
-                        dp(25)
-                    )
-                )
-            }
-
-            addView(
-                counter,
-                android.widget.FrameLayout.LayoutParams(
-                    dp(26),
-                    dp(26),
-                    Gravity.CENTER
-                )
-            )
-        }
-
-        column.addView(
-            circle,
-            LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
-        )
-
-        column.addView(
-            TextView(this).apply {
-                text = label
-                textSize = 10.5f
-                setTextColor(secondaryText)
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-                maxLines = 1
-                isSingleLine = true
-            },
-            LinearLayout.LayoutParams(-1, dp(23))
-        )
-
-        parent.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
-    }
-
-    private fun addSheetItem(
-        parent: LinearLayout,
-        icon: String,
-        label: String,
-        action: () -> Unit
-    ) {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
-            background = selectableBackground()
-            isClickable = true
-            isFocusable = true
-            minimumHeight = dp(56)
-            setOnClickListener { action() }
-        }
-
-        val iconCell = android.widget.FrameLayout(this).apply {
-            addView(
-                MaterialSymbolsRounded.textView(
-                    this@OrbitBrowserActivity,
-                    icon,
-                    secondaryText,
-                    23f,
-                ),
-                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
-            )
-        }
-        row.addView(iconCell, LinearLayout.LayoutParams(dp(44), dp(56)))
-
-        row.addView(
-            TextView(this).apply {
-                text = label
-                textSize = 14f
-                setTextColor(primaryText)
-                gravity = Gravity.CENTER_VERTICAL
-                includeFontPadding = false
-                maxLines = 2
-            },
-            LinearLayout.LayoutParams(0, dp(56), 1f).apply {
-                marginStart = dp(4)
-            }
-        )
-
-        parent.addView(row, LinearLayout.LayoutParams(-1, dp(56)))
-    }
-
-    private fun sheetDivider(): View {
-        return View(this).apply {
-            setBackgroundColor(
-                if (dark) 0x33FFFFFF else 0x1F000000
-            )
-
-            layoutParams = LinearLayout.LayoutParams(-1, dp(1)).apply {
-                topMargin = dp(6)
-                bottomMargin = dp(6)
-            }
-        }
-    }
-
-    private fun showElementSheet(target: String, hitType: Int) {
-        val isImage = hitType == WebView.HitTestResult.IMAGE_TYPE ||
-            hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-
-        val isLink = hitType == WebView.HitTestResult.ANCHOR_TYPE ||
-            hitType == WebView.HitTestResult.SRC_ANCHOR_TYPE
-
-        val dialog = BottomSheetDialog(this)
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(16), dp(18), dp(20))
-            background = rounded(pageBg, 22)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = rounded(surface, 27)
+            clipToOutline = true
         }
 
-        content.addView(
-            TextView(this).apply {
-                text = when {
-                    isImage -> "Imagem"
-                    isLink -> "Ligação"
-                    else -> "Multimédia"
-                }
-                textSize = 16f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                maxLines = 1
-            },
-            LinearLayout.LayoutParams(-1, dp(36))
-        )
-
-        content.addView(
-            TextView(this).apply {
-                text = target
-                textSize = 12f
-                setTextColor(secondaryText)
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            },
-            LinearLayout.LayoutParams(-1, dp(44))
-        )
-
-        addSheetItem(content, "open_in_new", "Abrir num novo separador") {
-            dialog.dismiss()
-            finishToFlutter("newTab", target)
-        }
-
-        addSheetItem(content, "content_copy", "Copiar ligação") {
-            dialog.dismiss()
-            copyText(target)
-        }
-
-        addSheetItem(content, "share", "Partilhar") {
-            dialog.dismiss()
-            shareText(target)
-        }
-
-        if (isLink && !incognito) {
-            addSheetItem(content, "star", "Adicionar aos favoritos") {
-                dialog.dismiss()
-                finishToFlutter("bookmarkUrl", target)
-            }
-        }
-
-        if (isImage && !incognito) {
-            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
-                dialog.dismiss()
-                startDownload(target, null, null, null)
-            }
-        }
-
-        dialog.setContentView(content)
-        dialog.show()
-    }
-
-    private fun showDownloadsSheet() {
-        val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-        val dialog = BottomSheetDialog(this)
-        val scroll = android.widget.ScrollView(this)
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(18))
-            background = rounded(pageBg, 22)
-        }
-
-        val handle = View(this).apply {
-            background = rounded(
-                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
-                99
-            )
-        }
-
-        content.addView(
-            handle,
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(14)
-            }
-        )
-
-        content.addView(
-            TextView(this).apply {
-                text = "Transferências"
-                textSize = 18f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            },
-            LinearLayout.LayoutParams(-1, dp(42))
-        )
-
-        val query = DownloadManager.Query().setFilterByStatus(
-            DownloadManager.STATUS_PENDING or
-                DownloadManager.STATUS_RUNNING or
-                DownloadManager.STATUS_PAUSED or
-                DownloadManager.STATUS_SUCCESSFUL or
-                DownloadManager.STATUS_FAILED
-        )
-
-        var count = 0
-
-        manager.query(query)?.use { cursor ->
-            val idColumn = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
-            val titleColumn = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
-            val statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-            val downloadedColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-            val totalColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-            val reasonColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-
-            while (cursor.moveToNext()) {
-                if (idColumn < 0 || titleColumn < 0 || statusColumn < 0) {
-                    continue
-                }
-
-                count++
-
-                val id = cursor.getLong(idColumn)
-                val filename =
-                    cursor.getString(titleColumn)?.ifBlank { "Ficheiro" } ?: "Ficheiro"
-
-                val status = cursor.getInt(statusColumn)
-                val downloaded =
-                    if (downloadedColumn >= 0) cursor.getLong(downloadedColumn) else 0L
-                val total =
-                    if (totalColumn >= 0) cursor.getLong(totalColumn) else -1L
-                val reason =
-                    if (reasonColumn >= 0) cursor.getInt(reasonColumn) else 0
-
-                val statusLabel = when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> "Concluído"
-                    DownloadManager.STATUS_FAILED ->
-                        "Falhou${if (reason != 0) " · $reason" else ""}"
-
-                    DownloadManager.STATUS_PAUSED -> "Pausado"
-
-                    DownloadManager.STATUS_RUNNING -> {
-                        if (total > 0) {
-                            "A transferir · ${((downloaded * 100) / total).coerceIn(0, 100)}%"
-                        } else {
-                            "A transferir"
-                        }
-                    }
-
-                    else -> "Na fila"
-                }
-
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(12), dp(9), dp(12), dp(9))
-                    background = selectableBackground()
-                    isClickable = true
-                    isFocusable = true
-
-                    setOnClickListener {
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            openDownloadedFile(manager, id)
-                        } else {
-                            Toast.makeText(
-                                this@OrbitBrowserActivity,
-                                statusLabel,
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-
-                    setOnLongClickListener {
-                        MaterialAlertDialogBuilder(this@OrbitBrowserActivity)
-                            .setTitle("Remover transferência?")
-                            .setMessage(filename)
-                            .setNegativeButton("Cancelar", null)
-                            .setPositiveButton("Remover") { _, _ ->
-                                manager.remove(id)
-                                showDownloadsSheetAfterDismiss(dialog)
-                            }
-                            .show()
-
-                        true
-                    }
-                }
-
-                row.addView(
-                    TextView(this).apply {
-                        text = filename
-                        textSize = 14f
-                        maxLines = 1
-                        ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-                        setTextColor(primaryText)
-                    },
-                    LinearLayout.LayoutParams(-1, -2)
-                )
-
-                row.addView(
-                    TextView(this).apply {
-                        text = statusLabel
-                        textSize = 12f
-                        setTextColor(secondaryText)
-                        setPadding(0, dp(3), 0, 0)
-                    },
-                    LinearLayout.LayoutParams(-1, -2)
-                )
-
-                if (status == DownloadManager.STATUS_RUNNING && total > 0) {
-                    val bar = ProgressBar(
-                        this,
-                        null,
-                        android.R.attr.progressBarStyleHorizontal
-                    ).apply {
-                        max = 100
-                        progress =
-                            ((downloaded * 100) / total).toInt().coerceIn(0, 100)
-                        progressTintList =
-                            android.content.res.ColorStateList.valueOf(accent)
-                    }
-
-                    row.addView(
-                        bar,
-                        LinearLayout.LayoutParams(-1, dp(3)).apply {
-                            topMargin = dp(8)
-                        }
-                    )
-                }
-
-                content.addView(row, LinearLayout.LayoutParams(-1, dp(66)))
-                content.addView(sheetDivider())
-            }
-        }
-
-        if (count == 0) {
-            content.addView(
-                TextView(this).apply {
-                    text = "Ainda não existem transferências."
-                    textSize = 14f
-                    setTextColor(secondaryText)
-                    gravity = Gravity.CENTER
-                    setPadding(0, dp(26), 0, dp(30))
-                },
-                LinearLayout.LayoutParams(-1, -2)
-            )
-        }
-
-        scroll.addView(content)
-        dialog.setContentView(scroll)
-        dialog.show()
-    }
-
-    private fun showDownloadsSheetAfterDismiss(dialog: BottomSheetDialog) {
-        dialog.dismiss()
-
-        android.os.Handler(mainLooper).postDelayed({
-            if (!isFinishing) {
-                showDownloadsSheet()
-            }
-        }, 180)
-    }
-
-    private fun openDownloadedFile(manager: DownloadManager, id: Long) {
-        try {
-            val uri = manager.getUriForDownloadedFile(id)
-
-            if (uri == null) {
-                Toast.makeText(
-                    this,
-                    "O ficheiro ainda não está disponível.",
-                    Toast.LENGTH_SHORT
-                ).show()
-                return
-            }
-
-            val mime = manager.getMimeTypeForDownloadedFile(id) ?: "*/*"
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            startActivity(Intent.createChooser(intent, "Abrir ficheiro"))
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não existe uma aplicação compatível para abrir este ficheiro.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openFindBar() {
-        findBar.visibility = View.VISIBLE
-        findField.requestFocus()
-
-        findField.post {
-            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-                .showSoftInput(findField, InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
-
-    private fun closeFindBar() {
-        webView.clearMatches()
-        findField.setText("")
-        findBar.visibility = View.GONE
-
-        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-            .hideSoftInputFromWindow(findField.windowToken, 0)
-    }
-
-    private fun toggleDesktopMode() {
-        desktopMode = !desktopMode
-
-        webView.settings.userAgentString = if (desktopMode) {
-            DESKTOP_UA
-        } else {
-            originalUserAgent ?: WebSettings.getDefaultUserAgent(this)
-        }
-
-        webView.settings.useWideViewPort = true
-        webView.settings.loadWithOverviewMode = desktopMode
-        webView.reload()
-
-        Toast.makeText(
-            this,
-            if (desktopMode) {
-                "Site para computador ativado"
-            } else {
-                "Site para computador desativado"
-            },
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-
-    private fun translatePage() {
-        val targetLanguage = menuLabels.optString("targetLanguage", "en")
-            .takeIf { it.matches(Regex("^[a-zA-Z-]{2,8}$")) } ?: "en"
-        val translateUrl =
-            "https://translate.google.com/translate?sl=auto&tl=$targetLanguage&u=" +
-                Uri.encode(currentUrl)
-
-        webView.loadUrl(translateUrl)
-    }
-
-    private fun showScaleCard(pageScale: Boolean) {
-        val title = if (pageScale) "Zoom da página" else "Tamanho da fonte"
-        val initialValue = if (pageScale) pageZoomPercent else textSizePercent
-        val dialog = BottomSheetDialog(this)
-
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(18), dp(22), dp(18))
-            background = rounded(pageBg, 32)
-        }
-
-        val handle = View(this).apply {
-            background = rounded(
-                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
-                99
-            )
-        }
-
-        card.addView(
-            handle,
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(18)
-            }
-        )
-
-        val heading = LinearLayout(this).apply {
+        val quickRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        heading.addView(
-            MaterialSymbolsRounded.textView(
-                this,
-                if (pageScale) "zoom_in" else "text_fields",
-                primaryText,
-                24f,
-                title
-            ),
-            LinearLayout.LayoutParams(dp(30), dp(30)).apply {
-                marginEnd = dp(12)
-            }
-        )
-
-        heading.addView(
-            TextView(this).apply {
-                text = title
-                textSize = 18f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.create(
-                    "sans-serif-medium",
-                    android.graphics.Typeface.NORMAL
-                )
-                includeFontPadding = false
-            },
-            LinearLayout.LayoutParams(0, dp(38), 1f)
-        )
-
-        val valueLabel = TextView(this).apply {
-            text = "$initialValue%"
-            textSize = 15f
-            setTextColor(primaryText)
             gravity = Gravity.CENTER
-            includeFontPadding = false
-            background = rounded(toolbarPillColor(), 99)
-            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setPadding(dp(5), dp(7), dp(5), dp(9))
         }
 
-        heading.addView(valueLabel, LinearLayout.LayoutParams(-2, dp(34)))
-        card.addView(heading)
-
-        val sliderContext = android.view.ContextThemeWrapper(
-            this,
-            R.style.ThemeOverlay_BrowseIt_ExpressiveSlider
-        )
-
-        val slider = Slider(
-            sliderContext,
-            null,
-            com.google.android.material.R.attr.sliderStyle
-        ).apply {
-            valueFrom = 50f
-            valueTo = 200f
-            stepSize = 5f
-            value = initialValue.coerceIn(50, 200).toFloat()
-            contentDescription = title
-            setThumbTintList(
-                android.content.res.ColorStateList.valueOf(accent)
-            )
-            setHaloTintList(
-                android.content.res.ColorStateList.valueOf(
-                    (accent and 0x00FFFFFF) or 0x26000000
+        fun quickAction(glyph: String, description: String, enabled: Boolean = true, action: () -> Unit) {
+            val frame = android.widget.FrameLayout(this).apply {
+                isClickable = enabled
+                isFocusable = enabled
+                alpha = if (enabled) 1f else .38f
+                background = rounded(quickSurface, 999)
+                addView(
+                    ImageView(this@OrbitBrowserActivity).apply {
+                        setImageDrawable(
+                            MaterialSymbolsRounded.bitmapDrawable(
+                                this@OrbitBrowserActivity,
+                                glyph,
+                                primaryText,
+                                dp(21),
+                            )
+                        )
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        contentDescription = description
+                    },
+                    android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER),
                 )
-            )
-            setTrackActiveTintList(
-                android.content.res.ColorStateList.valueOf(accent)
-            )
-            setTrackInactiveTintList(
-                android.content.res.ColorStateList.valueOf(
-                    if (dark) 0xFF53565B.toInt() else 0xFFDADCE0.toInt()
-                )
-            )
-        }
-
-        card.addView(
-            slider,
-            LinearLayout.LayoutParams(-1, dp(58)).apply {
-                topMargin = dp(12)
-            }
-        )
-
-        val rangeLabels = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        rangeLabels.addView(
-            TextView(this).apply {
-                text = "50%"
-                textSize = 12f
-                setTextColor(secondaryText)
-                includeFontPadding = false
-            },
-            LinearLayout.LayoutParams(0, dp(22), 1f)
-        )
-
-        rangeLabels.addView(
-            TextView(this).apply {
-                text = "200%"
-                textSize = 12f
-                setTextColor(secondaryText)
-                gravity = Gravity.END
-                includeFontPadding = false
-            },
-            LinearLayout.LayoutParams(0, dp(22), 1f)
-        )
-
-        card.addView(rangeLabels)
-
-        slider.addOnChangeListener { _, value, fromUser ->
-            val selected = ((value.roundToInt() / 5) * 5).coerceIn(50, 200)
-            valueLabel.text = "$selected%"
-
-            if (fromUser) {
-                if (pageScale) {
-                    pageZoomPercent = selected
-                    applyPageZoomToCurrentPage()
-                } else {
-                    textSizePercent = selected
-                    webView.settings.textZoom = selected
+                setOnClickListener {
+                    if (enabled) {
+                        popupWindowRef?.dismiss()
+                        action()
+                    }
                 }
             }
+            quickRow.addView(
+                frame,
+                LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                    marginStart = dp(3)
+                    marginEnd = dp(3)
+                },
+            )
         }
 
-        dialog.setContentView(card)
-        dialog.setOnShowListener {
-            val sheet = dialog.findViewById<android.widget.FrameLayout>(
-                com.google.android.material.R.id.design_bottom_sheet
-            ) ?: return@setOnShowListener
+        // The five top actions mirror the compact Chrome-style shortcut row.
+        quickAction("arrow_forward", menuText("forward", "Forward"), webView.canGoForward()) {
+            webView.goForward()
+        }
+        quickAction("star", menuText("bookmark", "Bookmark")) {
+            finishToFlutter("bookmark")
+        }
+        quickAction("download", menuText("downloads", "Downloads")) {
+            finishToFlutter("downloads")
+        }
+        quickAction("info", menuText("siteInfo", "Site information")) {
+            showSiteInfo()
+        }
+        quickAction("refresh", menuText("reload", "Reload page")) {
+            webView.reload()
+        }
+        content.addView(quickRow, LinearLayout.LayoutParams(-1, dp(64)))
 
-            sheet.setBackgroundColor(Color.TRANSPARENT)
-            val params = sheet.layoutParams as? ViewGroup.MarginLayoutParams
-            params?.let {
-                it.width = ViewGroup.LayoutParams.MATCH_PARENT
-                it.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                it.marginStart = dp(12)
-                it.marginEnd = dp(12)
-                it.bottomMargin = dp(12) + navigationBarInsetPx()
-                sheet.layoutParams = it
+        val dividerColor = when {
+            !dark -> Color.rgb(232, 234, 237)
+            pureBlack -> Color.rgb(41, 41, 41)
+            else -> Color.rgb(52, 54, 58)
+        }
+        val divider = View(this).apply { setBackgroundColor(dividerColor) }
+        content.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply {
+            leftMargin = dp(8)
+            rightMargin = dp(8)
+            bottomMargin = dp(5)
+        })
+
+        val menuScroll = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipToPadding = false
+            setPadding(0, 0, 0, dp(2))
+        }
+        val menuItems = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        menuScroll.addView(menuItems, ScrollView.LayoutParams(-1, -2))
+
+        fun menuRow(label: String, glyph: String, action: () -> Unit) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(13), 0, dp(13), 0)
+                minimumHeight = dp(51)
+                background = selectableBackground()
+                isClickable = true
+                isFocusable = true
+                addView(
+                    ImageView(this@OrbitBrowserActivity).apply {
+                        setImageDrawable(
+                            MaterialSymbolsRounded.bitmapDrawable(
+                                this@OrbitBrowserActivity,
+                                glyph,
+                                secondaryText,
+                                dp(21),
+                            )
+                        )
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                    },
+                    LinearLayout.LayoutParams(dp(24), dp(24)),
+                )
+                addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(14), 1))
+                addView(
+                    TextView(this@OrbitBrowserActivity).apply {
+                        text = label
+                        setTextColor(primaryText)
+                        textSize = 14f
+                        maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        gravity = Gravity.CENTER_VERTICAL
+                    },
+                    LinearLayout.LayoutParams(0, -2, 1f),
+                )
+                setOnClickListener {
+                    popupWindowRef?.dismiss()
+                    action()
+                }
             }
-
-            val behavior = BottomSheetBehavior.from(sheet)
-            behavior.skipCollapsed = true
-            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+            menuItems.addView(row, LinearLayout.LayoutParams(-1, dp(51)))
         }
 
-        dialog.show()
-    }
-
-    private fun applyPageZoomToCurrentPage() {
-        if (!::webView.isInitialized || webView.url.isNullOrBlank()) return
-
-        val target = pageZoomPercent.coerceIn(50, 200)
-        val previouslyApplied = appliedPageZoomPercent.coerceIn(50, 200)
-        if (target == previouslyApplied) return
-
-        // WebView.zoomBy recebe um fator relativo. webView.scale não é a
-        // percentagem escolhida no slider: também muda com pinch-zoom e viewport.
-        val factor = target.toFloat() / previouslyApplied.toFloat()
-        appliedPageZoomPercent = target
-        webView.zoomBy(factor.coerceIn(0.01f, 100f))
-    }
-
-    private fun statusBarInsetPx(): Int {
-        val insets = ViewCompat.getRootWindowInsets(root)
-        return insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
-            ?: systemDimension("status_bar_height")
-    }
-
-    private fun navigationBarInsetPx(): Int {
-        val insets = ViewCompat.getRootWindowInsets(root)
-        return insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
-    }
-
-    private fun systemDimension(name: String): Int {
-        val id = resources.getIdentifier(name, "dimen", "android")
-        return if (id != 0) resources.getDimensionPixelSize(id) else dp(24)
-    }
-
-    private fun printPage() {
-        try {
-            val manager = getSystemService(Context.PRINT_SERVICE) as PrintManager
-            val adapter = webView.createPrintDocumentAdapter(
-                "BrowseIt - ${hostOf(currentUrl)}"
-            )
-
-            manager.print(
-                "BrowseIt",
-                adapter,
-                PrintAttributes.Builder().build()
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não foi possível imprimir esta página.",
-                Toast.LENGTH_SHORT
-            ).show()
+        fun menuDivider() {
+            menuItems.addView(View(this).apply { setBackgroundColor(dividerColor) },
+                LinearLayout.LayoutParams(-1, dp(1)).apply {
+                    marginStart = dp(10)
+                    marginEnd = dp(10)
+                    topMargin = dp(5)
+                    bottomMargin = dp(5)
+                })
         }
+
+        menuRow(menuText("newTab", "New tab"), "add_box") {
+            finishToFlutter("newTab")
+        }
+        menuRow(menuText("tabs", "Manage tabs"), "tab") {
+            finishToFlutter("tabs")
+        }
+        if (!incognito) {
+            menuRow(menuText("bookmarks", "Bookmarks"), "bookmarks") {
+                finishToFlutter("bookmarks")
+            }
+            menuRow(menuText("history", "History"), "history") {
+                finishToFlutter("history")
+            }
+            menuDivider()
+            menuRow(menuText("downloads", "Downloads"), "download") {
+                finishToFlutter("downloads")
+            }
+        }
+        menuRow(menuText("find", "Find in page"), "search") { openFindBar() }
+        menuRow(
+            menuText(if (desktopMode) "desktopOff" else "desktop", if (desktopMode) "Turn off desktop site" else "Desktop site"),
+            "desktop_windows",
+        ) { toggleDesktopMode() }
+        menuRow(menuText("translate", "Translate"), "translate") { translatePage() }
+        menuDivider()
+        menuRow(menuText("fontSize", "Font size"), "text_fields") { showScaleCard(pageScale = false) }
+        menuRow(menuText("pageZoom", "Page zoom"), "zoom_in") { showScaleCard(pageScale = true) }
+        menuRow(menuText("print", "Print page"), "print") { printPage() }
+        menuRow(menuText("share", "Share page"), "share") { shareAddress() }
+        menuRow(menuText("settings", "Browser settings"), "settings") { finishToFlutter("settings") }
+        val menuHeight = minOf(dp(560), maxPopupHeight - dp(90)).coerceAtLeast(dp(150))
+        content.addView(menuScroll, LinearLayout.LayoutParams(-1, menuHeight))
+        val popupHeight = (menuHeight + dp(86)).coerceAtMost(maxPopupHeight)
+
+        val popup = PopupWindow(
+            content,
+            popupWidth,
+            popupHeight,
+            true,
+        ).apply {
+            setBackgroundDrawable(rounded(surface, 27))
+            setElevation(dp(18).toFloat())
+            isOutsideTouchable = true
+            isClippingEnabled = true
+            inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                enterTransition = Fade().apply { duration = 150 }
+                exitTransition = Fade().apply { duration = 110 }
+            }
+        }
+        popupWindowRef = popup
+        popup.setOnDismissListener {
+            if (popupWindowRef === popup) popupWindowRef = null
+        }
+        popup.showAsDropDown(anchor, dp(2), dp(5), Gravity.END)
     }
 
-    private fun showSiteInfo() {
-        val host = hostOf(currentUrl)
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle(menuText("siteInfo", "Site information"))
-            .setMessage("${currentTitle.ifBlank { host }}\n\n$currentUrl")
-            .setPositiveButton(menuText("close", "Close"), null)
-            .show()
-    }
-
-    private fun copyAddress() {
-        copyText(currentUrl)
-    }
-
-    private fun copyText(value: String) {
-        val clipboard =
-            getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-
-        clipboard.setPrimaryClip(
-            android.content.ClipData.newPlainText("BrowseIt", value)
-        )
-
-        Toast.makeText(this, menuText("copied", "Copied"), Toast.LENGTH_SHORT).show()
-    }
-
-    private fun shareAddress() {
-        shareText(currentUrl)
-    }
+    private var popupWindowRef: PopupWindow? = null
 
     private fun shareText(value: String) {
         val send = Intent(Intent.ACTION_SEND).apply {

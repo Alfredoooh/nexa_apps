@@ -30,7 +30,8 @@ Future<T?> showLooplyDialog<T>({
     transitionDuration: const Duration(milliseconds: 190),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       final scheme = Theme.of(dialogContext).colorScheme;
-      final surface = scheme.surfaceContainerHigh;
+      final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
+      final surface = isDark ? settingsCardColor(dialogContext) : Colors.white;
       final screenHeight = MediaQuery.sizeOf(dialogContext).height;
       return SafeArea(
         child: Center(
@@ -48,7 +49,7 @@ Future<T?> showLooplyDialog<T>({
                   surfaceTintColor: Colors.transparent,
                   elevation: 3,
                   clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(24),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                     child: SingleChildScrollView(
@@ -57,46 +58,20 @@ Future<T?> showLooplyDialog<T>({
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              if (icon != null) ...[
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: ShapeDecoration(
-                                    color: scheme.secondaryContainer,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(17),
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: AppMaterialIcon(
-                                    icon,
-                                    color: scheme.onSecondaryContainer,
-                                    size: 23,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  style: TextStyle(
-                                    color: scheme.onSurface,
-                                    fontSize: 21,
-                                    height: 1.18,
-                                    letterSpacing: -.25,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          Text(
+                            title,
+                            style: TextStyle(
+                              color: mainText(dialogContext),
+                              fontSize: 20,
+                              height: 1.2,
+                              letterSpacing: -.2,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           DefaultTextStyle.merge(
                             style: TextStyle(
-                              color: scheme.onSurfaceVariant,
+                              color: mutedText(dialogContext),
                               fontSize: 14,
                               height: 1.5,
                             ),
