@@ -7,6 +7,8 @@ const Map<String, String> jaCoreTranslations = <String, String>{
     'back': '戻る', 'home': 'ホーム', 'more_options': 'その他のオプション', 'ai_mode': 'AI モード',
     'force_dark': 'ウェブサイトをダークモードにする', 'follow_app_theme': 'サイトをアプリのテーマに合わせる',
     'adaptive_toolbar': 'アダプティブツールバー', 'no_history': '履歴はありません', 'select_language': '言語を選択',
+      'file_viewer_android_only': 'このファイルビューアは Android でのみ利用できます。',
+    'file_open_failed': 'このファイルを開けませんでした。',
   };
 
 const Map<String, String> jaExtraTranslations = <String, String>{

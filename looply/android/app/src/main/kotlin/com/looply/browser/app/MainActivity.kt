@@ -123,6 +123,7 @@ class MainActivity : FlutterActivity() {
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
                     "openNativeBrowser" -> openNativeBrowser(call, result)
+                    "openNativeFileViewer" -> openNativeFileViewer(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
@@ -549,6 +550,36 @@ class MainActivity : FlutterActivity() {
         } catch (error: Exception) {
             pendingOrbitBrowserResult = null
             result.error("native_browser_unavailable", error.message, null)
+        }
+    }
+
+    /** Abre um ficheiro local no WebView dedicado, sem Orbit, appbar ou separadores. */
+    private fun openNativeFileViewer(call: MethodCall, result: MethodChannel.Result) {
+        val rawPath = call.argument<String>("path")?.trim().orEmpty()
+        if (rawPath.isBlank()) {
+            result.error("invalid_file_path", "O caminho do ficheiro está vazio.", null)
+            return
+        }
+
+        val file = runCatching { java.io.File(rawPath).canonicalFile }.getOrNull()
+        val appDataRoot = runCatching { java.io.File(applicationInfo.dataDir).canonicalPath }.getOrNull()
+        if (file == null || appDataRoot.isNullOrBlank() || !file.isFile ||
+            !file.path.startsWith(appDataRoot + java.io.File.separator)) {
+            result.error("file_not_available", "O ficheiro local não está disponível.", null)
+            return
+        }
+
+        try {
+            val intent = Intent(this, NativeFileViewerActivity::class.java).apply {
+                putExtra(NativeFileViewerActivity.EXTRA_PATH, file.path)
+                putExtra(NativeFileViewerActivity.EXTRA_NAME, call.argument<String>("filename") ?: file.name)
+                putExtra(NativeFileViewerActivity.EXTRA_MIME, call.argument<String>("mimeType") ?: "")
+            }
+            startActivity(intent)
+            overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("file_viewer_unavailable", error.message, null)
         }
     }
 

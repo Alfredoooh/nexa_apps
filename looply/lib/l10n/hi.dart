@@ -7,6 +7,8 @@ const Map<String, String> hiCoreTranslations = <String, String>{
     'clear': 'साफ़ करें', 'close': 'बंद करें', 'back': 'वापस', 'home': 'होम', 'more_options': 'अधिक विकल्प',
     'ai_mode': 'AI मोड', 'force_dark': 'वेबसाइट पर डार्क मोड लागू करें', 'follow_app_theme': 'वेबसाइट ऐप थीम का पालन करें',
     'adaptive_toolbar': 'अनुकूली टूलबार', 'no_history': 'कोई इतिहास नहीं', 'select_language': 'भाषा चुनें',
+      'file_viewer_android_only': 'यह फ़ाइल व्यूअर केवल Android पर उपलब्ध है।',
+    'file_open_failed': 'यह फ़ाइल नहीं खुल सकी।',
   };
 
 const Map<String, String> hiExtraTranslations = <String, String>{

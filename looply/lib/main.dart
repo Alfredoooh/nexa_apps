@@ -720,7 +720,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                           image: imageProvider,
                           fit: BoxFit.cover,
                           gaplessPlayback: true,
-                          filterQuality: FilterQuality.low,
+                          filterQuality: FilterQuality.medium,
                         ),
                       ),
                     ),
@@ -775,7 +775,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }));
 
     final sourceRect = _rectInOverlay(_repaintKey);
-    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.1);
+    final bitmap = await captureWidgetSnapshot(_repaintKey, pixelRatio: 1.4);
     if (!mounted) {
       _morphing = false;
       return;
@@ -948,7 +948,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       bitmap = _lastScreenSnapshot;
     }
     if (bitmap == null && sourceKey != null) {
-      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.1);
+      bitmap = await captureWidgetSnapshot(sourceKey, pixelRatio: 1.4);
     }
     if (!mounted) {
       _morphing = false;
@@ -1541,7 +1541,12 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
       child: Material(
         color: pillSurface,
         elevation: 0,
-        borderRadius: BorderRadius.circular(999),
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: isDark ? Colors.transparent : const Color(0xFFDADCE0),
+            width: isDark ? 0 : 1,
+          ),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: 60,

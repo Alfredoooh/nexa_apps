@@ -7,6 +7,8 @@ const Map<String, String> trCoreTranslations = <String, String>{
     'clear': 'Temizle', 'close': 'Kapat', 'back': 'Geri', 'home': 'Ana sayfa', 'more_options': 'Diğer seçenekler',
     'ai_mode': 'Yapay zekâ modu', 'force_dark': 'Sitelerde koyu modu zorla', 'follow_app_theme': 'Siteler uygulama temasını izlesin',
     'adaptive_toolbar': 'Uyarlanabilir araç çubuğu', 'no_history': 'Geçmiş yok', 'select_language': 'Dil seçin',
+      'file_viewer_android_only': 'Bu dosya görüntüleyici yalnızca Android\'de kullanılabilir.',
+    'file_open_failed': 'Bu dosya açılamadı.',
   };
 
 const Map<String, String> trExtraTranslations = <String, String>{

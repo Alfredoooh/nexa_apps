@@ -66,6 +66,14 @@
             android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".NativeFileViewerActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:theme="@style/FileViewerTheme"
+            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:windowSoftInputMode="adjustResize" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

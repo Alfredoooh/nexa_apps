@@ -1099,7 +1099,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             isFillViewport = true
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            scrollbarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+            scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
         }
 
         val content = LinearLayout(this).apply {

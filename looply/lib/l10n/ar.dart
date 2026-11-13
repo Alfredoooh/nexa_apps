@@ -9,6 +9,8 @@ const Map<String, String> arCoreTranslations = <String, String>{
     'more_options': 'مزيد من الخيارات', 'ai_mode': 'وضع الذكاء الاصطناعي',
     'force_dark': 'فرض الوضع الداكن على المواقع', 'follow_app_theme': 'تتبع المواقع مظهر التطبيق',
     'adaptive_toolbar': 'شريط أدوات متكيف', 'no_history': 'لا يوجد سجل', 'select_language': 'اختر اللغة',
+      'file_viewer_android_only': 'عارض الملفات هذا متاح على Android فقط.',
+    'file_open_failed': 'تعذّر فتح هذا الملف.',
   };
 
 const Map<String, String> arExtraTranslations = <String, String>{

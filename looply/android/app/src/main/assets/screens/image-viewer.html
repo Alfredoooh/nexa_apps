@@ -18,6 +18,7 @@
     --line: #E8EAED;
     --track-inactive: #D2E3FC;
     --danger: #D93025;
+    --crop-mask: rgba(255,255,255,.82);
     --r-xs: 4px;
     --r-md: 12px;
     --r-pill: 999px;
@@ -56,7 +57,23 @@
 
   .msr.filled { font-variation-settings: 'FILL' 1, 'wght' 500, 'opsz' 24, 'GRAD' 0; }
 
-  .topbar { flex-shrink: 0; height: calc(10px + env(safe-area-inset-top)); }
+  .topbar {
+    position: relative;
+    z-index: 20;
+    flex-shrink: 0;
+    height: 48px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0 12px;
+    background: var(--bg);
+  }
+  .close-viewer {
+    width: 38px; height: 38px; border: 0; border-radius: 50%;
+    display: grid; place-items: center; color: var(--text);
+    background: var(--panel-2); cursor: pointer;
+    font: 27px/1 Arial, sans-serif;
+  }
 
   /* ---------- Ripple M3 (todo botão/chip/tab usa) ---------- */
 
@@ -132,7 +149,7 @@
   .crop-frame {
     position: absolute;
     border: 2.5px solid var(--accent-blue);
-    box-shadow: 0 0 0 2000px rgba(255, 255, 255, 0.82);
+    box-shadow: 0 0 0 2000px var(--crop-mask);
     pointer-events: none;
     display: none;
   }
@@ -336,7 +353,9 @@
 </head>
 <body>
 
-  <div class="topbar"></div>
+  <div class="topbar">
+    <button class="close-viewer m3-ink" id="closeViewer" aria-label="Fechar">×</button>
+  </div>
 
   <div class="canvas-wrap" id="canvasWrap">
     <canvas id="imgCanvas"></canvas>
@@ -604,8 +623,13 @@
   }
 
   function loadImageFromRoot() {
+    var params = new URLSearchParams(window.location.search);
+    var source = params.get('src');
+    if (!source) {
+      showToast('Não foi indicado nenhum ficheiro de imagem');
+      return;
+    }
     var img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = function () {
       originalImage = img;
       baseImage = img;
@@ -614,8 +638,8 @@
       resetAllAdjustmentsToZero(true);
       render();
     };
-    img.onerror = function () { showToast('Não encontrei image.png na raiz'); };
-    img.src = './image.png';
+    img.onerror = function () { showToast('Não foi possível abrir esta imagem'); };
+    img.src = source;
   }
 
   editBtn.addEventListener('click', function () {
@@ -1292,6 +1316,31 @@
   window.addEventListener('resize', function () {
     positionOverlayCanvases();
     if (!modeRowCrop.classList.contains('hidden')) initCropFrame();
+  });
+
+  // A paleta é a mesma do BrowseIt (tema claro, escuro e AMOLED).
+  var viewerParams = new URLSearchParams(window.location.search);
+  var viewerDark = viewerParams.get('theme') === 'dark';
+  var viewerPure = viewerParams.get('pure') === '1';
+  var viewerRoot = document.documentElement;
+  var viewerPalette = {
+    '--primary': viewerDark ? '#8AB4F8' : '#1A73E8',
+    '--accent-blue': viewerDark ? '#8AB4F8' : '#1A73E8',
+    '--bg': viewerDark ? (viewerPure ? '#000000' : '#141517') : '#FFFFFF',
+    '--panel-2': viewerDark ? (viewerPure ? '#191919' : '#2B2D30') : '#F0F1F3',
+    '--soft': viewerDark ? (viewerPure ? '#050505' : '#1D1F21') : '#F8F9FA',
+    '--text': viewerDark ? '#E6E6E8' : '#202124',
+    '--muted': viewerDark ? '#B2B4B8' : '#5F6368',
+    '--line': viewerDark ? (viewerPure ? '#292929' : '#34363A') : '#E8EAED',
+    '--track-inactive': viewerDark ? '#41464F' : '#D2E3FC',
+    '--crop-mask': viewerDark ? 'rgba(0,0,0,.78)' : 'rgba(255,255,255,.82)'
+  };
+  Object.keys(viewerPalette).forEach(function (key) {
+    viewerRoot.style.setProperty(key, viewerPalette[key]);
+  });
+  document.getElementById('closeViewer').addEventListener('click', function () {
+    if (window.AndroidViewer && window.AndroidViewer.close) window.AndroidViewer.close();
+    else window.close();
   });
 
   loadImageFromRoot();

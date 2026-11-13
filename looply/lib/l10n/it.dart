@@ -10,6 +10,8 @@ const Map<String, String> itCoreTranslations = <String, String>{
     'more_options': 'Altre opzioni', 'ai_mode': 'Modalità IA', 'force_dark': 'Forza modalità scura nei siti',
     'follow_app_theme': 'I siti seguono il tema dell’app', 'adaptive_toolbar': 'Barra degli strumenti adattiva',
     'no_history': 'Nessuna cronologia', 'select_language': 'Scegli lingua',
+      'file_viewer_android_only': 'Questo visualizzatore di file è disponibile solo su Android.',
+    'file_open_failed': 'Impossibile aprire questo file.',
   };
 
 const Map<String, String> itExtraTranslations = <String, String>{

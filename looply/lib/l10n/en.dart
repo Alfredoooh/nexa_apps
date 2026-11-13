@@ -10,6 +10,8 @@ const Map<String, String> enCoreTranslations = <String, String>{
     'more_options': 'More options', 'ai_mode': 'AI mode', 'force_dark': 'Force dark mode on websites',
     'follow_app_theme': 'Websites follow app theme', 'adaptive_toolbar': 'Adaptive toolbar color',
     'no_history': 'No history', 'select_language': 'Choose language',
+      'file_viewer_android_only': 'This file viewer is available on Android only.',
+    'file_open_failed': 'Could not open this file.',
   };
 
 const Map<String, String> enExtraTranslations = <String, String>{

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Áudio · BrowseIt</title>
+<style>
+:root{--bg:#fff;--panel:#f0f1f3;--text:#202124;--muted:#5f6368;--accent:#1a73e8;--line:#e8eaed}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:Roboto,"Arial",sans-serif}
+body{display:flex;flex-direction:column}
+header{height:52px;display:flex;justify-content:flex-end;align-items:center;padding:0 12px}
+button{border:0;cursor:pointer}#close{width:38px;height:38px;border-radius:50%;background:var(--panel);color:var(--text);font-size:24px}
+main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;gap:24px}
+.art{width:min(66vw,260px);aspect-ratio:1;border-radius:28px;background:var(--panel);display:grid;place-items:center;color:var(--accent);font-size:76px}
+.name{max-width:100%;text-align:center;font-size:16px;font-weight:600;overflow-wrap:anywhere}
+audio{width:min(100%,480px)}.error{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header><button id="close" aria-label="Fechar">×</button></header>
+<main><div class="art">♫</div><div class="name" id="name"></div><audio id="player" controls preload="metadata"></audio><div class="error" id="error" hidden>Não foi possível reproduzir este áudio.</div></main>
+<script>
+(function(){const q=new URLSearchParams(location.search),dark=q.get('theme')==='dark',pure=q.get('pure')==='1',s=document.documentElement.style;
+s.setProperty('--bg',dark?(pure?'#000':'#141517'):'#fff');s.setProperty('--panel',dark?(pure?'#191919':'#2b2d30'):'#f0f1f3');s.setProperty('--text',dark?'#e6e6e8':'#202124');s.setProperty('--muted',dark?'#b2b4b8':'#5f6368');s.setProperty('--accent',dark?'#8ab4f8':'#1a73e8');s.setProperty('--line',dark?(pure?'#292929':'#34363a'):'#e8eaed');
+document.getElementById('close').onclick=()=>{if(window.AndroidViewer)AndroidViewer.close();else window.close();};document.getElementById('name').textContent=q.get('name')||'';const p=document.getElementById('player');p.src=q.get('src')||'';p.onerror=()=>document.getElementById('error').hidden=false;})();
+</script>
+</body>
+</html>
