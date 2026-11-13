@@ -198,37 +198,27 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                     padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
                     child: Row(
                     children: [
-                      // Voltar e Home partilham uma única cápsula contínua.
-                      Material(
-                        color: pillColor(context),
-                        borderRadius: BorderRadius.circular(99),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: IconButton(
-                                tooltip: appText('back'),
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                icon: AppMaterialIcon(AppIcons.arrowLeft, size: 22, color: text),
-                                onPressed: widget.onClose,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 36,
-                              height: 36,
-                              child: IconButton(
-                                tooltip: appText('home'),
-                                padding: EdgeInsets.zero,
-                                visualDensity: VisualDensity.compact,
-                                icon: AppMaterialIcon(AppIcons.house, size: 20, color: text),
-                                onPressed: widget.onHome,
-                              ),
-                            ),
-                          ]),
+                      IconButton(
+                        tooltip: appText('back'),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                        style: IconButton.styleFrom(
+                          foregroundColor: text,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                         ),
+                        icon: AppMaterialIcon(AppIcons.arrowLeft, size: 22, color: text),
+                        onPressed: widget.onClose,
+                      ),
+                      IconButton(
+                        tooltip: appText('home'),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                        style: IconButton.styleFrom(
+                          foregroundColor: text,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                        ),
+                        icon: AppMaterialIcon(AppIcons.house, size: 20, color: text),
+                        onPressed: widget.onHome,
                       ),
                       const Spacer(),
                       IconButton(

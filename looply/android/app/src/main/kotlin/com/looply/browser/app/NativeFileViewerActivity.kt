@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.util.Base64
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -16,6 +17,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
 import androidx.core.view.ViewCompat
@@ -44,6 +46,9 @@ class NativeFileViewerActivity : AppCompatActivity() {
     }
 
     private lateinit var webView: WebView
+    private lateinit var rootContainer: FrameLayout
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private lateinit var sourceFile: File
     private lateinit var webViewAssetLoader: WebViewAssetLoader
     private var isDark = false
@@ -91,14 +96,14 @@ class NativeFileViewerActivity : AppCompatActivity() {
             .addPathHandler("/viewer/", WebViewAssetLoader.InternalStoragePathHandler(this, downloadsDirectory))
             .build()
 
-        val root = FrameLayout(this).apply {
+        rootContainer = FrameLayout(this).apply {
             setBackgroundColor(surfaceColor)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
         }
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+        ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(0, bars.top, 0, bars.bottom)
             insets
@@ -119,7 +124,34 @@ class NativeFileViewerActivity : AppCompatActivity() {
             settings.builtInZoomControls = false
             settings.displayZoomControls = false
             settings.loadsImagesAutomatically = true
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowCustomView(
+                    view: View?,
+                    callback: CustomViewCallback?,
+                ) {
+                    if (view == null || customView != null) {
+                        callback?.onCustomViewHidden()
+                        return
+                    }
+                    customView = view
+                    customViewCallback = callback
+                    rootContainer.addView(
+                        view,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    val controller = WindowInsetsControllerCompat(window, window.decorView)
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                }
+
+                override fun onHideCustomView() {
+                    hideCustomView()
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView?,
@@ -142,14 +174,19 @@ class NativeFileViewerActivity : AppCompatActivity() {
             addJavascriptInterface(ViewerBridge(this@NativeFileViewerActivity), "AndroidViewer")
         }
 
-        root.addView(
+        rootContainer.addView(
             webView,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        setContentView(root)
+        setContentView(rootContainer)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (customView != null) hideCustomView() else closeViewer()
+            }
+        })
         loadViewerPage()
     }
 
@@ -175,6 +212,8 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.isAppearanceLightStatusBars = !isDark
         controller.isAppearanceLightNavigationBars = !isDark
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+        controller.show(WindowInsetsCompat.Type.systemBars())
         if (Build.VERSION.SDK_INT >= 29) {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
@@ -309,12 +348,19 @@ class NativeFileViewerActivity : AppCompatActivity() {
         overridePendingTransition(0, R.anim.browser_slide_down)
     }
 
-    @Deprecated("Deprecated by Android; retained for back-button compatibility")
-    override fun onBackPressed() {
-        closeViewer()
+    private fun hideCustomView() {
+        val activeView = customView ?: return
+        rootContainer.removeView(activeView)
+        customView = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+        applySystemBars()
     }
 
     override fun onDestroy() {
+        customView?.let { rootContainer.removeView(it) }
+        customView = null
+        customViewCallback = null
         if (::webView.isInitialized) {
             webView.stopLoading()
             webView.removeJavascriptInterface("AndroidViewer")
