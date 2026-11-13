@@ -1191,7 +1191,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val menuItems = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
-        menuScroll.addView(menuItems, ScrollView.LayoutParams(-1, -2))
+        menuScroll.addView(menuItems, android.widget.FrameLayout.LayoutParams(-1, -2))
 
         fun menuRow(label: String, glyph: String, action: () -> Unit) {
             val row = LinearLayout(this).apply {
@@ -1304,6 +1304,383 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private var popupWindowRef: PopupWindow? = null
+
+    private fun addSheetItem(
+        parent: LinearLayout,
+        icon: String,
+        label: String,
+        action: () -> Unit
+    ) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(12), 0)
+            background = selectableBackground()
+            isClickable = true
+            isFocusable = true
+            minimumHeight = dp(56)
+            setOnClickListener { action() }
+        }
+
+        val iconCell = android.widget.FrameLayout(this).apply {
+            addView(
+                MaterialSymbolsRounded.textView(
+                    this@OrbitBrowserActivity,
+                    icon,
+                    secondaryText,
+                    21f,
+                ),
+                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
+            )
+        }
+        row.addView(iconCell, LinearLayout.LayoutParams(dp(44), dp(56)))
+
+        row.addView(
+            TextView(this).apply {
+                text = label
+                textSize = 14f
+                setTextColor(primaryText)
+                gravity = Gravity.CENTER_VERTICAL
+                includeFontPadding = false
+                maxLines = 2
+            },
+            LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                marginStart = dp(4)
+            }
+        )
+
+        parent.addView(row, LinearLayout.LayoutParams(-1, dp(56)))
+    }
+
+    private fun showElementSheet(target: String, hitType: Int) {
+        val isImage = hitType == WebView.HitTestResult.IMAGE_TYPE ||
+            hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+        val isLink = hitType == WebView.HitTestResult.ANCHOR_TYPE ||
+            hitType == WebView.HitTestResult.SRC_ANCHOR_TYPE
+        val dialog = BottomSheetDialog(this)
+
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(20))
+            background = rounded(pageBg, 22)
+        }
+
+        content.addView(
+            TextView(this).apply {
+                text = when {
+                    isImage -> menuText("image", "Image")
+                    isLink -> menuText("link", "Link")
+                    else -> menuText("media", "Media")
+                }
+                textSize = 16f
+                setTextColor(primaryText)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                maxLines = 1
+            },
+            LinearLayout.LayoutParams(-1, dp(36))
+        )
+        content.addView(
+            TextView(this).apply {
+                text = target
+                textSize = 12f
+                setTextColor(secondaryText)
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            },
+            LinearLayout.LayoutParams(-1, dp(44))
+        )
+
+        addSheetItem(content, "open_in_new", menuText("openNewTab", "Open in new tab")) {
+            dialog.dismiss()
+            finishToFlutter("newTab", target)
+        }
+        addSheetItem(content, "content_copy", menuText("copyLink", "Copy link")) {
+            dialog.dismiss()
+            copyText(target)
+        }
+        addSheetItem(content, "share", menuText("share", "Share")) {
+            dialog.dismiss()
+            shareText(target)
+        }
+        if (isLink && !incognito) {
+            addSheetItem(content, "star", menuText("addBookmark", "Add bookmark")) {
+                dialog.dismiss()
+                finishToFlutter("bookmarkUrl", target)
+            }
+        }
+        if (isImage && !incognito) {
+            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
+                dialog.dismiss()
+                startDownload(target, null, null, null)
+            }
+        }
+
+        dialog.setContentView(content)
+        dialog.show()
+    }
+
+    private fun openFindBar() {
+        findBar.visibility = View.VISIBLE
+        findField.requestFocus()
+        findField.post {
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                .showSoftInput(findField, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun closeFindBar() {
+        webView.clearMatches()
+        findField.setText("")
+        findBar.visibility = View.GONE
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(findField.windowToken, 0)
+    }
+
+    private fun toggleDesktopMode() {
+        desktopMode = !desktopMode
+        webView.settings.userAgentString = if (desktopMode) {
+            DESKTOP_UA
+        } else {
+            originalUserAgent ?: WebSettings.getDefaultUserAgent(this)
+        }
+        webView.settings.useWideViewPort = true
+        webView.settings.loadWithOverviewMode = desktopMode
+        webView.reload()
+        Toast.makeText(
+            this,
+            if (desktopMode) menuText("desktopEnabled", "Desktop site enabled")
+            else menuText("desktopDisabled", "Desktop site disabled"),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    private fun translatePage() {
+        val targetLanguage = menuLabels.optString("targetLanguage", "en")
+            .takeIf { it.matches(Regex("^[a-zA-Z-]{2,8}$")) } ?: "en"
+        val translateUrl =
+            "https://translate.google.com/translate?sl=auto&tl=$targetLanguage&u=" +
+                Uri.encode(currentUrl)
+        webView.loadUrl(translateUrl)
+    }
+
+    private fun showScaleCard(pageScale: Boolean) {
+        val title = if (pageScale) {
+            menuText("pageZoom", "Page zoom")
+        } else {
+            menuText("fontSize", "Font size")
+        }
+        val initialValue = if (pageScale) pageZoomPercent else textSizePercent
+        val dialog = BottomSheetDialog(this)
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(18), dp(22), dp(18))
+            background = rounded(pageBg, 32)
+        }
+        val handle = View(this).apply {
+            background = rounded(
+                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
+                99
+            )
+        }
+        card.addView(
+            handle,
+            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(18)
+            }
+        )
+
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        heading.addView(
+            MaterialSymbolsRounded.textView(
+                this,
+                if (pageScale) "zoom_in" else "text_fields",
+                primaryText,
+                24f,
+                title
+            ),
+            LinearLayout.LayoutParams(dp(30), dp(30)).apply {
+                marginEnd = dp(12)
+            }
+        )
+        heading.addView(
+            TextView(this).apply {
+                text = title
+                textSize = 18f
+                setTextColor(primaryText)
+                typeface = android.graphics.Typeface.create(
+                    "sans-serif-medium",
+                    android.graphics.Typeface.NORMAL
+                )
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(38), 1f)
+        )
+        val valueLabel = TextView(this).apply {
+            text = "$initialValue%"
+            textSize = 15f
+            setTextColor(primaryText)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            background = rounded(toolbarPillColor(), 99)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+        }
+        heading.addView(valueLabel, LinearLayout.LayoutParams(-2, dp(34)))
+        card.addView(heading)
+
+        val sliderContext = android.view.ContextThemeWrapper(
+            this,
+            R.style.ThemeOverlay_BrowseIt_ExpressiveSlider
+        )
+        val slider = Slider(
+            sliderContext,
+            null,
+            com.google.android.material.R.attr.sliderStyle
+        ).apply {
+            valueFrom = 50f
+            valueTo = 200f
+            stepSize = 5f
+            value = initialValue.coerceIn(50, 200).toFloat()
+            contentDescription = title
+            val accentColorList = android.content.res.ColorStateList.valueOf(accent)
+            setThumbTintList(accentColorList)
+            setHaloTintList(
+                android.content.res.ColorStateList.valueOf(
+                    (accent and 0x00FFFFFF) or 0x26000000
+                )
+            )
+            setTrackActiveTintList(accentColorList)
+            setTrackInactiveTintList(
+                android.content.res.ColorStateList.valueOf(
+                    if (dark) 0xFF53565B.toInt() else 0xFFDADCE0.toInt()
+                )
+            )
+        }
+        card.addView(
+            slider,
+            LinearLayout.LayoutParams(-1, dp(58)).apply {
+                topMargin = dp(12)
+            }
+        )
+
+        val rangeLabels = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        rangeLabels.addView(
+            TextView(this).apply {
+                text = "50%"
+                textSize = 12f
+                setTextColor(secondaryText)
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(22), 1f)
+        )
+        rangeLabels.addView(
+            TextView(this).apply {
+                text = "200%"
+                textSize = 12f
+                setTextColor(secondaryText)
+                gravity = Gravity.END
+                includeFontPadding = false
+            },
+            LinearLayout.LayoutParams(0, dp(22), 1f)
+        )
+        card.addView(rangeLabels)
+        slider.addOnChangeListener { _, value, fromUser ->
+            val selected = ((value.roundToInt() / 5) * 5).coerceIn(50, 200)
+            valueLabel.text = "$selected%"
+            if (fromUser) {
+                if (pageScale) {
+                    pageZoomPercent = selected
+                    applyPageZoomToCurrentPage()
+                } else {
+                    textSizePercent = selected
+                    webView.settings.textZoom = selected
+                }
+            }
+        }
+
+        dialog.setContentView(card)
+        dialog.setOnShowListener {
+            val sheet = dialog.findViewById<android.widget.FrameLayout>(
+                com.google.android.material.R.id.design_bottom_sheet
+            ) ?: return@setOnShowListener
+            sheet.setBackgroundColor(Color.TRANSPARENT)
+            val params = sheet.layoutParams as? ViewGroup.MarginLayoutParams
+            params?.let {
+                it.width = ViewGroup.LayoutParams.MATCH_PARENT
+                it.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                it.marginStart = dp(12)
+                it.marginEnd = dp(12)
+                it.bottomMargin = dp(12) + navigationBarInsetPx()
+                sheet.layoutParams = it
+            }
+            val behavior = BottomSheetBehavior.from(sheet)
+            behavior.skipCollapsed = true
+            behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+        dialog.show()
+    }
+
+    private fun applyPageZoomToCurrentPage() {
+        if (!::webView.isInitialized || webView.url.isNullOrBlank()) return
+        val target = pageZoomPercent.coerceIn(50, 200)
+        val previouslyApplied = appliedPageZoomPercent.coerceIn(50, 200)
+        if (target == previouslyApplied) return
+        val factor = target.toFloat() / previouslyApplied.toFloat()
+        appliedPageZoomPercent = target
+        webView.zoomBy(factor.coerceIn(0.01f, 100f))
+    }
+
+    private fun navigationBarInsetPx(): Int {
+        val insets = ViewCompat.getRootWindowInsets(root)
+        return insets?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0
+    }
+
+    private fun printPage() {
+        try {
+            val manager = getSystemService(Context.PRINT_SERVICE) as PrintManager
+            val adapter = webView.createPrintDocumentAdapter(
+                "BrowseIt - ${hostOf(currentUrl)}"
+            )
+            manager.print("BrowseIt", adapter, PrintAttributes.Builder().build())
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                menuText("printError", "Could not print this page."),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun showSiteInfo() {
+        val host = hostOf(currentUrl)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(menuText("siteInfo", "Site information"))
+            .setMessage("${currentTitle.ifBlank { host }}\n\n$currentUrl")
+            .setPositiveButton(menuText("close", "Close"), null)
+            .show()
+    }
+
+    private fun copyAddress() {
+        copyText(currentUrl)
+    }
+
+    private fun copyText(value: String) {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(
+            android.content.ClipData.newPlainText("BrowseIt", value)
+        )
+        Toast.makeText(this, menuText("copied", "Copied"), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareAddress() {
+        shareText(currentUrl)
+    }
 
     private fun shareText(value: String) {
         val send = Intent(Intent.ACTION_SEND).apply {
