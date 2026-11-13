@@ -1284,7 +1284,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         quickScroller.addView(
             quickRow,
-            HorizontalScrollView.LayoutParams(-2, -1),
+            android.widget.FrameLayout.LayoutParams(-2, -1),
         )
         content.addView(quickScroller, LinearLayout.LayoutParams(-1, dp(58)))
 
@@ -1775,6 +1775,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val factor = target.toFloat() / previouslyApplied.toFloat()
         appliedPageZoomPercent = target
         webView.zoomBy(factor.coerceIn(0.01f, 100f))
+    }
+
+    private fun statusBarInsetPx(): Int {
+        val insets = ViewCompat.getRootWindowInsets(root)
+        return insets?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: dp(24)
     }
 
     private fun navigationBarInsetPx(): Int {
