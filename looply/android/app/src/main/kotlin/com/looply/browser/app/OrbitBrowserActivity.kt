@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Parcel
+import android.os.SystemClock
 import android.util.Base64
 import android.print.PrintAttributes
 import android.print.PrintManager
@@ -43,6 +44,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -58,6 +60,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.URLConnection
 import java.util.Locale
+import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -69,6 +72,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         const val EXTRA_INCOGNITO = "com.looply.browser.app.orbit.INCOGNITO"
         const val EXTRA_TAB_COUNT = "com.looply.browser.app.orbit.TAB_COUNT"
         const val EXTRA_PREVIEW_ONLY = "com.looply.browser.app.orbit.PREVIEW_ONLY"
+        const val EXTRA_MENU_LABELS_JSON = "com.looply.browser.app.orbit.MENU_LABELS_JSON"
 
         const val RESULT_URL = "com.looply.browser.app.orbit.RESULT_URL"
         const val RESULT_TITLE = "com.looply.browser.app.orbit.RESULT_TITLE"
@@ -89,6 +93,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
         private const val STATE_WEBVIEW = "orbit.webview.state"
         private const val STATE_URL = "orbit.url"
         private const val STATE_TITLE = "orbit.title"
+        private const val STATE_SCROLL_X = "orbit.scroll.x"
+        private const val STATE_SCROLL_Y = "orbit.scroll.y"
 
         private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
         private const val MAX_TAB_STATE_CHARS = 1_400_000
@@ -178,6 +184,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var toolbar: LinearLayout
     private lateinit var appBarContainer: LinearLayout
     private lateinit var titlePill: LinearLayout
+    private lateinit var moreButton: View
     private lateinit var faviconView: ImageView
     private lateinit var titleView: TextView
     private lateinit var progress: ProgressBar
@@ -199,10 +206,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var textSizePercent = 100
     private var pageZoomPercent = 100
     private var appliedPageZoomPercent = 100
+    private var pendingRestoredScrollX: Int? = null
+    private var pendingRestoredScrollY: Int? = null
     private var appBarAnimator: ValueAnimator? = null
     private var lastScrollDirection = 0
     private var accumulatedScrollDelta = 0
     private var reverseScrollDelta = 0
+    private var toolbarScrollFreezeUntilMs = 0L
+    private var menuLabels = JSONObject()
     private var isFinishingWithResult = false
 
     private var customView: View? = null
@@ -299,10 +310,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
             ?: "https://www.google.com"
 
         currentTitle = savedInstanceState?.getString(STATE_TITLE).orEmpty()
+        pendingRestoredScrollX = savedInstanceState?.getInt(STATE_SCROLL_X)
+        pendingRestoredScrollY = savedInstanceState?.getInt(STATE_SCROLL_Y)
         tabId = intent.getStringExtra(EXTRA_TAB_ID).orEmpty()
         tabCount = intent.getIntExtra(EXTRA_TAB_COUNT, 1).coerceAtLeast(1)
         incognito = intent.getBooleanExtra(EXTRA_INCOGNITO, false)
         previewOnly = intent.getBooleanExtra(EXTRA_PREVIEW_ONLY, false)
+        menuLabels = runCatching {
+            JSONObject(intent.getStringExtra(EXTRA_MENU_LABELS_JSON) ?: "{}")
+        }.getOrDefault(JSONObject())
 
         createInterface()
         configureWebView()
@@ -346,6 +362,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_URL, currentUrl)
         outState.putString(STATE_TITLE, currentTitle)
+        outState.putInt(STATE_SCROLL_X, webView.scrollX)
+        outState.putInt(STATE_SCROLL_Y, webView.scrollY)
         outState.putBundle(
             STATE_WEBVIEW,
             Bundle().also { webView.saveState(it) }
@@ -441,10 +459,26 @@ class OrbitBrowserActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(dp(42), dp(46))
         )
 
-        toolbar.addView(
-            actionButton("more_vert", "Mais opções") { showBrowserSheet() },
-            LinearLayout.LayoutParams(dp(42), dp(46))
-        )
+        moreButton = actionButton("more_vert", menuText("options", "More options")) {
+            showBrowserPopupMenu(moreButton)
+        }.apply {
+            removeAllViews()
+            addView(
+                ImageView(this@OrbitBrowserActivity).apply {
+                    setImageDrawable(
+                        MaterialSymbolsRounded.menuOptionsDrawable(
+                            this@OrbitBrowserActivity,
+                            toolbarText(),
+                            dp(25),
+                        )
+                    )
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = menuText("options", "More options")
+                },
+                android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER),
+            )
+        }
+        toolbar.addView(moreButton, LinearLayout.LayoutParams(dp(42), dp(46)))
 
         progress = ProgressBar(
             this,
@@ -542,7 +576,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         )
 
         findBar.addView(
-            actionButton("close", "Fechar pesquisa") {
+            actionButton("close", menuText("closeSearch", "Close search")) {
                 closeFindBar()
             },
             LinearLayout.LayoutParams(dp(38), dp(42))
@@ -564,6 +598,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     _, _, scrollY, _, oldScrollY ->
                 val delta = scrollY - oldScrollY
                 if (delta == 0) return@setOnScrollChangeListener
+
+                // A alteração da altura da AppBar pode produzir callbacks de
+                // compensação do WebView. Estes não são gestos do utilizador e
+                // ficam fora da acumulação direcional até o layout estabilizar.
+                if (SystemClock.uptimeMillis() < toolbarScrollFreezeUntilMs) {
+                    lastScrollDirection = 0
+                    accumulatedScrollDelta = 0
+                    reverseScrollDelta = 0
+                    return@setOnScrollChangeListener
+                }
+                if (abs(delta) < dp(2)) return@setOnScrollChangeListener
 
                 // No topo, a barra fica sempre visível e a memória de direção
                 // é reiniciada para não transportar oscilações entre páginas.
@@ -592,10 +637,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     }
                     accumulatedScrollDelta += distance
                 } else {
-                    // Só aceita a nova direção após movimento contrário
-                    // contínuo de 10dp: elimina o tremor por ruído de poucos px.
+                    // Uma inversão só é aceite após uma distância consistente.
+                    // O filtro evita alternância causada por sub-píxeis e por
+                    // páginas que atualizam o scroll de forma incremental.
                     reverseScrollDelta += distance
-                    val reversalThreshold = dp(10)
+                    val reversalThreshold = dp(22)
                     if (reverseScrollDelta < reversalThreshold) {
                         return@setOnScrollChangeListener
                     }
@@ -606,8 +652,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     reverseScrollDelta = 0
                 }
 
-                val triggerDistance = if (direction > 0) dp(28) else dp(18)
-                if (direction > 0 && scrollY > dp(90) &&
+                val triggerDistance = if (direction > 0) dp(48) else dp(30)
+                if (direction > 0 && scrollY > dp(112) &&
                     accumulatedScrollDelta >= triggerDistance
                 ) {
                     hideToolbar(true)
@@ -794,7 +840,16 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
                 refreshTitle()
                 updateToolbarColors()
-                view.post { applyPageZoomToCurrentPage() }
+                view.post {
+                    val restoredX = pendingRestoredScrollX
+                    val restoredY = pendingRestoredScrollY
+                    if (restoredX != null || restoredY != null) {
+                        view.scrollTo(restoredX ?: 0, restoredY ?: 0)
+                        pendingRestoredScrollX = null
+                        pendingRestoredScrollY = null
+                    }
+                    applyPageZoomToCurrentPage()
+                }
             }
 
             override fun onReceivedError(
@@ -806,7 +861,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     Toast.makeText(
                         this@OrbitBrowserActivity,
                         error.description?.toString()
-                            ?: "Não foi possível abrir a página.",
+                            ?: menuText("loadingError", "Could not load this page."),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -942,13 +997,19 @@ class OrbitBrowserActivity : AppCompatActivity() {
         )
     }
 
+    private fun tintMenuOptionsButton(color: Int) {
+        if (!::moreButton.isInitialized) return
+        val icon = (moreButton as? ViewGroup)?.getChildAt(0) as? ImageView ?: return
+        icon.setImageDrawable(MaterialSymbolsRounded.menuOptionsDrawable(this, color, dp(25)))
+    }
+
     private fun showAddressDialog() {
         val input = EditText(this).apply {
             setSingleLine(true)
             textSize = 15f
             setTextColor(primaryText)
             setHintTextColor(secondaryText)
-            hint = "Pesquisar ou introduzir endereço"
+            hint = menuText("searchHint", "Search or enter a URL")
             setText(currentUrl)
             setSelection(text.length)
             inputType = InputType.TYPE_CLASS_TEXT or
@@ -963,10 +1024,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Pesquisar ou abrir endereço")
+            .setTitle(menuText("searchHint", "Search or open address"))
             .setView(container)
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Abrir", null)
+            .setNegativeButton(menuText("cancel", "Cancel"), null)
+            .setPositiveButton(menuText("newTabLabel", "Open"), null)
             .create()
 
         dialog.setOnShowListener {
@@ -1017,220 +1078,75 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val uri = Uri.parse(target)
 
         if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-            Toast.makeText(this, "Endereço inválido.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, menuText("validAddress", "Enter a valid HTTP or HTTPS address."), Toast.LENGTH_SHORT).show()
             return
         }
 
         webView.loadUrl(uri.toString())
     }
 
-    private fun showBrowserSheet() {
-        val dialog = BottomSheetDialog(this)
+    private fun menuText(key: String, fallback: String): String {
+        return menuLabels.optString(key).takeIf { it.isNotBlank() } ?: fallback
+    }
 
-        // Cabeçalho separado do ScrollView: os atalhos não acompanham o scroll.
-        val sheetRoot = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = rounded(pageBg, 22)
-            clipToPadding = true
-            clipChildren = true
+    private fun showBrowserPopupMenu(anchor: View) {
+        if (previewOnly || isFinishing || !anchor.isAttachedToWindow) return
+        val popup = PopupMenu(this, anchor, Gravity.END).apply {
+            setForceShowIcon(true)
+        }
+        val menu = popup.menu
+        val iconSize = dp(22)
+        fun add(id: Int, label: String, glyph: String) {
+            menu.add(0, id, menu.size(), label).icon =
+                MaterialSymbolsRounded.bitmapDrawable(this, glyph, secondaryText, iconSize)
         }
 
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(10), dp(18), 0)
-        }
-
-        val handle = View(this).apply {
-            background = rounded(
-                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
-                99
-            )
-        }
-
-        header.addView(
-            handle,
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(14)
-            }
-        )
-
-        header.addView(
-            TextView(this).apply {
-                text = "Browser"
-                textSize = 17f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.create(
-                    "sans-serif-medium",
-                    android.graphics.Typeface.NORMAL
-                )
-                includeFontPadding = false
-            },
-            LinearLayout.LayoutParams(-1, dp(34))
-        )
-
-        val quick = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        addQuickAction(quick, "arrow_back", "Voltar", webView.canGoBack()) {
-            webView.goBack()
-        }
-
-        addQuickAction(quick, "arrow_forward", "Avançar", webView.canGoForward()) {
-            webView.goForward()
-        }
-
-        addQuickAction(quick, "add", "Novo separador", true) {
-            finishToFlutter("newTab")
-        }
-
-        addTabCounterQuickAction(quick, "Separadores", true) {
-            finishToFlutter("tabs")
-        }
-
-        header.addView(quick, LinearLayout.LayoutParams(-1, dp(78)))
-        sheetRoot.addView(header, LinearLayout.LayoutParams(-1, -2))
-        sheetRoot.addView(sheetDivider())
-
-        // Esta é a única região rolável do modal.
-        val scroll = android.widget.ScrollView(this).apply {
-            isFillViewport = true
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
-        }
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(6), dp(18), dp(18))
-        }
-
-        addSheetItem(content, "star", "Adicionar aos favoritos") {
-            dialog.dismiss()
-            finishToFlutter("bookmark")
-        }
-
+        add(1, menuText("bookmark", "Add bookmark"), "star")
         if (!incognito) {
-            addSheetItem(content, "bookmarks", "Ver favoritos") {
-                dialog.dismiss()
-                finishToFlutter("bookmarks")
+            add(2, menuText("bookmarks", "Bookmarks"), "bookmarks")
+            add(3, menuText("history", "History"), "history")
+            add(4, menuText("downloads", "Downloads"), "download")
+        }
+        menu.add(0, 5, menu.size(), menuText("reload", "Reload page"))
+            .setIcon(MaterialSymbolsRounded.bitmapDrawable(this, "refresh", secondaryText, iconSize))
+        add(6, menuText("find", "Find in page"), "search")
+        add(7, menuText(if (desktopMode) "desktopOff" else "desktop", if (desktopMode) "Turn off desktop site" else "Desktop site"), "desktop_windows")
+        add(8, menuText("translate", "Translate"), "translate")
+        add(9, menuText("fontSize", "Font size"), "text_fields")
+        add(10, menuText("pageZoom", "Page zoom"), "zoom_in")
+        add(11, menuText("print", "Print page"), "print")
+        add(12, menuText("copy", "Copy address"), "content_copy")
+        add(13, menuText("share", "Share page"), "share")
+        add(14, menuText("siteInfo", "Site information"), "info")
+        add(15, menuText("settings", "Settings"), "settings")
+        add(16, menuText("home", "Home"), "home")
+        add(17, menuText("newTab", "New tab"), "add")
+        add(18, menuText("tabs", "Tabs"), "tab")
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> finishToFlutter("bookmark")
+                2 -> finishToFlutter("bookmarks")
+                3 -> finishToFlutter("history")
+                4 -> finishToFlutter("downloads")
+                5 -> webView.reload()
+                6 -> openFindBar()
+                7 -> toggleDesktopMode()
+                8 -> translatePage()
+                9 -> showScaleCard(pageScale = false)
+                10 -> showScaleCard(pageScale = true)
+                11 -> printPage()
+                12 -> copyAddress()
+                13 -> shareAddress()
+                14 -> showSiteInfo()
+                15 -> finishToFlutter("settings")
+                16 -> finishToFlutter("home")
+                17 -> finishToFlutter("newTab")
+                18 -> finishToFlutter("tabs")
             }
-
-            addSheetItem(content, "history", "Histórico") {
-                dialog.dismiss()
-                finishToFlutter("history")
-            }
-
-            addSheetItem(content, "download", "Transferências") {
-                dialog.dismiss()
-                showDownloadsSheet()
-            }
+            true
         }
-
-        addSheetItem(content, "refresh", "Recarregar página") {
-            dialog.dismiss()
-            webView.reload()
-        }
-
-        addSheetItem(content, "search", "Localizar na página") {
-            dialog.dismiss()
-            openFindBar()
-        }
-
-        addSheetItem(
-            content,
-            "desktop_windows",
-            if (desktopMode) {
-                "Desativar site para computador"
-            } else {
-                "Site para computador"
-            }
-        ) {
-            dialog.dismiss()
-            toggleDesktopMode()
-        }
-
-        addSheetItem(content, "translate", "Traduzir página") {
-            dialog.dismiss()
-            translatePage()
-        }
-
-        addSheetItem(content, "text_fields", "Tamanho da fonte") {
-            dialog.setOnDismissListener {
-                if (!isFinishing) showScaleCard(pageScale = false)
-            }
-            dialog.dismiss()
-        }
-
-        addSheetItem(content, "zoom_in", "Zoom da página") {
-            dialog.setOnDismissListener {
-                if (!isFinishing) showScaleCard(pageScale = true)
-            }
-            dialog.dismiss()
-        }
-
-        addSheetItem(content, "print", "Imprimir") {
-            dialog.dismiss()
-            printPage()
-        }
-
-        addSheetItem(content, "content_copy", "Copiar endereço") {
-            dialog.dismiss()
-            copyAddress()
-        }
-
-        addSheetItem(content, "share", "Partilhar página") {
-            dialog.dismiss()
-            shareAddress()
-        }
-
-        addSheetItem(content, "info", "Informações do site") {
-            dialog.dismiss()
-            showSiteInfo()
-        }
-
-        addSheetItem(content, "settings", "Definições") {
-            dialog.dismiss()
-            finishToFlutter("settings")
-        }
-
-        addSheetItem(content, "home", "Início") {
-            dialog.dismiss()
-            finishToFlutter("home")
-        }
-
-        scroll.addView(content, ViewGroup.LayoutParams(-1, -2))
-        sheetRoot.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        dialog.setContentView(sheetRoot)
-
-        dialog.setOnShowListener {
-            val sheet = dialog.findViewById<android.widget.FrameLayout>(
-                com.google.android.material.R.id.design_bottom_sheet
-            ) ?: return@setOnShowListener
-
-            sheet.setBackgroundColor(Color.TRANSPARENT)
-            val availableHeight = (
-                resources.displayMetrics.heightPixels -
-                    statusBarInsetPx() -
-                    navigationBarInsetPx() -
-                    dp(8)
-                ).coerceAtLeast(dp(420))
-
-            sheet.layoutParams = sheet.layoutParams.apply {
-                width = ViewGroup.LayoutParams.MATCH_PARENT
-                height = availableHeight
-            }
-
-            val behavior = BottomSheetBehavior.from(sheet)
-            behavior.isFitToContents = false
-            behavior.skipCollapsed = true
-            behavior.expandedOffset = statusBarInsetPx() + dp(8)
-            behavior.state = BottomSheetBehavior.STATE_EXPANDED
-        }
-
-        dialog.show()
+        popup.show()
     }
 
     private fun addQuickAction(
@@ -1477,7 +1393,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         if (isImage && !incognito) {
-            addSheetItem(content, "download", "Transferir imagem") {
+            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
                 dialog.dismiss()
                 startDownload(target, null, null, null)
             }
@@ -1765,8 +1681,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun translatePage() {
+        val targetLanguage = menuLabels.optString("targetLanguage", "en")
+            .takeIf { it.matches(Regex("^[a-zA-Z-]{2,8}$")) } ?: "en"
         val translateUrl =
-            "https://translate.google.com/translate?sl=auto&tl=pt&u=" +
+            "https://translate.google.com/translate?sl=auto&tl=$targetLanguage&u=" +
                 Uri.encode(currentUrl)
 
         webView.loadUrl(translateUrl)
@@ -2006,9 +1924,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val host = hostOf(currentUrl)
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Informações do site")
+            .setTitle(menuText("siteInfo", "Site information"))
             .setMessage("${currentTitle.ifBlank { host }}\n\n$currentUrl")
-            .setPositiveButton("Fechar", null)
+            .setPositiveButton(menuText("close", "Close"), null)
             .show()
     }
 
@@ -2024,7 +1942,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             android.content.ClipData.newPlainText("BrowseIt", value)
         )
 
-        Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, menuText("copied", "Copied"), Toast.LENGTH_SHORT).show()
     }
 
     private fun shareAddress() {
@@ -2037,7 +1955,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             putExtra(Intent.EXTRA_TEXT, value)
         }
 
-        startActivity(Intent.createChooser(send, "Partilhar ligação"))
+        startActivity(Intent.createChooser(send, menuText("share", "Share link")))
     }
 
     private fun startDownload(
@@ -2047,50 +1965,28 @@ class OrbitBrowserActivity : AppCompatActivity() {
         mimeType: String?
     ) {
         try {
-            val filename = android.webkit.URLUtil.guessFileName(
-                url,
-                contentDisposition,
-                mimeType
-            )
-
-            val request = DownloadManager.Request(Uri.parse(url)).apply {
-                setTitle(filename)
-                setDescription("A transferir através do BrowseIt")
-                setMimeType(
-                    mimeType ?: URLConnection.guessContentTypeFromName(filename)
-                )
-                setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                )
-                setDestinationInExternalFilesDir(
-                    this@OrbitBrowserActivity,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    filename
-                )
-                addRequestHeader(
-                    "User-Agent",
-                    userAgent ?: webView.settings.userAgentString
-                )
-
-                val cookie = CookieManager.getInstance().getCookie(url)
-                if (!cookie.isNullOrBlank()) {
-                    addRequestHeader("Cookie", cookie)
-                }
+            val uri = Uri.parse(url)
+            if (uri.scheme != "http" && uri.scheme != "https") {
+                Toast.makeText(this, "Este tipo de transferência não pode ser enviado para a lista da aplicação.", Toast.LENGTH_LONG).show()
+                return
             }
-
-            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
-
-            Toast.makeText(
-                this,
-                "Transferência iniciada",
-                Toast.LENGTH_SHORT
-            ).show()
+            val filename = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType)
+            val resolvedMime = mimeType ?: URLConnection.guessContentTypeFromName(filename)
+            val headers = hashMapOf<String, String>()
+            headers["User-Agent"] = userAgent ?: webView.settings.userAgentString
+            headers["Referer"] = currentUrl
+            CookieManager.getInstance().getCookie(url)?.takeIf { it.isNotBlank() }?.let {
+                headers["Cookie"] = it
+            }
+            MainActivity.notifyNativeDownloadRequested(
+                url = url,
+                filename = filename,
+                mimeType = resolvedMime,
+                headers = headers,
+            )
+            Toast.makeText(this, menuText("downloadReceived", "Download added to Downloads"), Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não foi possível iniciar a transferência.",
-                Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, menuText("downloadFailed", "Download failed"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2210,6 +2106,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
                 titleView.setTextColor(toolbarText())
                 tintTabCountButton(toolbarText())
+                tintMenuOptionsButton(toolbarText())
             }
         }
     }
@@ -2288,6 +2185,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
         if (toolbarHidden == hide) return
 
         toolbarHidden = hide
+        toolbarScrollFreezeUntilMs = SystemClock.uptimeMillis() + 330L
+        lastScrollDirection = 0
+        accumulatedScrollDelta = 0
+        reverseScrollDelta = 0
         appBarAnimator?.removeAllListeners()
         appBarAnimator?.cancel()
         appBarContainer.animate().cancel()
@@ -2313,7 +2214,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val startHeight = appBarContainer.layoutParams.height
             .takeIf { it >= 0 } ?: appBarContainer.height
         appBarAnimator = ValueAnimator.ofInt(startHeight, targetHeight).apply {
-            duration = 190L
+            duration = 220L
             interpolator = DecelerateInterpolator()
             addUpdateListener { animator ->
                 val params = appBarContainer.layoutParams
@@ -2322,6 +2223,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
+                    toolbarScrollFreezeUntilMs = SystemClock.uptimeMillis() + 110L
+                    lastScrollDirection = 0
+                    accumulatedScrollDelta = 0
+                    reverseScrollDelta = 0
                     if (toolbarHidden) {
                         appBarContainer.visibility = View.GONE
                     } else {
@@ -2441,6 +2346,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
             state.classLoader = javaClass.classLoader
 
             if (webView.restoreState(state) == null) return false
+            pendingRestoredScrollX = state.getInt(STATE_SCROLL_X, 0)
+            pendingRestoredScrollY = state.getInt(STATE_SCROLL_Y, 0)
 
             currentUrl = state.getString(STATE_URL) ?: webView.url ?: currentUrl
             currentTitle = state.getString(STATE_TITLE) ?: webView.title ?: currentTitle
@@ -2463,6 +2370,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val state = Bundle().apply {
             putString(STATE_URL, webView.url ?: currentUrl)
             putString(STATE_TITLE, webView.title ?: currentTitle)
+            putInt(STATE_SCROLL_X, webView.scrollX)
+            putInt(STATE_SCROLL_Y, webView.scrollY)
         }
 
         try {
