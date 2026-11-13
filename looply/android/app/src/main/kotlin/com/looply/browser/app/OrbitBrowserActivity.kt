@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -16,12 +17,16 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Parcel
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.text.InputType
 import android.view.Gravity
+import android.view.PixelCopy
 import android.widget.PopupWindow
+import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.transition.Fade
 import android.view.animation.DecelerateInterpolator
@@ -58,6 +63,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.slider.Slider
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.URLConnection
@@ -88,6 +94,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val PREF_PURE_BLACK = "flutter.looply_theme_pure_dark"
         private const val PREF_AD_BLOCK = "flutter.looply_ad_block_enabled"
+        private const val PREF_NAVIGATION_ACCELERATOR = "flutter.looply_navigation_accelerator_enabled"
         private const val PREF_FORCE_DARK = "flutter.looply_force_dark_websites"
         private const val PREF_ADAPTIVE_TOOLBAR = "flutter.looply_adaptive_toolbar_color"
         private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
@@ -211,6 +218,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var pendingRestoredScrollX: Int? = null
     private var pendingRestoredScrollY: Int? = null
     private var appBarAnimator: ValueAnimator? = null
+    private var progressAnimator: ValueAnimator? = null
+    private var progressTarget: Int = 0
     private var lastScrollDirection = 0
     private var accumulatedScrollDelta = 0
     private var reverseScrollDelta = 0
@@ -284,6 +293,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private val adBlockEnabled: Boolean
         get() = prefs.getBoolean(PREF_AD_BLOCK, true)
+
+    private val navigationAcceleratorEnabled: Boolean
+        get() = !incognito && prefs.getBoolean(PREF_NAVIGATION_ACCELERATOR, true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // A WebView derives prefers-color-scheme from android:isLightTheme.
@@ -663,6 +675,64 @@ class OrbitBrowserActivity : AppCompatActivity() {
      * só tenta escurecer algoritmicamente páginas sem tema escuro próprio,
      * quando o site não desativou explicitamente esta possibilidade.
      */
+    private fun setProgressSmooth(target: Int, immediate: Boolean = false) {
+        if (!::progress.isInitialized) return
+        progressTarget = target.coerceIn(0, 100)
+
+        if (immediate) {
+            progressAnimator?.cancel()
+            progressAnimator = null
+            progress.progress = progressTarget
+            return
+        }
+
+        // As atualizações do WebView chegam em rajadas. Não reinicia a animação
+        // por cada percentagem: a animação ativa segue o alvo mais recente e,
+        // se necessário, inicia uma segunda fase contínua até o alcançar.
+        if (progressAnimator?.isRunning == true) return
+        val startValue = progress.progress
+        if (startValue == progressTarget) return
+        val initialDistance = kotlin.math.abs(progressTarget - startValue)
+        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = (220L + initialDistance * 2L).coerceIn(240L, 420L)
+            interpolator = DecelerateInterpolator(1.15f)
+        }
+        animator.addUpdateListener { update ->
+            if (::progress.isInitialized && !isFinishing) {
+                val targetNow = progressTarget
+                val fraction = update.animatedFraction
+                progress.progress = (startValue + (targetNow - startValue) * fraction)
+                    .toInt().coerceIn(0, 100)
+            }
+        }
+        animator.addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                if (progressAnimator === animator) progressAnimator = null
+                if (!isFinishing && progress.progress != progressTarget) {
+                    setProgressSmooth(progressTarget)
+                }
+            }
+        })
+        progressAnimator = animator
+        animator.start()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) {
+            applyWebsiteDarkMode(webView.settings)
+            webView.settings.cacheMode = when {
+                incognito -> WebSettings.LOAD_NO_CACHE
+                navigationAcceleratorEnabled -> WebSettings.LOAD_CACHE_ELSE_NETWORK
+                else -> WebSettings.LOAD_DEFAULT
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                webView.settings.offscreenPreRaster = navigationAcceleratorEnabled
+            }
+            updateToolbarColors()
+        }
+    }
+
     private fun applyWebsiteDarkMode(settings: WebSettings) {
         val shouldDarken = dark &&
             (incognito || prefs.getBoolean(PREF_FORCE_DARK, false))
@@ -726,10 +796,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
         settings.displayZoomControls = false
         settings.textZoom = textSizePercent
 
-        settings.cacheMode = if (incognito) {
-            WebSettings.LOAD_NO_CACHE
-        } else {
-            WebSettings.LOAD_DEFAULT
+        settings.cacheMode = when {
+            incognito -> WebSettings.LOAD_NO_CACHE
+            navigationAcceleratorEnabled -> WebSettings.LOAD_CACHE_ELSE_NETWORK
+            else -> WebSettings.LOAD_DEFAULT
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Pré-renderização ajuda a reduzir o atraso visual ao voltar a uma
+            // página; desligada em incógnito para reduzir retenção de memória.
+            settings.offscreenPreRaster = navigationAcceleratorEnabled
         }
 
         applyWebsiteDarkMode(settings)
@@ -809,7 +884,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 reverseScrollDelta = 0
                 appliedPageZoomPercent = 100
                 hideToolbar(false)
-                progress.progress = 0
+                setProgressSmooth(0, immediate = true)
                 progress.visibility = View.VISIBLE
                 refreshTitle()
                 updateToolbarColors()
@@ -819,12 +894,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 currentUrl = url
                 currentTitle = view.title?.takeIf { it.isNotBlank() } ?: hostOf(url)
 
-                progress.progress = 100
+                setProgressSmooth(100)
                 progress.postDelayed({
                     if (!isFinishing && progress.progress == 100) {
                         progress.visibility = View.GONE
                     }
-                }, 260)
+                }, 460)
 
                 refreshTitle()
                 updateToolbarColors()
@@ -851,12 +926,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 error: WebResourceError
             ) {
                 if (request.isForMainFrame) {
-                    Toast.makeText(
-                        this@OrbitBrowserActivity,
+                    showBrowserSnackbar(
                         error.description?.toString()
-                            ?: menuText("loadingError", "Could not load this page."),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                            ?: menuText("loadingError", "Could not load this page.")
+                    )
                 }
             }
         }
@@ -864,11 +937,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
         webView.webChromeClient = object : WebChromeClient() {
 
             override fun onProgressChanged(view: WebView, newProgress: Int) {
-                progress.progress = newProgress
-                progress.visibility = if (newProgress >= 100) {
-                    View.GONE
-                } else {
-                    View.VISIBLE
+                setProgressSmooth(newProgress)
+                progress.visibility = View.VISIBLE
+                if (newProgress >= 100) {
+                    progress.postDelayed({
+                        if (!isFinishing && progress.progress >= 100) {
+                            progress.visibility = View.GONE
+                        }
+                    }, 460L)
                 }
             }
 
@@ -915,11 +991,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         webView.setDownloadListener(
             DownloadListener { url, userAgent, disposition, mimeType, _ ->
                 if (incognito) {
-                    Toast.makeText(
-                        this,
-                        "Transferências desativadas no modo privado.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    showBrowserSnackbar("Transferências desativadas no modo privado.")
                 } else {
                     startDownload(url, userAgent, disposition, mimeType)
                 }
@@ -954,9 +1026,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     symbol,
                     toolbarText(),
-                    21f,
+                    24f,
                 ),
-                android.widget.FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER),
+                android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER),
             )
             setOnClickListener { onClick() }
         }
@@ -974,11 +1046,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         this@OrbitBrowserActivity,
                         count,
                         toolbarText(),
-                        dp(25),
+                        dp(27),
                     )
                 )
             }
-            addView(icon, android.widget.FrameLayout.LayoutParams(dp(25), dp(25), Gravity.CENTER))
+            addView(icon, android.widget.FrameLayout.LayoutParams(dp(27), dp(27), Gravity.CENTER))
             setOnClickListener { onClick() }
         }
     }
@@ -986,7 +1058,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private fun tintTabCountButton(color: Int) {
         if (!::tabsButton.isInitialized) return
         (tabsButton.getChildAt(0) as? ImageView)?.setImageDrawable(
-            MaterialSymbolsRounded.tabsCounterDrawable(this, tabCount, color, dp(25))
+            MaterialSymbolsRounded.tabsCounterDrawable(this, tabCount, color, dp(27))
         )
     }
 
@@ -1071,11 +1143,35 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val uri = Uri.parse(target)
 
         if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-            Toast.makeText(this, menuText("validAddress", "Enter a valid HTTP or HTTPS address."), Toast.LENGTH_SHORT).show()
+            showBrowserSnackbar(menuText("validAddress", "Enter a valid HTTP or HTTPS address."))
             return
         }
 
         webView.loadUrl(uri.toString())
+    }
+
+    private fun showBrowserSnackbar(message: String, long: Boolean = false) {
+        if (!::root.isInitialized || isFinishing || message.isBlank()) return
+        val backgroundColor = when {
+            !dark -> Color.rgb(241, 243, 244)
+            pureBlack -> Color.rgb(41, 41, 41)
+            else -> Color.rgb(58, 60, 64)
+        }
+        val foregroundColor = if (dark) Color.WHITE else Color.rgb(32, 33, 36)
+        val snackbar = Snackbar.make(
+            root,
+            message,
+            if (long) Snackbar.LENGTH_LONG else Snackbar.LENGTH_SHORT,
+        )
+        snackbar.setTextColor(foregroundColor)
+        snackbar.setBackgroundTint(backgroundColor)
+        snackbar.setAnimationMode(Snackbar.ANIMATION_MODE_SLIDE)
+        snackbar.view.apply {
+            background = rounded(backgroundColor, 11)
+            elevation = dp(6).toFloat()
+            clipToOutline = true
+        }
+        snackbar.show()
     }
 
     private fun menuText(key: String, fallback: String): String {
@@ -1084,13 +1180,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun showBrowserPopupMenu(anchor: View) {
         if (previewOnly || isFinishing || !anchor.isAttachedToWindow) return
+        popupWindowRef?.dismiss()
 
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
-        val popupWidth = minOf(dp(420), screenWidth - dp(24)).coerceAtLeast(dp(260))
-        // Não ocupar o ecrã todo: o menu é um painel compacto com a lista
-        // interna a rolar, sem empurrar o conteúdo até ao fundo do telemóvel.
-        val maxPopupHeight = (screenHeight * .62f).toInt().coerceAtLeast(dp(300))
+        val popupWidth = minOf(dp(360), screenWidth - dp(24)).coerceAtLeast(dp(260))
+        val maxPopupHeight = (screenHeight * .56f).toInt().coerceAtLeast(dp(280))
         val surface = when {
             !dark -> Color.WHITE
             pureBlack -> Color.rgb(16, 16, 16)
@@ -1101,41 +1196,60 @@ class OrbitBrowserActivity : AppCompatActivity() {
             pureBlack -> Color.rgb(25, 25, 25)
             else -> Color.rgb(31, 33, 36)
         }
+        val dividerColor = when {
+            !dark -> Color.rgb(232, 234, 237)
+            pureBlack -> Color.rgb(41, 41, 41)
+            else -> Color.rgb(52, 54, 58)
+        }
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(8))
-            background = rounded(surface, 27)
+            background = rounded(surface, 26)
             clipToOutline = true
+            layoutTransition = android.animation.LayoutTransition().apply {
+                setDuration(170L)
+                enableTransitionType(android.animation.LayoutTransition.CHANGING)
+            }
         }
 
+        // Atalhos superiores num trilho horizontal. Em ecrãs estreitos o
+        // utilizador desliza esta faixa, sem aumentar a altura do popup.
+        val quickScroller = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipToPadding = false
+            setPadding(dp(2), dp(3), dp(2), dp(7))
+        }
         val quickRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(5), dp(7), dp(5), dp(9))
+            gravity = Gravity.CENTER_VERTICAL
         }
 
-        fun quickAction(glyph: String, description: String, enabled: Boolean = true, action: () -> Unit) {
+        fun quickAction(
+            glyph: String,
+            description: String,
+            enabled: Boolean = true,
+            action: () -> Unit,
+        ) {
+            val icon = ImageView(this@OrbitBrowserActivity).apply {
+                setImageDrawable(
+                    MaterialSymbolsRounded.bitmapDrawable(
+                        this@OrbitBrowserActivity,
+                        glyph,
+                        primaryText,
+                        dp(24),
+                    )
+                )
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                contentDescription = description
+            }
             val frame = android.widget.FrameLayout(this).apply {
                 isClickable = enabled
                 isFocusable = enabled
                 alpha = if (enabled) 1f else .38f
                 background = rounded(quickSurface, 999)
-                addView(
-                    ImageView(this@OrbitBrowserActivity).apply {
-                        setImageDrawable(
-                            MaterialSymbolsRounded.bitmapDrawable(
-                                this@OrbitBrowserActivity,
-                                glyph,
-                                primaryText,
-                                dp(21),
-                            )
-                        )
-                        scaleType = ImageView.ScaleType.FIT_CENTER
-                        contentDescription = description
-                    },
-                    android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER),
-                )
+                addView(icon, android.widget.FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
                 setOnClickListener {
                     if (enabled) {
                         popupWindowRef?.dismiss()
@@ -1145,14 +1259,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
             quickRow.addView(
                 frame,
-                LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                LinearLayout.LayoutParams(dp(54), dp(48)).apply {
                     marginStart = dp(3)
                     marginEnd = dp(3)
                 },
             )
         }
 
-        // The five top actions mirror the compact Chrome-style shortcut row.
         quickAction("arrow_forward", menuText("forward", "Forward"), webView.canGoForward()) {
             webView.goForward()
         }
@@ -1168,19 +1281,19 @@ class OrbitBrowserActivity : AppCompatActivity() {
         quickAction("refresh", menuText("reload", "Reload page")) {
             webView.reload()
         }
-        content.addView(quickRow, LinearLayout.LayoutParams(-1, dp(64)))
 
-        val dividerColor = when {
-            !dark -> Color.rgb(232, 234, 237)
-            pureBlack -> Color.rgb(41, 41, 41)
-            else -> Color.rgb(52, 54, 58)
-        }
-        val divider = View(this).apply { setBackgroundColor(dividerColor) }
-        content.addView(divider, LinearLayout.LayoutParams(-1, dp(1)).apply {
-            leftMargin = dp(8)
-            rightMargin = dp(8)
-            bottomMargin = dp(5)
-        })
+        quickScroller.addView(
+            quickRow,
+            HorizontalScrollView.LayoutParams(-2, -1),
+        )
+        content.addView(quickScroller, LinearLayout.LayoutParams(-1, dp(58)))
+
+        content.addView(View(this).apply { setBackgroundColor(dividerColor) },
+            LinearLayout.LayoutParams(-1, dp(1)).apply {
+                leftMargin = dp(8)
+                rightMargin = dp(8)
+                bottomMargin = dp(5)
+            })
 
         val menuScroll = ScrollView(this).apply {
             isFillViewport = false
@@ -1198,7 +1311,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(13), 0, dp(13), 0)
-                minimumHeight = dp(51)
+                minimumHeight = dp(50)
+                alpha = 0f
+                translationY = dp(7).toFloat()
                 background = selectableBackground()
                 isClickable = true
                 isFocusable = true
@@ -1209,14 +1324,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
                                 this@OrbitBrowserActivity,
                                 glyph,
                                 secondaryText,
-                                dp(21),
+                                dp(24),
                             )
                         )
                         scaleType = ImageView.ScaleType.FIT_CENTER
                     },
-                    LinearLayout.LayoutParams(dp(24), dp(24)),
+                    LinearLayout.LayoutParams(dp(26), dp(26)),
                 )
-                addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(14), 1))
+                addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(13), 1))
                 addView(
                     TextView(this@OrbitBrowserActivity).apply {
                         text = label
@@ -1225,6 +1340,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         maxLines = 2
                         ellipsize = android.text.TextUtils.TruncateAt.END
                         gravity = Gravity.CENTER_VERTICAL
+                        includeFontPadding = false
                     },
                     LinearLayout.LayoutParams(0, -2, 1f),
                 )
@@ -1233,7 +1349,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     action()
                 }
             }
-            menuItems.addView(row, LinearLayout.LayoutParams(-1, dp(51)))
+            val delay = menuItems.childCount * 14L
+            menuItems.addView(row, LinearLayout.LayoutParams(-1, dp(50)))
+            row.postDelayed({
+                if (row.isAttachedToWindow) {
+                    row.animate()
+                        .alpha(1f)
+                        .translationY(0f)
+                        .setDuration(175L)
+                        .setInterpolator(DecelerateInterpolator(1.4f))
+                        .start()
+                }
+            }, delay)
         }
 
         fun menuDivider() {
@@ -1241,28 +1368,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams(-1, dp(1)).apply {
                     marginStart = dp(10)
                     marginEnd = dp(10)
-                    topMargin = dp(5)
-                    bottomMargin = dp(5)
+                    topMargin = dp(4)
+                    bottomMargin = dp(4)
                 })
         }
 
-        menuRow(menuText("newTab", "New tab"), "add_box") {
-            finishToFlutter("newTab")
-        }
-        menuRow(menuText("tabs", "Manage tabs"), "tab") {
-            finishToFlutter("tabs")
-        }
+        menuRow(menuText("newTab", "New tab"), "add_box") { finishToFlutter("newTab") }
+        menuRow(menuText("tabs", "Manage tabs"), "tab") { finishToFlutter("tabs") }
         if (!incognito) {
-            menuRow(menuText("bookmarks", "Bookmarks"), "bookmarks") {
-                finishToFlutter("bookmarks")
-            }
-            menuRow(menuText("history", "History"), "history") {
-                finishToFlutter("history")
-            }
+            menuRow(menuText("bookmarks", "Bookmarks"), "bookmarks") { finishToFlutter("bookmarks") }
+            menuRow(menuText("history", "History"), "history") { finishToFlutter("history") }
             menuDivider()
-            menuRow(menuText("downloads", "Downloads"), "download") {
-                finishToFlutter("downloads")
-            }
+            menuRow(menuText("downloads", "Downloads"), "download") { finishToFlutter("downloads") }
         }
         menuRow(menuText("find", "Find in page"), "search") { openFindBar() }
         menuRow(
@@ -1276,31 +1393,57 @@ class OrbitBrowserActivity : AppCompatActivity() {
         menuRow(menuText("print", "Print page"), "print") { printPage() }
         menuRow(menuText("share", "Share page"), "share") { shareAddress() }
         menuRow(menuText("settings", "Browser settings"), "settings") { finishToFlutter("settings") }
-        val menuHeight = minOf(dp(560), maxPopupHeight - dp(90)).coerceAtLeast(dp(150))
-        content.addView(menuScroll, LinearLayout.LayoutParams(-1, menuHeight))
-        val popupHeight = (menuHeight + dp(86)).coerceAtMost(maxPopupHeight)
 
-        val popup = PopupWindow(
-            content,
-            popupWidth,
-            popupHeight,
-            true,
-        ).apply {
-            setBackgroundDrawable(rounded(surface, 27))
-            setElevation(dp(18).toFloat())
+        val menuHeight = minOf(dp(430), maxPopupHeight - dp(66)).coerceAtLeast(dp(130))
+        content.addView(menuScroll, LinearLayout.LayoutParams(-1, menuHeight))
+        val popupHeight = (menuHeight + dp(76)).coerceAtMost(maxPopupHeight)
+
+        val popup = PopupWindow(content, popupWidth, popupHeight, true).apply {
+            setBackgroundDrawable(rounded(surface, 26))
+            setElevation(dp(20).toFloat())
             isOutsideTouchable = true
             isClippingEnabled = true
             inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                enterTransition = Fade().apply { duration = 150 }
-                exitTransition = Fade().apply { duration = 110 }
+                enterTransition = Fade().apply { duration = 165 }
+                exitTransition = Fade().apply { duration = 115 }
             }
         }
         popupWindowRef = popup
         popup.setOnDismissListener {
             if (popupWindowRef === popup) popupWindowRef = null
         }
-        popup.showAsDropDown(anchor, dp(2), dp(5), Gravity.END)
+
+        val anchorLocation = IntArray(2)
+        anchor.getLocationOnScreen(anchorLocation)
+        val availableAbove = anchorLocation[1] - statusBarInsetPx()
+        val showAbove = availableAbove >= popupHeight + dp(16)
+        val popupX = (anchorLocation[0] + anchor.width - popupWidth)
+            .coerceIn(dp(12), (screenWidth - popupWidth - dp(12)).coerceAtLeast(dp(12)))
+        val popupY = if (showAbove) {
+            (anchorLocation[1] - popupHeight - dp(8))
+                .coerceAtLeast(statusBarInsetPx() + dp(8))
+        } else {
+            (anchorLocation[1] + anchor.height + dp(8))
+                .coerceAtMost((screenHeight - popupHeight - navigationBarInsetPx() - dp(8)).coerceAtLeast(dp(8)))
+        }
+        popup.showAtLocation(root, Gravity.TOP or Gravity.LEFT, popupX, popupY)
+        quickRow.post {
+            for (index in 0 until quickRow.childCount) {
+                val child = quickRow.getChildAt(index)
+                child.alpha = 0f
+                child.scaleX = .92f
+                child.scaleY = .92f
+                child.animate()
+                    .alpha(1f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setStartDelay(index * 18L)
+                    .setDuration(170L)
+                    .setInterpolator(DecelerateInterpolator(1.35f))
+                    .start()
+            }
+        }
     }
 
     private var popupWindowRef: PopupWindow? = null
@@ -1328,9 +1471,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     icon,
                     secondaryText,
-                    21f,
+                    24f,
                 ),
-                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER)
+                android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER)
             )
         }
         row.addView(iconCell, LinearLayout.LayoutParams(dp(44), dp(56)))
@@ -1446,12 +1589,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
         webView.settings.useWideViewPort = true
         webView.settings.loadWithOverviewMode = desktopMode
         webView.reload()
-        Toast.makeText(
-            this,
+        showBrowserSnackbar(
             if (desktopMode) menuText("desktopEnabled", "Desktop site enabled")
-            else menuText("desktopDisabled", "Desktop site disabled"),
-            Toast.LENGTH_SHORT
-        ).show()
+            else menuText("desktopDisabled", "Desktop site disabled")
+        )
     }
 
     private fun translatePage() {
@@ -1649,11 +1790,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             )
             manager.print("BrowseIt", adapter, PrintAttributes.Builder().build())
         } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                menuText("printError", "Could not print this page."),
-                Toast.LENGTH_SHORT
-            ).show()
+            showBrowserSnackbar(menuText("printError", "Could not print this page."))
         }
     }
 
@@ -1675,7 +1812,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         clipboard.setPrimaryClip(
             android.content.ClipData.newPlainText("BrowseIt", value)
         )
-        Toast.makeText(this, menuText("copied", "Copied"), Toast.LENGTH_SHORT).show()
+        showBrowserSnackbar(menuText("copied", "Copied"))
     }
 
     private fun shareAddress() {
@@ -1700,7 +1837,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         try {
             val uri = Uri.parse(url)
             if (uri.scheme != "http" && uri.scheme != "https") {
-                Toast.makeText(this, "Este tipo de transferência não pode ser enviado para a lista da aplicação.", Toast.LENGTH_LONG).show()
+                showBrowserSnackbar("Este tipo de transferência não pode ser enviado para a lista da aplicação.", long = true)
                 return
             }
             val filename = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimeType)
@@ -1717,9 +1854,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 mimeType = resolvedMime,
                 headers = headers,
             )
-            Toast.makeText(this, menuText("downloadReceived", "Download added to Downloads"), Toast.LENGTH_SHORT).show()
+            showBrowserSnackbar(menuText("downloadReceived", "Download added to Downloads"))
         } catch (_: Exception) {
-            Toast.makeText(this, menuText("downloadFailed", "Download failed"), Toast.LENGTH_SHORT).show()
+            showBrowserSnackbar(menuText("downloadFailed", "Download failed"))
         }
     }
 
@@ -1732,11 +1869,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             startActivity(Intent(Intent.ACTION_VIEW, uri))
             true
         } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não existe uma aplicação compatível para abrir esta ligação.",
-                Toast.LENGTH_SHORT
-            ).show()
+            showBrowserSnackbar("Não existe uma aplicação compatível para abrir esta ligação.")
             true
         }
     }
@@ -1805,6 +1938,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         if (!adaptive) {
             pageToolbarColor = null
+            if (::toolbar.isInitialized) toolbar.setBackgroundColor(toolbarBg)
+            if (::appBarContainer.isInitialized) appBarContainer.setBackgroundColor(toolbarBg)
+            if (::titlePill.isInitialized) titlePill.background = rounded(toolbarPillColor(), 24)
+            if (::titleView.isInitialized) titleView.setTextColor(toolbarText())
+            tintTabCountButton(toolbarText())
+            tintMenuOptionsButton(toolbarText())
             applySystemBars()
             return
         }
@@ -1880,11 +2019,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun toolbarPillColor(): Int {
-        return if (dark) {
-            Color.rgb(46, 48, 52)
-        } else {
-            Color.rgb(241, 243, 244)
-        }
+        val base = toolbarBg
+        val neutral = if (isLight(base)) Color.WHITE else Color.BLACK
+        val fraction = if (isLight(base)) .10f else .16f
+        return blendColor(base, neutral, fraction)
+    }
+
+    private fun blendColor(from: Int, to: Int, amount: Float): Int {
+        val t = amount.coerceIn(0f, 1f)
+        val inverse = 1f - t
+        return Color.rgb(
+            (Color.red(from) * inverse + Color.red(to) * t).roundToInt().coerceIn(0, 255),
+            (Color.green(from) * inverse + Color.green(to) * t).roundToInt().coerceIn(0, 255),
+            (Color.blue(from) * inverse + Color.blue(to) * t).roundToInt().coerceIn(0, 255),
+        )
     }
 
     private fun applySystemBars() {
@@ -2003,45 +2151,126 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun finishToFlutter(action: String, newUrl: String? = null) {
         if (isFinishingWithResult) return
-
         isFinishingWithResult = true
         persistTabState()
 
+        if (incognito || previewOnly || !::webView.isInitialized) {
+            completeFinishToFlutter(action, newUrl, null, null)
+            return
+        }
+
+        captureCurrentScreen { pageThumbnail, fullScreenshot ->
+            if (isFinishing) return@captureCurrentScreen
+            completeFinishToFlutter(
+                action,
+                newUrl,
+                pageThumbnail,
+                if (action == "tabs") fullScreenshot else null,
+            )
+        }
+    }
+
+    private fun completeFinishToFlutter(
+        action: String,
+        newUrl: String?,
+        pageThumbnail: ByteArray?,
+        fullScreenshot: ByteArray?,
+    ) {
         val output = Intent().apply {
             putExtra(RESULT_URL, currentUrl)
             putExtra(RESULT_TITLE, currentTitle)
             putExtra(RESULT_TAB_ID, tabId)
             putExtra(RESULT_ACTION, action)
-
-            if (newUrl != null) {
-                putExtra(RESULT_NEW_URL, newUrl)
-            }
-
-            if (!incognito && !previewOnly) {
-                takeThumbnail()?.let {
-                    putExtra(RESULT_THUMBNAIL, it)
-                }
-            }
-
-            // A animação de Container Transform precisa da captura da Activity
-            // completa (barra, progresso e página), não apenas da WebView usada
-            // como miniatura do cartão. A imagem é transitória e não é guardada.
-            if (action == "tabs" && !previewOnly) {
-                takeBrowserTransitionScreenshot()?.let {
-                    putExtra(RESULT_TRANSITION_SCREENSHOT, it)
-                }
-            }
+            if (newUrl != null) putExtra(RESULT_NEW_URL, newUrl)
+            pageThumbnail?.let { putExtra(RESULT_THUMBNAIL, it) }
+            fullScreenshot?.let { putExtra(RESULT_TRANSITION_SCREENSHOT, it) }
         }
 
         setResult(Activity.RESULT_OK, output)
         finish()
-        // Ao abrir a grelha, o Flutter executa o mesmo Container Transform
-        // usado pela navegação principal. Uma animação de saída da Activity
-        // aqui criava um segundo movimento e quebrava a continuidade visual.
         if (action == "tabs") {
             overridePendingTransition(0, 0)
         } else {
             overridePendingTransition(0, R.anim.browser_slide_down)
+        }
+    }
+
+    /** Captura a janela já composta (incluindo WebView) e faz fallback para
+     * View.draw caso PixelCopy não esteja disponível ou o fabricante falhe. */
+    private fun captureCurrentScreen(onCaptured: (ByteArray?, ByteArray?) -> Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            onCaptured(takeThumbnail(), takeBrowserTransitionScreenshot())
+            return
+        }
+
+        val decor = window.decorView
+        val width = decor.width.coerceAtLeast(1)
+        val height = decor.height.coerceAtLeast(1)
+        val bitmap = try {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        } catch (_: Exception) {
+            onCaptured(takeThumbnail(), takeBrowserTransitionScreenshot())
+            return
+        }
+        val handler = Handler(Looper.getMainLooper())
+        var completed = false
+
+        fun fallback() {
+            if (completed) return
+            completed = true
+            runCatching { bitmap.recycle() }
+            onCaptured(takeThumbnail(), takeBrowserTransitionScreenshot())
+        }
+
+        val timeout = Runnable { fallback() }
+        handler.postDelayed(timeout, 450L)
+        try {
+            PixelCopy.request(window, bitmap, { result ->
+                if (completed) {
+                    runCatching { bitmap.recycle() }
+                    return@request
+                }
+                completed = true
+                handler.removeCallbacks(timeout)
+
+                if (result != PixelCopy.SUCCESS) {
+                    runCatching { bitmap.recycle() }
+                    onCaptured(takeThumbnail(), takeBrowserTransitionScreenshot())
+                    return@request
+                }
+
+                val full = encodeScreenshot(bitmap, 60)
+                val location = IntArray(2)
+                webView.getLocationInWindow(location)
+                val left = location[0].coerceIn(0, bitmap.width - 1)
+                val top = location[1].coerceIn(0, bitmap.height - 1)
+                val right = (left + webView.width).coerceIn(left + 1, bitmap.width)
+                val bottom = (top + webView.height).coerceIn(top + 1, bitmap.height)
+                val page = try {
+                    Bitmap.createBitmap(bitmap, left, top, right - left, bottom - top)
+                } catch (_: Exception) {
+                    null
+                }
+                val pageBytes = page?.let { encodeScreenshot(it, 58) }
+                page?.recycle()
+                bitmap.recycle()
+                onCaptured(pageBytes ?: takeThumbnail(), full ?: takeBrowserTransitionScreenshot())
+            }, handler)
+        } catch (_: Exception) {
+            handler.removeCallbacks(timeout)
+            fallback()
+        }
+    }
+
+    private fun encodeScreenshot(bitmap: Bitmap, quality: Int): ByteArray? {
+        return try {
+            ByteArrayOutputStream().use { stream ->
+                if (bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)) {
+                    stream.toByteArray()
+                } else null
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -2138,6 +2367,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        progressAnimator?.cancel()
+        progressAnimator = null
         if (incognito) {
             CookieManager.getInstance().setAcceptCookie(true)
         }

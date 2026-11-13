@@ -211,8 +211,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphController = AnimationController(vsync: this, duration: const Duration(milliseconds: 430));
     _drawerController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
-      reverseDuration: const Duration(milliseconds: 460),
+      duration: const Duration(milliseconds: 560),
+      reverseDuration: const Duration(milliseconds: 520),
     );
     drawer_menu.LooplyDrawerBridge.open = _openShellDrawer;
     drawer_menu.LooplyDrawerBridge.close = _closeShellDrawer;
@@ -469,12 +469,12 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _drawerController.stop();
     final speed = velocity.abs();
     final milliseconds = speed > 80
-        ? (distance * drawerWidth / speed * 1000).round().clamp(105, 260).toInt()
-        : (distance * 245).round().clamp(105, 245).toInt();
+        ? (distance * drawerWidth / speed * 1000).round().clamp(230, 430).toInt()
+        : (distance * 455).round().clamp(260, 455).toInt();
     unawaited(_drawerController.animateTo(
       target,
       duration: Duration(milliseconds: milliseconds),
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeInOutCubicEmphasized,
     ));
   }
 
@@ -1636,7 +1636,13 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
       child: Material(
         color: pillSurface,
         elevation: 0,
-        borderRadius: BorderRadius.circular(999),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: BorderSide(
+            color: isDark ? Colors.transparent : const Color(0xFFD7DADF),
+            width: isDark ? 0 : 1,
+          ),
+        ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: 60,
