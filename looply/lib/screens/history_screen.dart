@@ -20,7 +20,9 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final Set<String> _selectedKeys = <String>{};
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _query = '';
+  bool _searchActive = false;
 
   bool get _isSelecting => _selectedKeys.isNotEmpty;
 
@@ -29,13 +31,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.initState();
     activityController.addListener(_onChanged);
     _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     activityController.removeListener(_onChanged);
     _searchController.removeListener(_onSearchChanged);
+    _searchFocusNode.removeListener(_onFocusChanged);
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -51,6 +56,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     setState(() => _query = _searchController.text.trim().toLowerCase());
   }
 
+  void _onFocusChanged() {
+    if (!mounted) return;
+    if (_searchFocusNode.hasFocus && !_searchActive) {
+      setState(() => _searchActive = true);
+    }
+  }
+
   String _key(ActivityEntry entry) =>
       '${entry.kind.name}|${entry.url}|${entry.timestamp.microsecondsSinceEpoch}';
 
@@ -62,16 +74,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
-  // Ao voltar com seleção ativa, o primeiro toque em "fechar" apenas
-  // desativa a seleção; só um segundo toque (ou voltar sem seleção)
-  // efetivamente sai da tela.
-  void _clearSelectionOrPop() {
+  // Ordem de prioridade ao voltar: 1) sair da seleção, 2) fechar a busca
+  // expandida, 3) sair da tela.
+  void _handleBack() {
     if (_isSelecting) {
       HapticFeedback.selectionClick();
       setState(_selectedKeys.clear);
       return;
     }
+    if (_searchActive) {
+      _closeSearch();
+      return;
+    }
     Navigator.of(context).maybePop();
+  }
+
+  void _openSearch() {
+    setState(() => _searchActive = true);
+    _searchFocusNode.requestFocus();
+  }
+
+  void _closeSearch() {
+    HapticFeedback.selectionClick();
+    _searchFocusNode.unfocus();
+    _searchController.clear();
+    setState(() {
+      _searchActive = false;
+      _query = '';
+    });
   }
 
   Future<void> _deleteSelected() async {
@@ -114,10 +144,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final bg = pageBg(context);
 
     return PopScope<void>(
-      canPop: !_isSelecting,
+      canPop: !_isSelecting && !_searchActive,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        _clearSelectionOrPop();
+        _handleBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
@@ -126,7 +156,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         child: Scaffold(
           backgroundColor: bg,
           extendBodyBehindAppBar: true,
-          extendBody: true,
           body: Stack(
             children: [
               entries.isEmpty
@@ -141,32 +170,47 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ]),
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 92),
+                      padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 24),
                       itemCount: entries.length,
                       itemBuilder: (context, index) {
                         final entry = entries[index];
+                        final isFirst = index == 0;
+                        final isLast = index == entries.length - 1;
                         final previous = index > 0 ? entries[index - 1] : null;
                         final day = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
                         final previousDay = previous == null ? null : DateTime(previous.timestamp.year, previous.timestamp.month, previous.timestamp.day);
                         final showDay = previousDay == null || day != previousDay;
+                        // Quando um cabeçalho de dia aparece, o item seguinte
+                        // reinicia o agrupamento visual (topo arredondado),
+                        // mesmo que não seja o primeiro da lista inteira.
+                        final groupFirst = isFirst || showDay;
+                        final nextEntry = index < entries.length - 1 ? entries[index + 1] : null;
+                        final nextDay = nextEntry == null
+                            ? null
+                            : DateTime(nextEntry.timestamp.year, nextEntry.timestamp.month, nextEntry.timestamp.day);
+                        final groupLast = isLast || nextDay != day;
                         final card = _HistoryCard(
                           entry: entry,
                           selected: _selectedKeys.contains(_key(entry)),
                           onTap: () {
-                            if (_isSelecting) { _toggle(entry); }
-                            else if (entry.kind == ActivityKind.site) {
+                            if (_isSelecting) {
+                              _toggle(entry);
+                            } else if (entry.kind == ActivityKind.site) {
                               openOrbitTab(context, entry.url, title: entry.title);
                             }
                           },
                           onLongPress: () => _toggle(entry),
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(groupFirst ? 22 : 8),
+                            bottom: Radius.circular(groupLast ? 22 : 8),
+                          ),
                         );
                         return Padding(
-                          padding: EdgeInsets.only(bottom: index == entries.length - 1 ? 0 : 9),
+                          padding: EdgeInsets.only(bottom: groupLast ? 0 : 2),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             if (showDay) ...[
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                                padding: EdgeInsets.fromLTRB(4, isFirst ? 0 : 16, 4, 8),
                                 child: Text(
                                   '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}/${day.year}',
                                   style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: .2),
@@ -182,71 +226,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: Container(
-                  padding: EdgeInsets.only(top: topInset),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [bg, bg, bg.withOpacity(0)],
-                      stops: const [0, .58, 1],
-                    ),
-                  ),
-                  child: SizedBox(
-                    height: 64,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Row(children: [
-                        // O botão troca entre "voltar" e "fechar seleção"
-                        // com um fade/scale suave, sem substituir o widget
-                        // abruptamente — a posição e o tamanho não mudam.
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          transitionBuilder: (child, animation) => FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(scale: animation, child: child),
-                          ),
-                          child: _HistoryHeaderButton(
-                            key: ValueKey<bool>(_isSelecting),
-                            tooltip: _isSelecting ? appText('close') : appText('back'),
-                            icon: _isSelecting ? AppIcons.x : AppIcons.arrowLeft,
-                            onTap: _clearSelectionOrPop,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _isSelecting
-                                ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                                : appText('history'),
-                            style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        if (!_isSelecting)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(99)),
-                            child: Text('${entries.length}', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
-                          ),
-                        if (selectedCount > 0)
-                          _HistoryHeaderButton(
-                            tooltip: '${appText('delete')} ($selectedCount)',
-                            icon: AppIcons.trash,
-                            foreground: const Color(0xFFFF453A),
-                            onTap: _deleteSelected,
-                          ),
-                      ]),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _HistorySearchBar(
-                  controller: _searchController,
-                  bottomInset: bottomInset,
+                child: _HistoryFadeAppBar(
+                  topInset: topInset,
+                  isSelecting: _isSelecting,
+                  searchActive: _searchActive,
+                  selectedCount: selectedCount,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onBack: _handleBack,
+                  onOpenSearch: _openSearch,
+                  onDelete: _deleteSelected,
                 ),
               ),
             ],
@@ -257,11 +246,194 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
+// AppBar com esmaecimento (mesmo gradiente das demais telas) que alterna
+// entre três estados: normal (título + voltar + lupa), seleção (título
+// "X selecionados" + lixeira), e busca (input expandido ocupando o lugar
+// do título, com botão de voltar fechando a busca).
+class _HistoryFadeAppBar extends StatelessWidget {
+  const _HistoryFadeAppBar({
+    required this.topInset,
+    required this.isSelecting,
+    required this.searchActive,
+    required this.selectedCount,
+    required this.searchController,
+    required this.searchFocusNode,
+    required this.onBack,
+    required this.onOpenSearch,
+    required this.onDelete,
+  });
+
+  final double topInset;
+  final bool isSelecting;
+  final bool searchActive;
+  final int selectedCount;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
+  final VoidCallback onBack;
+  final VoidCallback onOpenSearch;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final text = mainText(context);
+    final muted = mutedText(context);
+
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0)],
+          stops: const [0, .58, 1],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            children: [
+              // Botão de voltar/fechar: sempre visível, troca de ícone
+              // conforme o estado (voltar / sair da seleção / fechar busca).
+              _HistoryHeaderButton(
+                key: ValueKey<String>(isSelecting || searchActive ? 'close' : 'back'),
+                tooltip: isSelecting || searchActive ? appText('close') : appText('back'),
+                icon: isSelecting || searchActive ? AppIcons.x : AppIcons.arrowLeft,
+                onTap: onBack,
+              ),
+              const SizedBox(width: 12),
+              // O título encolhe e desaparece (fade + leve deslocamento)
+              // exatamente quando a busca expande; o Expanded garante que
+              // o input ocupa o espaço liberado sem saltos de layout.
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axis: Axis.horizontal,
+                      axisAlignment: -1,
+                      child: child,
+                    ),
+                  ),
+                  child: searchActive
+                      ? _HistorySearchField(
+                          key: const ValueKey<String>('search-field'),
+                          controller: searchController,
+                          focusNode: searchFocusNode,
+                        )
+                      : Text(
+                          isSelecting
+                              ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                              : appText('history'),
+                          key: const ValueKey<String>('title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Ação à direita: lixeira em seleção, lupa em repouso, nada
+              // durante a busca (o próprio input já tem o ícone de lupa).
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: isSelecting
+                    ? _HistoryHeaderButton(
+                        key: const ValueKey<String>('delete'),
+                        tooltip: '${appText('delete')} ($selectedCount)',
+                        icon: AppIcons.trash,
+                        foreground: const Color(0xFFFF453A),
+                        onTap: onDelete,
+                      )
+                    : searchActive
+                        ? const SizedBox(key: ValueKey<String>('empty'), width: 42, height: 42)
+                        : _HistoryHeaderButton(
+                            key: const ValueKey<String>('search'),
+                            tooltip: appText('search_history'),
+                            icon: AppIcons.magnifyingGlass,
+                            onTap: onOpenSearch,
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Campo de busca que some no lugar do título. Tem o mesmo fundo em
+// pílula usado no restante do app (pillColor) e um "x" para limpar o
+// texto sem precisar fechar a busca inteira.
+class _HistorySearchField extends StatelessWidget {
+  const _HistorySearchField({super.key, required this.controller, required this.focusNode});
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        borderRadius: BorderRadius.circular(21),
+      ),
+      child: Row(
+        children: [
+          AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              style: TextStyle(color: text, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: appText('search_history'),
+                hintStyle: TextStyle(color: muted, fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: controller.clear,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // Card de histórico: toque ativa a seleção com um ícone de check que
 // aparece com animação de escala + fade (TweenAnimationBuilder), sem
 // depender de nenhum pacote externo de ícones animados. À direita, um
 // ícone de abertura externa em Material Symbols Rounded no
-// lugar do antigo chevron. À esquerda, agora usa SiteFaviconAvatar (o
+// lugar do antigo chevron. À esquerda, usa SiteFaviconAvatar (o
 // mesmo widget já usado nos cartões de "Recentes" da tela de Atividade)
 // para entradas de site: mostra o favicon real quando disponível, ou um
 // círculo cinza com a inicial do host — nunca mais o ícone de globo
@@ -301,8 +473,6 @@ class _HistoryCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           child: Row(
             children: [
-              // Ícone do site/atividade à esquerda, substituído pelo check
-              // animado quando o card está selecionado.
               SizedBox(
                 width: 38,
                 height: 38,
@@ -367,70 +537,6 @@ class _HistoryCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Icon(Symbols.open_in_new_rounded, size: 18, color: muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Bottom bar com o mesmo efeito de esmaecimento do antigo _LooplyBottomBar
-// (gradiente transparente no topo, opaco na base), contendo um campo de
-// busca que filtra o histórico em tempo real por título ou URL.
-class _HistorySearchBar extends StatelessWidget {
-  const _HistorySearchBar({required this.controller, required this.bottomInset});
-
-  final TextEditingController controller;
-  final double bottomInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = pageBg(context);
-    final text = mainText(context);
-    final muted = mutedText(context);
-
-    return Container(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg.withOpacity(0.0), bg, bg],
-          stops: const [0.0, 0.45, 1.0],
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: pillColor(context),
-            borderRadius: BorderRadius.circular(23),
-          ),
-          child: Row(
-            children: [
-              AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 18),
-              const SizedBox(width: 9),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  style: TextStyle(color: text, fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: appText('search_history'),
-                    hintStyle: TextStyle(color: muted, fontSize: 14),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ),
-              ),
-              if (controller.text.isNotEmpty)
-                GestureDetector(
-                  onTap: controller.clear,
-                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 16),
-                ),
             ],
           ),
         ),
