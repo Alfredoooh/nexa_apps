@@ -24,7 +24,7 @@ const Map<String, String> deExtraTranslations = <String, String>{
   };
 
 const Map<String, String> deScreenTranslations = <String, String>{
-    'all_sites': 'Alle Websites', 'add_site': 'Website hinzufügen', 'loading_sites': 'Websites werden geladen', 'auto_site_name': 'Namen automatisch abrufen', 'auto_site_name_help': 'Verwendet den Seitentitel oder die Domain.', 'site_icon': 'Website-Symbol', 'auto_favicon': 'Favicon automatisch abrufen', 'upload_site_icon': 'Symbol vom Gerät laden', 'select_image': 'Bild auswählen', 'selected_icon': 'Ausgewähltes Symbol', 'add_site_success': '{name} wurde zu deinen Websites hinzugefügt.', 'about_app_text': 'BrowseIt ist ein einfacher, schneller und privater Browser. Dieser Bildschirm zeigt Informationen zur installierten Version und Projektcredits.', 'version': 'Version',
+    'all_sites': 'Alle Websites', 'add_site': 'Website hinzufügen', 'loading_sites': 'Websites werden geladen', 'auto_site_name': 'Namen automatisch abrufen', 'auto_site_name_help': 'Verwendet den Seitentitel oder die Domain.', 'site_icon': 'Website-Symbol', 'auto_favicon': 'Favicon automatisch abrufen', 'upload_site_icon': 'Symbol vom Gerät laden', 'select_image': 'Bild auswählen', 'selected_icon': 'Ausgewähltes Symbol', 'add_site_success': '{name} wurde zu deinen Websites hinzugefügt.', 'about_app_text': "BrowseIt vereint Webnavigation, Tab-Verwaltung, Lesezeichen, Verlauf, Downloads sowie Sprach- und Darstellungseinstellungen in einer App.", 'version': 'Version',
     'continue': 'Weiter', 'delete_history_selected': 'Ausgewählten Verlauf löschen?', 'delete_history_count': '{count} Verlaufseinträge werden entfernt.',
     'open_menu': 'Menü öffnen', 'search': 'Suchen', 'more_sites': 'Weitere Websites', 'more': 'Mehr', 'sign_in': 'Anmelden',
     'activity': 'Aktivität', 'recent': 'Zuletzt', 'view_all': 'Alle anzeigen', 'no_recent_activity': 'Keine aktuelle Aktivität',
@@ -141,4 +141,14 @@ const Map<String, String> deTranslations = <String, String>{
     'exit_incognito': 'Inkognito beenden',
   'recent_sites': 'Zuletzt besuchte Websites',
   'home_tagline': 'Einfaches, schnelles und privates Surfen.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Datenschutzerklärung",
+  "privacy_policy_subtitle": "So verarbeitet BrowseIt deine Informationen",
+  "terms_of_use": "Nutzungsbedingungen",
+  "terms_of_use_subtitle": "Regeln zur Verwendung des Browsers",
+  "open_source_licenses": "Open-Source-Lizenzen",
+  "open_source_licenses_subtitle": "Bibliotheken und Hinweise zu Drittanbietern",
+  "about_privacy_text": "BrowseIt speichert Daten, die für seine Funktionen erforderlich sind, im privaten App-Speicher, darunter Tabs, Lesezeichen, Verlauf, Einstellungen und heruntergeladene Dateien. Wenn du dich anmeldest, Synchronisierung oder Cloud-Backups verwendest oder externe Suchdienste nutzt, können erforderliche Daten an die jeweiligen Anbieter gesendet werden. Inkognito-Tabs werden nicht zum normalen Verlauf hinzugefügt; dadurch wird deine Aktivität jedoch nicht vor Websites oder Netzwerkanbietern verborgen. Du kannst Browserdaten in den Einstellungen löschen. Diese Zusammenfassung ersetzt keine vollständige öffentliche Datenschutzerklärung mit Angaben zu erhobenen Daten, Diensten, Zwecken, Speicherfristen und Nutzerrechten.",
+  "about_terms_text": "Verwende BrowseIt rechtmäßig und beachte die Nutzungsbedingungen, Datenschutzregeln und Rechte des geistigen Eigentums der besuchten Websites. Du bist für heruntergeladene Dateien sowie veröffentlichte oder geteilte Inhalte verantwortlich. Verwende den Browser nicht, um Rechte anderer zu verletzen oder Dienste zu stören. Websites und ihre Inhalte werden von den jeweiligen Betreibern bereitgestellt; BrowseIt besitzt oder kontrolliert diese Websites nicht. Funktionen können sich durch Updates ändern.",
 };

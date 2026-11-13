@@ -25,7 +25,7 @@ const Map<String, String> ptExtraTranslations = <String, String>{
   };
 
 const Map<String, String> ptScreenTranslations = <String, String>{
-    'all_sites': 'Todos os sites', 'add_site': 'Adicionar site', 'loading_sites': 'A carregar os sites', 'auto_site_name': 'Carregar nome automaticamente', 'auto_site_name_help': 'Usa o título da página ou o domínio.', 'site_icon': 'Ícone do site', 'auto_favicon': 'Adquirir favicon automaticamente', 'upload_site_icon': 'Carregar ícone do telemóvel', 'select_image': 'Selecionar imagem', 'selected_icon': 'Ícone selecionado', 'add_site_success': '{name} foi adicionado aos teus sites.', 'about_app_text': 'BrowseIt é um navegador simples, rápido e privado. Esta tela reúne informação sobre a versão instalada e os créditos do projeto.', 'version': 'Versão',
+    'all_sites': 'Todos os sites', 'add_site': 'Adicionar site', 'loading_sites': 'A carregar os sites', 'auto_site_name': 'Carregar nome automaticamente', 'auto_site_name_help': 'Usa o título da página ou o domínio.', 'site_icon': 'Ícone do site', 'auto_favicon': 'Adquirir favicon automaticamente', 'upload_site_icon': 'Carregar ícone do telemóvel', 'select_image': 'Selecionar imagem', 'selected_icon': 'Ícone selecionado', 'add_site_success': '{name} foi adicionado aos teus sites.', 'about_app_text': "O BrowseIt reúne navegação na Web, gestão de separadores, marcadores, histórico, transferências e preferências de idioma e aparência numa única aplicação.", 'version': 'Versão',
     'continue': 'Continuar', 'delete_history_selected': 'Eliminar histórico selecionado?', 'delete_history_count': 'Serão removidos {count} registos do histórico.',
     'open_menu': 'Abrir menu', 'search': 'Pesquisar', 'more_sites': 'Mais sites', 'more': 'Mais',
     'sign_in': 'Iniciar sessão', 'activity': 'Atividade', 'recent': 'Recente', 'view_all': 'Ver tudo',
@@ -142,4 +142,14 @@ const Map<String, String> ptTranslations = <String, String>{
     'exit_incognito': 'Sair do modo anónimo',
   'recent_sites': 'Sites recentes',
   'home_tagline': 'Navegação simples, rápida e privada.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Política de privacidade",
+  "privacy_policy_subtitle": "Como o BrowseIt trata as tuas informações",
+  "terms_of_use": "Termos de utilização",
+  "terms_of_use_subtitle": "Regras para utilizar o navegador",
+  "open_source_licenses": "Licenças de código aberto",
+  "open_source_licenses_subtitle": "Bibliotecas e avisos de terceiros",
+  "about_privacy_text": "O BrowseIt guarda no armazenamento privado da aplicação dados necessários às suas funcionalidades, como separadores, marcadores, histórico, definições e ficheiros transferidos. Quando inicias sessão, utilizas sincronização, cópias de segurança na nuvem ou serviços de pesquisa externos, os dados necessários podem ser enviados aos respetivos fornecedores. Os separadores anónimos não são adicionados ao histórico normal, mas isso não torna a atividade invisível para os sites ou fornecedores de rede. Podes limpar os dados de navegação nas definições. Este resumo não substitui uma política pública completa que identifique os dados recolhidos, serviços utilizados, finalidades, períodos de conservação e direitos do utilizador.",
+  "about_terms_text": "Utiliza o BrowseIt de forma legal e respeita os termos, as regras de privacidade e os direitos de propriedade intelectual dos sites que visitas. És responsável pelos ficheiros que transferes e pelo conteúdo que publicas ou partilhas. Não utilizes o navegador para violar direitos de terceiros ou perturbar serviços. Os sites e os respetivos conteúdos são fornecidos pelos seus operadores; o BrowseIt não é proprietário nem controla sites de terceiros. As funcionalidades podem mudar com as atualizações.",
 };

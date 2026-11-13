@@ -3,44 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
 <title>Vídeo · BrowseIt</title>
 <style>
-:root{--bg:#fff;--panel:#f0f1f3;--text:#202124;--muted:#5f6368;--accent:#1a73e8;--line:#e8eaed}
+:root{--bg:#fff;--surface:#f5f5f6;--panel:#ededee;--text:#202124;--muted:#62666c;--accent:#E8890C;--line:#e5e6e8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Roboto,"Arial",sans-serif}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Roboto,"Google Sans",Arial,sans-serif}
 body{display:flex;flex-direction:column}
-header{height:52px;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 12px;background:var(--bg)}
-button{border:0;cursor:pointer}
-#close{width:38px;height:38px;border-radius:50%;background:var(--panel);color:var(--text);font-size:24px;line-height:1}
-main{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:16px}
-video{width:100%;max-height:calc(100% - 76px);background:#000;border-radius:14px;object-fit:contain}
-.filename{max-width:100%;font-size:13px;color:var(--muted);text-align:center;overflow-wrap:anywhere}
-#error{display:none;color:var(--muted);font-size:14px;text-align:center;line-height:1.5;padding:20px}
+header{height:56px;flex:0 0 56px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--bg)}
+.icon-button{width:44px;height:44px;flex:none;border:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:var(--text);transition:background .16s,transform .16s}
+.icon-button:active{background:var(--panel);transform:scale(.92)}
+.icon-button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:500}
+main{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--surface)}
+video{display:block;width:100%;height:100%;max-height:100%;background:#000;object-fit:contain;border-radius:16px;outline:none}
+#error{display:none;position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);text-align:center;color:var(--muted);font-size:14px;line-height:1.5}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
 </head>
 <body>
-<header><button id="close" aria-label="Fechar">×</button></header>
+<header>
+  <button class="icon-button" id="back" type="button" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M20 12H4m0 0 7 7m-7-7 7-7"/></svg></button>
+  <div id="title">Vídeo</div>
+</header>
 <main>
-  <video id="player" controls playsinline preload="metadata"></video>
-  <div class="filename" id="filename"></div>
+  <video id="player" controls playsinline webkit-playsinline preload="metadata"></video>
   <div id="error">Não foi possível reproduzir este vídeo neste formato.</div>
 </main>
 <script>
-(function(){
-  const q=new URLSearchParams(location.search), dark=q.get('theme')==='dark', pure=q.get('pure')==='1';
-  const css=document.documentElement.style;
-  css.setProperty('--bg',dark?(pure?'#000':'#141517'):'#fff');
-  css.setProperty('--panel',dark?(pure?'#191919':'#2b2d30'):'#f0f1f3');
-  css.setProperty('--text',dark?'#e6e6e8':'#202124');
-  css.setProperty('--muted',dark?'#b2b4b8':'#5f6368');
-  css.setProperty('--accent',dark?'#8ab4f8':'#1a73e8');
-  css.setProperty('--line',dark?(pure?'#292929':'#34363a'):'#e8eaed');
-  const close=()=>{if(window.AndroidViewer)AndroidViewer.close();else window.close();};
-  document.getElementById('close').addEventListener('click',close);
-  document.getElementById('filename').textContent=q.get('name')||'';
-  const player=document.getElementById('player');
-  player.src=q.get('src')||'';
-  player.addEventListener('error',()=>{document.getElementById('error').style.display='block';player.style.display='none';});
+(()=>{
+ const q=new URLSearchParams(location.search),dark=q.get('theme')==='dark',pure=q.get('pure')==='1';
+ const s=document.documentElement.style;
+ s.setProperty('--bg',dark?(pure?'#000':'#191a1c'):'#fff');s.setProperty('--surface',dark?(pure?'#080808':'#202124'):'#f5f5f6');s.setProperty('--panel',dark?(pure?'#222':'#303236'):'#ededee');s.setProperty('--text',dark?'#f1f1f2':'#202124');s.setProperty('--muted',dark?'#b5b7bb':'#62666c');s.setProperty('--accent',dark?'#FF9F1C':'#E8890C');s.setProperty('--line',dark?(pure?'#292929':'#383a3e'):'#e5e6e8');
+ const close=()=>{if(window.AndroidViewer&&typeof AndroidViewer.close==='function')AndroidViewer.close();else history.back();};
+ document.getElementById('back').addEventListener('click',close);
+ document.getElementById('title').textContent=q.get('name')||'Vídeo';
+ const player=document.getElementById('player'),error=document.getElementById('error');
+ player.src=q.get('src')||'';
+ player.addEventListener('error',()=>{player.style.display='none';error.style.display='block';});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'||e.key==='Backspace')close();});
 })();
 </script>
 </body>

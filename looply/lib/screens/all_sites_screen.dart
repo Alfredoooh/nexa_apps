@@ -126,7 +126,8 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
           style: IconButton.styleFrom(
             foregroundColor: text,
             fixedSize: const Size(42, 42),
-            shape: const CircleBorder(),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+            backgroundColor: Colors.transparent,
           ),
           icon: const AppMaterialIcon(AppIcons.arrowLeft),
           onPressed: () => Navigator.of(context).maybePop(),

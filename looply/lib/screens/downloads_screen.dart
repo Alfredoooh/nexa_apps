@@ -217,7 +217,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             opacity: animation,
                             child: ScaleTransition(scale: animation, child: child),
                           ),
-                          child: _CircularDownloadButton(
+                          child: _DownloadHeaderButton(
                             key: ValueKey<bool>(_isSelecting),
                             tooltip: _isSelecting ? appText('close') : appText('back'),
                             icon: _isSelecting ? AppIcons.x : AppIcons.arrowLeft,
@@ -234,14 +234,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           ),
                         ),
                         if (selectedCount > 0)
-                          _CircularDownloadButton(
+                          _DownloadHeaderButton(
                             tooltip: '${appText('delete')} ($selectedCount)',
                             icon: AppIcons.trash,
                             foreground: const Color(0xFFFF453A),
                             onTap: _deleteSelected,
                           )
                         else if (entries.isNotEmpty)
-                          _CircularDownloadButton(
+                          _DownloadHeaderButton(
                             tooltip: appText('clear_list'),
                             icon: AppIcons.trash,
                             onTap: () async {
@@ -491,8 +491,8 @@ class _DownloadsSearchBar extends StatelessWidget {
   }
 }
 
-class _CircularDownloadButton extends StatelessWidget {
-  const _CircularDownloadButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
+class _DownloadHeaderButton extends StatelessWidget {
+  const _DownloadHeaderButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
   final String tooltip;
   final IconData icon;
   final VoidCallback onTap;
@@ -502,15 +502,18 @@ class _CircularDownloadButton extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
         child: Material(
-          color: pillColor(context),
-          shape: const CircleBorder(),
+          color: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+          borderRadius: BorderRadius.circular(13),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
+            borderRadius: BorderRadius.circular(13),
             onTap: onTap,
             child: SizedBox(
               width: 42,
               height: 42,
-              child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: Center(
+                child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              ),
             ),
           ),
         ),

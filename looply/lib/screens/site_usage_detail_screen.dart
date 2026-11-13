@@ -127,7 +127,7 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Row(
                       children: [
-                        _SiteUsageCircleButton(
+                        _SiteUsageBackButton(
                           tooltip: appText('back'),
                           icon: AppIcons.arrowLeft,
                           onTap: () => Navigator.of(context).maybePop(),
@@ -414,8 +414,8 @@ class _VisitedSitesSearchBar extends StatelessWidget {
   }
 }
 
-class _SiteUsageCircleButton extends StatelessWidget {
-  const _SiteUsageCircleButton({required this.tooltip, required this.icon, required this.onTap});
+class _SiteUsageBackButton extends StatelessWidget {
+  const _SiteUsageBackButton({required this.tooltip, required this.icon, required this.onTap});
   final String tooltip;
   final IconData icon;
   final VoidCallback onTap;
@@ -424,12 +424,14 @@ class _SiteUsageCircleButton extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
         child: Material(
-          color: pillColor(context),
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
+          color: Colors.transparent,
           child: InkWell(
+            borderRadius: BorderRadius.circular(13),
             onTap: onTap,
-            child: SizedBox(width: 42, height: 42, child: AppMaterialIcon(icon, color: mutedText(context), size: 20)),
+            child: SizedBox(
+              width: 42, height: 42,
+              child: Center(child: AppMaterialIcon(icon, color: mutedText(context), size: 20)),
+            ),
           ),
         ),
       );

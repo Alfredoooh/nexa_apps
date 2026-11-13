@@ -24,7 +24,7 @@ const Map<String, String> itExtraTranslations = <String, String>{
   };
 
 const Map<String, String> itScreenTranslations = <String, String>{
-    'all_sites': 'Tutti i siti', 'add_site': 'Aggiungi sito', 'loading_sites': 'Caricamento siti', 'auto_site_name': 'Ottieni nome automaticamente', 'auto_site_name_help': 'Usa il titolo della pagina o il dominio.', 'site_icon': 'Icona del sito', 'auto_favicon': 'Ottieni favicon automaticamente', 'upload_site_icon': 'Carica icona dal dispositivo', 'select_image': 'Seleziona immagine', 'selected_icon': 'Icona selezionata', 'add_site_success': '{name} è stato aggiunto ai tuoi siti.', 'about_app_text': 'BrowseIt è un browser semplice, veloce e privato. Questa schermata mostra la versione installata e i crediti del progetto.', 'version': 'Versione',
+    'all_sites': 'Tutti i siti', 'add_site': 'Aggiungi sito', 'loading_sites': 'Caricamento siti', 'auto_site_name': 'Ottieni nome automaticamente', 'auto_site_name_help': 'Usa il titolo della pagina o il dominio.', 'site_icon': 'Icona del sito', 'auto_favicon': 'Ottieni favicon automaticamente', 'upload_site_icon': 'Carica icona dal dispositivo', 'select_image': 'Seleziona immagine', 'selected_icon': 'Icona selezionata', 'add_site_success': '{name} è stato aggiunto ai tuoi siti.', 'about_app_text': "BrowseIt riunisce navigazione web, gestione delle schede, segnalibri, cronologia, download e preferenze di lingua e aspetto in un’unica app.", 'version': 'Versione',
     'continue': 'Continua', 'delete_history_selected': 'Eliminare la cronologia selezionata?', 'delete_history_count': 'Saranno rimossi {count} elementi della cronologia.',
     'open_menu': 'Apri menu', 'search': 'Cerca', 'more_sites': 'Altri siti', 'more': 'Altro', 'sign_in': 'Accedi',
     'activity': 'Attività', 'recent': 'Recenti', 'view_all': 'Mostra tutto', 'no_recent_activity': 'Nessuna attività recente',
@@ -141,4 +141,14 @@ const Map<String, String> itTranslations = <String, String>{
     'exit_incognito': 'Esci dalla modalità privata',
   'recent_sites': 'Siti recenti',
   'home_tagline': 'Navigazione semplice, veloce e privata.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Informativa sulla privacy",
+  "privacy_policy_subtitle": "Come BrowseIt gestisce le tue informazioni",
+  "terms_of_use": "Termini di utilizzo",
+  "terms_of_use_subtitle": "Regole per usare il browser",
+  "open_source_licenses": "Licenze open source",
+  "open_source_licenses_subtitle": "Librerie e note di terze parti",
+  "about_privacy_text": "BrowseIt conserva nell’area privata dell’app i dati necessari alle sue funzioni, come schede, segnalibri, cronologia, impostazioni e file scaricati. Quando accedi, utilizzi la sincronizzazione, i backup su cloud o servizi di ricerca esterni, i dati necessari possono essere inviati ai rispettivi fornitori. Le schede in incognito non vengono aggiunte alla cronologia normale, ma questo non rende l’attività invisibile ai siti web o ai fornitori di rete. Puoi cancellare i dati di navigazione dalle impostazioni. Questo riepilogo non sostituisce un’informativa pubblica completa che specifichi dati raccolti, servizi, finalità, tempi di conservazione e diritti dell’utente.",
+  "about_terms_text": "Utilizza BrowseIt nel rispetto della legge e dei termini, delle regole sulla privacy e dei diritti di proprietà intellettuale dei siti visitati. Sei responsabile dei file scaricati e dei contenuti che pubblichi o condividi. Non utilizzare il browser per violare i diritti altrui o interrompere servizi. I siti e i relativi contenuti appartengono ai rispettivi operatori; BrowseIt non li possiede né li controlla. Le funzionalità possono cambiare con gli aggiornamenti.",
 };

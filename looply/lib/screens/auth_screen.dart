@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material3_expressive_loading_indicator/material3_expressive_loading_indicator.dart';
 
 import '../auth_service.dart';
 import '../localization.dart';
@@ -93,8 +94,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  /// Campo de texto com cápsula preenchida + borda tracejada desenhada
-  /// por CustomPainter (o Flutter só suporta `solid`/`none` nativamente).
+  /// Campo neutro: mantém o fundo do app sem linhas azuis ao receber foco.
   Widget _dashedField({
     required FocusNode focusNode,
     required TextEditingController controller,
@@ -107,7 +107,6 @@ class _AuthScreenState extends State<AuthScreen> {
     List<String>? autofillHints,
     ValueChanged<String>? onSubmitted,
   }) {
-    final accent = accentColor(context);
     final base = lineColor(context);
     final textColor = mainText(context);
     final muted = mutedText(context);
@@ -115,52 +114,53 @@ class _AuthScreenState extends State<AuthScreen> {
 
     return AnimatedBuilder(
       animation: focusNode,
-      builder: (context, child) {
-        final focused = focusNode.hasFocus && enabled;
-        final borderColor = !enabled
-            ? base.withOpacity(.35)
-            : focused
-                ? accent
-                : base.withOpacity(.75);
-        return Container(
-          decoration: BoxDecoration(
-            color: pillColor(context),
-            borderRadius: BorderRadius.circular(999),
+      builder: (context, child) => AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: pillColor(context),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: base.withOpacity(focusNode.hasFocus && enabled ? .95 : .62),
+            width: focusNode.hasFocus && enabled ? 1.15 : .9,
           ),
-          child: CustomPaint(
-            foregroundPainter: _DashedRoundedBorderPainter(
-              color: borderColor,
-              strokeWidth: focused ? 1.5 : 1.1,
-            ),
-            child: child,
+        ),
+        child: child,
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          textSelectionTheme: TextSelectionThemeData(
+            cursorColor: muted,
+            selectionColor: muted.withOpacity(.22),
+            selectionHandleColor: muted,
           ),
-        );
-      },
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        enabled: enabled,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        textInputAction: textInputAction,
-        autofillHints: autofillHints,
-        onSubmitted: onSubmitted,
-        style: TextStyle(color: textColor, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: muted.withOpacity(.85), fontSize: 14),
-          prefixIcon: AppMaterialIcon(icon, size: 20, color: muted),
-          suffixIcon: suffixIcon,
-          filled: false,
-          isCollapsed: false,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          disabledBorder: InputBorder.none,
+        ),
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          autofillHints: autofillHints,
+          onSubmitted: onSubmitted,
+          cursorColor: muted,
+          style: TextStyle(color: textColor, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: muted.withOpacity(.85), fontSize: 14),
+            prefixIcon: AppMaterialIcon(icon, size: 20, color: muted),
+            suffixIcon: suffixIcon,
+            filled: false,
+            isCollapsed: false,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+          ),
         ),
       ),
     );
@@ -201,31 +201,14 @@ class _AuthScreenState extends State<AuthScreen> {
                   height: 1.15,
                 ),
               ),
-              // Botão fechar dentro de um círculo, alinhado à esquerda.
               Align(
                 alignment: Alignment.centerLeft,
-                child: Semantics(
-                  button: true,
-                  label: appText('close'),
-                  child: Material(
-                    color: pillColor(context),
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).maybePop(),
-                      child: SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Center(
-                          child: AppMaterialIcon(
-                            AppIcons.x,
-                            color: text,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                child: AppBackButton(
+                  tooltip: appText('back'),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  color: text,
+                  buttonSize: 40,
+                  size: 21,
                 ),
               ),
             ],
@@ -395,13 +378,13 @@ class _AuthScreenState extends State<AuthScreen> {
                                     fit: BoxFit.contain,
                                   ),
                                   const SizedBox(width: 12),
-                                  SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: accent,
+                                  ExpressiveLoadingIndicator(
+                                    color: accent,
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 22,
+                                      height: 22,
                                     ),
+                                    semanticsLabel: appText('loading_sites'),
                                   ),
                                 ],
                               )
@@ -431,59 +414,5 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
-  }
-}
-
-/// Desenha uma borda tracejada com cantos arredondados (pill-shape por
-/// omissão, porque o raio é clampado automaticamente pelo RRect).
-class _DashedRoundedBorderPainter extends CustomPainter {
-  _DashedRoundedBorderPainter({
-    required this.color,
-    this.strokeWidth = 1,
-    this.dashLength = 6,
-    this.gapLength = 4,
-  });
-
-  final Color color;
-  final double strokeWidth;
-  final double dashLength;
-  final double gapLength;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final inset = strokeWidth / 2;
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(
-        inset,
-        inset,
-        size.width - strokeWidth,
-        size.height - strokeWidth,
-      ),
-      const Radius.circular(999),
-    );
-    final path = Path()..addRRect(rrect);
-
-    for (final metric in path.computeMetrics()) {
-      double distance = 0;
-      while (distance < metric.length) {
-        final end = (distance + dashLength).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance = end + gapLength;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRoundedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth ||
-        oldDelegate.dashLength != dashLength ||
-        oldDelegate.gapLength != gapLength;
   }
 }

@@ -206,7 +206,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             opacity: animation,
                             child: ScaleTransition(scale: animation, child: child),
                           ),
-                          child: _CircularHistoryButton(
+                          child: _HistoryHeaderButton(
                             key: ValueKey<bool>(_isSelecting),
                             tooltip: _isSelecting ? appText('close') : appText('back'),
                             icon: _isSelecting ? AppIcons.x : AppIcons.arrowLeft,
@@ -229,7 +229,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             child: Text('${entries.length}', style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
                           ),
                         if (selectedCount > 0)
-                          _CircularHistoryButton(
+                          _HistoryHeaderButton(
                             tooltip: '${appText('delete')} ($selectedCount)',
                             icon: AppIcons.trash,
                             foreground: const Color(0xFFFF453A),
@@ -439,8 +439,8 @@ class _HistorySearchBar extends StatelessWidget {
   }
 }
 
-class _CircularHistoryButton extends StatelessWidget {
-  const _CircularHistoryButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
+class _HistoryHeaderButton extends StatelessWidget {
+  const _HistoryHeaderButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
   final String tooltip;
   final IconData icon;
   final VoidCallback onTap;
@@ -450,15 +450,18 @@ class _CircularHistoryButton extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
         child: Material(
-          color: pillColor(context),
-          shape: const CircleBorder(),
+          color: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+          borderRadius: BorderRadius.circular(13),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
+            borderRadius: BorderRadius.circular(13),
             onTap: onTap,
             child: SizedBox(
               width: 42,
               height: 42,
-              child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              child: Center(
+                child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
+              ),
             ),
           ),
         ),

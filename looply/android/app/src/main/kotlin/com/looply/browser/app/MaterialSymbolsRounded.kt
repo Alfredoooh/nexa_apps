@@ -36,6 +36,8 @@ internal object MaterialSymbolsRounded {
         "arrow_back" to 0xE5C4,
         "arrow_forward" to 0xE5C8,
         "add" to 0xE145,
+        // Used by the first row of the Orbit popup menu.
+        "add_box" to 0xE146,
         "tab" to 0xE8D8,
         "bookmark" to 0xE8E7,
         "bookmarks" to 0xE98B,
@@ -84,9 +86,13 @@ internal object MaterialSymbolsRounded {
         return "'FILL' 0, 'wght' 300, 'GRAD' -25, 'opsz' $opticalSize"
     }
 
+    /**
+     * Um nome de ícone desconhecido não deve derrubar o browser enquanto o
+     * popup está a ser construído. Todos os nomes conhecidos usam o glifo
+     * mapeado; nomes futuros sem mapeamento recebem um fallback visual neutro.
+     */
     fun glyph(name: String): String {
-        val codePoint = codePoints[name]
-            ?: throw IllegalArgumentException("Símbolo Material não registado: $name")
+        val codePoint = codePoints[name] ?: codePoints.getValue("more_vert")
         return String(Character.toChars(codePoint))
     }
 

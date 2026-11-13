@@ -3,46 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
 <title>Documento · BrowseIt</title>
 <style>
-:root{--bg:#fff;--panel:#f0f1f3;--soft:#f8f9fa;--text:#202124;--muted:#5f6368;--accent:#1a73e8;--line:#e8eaed}
+:root{--bg:#fff;--surface:#f5f5f6;--panel:#f0f0f1;--soft:#fafafa;--text:#202124;--muted:#62666c;--accent:#E8890C;--line:#e5e6e8}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;width:100%;height:100%;background:var(--bg);color:var(--text);font-family:Roboto,"Arial",sans-serif}
-body{display:flex;flex-direction:column}
-header{height:52px;flex:none;display:flex;justify-content:flex-end;align-items:center;padding:0 12px;background:var(--bg)}
-button{border:0;cursor:pointer}#close{width:38px;height:38px;border-radius:50%;background:var(--panel);color:var(--text);font-size:24px}
-#title{font-size:14px;font-weight:600;color:var(--text);padding:0 16px 12px;overflow-wrap:anywhere}
-main{flex:1;min-height:0;overflow:auto;padding:0 14px 24px}
-#text{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0;font:13px/1.55 ui-monospace,monospace;color:var(--text)}
-.pdf-page{display:block;width:100%;height:auto;background:#fff;margin:0 auto 14px;box-shadow:0 1px 4px #0002}
-.notice{padding:22px;border-radius:14px;background:var(--panel);color:var(--muted);font-size:14px;line-height:1.5;text-align:center}
-#progress{color:var(--muted);font-size:12px;text-align:center;padding:12px}
+html,body{width:100%;height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Roboto,"Google Sans",Arial,sans-serif}
+body{display:flex;flex-direction:column;overflow:hidden}
+header{height:56px;flex:0 0 56px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--bg)}
+.icon-button{width:44px;height:44px;flex:none;border:0;border-radius:50%;display:grid;place-items:center;background:transparent;color:var(--text);transition:background .16s,transform .16s}
+.icon-button:active{background:var(--panel);transform:scale(.92)}
+.icon-button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:500}
+main{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 14px 24px;background:var(--surface);-webkit-overflow-scrolling:touch}
+#text{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:18px;margin:0;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text)}
+.pdf-page{display:block;width:100%;height:auto;background:#fff;margin:0 auto 14px;border-radius:4px;box-shadow:0 1px 5px #0002}
+.notice{max-width:520px;margin:12vh auto 0;padding:24px;border-radius:20px;background:var(--bg);color:var(--muted);font-size:14px;line-height:1.55;text-align:center;border:1px solid var(--line)}
+#progress{color:var(--muted);font-size:13px;text-align:center;padding:26px 12px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
 </style>
 </head>
 <body>
-<header><button id="close" aria-label="Fechar">×</button></header>
-<div id="title"></div>
+<header>
+  <button class="icon-button" id="back" type="button" aria-label="Voltar"><svg viewBox="0 0 24 24"><path d="M20 12H4m0 0 7 7m-7-7 7-7"/></svg></button>
+  <div id="title">Documento</div>
+</header>
 <main id="content"><div id="progress">A preparar documento…</div></main>
 <script>
-(function(){
- const q=new URLSearchParams(location.search),dark=q.get('theme')==='dark',pure=q.get('pure')==='1',kind=q.get('kind'),src=q.get('src'),name=q.get('name')||'Documento';
+(()=>{
+ const q=new URLSearchParams(location.search),dark=q.get('theme')==='dark',pure=q.get('pure')==='1',kind=q.get('kind'),name=q.get('name')||'Documento';
  const css=document.documentElement.style;
- css.setProperty('--bg',dark?(pure?'#000':'#141517'):'#fff');css.setProperty('--panel',dark?(pure?'#191919':'#2b2d30'):'#f0f1f3');css.setProperty('--soft',dark?(pure?'#050505':'#1d1f21'):'#f8f9fa');css.setProperty('--text',dark?'#e6e6e8':'#202124');css.setProperty('--muted',dark?'#b2b4b8':'#5f6368');css.setProperty('--accent',dark?'#8ab4f8':'#1a73e8');css.setProperty('--line',dark?(pure?'#292929':'#34363a'):'#e8eaed');
- document.getElementById('close').onclick=()=>{if(window.AndroidViewer)AndroidViewer.close();else window.close();};document.getElementById('title').textContent=name;
+ css.setProperty('--bg',dark?(pure?'#000':'#191a1c'):'#fff');css.setProperty('--surface',dark?(pure?'#080808':'#202124'):'#f5f5f6');css.setProperty('--panel',dark?(pure?'#202020':'#303236'):'#f0f0f1');css.setProperty('--soft',dark?(pure?'#050505':'#1d1f21'):'#fafafa');css.setProperty('--text',dark?'#f1f1f2':'#202124');css.setProperty('--muted',dark?'#b5b7bb':'#62666c');css.setProperty('--accent',dark?'#FF9F1C':'#E8890C');css.setProperty('--line',dark?(pure?'#292929':'#383a3e'):'#e5e6e8');
+ const close=()=>{if(window.AndroidViewer&&typeof AndroidViewer.close==='function')AndroidViewer.close();else history.back();};
+ document.getElementById('back').addEventListener('click',close);document.getElementById('title').textContent=name;
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'||e.key==='Backspace')close();});
  const host=document.getElementById('content');
- function notice(message){host.innerHTML='';const n=document.createElement('div');n.className='notice';n.textContent=message;host.appendChild(n);}
- if(kind==='pdf' && window.AndroidViewer){
-   host.innerHTML='';const count=AndroidViewer.getPdfPageCount();
+ function notice(message){host.replaceChildren();const n=document.createElement('div');n.className='notice';n.textContent=message;host.appendChild(n);}
+ if(kind==='pdf'&&window.AndroidViewer){
+   host.replaceChildren();
+   let count=0;try{count=AndroidViewer.getPdfPageCount();}catch(_){count=0;}
    if(!count){notice('Não foi possível abrir este PDF.');return;}
    const loaded=new Set();
-   for(let i=0;i<count;i++){const img=document.createElement('img');img.className='pdf-page';img.alt='Página '+(i+1);img.dataset.page=String(i);img.loading='lazy';img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';host.appendChild(img);}
-   const load=img=>{const i=Number(img.dataset.page);if(loaded.has(i))return;loaded.add(i);const data=AndroidViewer.getPdfPageData(i);if(data)img.src='data:image/jpeg;base64,'+data;else img.alt='Não foi possível renderizar a página '+(i+1);};
-   if('IntersectionObserver' in window){const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){load(e.target);observer.unobserve(e.target);}}),{root:host,rootMargin:'500px'});host.querySelectorAll('img').forEach(img=>observer.observe(img));}else host.querySelectorAll('img').forEach(load);
- } else if(kind==='text' && window.AndroidViewer){
-   try{const raw=AndroidViewer.getTextDocument();const binary=atob(raw);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));const content=new TextDecoder('utf-8').decode(bytes);host.innerHTML='';const pre=document.createElement('pre');pre.id='text';pre.textContent=content;host.appendChild(pre);}catch(e){notice('Não foi possível ler o conteúdo deste documento.');}
- } else {
-   notice('Este formato de documento não tem pré-visualização integrada. Os formatos PDF e texto são apresentados diretamente no BrowseIt.');
- }
+   for(let i=0;i<count;i++){const img=document.createElement('img');img.className='pdf-page';img.alt=`Página ${i+1}`;img.dataset.page=String(i);img.loading='lazy';img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';host.appendChild(img);}
+   const load=img=>{const i=Number(img.dataset.page);if(loaded.has(i))return;loaded.add(i);try{const data=AndroidViewer.getPdfPageData(i);if(data)img.src='data:image/jpeg;base64,'+data;else img.alt=`Não foi possível apresentar a página ${i+1}.`;}catch(_){img.alt=`Não foi possível apresentar a página ${i+1}.`;}};
+   if('IntersectionObserver'in window){const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){load(e.target);observer.unobserve(e.target);}}),{root:host,rootMargin:'600px'});host.querySelectorAll('img').forEach(img=>observer.observe(img));}else host.querySelectorAll('img').forEach(load);
+ }else if(kind==='text'&&window.AndroidViewer){
+   try{const raw=AndroidViewer.getTextDocument();const binary=atob(raw);const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));const content=new TextDecoder('utf-8').decode(bytes);host.replaceChildren();const pre=document.createElement('pre');pre.id='text';pre.textContent=content;host.appendChild(pre);}catch(_){notice('Não foi possível ler o conteúdo deste documento.');}
+ }else{notice('A pré-visualização deste formato não está disponível. Os documentos PDF e os ficheiros de texto compatíveis podem ser lidos diretamente no BrowseIt.');}
 })();
 </script>
 </body>

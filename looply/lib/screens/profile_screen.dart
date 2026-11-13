@@ -224,22 +224,10 @@ class _ProfileFadeAppBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
-              Semantics(
-                button: true,
-                label: appText('back'),
-                child: Material(
-                  color: pillColor(context),
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: () => Navigator.of(context).maybePop(),
-                    child: SizedBox(
-                      width: 42,
-                      height: 42,
-                      child: AppMaterialIcon(AppIcons.caretLeft, size: 19, color: muted),
-                    ),
-                  ),
-                ),
+              AppBackButton(
+                tooltip: appText('back'),
+                color: muted,
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
               const SizedBox(width: 12),
               Expanded(

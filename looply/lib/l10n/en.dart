@@ -24,7 +24,7 @@ const Map<String, String> enExtraTranslations = <String, String>{
   };
 
 const Map<String, String> enScreenTranslations = <String, String>{
-    'all_sites': 'All sites', 'add_site': 'Add site', 'loading_sites': 'Loading sites', 'auto_site_name': 'Get name automatically', 'auto_site_name_help': 'Uses the page title or domain.', 'site_icon': 'Site icon', 'auto_favicon': 'Get favicon automatically', 'upload_site_icon': 'Upload icon from device', 'select_image': 'Select image', 'selected_icon': 'Selected icon', 'add_site_success': '{name} was added to your sites.', 'about_app_text': 'BrowseIt is a simple, fast and private browser. This screen contains information about the installed version and project credits.', 'version': 'Version',
+    'all_sites': 'All sites', 'add_site': 'Add site', 'loading_sites': 'Loading sites', 'auto_site_name': 'Get name automatically', 'auto_site_name_help': 'Uses the page title or domain.', 'site_icon': 'Site icon', 'auto_favicon': 'Get favicon automatically', 'upload_site_icon': 'Upload icon from device', 'select_image': 'Select image', 'selected_icon': 'Selected icon', 'add_site_success': '{name} was added to your sites.', 'about_app_text': "BrowseIt brings web browsing, tab management, bookmarks, history, downloads, and language and appearance preferences together in one app.", 'version': 'Version',
     'continue': 'Continue', 'delete_history_selected': 'Delete selected history?', 'delete_history_count': '{count} history entries will be removed.',
     'open_menu': 'Open menu', 'search': 'Search', 'more_sites': 'More sites', 'more': 'More', 'sign_in': 'Sign in',
     'activity': 'Activity', 'recent': 'Recent', 'view_all': 'View all', 'no_recent_activity': 'No recent activity',

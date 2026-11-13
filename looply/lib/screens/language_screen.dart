@@ -17,6 +17,10 @@ class LanguageScreen extends StatelessWidget {
         leading: IconButton(
           tooltip: appText('back'),
           onPressed: () => Navigator.of(context).maybePop(),
+          style: IconButton.styleFrom(
+            foregroundColor: text,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+          ),
           icon: AppMaterialIcon(AppIcons.arrowLeft, color: text),
         ),
         title: Text(appText('select_language')),

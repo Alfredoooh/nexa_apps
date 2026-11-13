@@ -24,7 +24,7 @@ const Map<String, String> esExtraTranslations = <String, String>{
   };
 
 const Map<String, String> esScreenTranslations = <String, String>{
-    'all_sites': 'Todos los sitios', 'add_site': 'Añadir sitio', 'loading_sites': 'Cargando sitios', 'auto_site_name': 'Obtener nombre automáticamente', 'auto_site_name_help': 'Usa el título de la página o el dominio.', 'site_icon': 'Icono del sitio', 'auto_favicon': 'Obtener favicon automáticamente', 'upload_site_icon': 'Cargar icono del dispositivo', 'select_image': 'Seleccionar imagen', 'selected_icon': 'Icono seleccionado', 'add_site_success': '{name} se añadió a tus sitios.', 'about_app_text': 'BrowseIt es un navegador sencillo, rápido y privado. Esta pantalla muestra información sobre la versión instalada y los créditos del proyecto.', 'version': 'Versión',
+    'all_sites': 'Todos los sitios', 'add_site': 'Añadir sitio', 'loading_sites': 'Cargando sitios', 'auto_site_name': 'Obtener nombre automáticamente', 'auto_site_name_help': 'Usa el título de la página o el dominio.', 'site_icon': 'Icono del sitio', 'auto_favicon': 'Obtener favicon automáticamente', 'upload_site_icon': 'Cargar icono del dispositivo', 'select_image': 'Seleccionar imagen', 'selected_icon': 'Icono seleccionado', 'add_site_success': '{name} se añadió a tus sitios.', 'about_app_text': "BrowseIt reúne navegación web, gestión de pestañas, marcadores, historial, descargas y preferencias de idioma y apariencia en una sola aplicación.", 'version': 'Versión',
     'continue': 'Continuar', 'delete_history_selected': '¿Eliminar el historial seleccionado?', 'delete_history_count': 'Se eliminarán {count} registros del historial.',
     'open_menu': 'Abrir menú', 'search': 'Buscar', 'more_sites': 'Más sitios', 'more': 'Más', 'sign_in': 'Iniciar sesión',
     'activity': 'Actividad', 'recent': 'Reciente', 'view_all': 'Ver todo', 'no_recent_activity': 'Sin actividad reciente',
@@ -141,4 +141,14 @@ const Map<String, String> esTranslations = <String, String>{
     'exit_incognito': 'Salir del modo incógnito',
   'recent_sites': 'Sitios recientes',
   'home_tagline': 'Navegación sencilla, rápida y privada.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Política de privacidad",
+  "privacy_policy_subtitle": "Cómo BrowseIt trata tu información",
+  "terms_of_use": "Términos de uso",
+  "terms_of_use_subtitle": "Reglas para utilizar el navegador",
+  "open_source_licenses": "Licencias de código abierto",
+  "open_source_licenses_subtitle": "Bibliotecas y avisos de terceros",
+  "about_privacy_text": "BrowseIt guarda en el almacenamiento privado de la aplicación los datos necesarios para sus funciones, como pestañas, marcadores, historial, ajustes y archivos descargados. Al iniciar sesión, utilizar la sincronización, las copias de seguridad en la nube o servicios externos de búsqueda, los datos necesarios pueden enviarse a los proveedores correspondientes. Las pestañas de incógnito no se añaden al historial normal, pero esto no oculta la actividad a los sitios web ni a los proveedores de red. Puedes borrar los datos de navegación desde los ajustes. Este resumen no sustituye una política pública completa que identifique los datos recopilados, los servicios, las finalidades, los plazos de conservación y los derechos del usuario.",
+  "about_terms_text": "Utiliza BrowseIt de forma legal y respeta los términos, las normas de privacidad y los derechos de propiedad intelectual de los sitios que visitas. Eres responsable de los archivos que descargas y del contenido que publicas o compartes. No utilices el navegador para infringir derechos de terceros ni interrumpir servicios. Los sitios y sus contenidos pertenecen a sus respectivos operadores; BrowseIt no es propietario ni controla sitios de terceros. Las funciones pueden cambiar con las actualizaciones.",
 };

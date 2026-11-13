@@ -20,7 +20,7 @@ const Map<String, String> zhExtraTranslations = <String, String>{
   };
 
 const Map<String, String> zhScreenTranslations = <String, String>{
-    'all_sites': '所有网站', 'add_site': '添加网站', 'loading_sites': '正在加载网站', 'auto_site_name': '自动获取名称', 'auto_site_name_help': '使用网页标题或域名。', 'site_icon': '网站图标', 'auto_favicon': '自动获取网站图标', 'upload_site_icon': '从设备上传图标', 'select_image': '选择图片', 'selected_icon': '已选图标', 'add_site_success': '已将 {name} 添加到你的网站。', 'about_app_text': 'BrowseIt 是一款简单、快速且注重隐私的浏览器。此页面显示已安装版本信息和项目致谢。', 'version': '版本',
+    'all_sites': '所有网站', 'add_site': '添加网站', 'loading_sites': '正在加载网站', 'auto_site_name': '自动获取名称', 'auto_site_name_help': '使用网页标题或域名。', 'site_icon': '网站图标', 'auto_favicon': '自动获取网站图标', 'upload_site_icon': '从设备上传图标', 'select_image': '选择图片', 'selected_icon': '已选图标', 'add_site_success': '已将 {name} 添加到你的网站。', 'about_app_text': "BrowseIt 将网页浏览、标签页管理、书签、历史记录、下载以及语言和外观偏好整合在一个应用中。", 'version': '版本',
     'continue': '继续', 'delete_history_selected': '删除所选历史记录？', 'delete_history_count': '将删除 {count} 条历史记录。',
     'open_menu': '打开菜单', 'search': '搜索', 'more_sites': '更多网站', 'more': '更多', 'sign_in': '登录',
     'activity': '活动', 'recent': '最近', 'view_all': '查看全部', 'no_recent_activity': '暂无近期活动',
@@ -135,4 +135,14 @@ const Map<String, String> zhTranslations = <String, String>{
     'exit_incognito': '退出无痕模式',
   'recent_sites': '最近访问的网站',
   'home_tagline': '简单、快速且私密的浏览。',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "隐私政策",
+  "privacy_policy_subtitle": "BrowseIt 如何处理你的信息",
+  "terms_of_use": "使用条款",
+  "terms_of_use_subtitle": "浏览器使用规则",
+  "open_source_licenses": "开源许可证",
+  "open_source_licenses_subtitle": "第三方库和相关声明",
+  "about_privacy_text": "BrowseIt 会在应用的私有存储空间中保存实现功能所需的数据，例如标签页、书签、历史记录、设置和已下载文件。登录账户、使用同步或云备份、或使用外部搜索服务时，必要数据可能会发送给相应服务提供商。无痕标签页不会加入普通浏览历史，但这并不意味着网站或网络服务提供商无法看到网络活动。你可以在设置中清除浏览数据。本摘要不能替代完整的公开隐私政策；正式政策应说明收集的数据、使用的服务、处理目的、保存期限和用户权利。",
+  "about_terms_text": "请合法使用 BrowseIt，并尊重所访问网站的条款、隐私规则和知识产权。你需对下载的文件以及发布或分享的内容负责。请勿使用浏览器侵犯他人权利或干扰服务。网站及其内容由各自运营方提供；BrowseIt 不拥有或控制第三方网站。应用功能可能随更新而变化。",
 };

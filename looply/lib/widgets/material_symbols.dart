@@ -15,7 +15,7 @@ class AppIcons {
   static const IconData browser = Symbols.web_rounded;
   static const IconData calendar = Symbols.calendar_month_rounded;
   static const IconData caretDown = Symbols.keyboard_arrow_down_rounded;
-  static const IconData caretLeft = Symbols.chevron_left_rounded;
+  static const IconData caretLeft = Symbols.arrow_back_rounded;
   static const IconData caretRight = Symbols.chevron_right_rounded;
   static const IconData caretUp = Symbols.keyboard_arrow_up_rounded;
   static const IconData check = Symbols.check_rounded;
@@ -152,6 +152,56 @@ class AppMaterialIcon extends StatelessWidget {
       semanticLabel: semanticLabel,
       textDirection: textDirection,
       applyTextScaling: applyTextScaling,
+    );
+  }
+}
+
+
+/// Botão de navegação simples, sem cápsula/círculo de fundo.
+/// Mantém a resposta tátil e a forma do ícone Material Symbols Rounded.
+class AppBackButton extends StatelessWidget {
+  const AppBackButton({
+    super.key,
+    required this.tooltip,
+    this.onPressed,
+    this.color,
+    this.size = 22,
+    this.buttonSize = 44,
+  });
+
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final double size;
+  final double buttonSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = color ?? Theme.of(context).colorScheme.onSurface;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(13),
+            onTap: onPressed ?? () { Navigator.of(context).maybePop(); },
+            child: SizedBox(
+              width: buttonSize,
+              height: buttonSize,
+              child: Center(
+                child: AppMaterialIcon(
+                  AppIcons.arrowLeft,
+                  size: size,
+                  color: foreground,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -20,7 +20,7 @@ const Map<String, String> trExtraTranslations = <String, String>{
   };
 
 const Map<String, String> trScreenTranslations = <String, String>{
-    'all_sites': 'Tüm siteler', 'add_site': 'Site ekle', 'loading_sites': 'Siteler yükleniyor', 'auto_site_name': 'Adı otomatik al', 'auto_site_name_help': 'Sayfa başlığını veya alan adını kullanır.', 'site_icon': 'Site simgesi', 'auto_favicon': 'Faviconu otomatik al', 'upload_site_icon': 'Cihazdan simge yükle', 'select_image': 'Görsel seç', 'selected_icon': 'Seçilen simge', 'add_site_success': '{name} sitelerinize eklendi.', 'about_app_text': 'BrowseIt basit, hızlı ve gizlilik odaklı bir tarayıcıdır. Bu ekran yüklü sürüm ve proje bilgilerini gösterir.', 'version': 'Sürüm',
+    'all_sites': 'Tüm siteler', 'add_site': 'Site ekle', 'loading_sites': 'Siteler yükleniyor', 'auto_site_name': 'Adı otomatik al', 'auto_site_name_help': 'Sayfa başlığını veya alan adını kullanır.', 'site_icon': 'Site simgesi', 'auto_favicon': 'Faviconu otomatik al', 'upload_site_icon': 'Cihazdan simge yükle', 'select_image': 'Görsel seç', 'selected_icon': 'Seçilen simge', 'add_site_success': '{name} sitelerinize eklendi.', 'about_app_text': "BrowseIt; web gezinme, sekme yönetimi, yer imleri, geçmiş, indirmeler ve dil ile görünüm tercihlerini tek bir uygulamada bir araya getirir.", 'version': 'Sürüm',
     'continue': 'Devam et', 'delete_history_selected': 'Seçilen geçmiş silinsin mi?', 'delete_history_count': '{count} geçmiş kaydı kaldırılacak.',
     'open_menu': 'Menüyü aç', 'search': 'Ara', 'more_sites': 'Daha fazla site', 'more': 'Daha fazla', 'sign_in': 'Giriş yap',
     'activity': 'Etkinlik', 'recent': 'Son', 'view_all': 'Tümünü gör', 'no_recent_activity': 'Son etkinlik yok',
@@ -136,4 +136,14 @@ const Map<String, String> trTranslations = <String, String>{
     'exit_incognito': 'Gizli moddan çık',
   'recent_sites': 'Son ziyaret edilen siteler',
   'home_tagline': 'Basit, hızlı ve gizli gezinme.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Gizlilik politikası",
+  "privacy_policy_subtitle": "BrowseIt bilgilerinizle nasıl ilgilenir",
+  "terms_of_use": "Kullanım şartları",
+  "terms_of_use_subtitle": "Tarayıcı kullanım kuralları",
+  "open_source_licenses": "Açık kaynak lisansları",
+  "open_source_licenses_subtitle": "Kitaplıklar ve üçüncü taraf bildirimleri",
+  "about_privacy_text": "BrowseIt; sekmeler, yer imleri, geçmiş, ayarlar ve indirilen dosyalar gibi özellikleri için gerekli verileri uygulamanın özel depolama alanında tutar. Oturum açtığınızda, eşitleme veya bulut yedeklemesi kullandığınızda ya da harici arama hizmetlerine eriştiğinizde gerekli veriler ilgili sağlayıcılara gönderilebilir. Gizli sekmeler normal geçmişe eklenmez; ancak bu durum ağ etkinliğini web sitelerinden veya ağ sağlayıcılarından gizlemez. Tarama verilerini ayarlardan temizleyebilirsiniz. Bu özet; toplanan verileri, hizmetleri, amaçları, saklama sürelerini ve kullanıcı haklarını açıklayan eksiksiz, herkese açık bir gizlilik politikasının yerine geçmez.",
+  "about_terms_text": "BrowseIt uygulamasını yasalara uygun kullanın ve ziyaret ettiğiniz sitelerin şartlarına, gizlilik kurallarına ve fikrî mülkiyet haklarına saygı gösterin. İndirdiğiniz dosyalardan ve yayımladığınız veya paylaştığınız içeriklerden siz sorumlusunuz. Tarayıcıyı başkalarının haklarını ihlal etmek veya hizmetleri aksatmak için kullanmayın. Web siteleri ve içerikleri ilgili işletmecileri tarafından sağlanır; BrowseIt üçüncü taraf sitelerin sahibi değildir ve bunları kontrol etmez. Özellikler güncellemelerle değişebilir.",
 };

@@ -20,7 +20,7 @@ const Map<String, String> jaExtraTranslations = <String, String>{
   };
 
 const Map<String, String> jaScreenTranslations = <String, String>{
-    'all_sites': 'すべてのサイト', 'add_site': 'サイトを追加', 'loading_sites': 'サイトを読み込み中', 'auto_site_name': '名前を自動取得', 'auto_site_name_help': 'ページタイトルまたはドメインを使用します。', 'site_icon': 'サイトアイコン', 'auto_favicon': 'ファビコンを自動取得', 'upload_site_icon': '端末からアイコンをアップロード', 'select_image': '画像を選択', 'selected_icon': '選択したアイコン', 'add_site_success': '{name} をサイトに追加しました。', 'about_app_text': 'BrowseIt はシンプルで高速、プライバシーを重視したブラウザです。この画面ではインストール済みバージョンとプロジェクトのクレジットを確認できます。', 'version': 'バージョン',
+    'all_sites': 'すべてのサイト', 'add_site': 'サイトを追加', 'loading_sites': 'サイトを読み込み中', 'auto_site_name': '名前を自動取得', 'auto_site_name_help': 'ページタイトルまたはドメインを使用します。', 'site_icon': 'サイトアイコン', 'auto_favicon': 'ファビコンを自動取得', 'upload_site_icon': '端末からアイコンをアップロード', 'select_image': '画像を選択', 'selected_icon': '選択したアイコン', 'add_site_success': '{name} をサイトに追加しました。', 'about_app_text': "BrowseIt は、Web 閲覧、タブ管理、ブックマーク、履歴、ダウンロード、言語や外観の設定をひとつのアプリにまとめています。", 'version': 'バージョン',
     'continue': '続行', 'delete_history_selected': '選択した履歴を削除しますか？', 'delete_history_count': '{count} 件の履歴を削除します。',
     'open_menu': 'メニューを開く', 'search': '検索', 'more_sites': 'その他のサイト', 'more': 'もっと見る', 'sign_in': 'ログイン',
     'activity': 'アクティビティ', 'recent': '最近', 'view_all': 'すべて表示', 'no_recent_activity': '最近のアクティビティはありません',
@@ -137,4 +137,14 @@ const Map<String, String> jaTranslations = <String, String>{
     'exit_incognito': 'シークレットモードを終了',
   'recent_sites': '最近のサイト',
   'home_tagline': 'シンプルで高速、プライベートなブラウジング。',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "プライバシーポリシー",
+  "privacy_policy_subtitle": "BrowseIt による情報の取り扱い",
+  "terms_of_use": "利用規約",
+  "terms_of_use_subtitle": "ブラウザーの利用ルール",
+  "open_source_licenses": "オープンソースライセンス",
+  "open_source_licenses_subtitle": "ライブラリおよび第三者に関する通知",
+  "about_privacy_text": "BrowseIt は、タブ、ブックマーク、履歴、設定、ダウンロードしたファイルなど、機能の提供に必要なデータをアプリの専用ストレージに保存します。ログイン、同期、クラウドバックアップ、外部検索サービスを利用すると、必要なデータが各サービス提供者に送信される場合があります。シークレットタブは通常の履歴には追加されませんが、ウェブサイトやネットワーク事業者から通信内容が見えなくなるわけではありません。設定から閲覧データを消去できます。この概要は、収集データ、利用サービス、目的、保存期間、利用者の権利を明記した公開プライバシーポリシーの代わりにはなりません。",
+  "about_terms_text": "BrowseIt は法律に従って利用し、閲覧するウェブサイトの規約、プライバシールール、知的財産権を尊重してください。ダウンロードしたファイルや公開・共有するコンテンツについては利用者が責任を負います。他者の権利を侵害したり、サービスを妨害したりする目的でブラウザーを使用しないでください。ウェブサイトとそのコンテンツは各運営者が提供するものであり、BrowseIt が第三者のサイトを所有または管理するものではありません。機能はアップデートにより変更される場合があります。",
 };

@@ -24,7 +24,7 @@ const Map<String, String> frExtraTranslations = <String, String>{
   };
 
 const Map<String, String> frScreenTranslations = <String, String>{
-    'all_sites': 'Tous les sites', 'add_site': 'Ajouter un site', 'loading_sites': 'Chargement des sites', 'auto_site_name': 'Obtenir le nom automatiquement', 'auto_site_name_help': 'Utilise le titre de la page ou le domaine.', 'site_icon': 'Icône du site', 'auto_favicon': 'Récupérer le favicon automatiquement', 'upload_site_icon': 'Importer une icône de l’appareil', 'select_image': 'Choisir une image', 'selected_icon': 'Icône sélectionnée', 'add_site_success': '{name} a été ajouté à vos sites.', 'about_app_text': 'BrowseIt est un navigateur simple, rapide et privé. Cet écran présente la version installée et les crédits du projet.', 'version': 'Version',
+    'all_sites': 'Tous les sites', 'add_site': 'Ajouter un site', 'loading_sites': 'Chargement des sites', 'auto_site_name': 'Obtenir le nom automatiquement', 'auto_site_name_help': 'Utilise le titre de la page ou le domaine.', 'site_icon': 'Icône du site', 'auto_favicon': 'Récupérer le favicon automatiquement', 'upload_site_icon': 'Importer une icône de l’appareil', 'select_image': 'Choisir une image', 'selected_icon': 'Icône sélectionnée', 'add_site_success': '{name} a été ajouté à vos sites.', 'about_app_text': "BrowseIt réunit la navigation Web, la gestion des onglets, les favoris, l’historique, les téléchargements et les préférences de langue et d’apparence dans une seule application.", 'version': 'Version',
     'continue': 'Continuer', 'delete_history_selected': 'Supprimer l’historique sélectionné ?', 'delete_history_count': '{count} éléments de l’historique seront supprimés.',
     'open_menu': 'Ouvrir le menu', 'search': 'Rechercher', 'more_sites': 'Plus de sites', 'more': 'Plus', 'sign_in': 'Se connecter',
     'activity': 'Activité', 'recent': 'Récent', 'view_all': 'Tout voir', 'no_recent_activity': 'Aucune activité récente',
@@ -141,4 +141,14 @@ const Map<String, String> frTranslations = <String, String>{
     'exit_incognito': 'Quitter le mode privé',
   'recent_sites': 'Sites récents',
   'home_tagline': 'Navigation simple, rapide et privée.',
+
+  // BrowseIt legal and product information
+  "privacy_policy": "Politique de confidentialité",
+  "privacy_policy_subtitle": "Comment BrowseIt traite vos informations",
+  "terms_of_use": "Conditions d’utilisation",
+  "terms_of_use_subtitle": "Règles d’utilisation du navigateur",
+  "open_source_licenses": "Licences open source",
+  "open_source_licenses_subtitle": "Bibliothèques et mentions de tiers",
+  "about_privacy_text": "BrowseIt conserve dans l’espace privé de l’application les données nécessaires à ses fonctions, notamment les onglets, les favoris, l’historique, les paramètres et les fichiers téléchargés. Lorsque vous vous connectez, utilisez la synchronisation, une sauvegarde cloud ou des services de recherche externes, les données nécessaires peuvent être transmises aux fournisseurs concernés. Les onglets privés ne sont pas ajoutés à l’historique normal, mais cela ne rend pas l’activité invisible aux sites Web ou aux fournisseurs réseau. Vous pouvez effacer les données de navigation dans les paramètres. Ce résumé ne remplace pas une politique de confidentialité publique complète précisant les données collectées, les services, les finalités, les durées de conservation et les droits des utilisateurs.",
+  "about_terms_text": "Utilisez BrowseIt conformément à la loi et respectez les conditions, les règles de confidentialité et les droits de propriété intellectuelle des sites visités. Vous êtes responsable des fichiers téléchargés et des contenus publiés ou partagés. N’utilisez pas le navigateur pour porter atteinte aux droits d’autrui ou perturber des services. Les sites et leurs contenus relèvent de leurs opérateurs respectifs ; BrowseIt ne les possède pas et ne les contrôle pas. Les fonctionnalités peuvent évoluer avec les mises à jour.",
 };
