@@ -1,9 +1,8 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 import '../browser_library.dart';
 import '../shell/browser_navigation.dart';
 import '../theme.dart';
@@ -200,8 +199,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     outerRadius: 22,
                     innerRadius: 8,
                     gap: 3,
-                    motion: M3EMotion.expressiveSpatialDefault,
-                    pressedMotion: M3EMotion.expressiveEffectsFast,
                     onTap: (index) {
                       final entry = entries[index];
                       openOrbitTab(context, entry.url, title: entry.title);

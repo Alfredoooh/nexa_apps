@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../models.dart';
 import '../browser_library.dart';
@@ -428,8 +427,6 @@ class _SettingsSection extends StatelessWidget {
             innerRadius: 8,
             gap: 2,
             padding: EdgeInsets.zero,
-            motion: M3EMotion.expressiveSpatialDefault,
-            pressedMotion: M3EMotion.expressiveEffectsFast,
           ),
         ),
       ],

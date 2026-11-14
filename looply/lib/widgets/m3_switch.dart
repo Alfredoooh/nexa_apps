@@ -17,7 +17,7 @@ class M3ExpressiveSwitch extends StatelessWidget {
   Widget build(BuildContext context) {
     return M3ESwitch(
       value: value,
-      selectedIcon: const Icon(M3EIcons.check),
+      selectedIcon: Icon(M3EIcons.check),
       onChanged: onChanged,
     );
   }

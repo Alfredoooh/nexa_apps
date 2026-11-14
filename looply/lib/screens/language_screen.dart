@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../localization.dart';
 import '../theme.dart';
@@ -54,8 +53,6 @@ class LanguageScreen extends StatelessWidget {
               innerRadius: 8,
               gap: 3,
               padding: EdgeInsets.zero,
-              motion: M3EMotion.expressiveSpatialDefault,
-              pressedMotion: M3EMotion.expressiveEffectsFast,
               onTap: (index) {
                 appLanguageController.select(supportedAppLanguages[index]);
                 Navigator.of(context).maybePop();

@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../localization.dart';
 import '../models.dart';
@@ -163,8 +162,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   innerRadius: 8,
                   gap: 2,
                   padding: EdgeInsets.zero,
-                  motion: M3EMotion.expressiveSpatialDefault,
-                  pressedMotion: M3EMotion.expressiveEffectsFast,
                   onTap: (index) {
                     final entry = recent[index];
                     openOrbitTab(context, entry.url, title: entry.title);
@@ -310,8 +307,6 @@ class _RangeSelector extends StatelessWidget {
       onSelectionChanged: (selection) {
         if (selection.isNotEmpty) onChanged(_ChartRange.values[selection.first]);
       },
-      motion: M3EMotion.expressiveSpatialDefault,
-      pressedMotion: M3EMotion.expressiveEffectsFast,
       children: [
         for (final range in _ChartRange.values)
           M3EListItem(

@@ -1,9 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../models.dart';

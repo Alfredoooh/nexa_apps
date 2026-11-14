@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -136,26 +137,25 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 24),
                   children: [
-                    // M3EList fornece os cartões segmentados, os raios
-                    // adaptativos e o comportamento de interação do M3E.
-                    // O conteúdo personalizado de cada linha preserva as
-                    // informações adicionais de visitas e o indicador wavy.
-                    M3EList(
-                      itemCount: stats.length,
+                    // Cartões segmentados M3E com conteúdo personalizado.
+                    // A coluna controla os raios, o espaçamento, a superfície
+                    // e a interação, enquanto cada linha preserva os detalhes
+                    // de visitas e o indicador wavy.
+                    M3ESegmentedColumn(
                       outerRadius: 22,
                       innerRadius: 8,
                       gap: 2,
                       color: settingsCardColor(context),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       onTap: (index) => openOrbitTab(context, stats[index].url, title: stats[index].title),
-                      itemBuilder: (context, index) {
-                        final item = stats[index];
-                        return _SiteUsageItemContent(
-                          item: item,
-                          fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
-                          onOpen: () => openOrbitTab(context, item.url, title: item.title),
-                        );
-                      },
+                      children: [
+                        for (final item in stats)
+                          _SiteUsageItemContent(
+                            item: item,
+                            fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
+                            onOpen: () => openOrbitTab(context, item.url, title: item.title),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -398,8 +398,7 @@ class _SiteUsageSearchField extends StatelessWidget {
   }
 }
 
-// Conteúdo de cada cartão segmentado M3E. O M3EList controla a superfície,
-// os raios e a interação da linha; estes widgets formam o conteúdo interno.
+// Conteúdo personalizado de cada cartão da coluna segmentada M3E.
 class _SiteUsageItemContent extends StatelessWidget {
   const _SiteUsageItemContent({required this.item, required this.fraction, required this.onOpen});
 
