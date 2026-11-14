@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Small Gradle bootstrapper for this ZIP. Uses the pinned Gradle release.
 set -eu
-VERSION="9.5.0"
+VERSION="8.13"
 GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
 DIST_DIR="$GRADLE_USER_HOME/wrapper/dists/looply-gradle-$VERSION"
 GRADLE_BIN="$DIST_DIR/gradle-$VERSION/bin/gradle"
