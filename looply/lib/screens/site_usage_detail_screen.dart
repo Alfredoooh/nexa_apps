@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:material_3_expressive/material_3_expressive.dart';
+import 'package:material_3_expressive/material_3_expressive.dart' hide M3EListItem;
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 
 import '../localization.dart';
@@ -10,19 +11,18 @@ import '../browser_library.dart';
 import '../theme.dart';
 import '../shell/browser_navigation.dart';
 import 'history_screen.dart';
-import 'site_usage_detail_screen.dart';
 import '../widgets/material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 enum _ChartRange { day, week, month, year }
 
-class ActivityScreen extends StatefulWidget {
-  const ActivityScreen({super.key});
+class SiteUsageDetailScreen extends StatefulWidget {
+  const SiteUsageDetailScreen({super.key});
   @override
-  State<ActivityScreen> createState() => _ActivityScreenState();
+  State<SiteUsageDetailScreen> createState() => _SiteUsageDetailScreenState();
 }
 
-class _ActivityScreenState extends State<ActivityScreen> {
+class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
   _ChartRange _range = _ChartRange.day;
   final ScrollController _scrollController = ScrollController();
   double _scrollOffset = 0;

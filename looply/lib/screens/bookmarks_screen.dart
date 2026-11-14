@@ -233,7 +233,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                     width: 36,
                                     height: 36,
                                     decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor(context)),
-                                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 18),
+                                    child: Icon(Symbols.check_rounded, color: Colors.white, size: 18),
                                   ),
                                 ),
                               ],
