@@ -75,8 +75,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
-  // Ordem de prioridade ao voltar: 1) sair da seleção, 2) fechar a busca
-  // expandida, 3) sair da tela.
   void _handleBack() {
     if (_isSelecting) {
       HapticFeedback.selectionClick();
@@ -181,9 +179,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final day = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
                         final previousDay = previous == null ? null : DateTime(previous.timestamp.year, previous.timestamp.month, previous.timestamp.day);
                         final showDay = previousDay == null || day != previousDay;
-                        // Quando um cabeçalho de dia aparece, o item seguinte
-                        // reinicia o agrupamento visual (topo arredondado),
-                        // mesmo que não seja o primeiro da lista inteira.
                         final groupFirst = isFirst || showDay;
                         final nextEntry = index < entries.length - 1 ? entries[index + 1] : null;
                         final nextDay = nextEntry == null
@@ -248,10 +243,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-// AppBar com esmaecimento (mesmo gradiente das demais telas) que alterna
-// entre três estados: normal (título + voltar + lupa), seleção (título
-// "X selecionados" + lixeira), e busca (input expandido ocupando o lugar
-// do título, com botão de voltar fechando a busca).
 class _HistoryFadeAppBar extends StatelessWidget {
   const _HistoryFadeAppBar({
     required this.topInset,
@@ -298,9 +289,8 @@ class _HistoryFadeAppBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Botão de voltar/fechar: sempre visível, troca de ícone
-              // conforme o estado (voltar / sair da seleção / fechar busca).
               _HistoryHeaderButton(
                 key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
                 tooltip: isSelecting ? appText('close') : appText('back'),
@@ -308,9 +298,6 @@ class _HistoryFadeAppBar extends StatelessWidget {
                 onTap: onBack,
               ),
               const SizedBox(width: 12),
-              // O título encolhe e desaparece (fade + leve deslocamento)
-              // exatamente quando a busca expande; o Expanded garante que
-              // o input ocupa o espaço liberado sem saltos de layout.
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
@@ -341,8 +328,6 @@ class _HistoryFadeAppBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Ação à direita: lixeira em seleção, lupa em repouso, nada
-              // durante a busca (o próprio input já tem o ícone de lupa).
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 transitionBuilder: (child, animation) => FadeTransition(
@@ -372,9 +357,6 @@ class _HistoryFadeAppBar extends StatelessWidget {
   }
 }
 
-// Campo de busca que some no lugar do título. Tem o mesmo fundo em
-// pílula usado no restante do app (pillColor) e um "x" para limpar o
-// texto sem precisar fechar a busca inteira.
 class _HistorySearchField extends StatelessWidget {
   const _HistorySearchField({super.key, required this.controller, required this.focusNode});
 
@@ -388,7 +370,6 @@ class _HistorySearchField extends StatelessWidget {
 
     return Container(
       height: 42,
-      margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: pillColor(context),
@@ -433,16 +414,6 @@ class _HistorySearchField extends StatelessWidget {
   }
 }
 
-// Card de histórico: toque ativa a seleção com um ícone de check que
-// aparece com animação de escala + fade (TweenAnimationBuilder), sem
-// depender de nenhum pacote externo de ícones animados. À direita, um
-// ícone de abertura externa em Material Symbols Rounded no
-// lugar do antigo chevron. À esquerda, usa SiteFaviconAvatar (o
-// mesmo widget já usado nos cartões de "Recentes" da tela de Atividade)
-// para entradas de site: mostra o favicon real quando disponível, ou um
-// círculo cinza com a inicial do host — nunca mais o ícone de globo
-// genérico. Entradas de jogo mantêm o ícone fixo de lupa, já que não há
-// favicon de URL de jogo para buscar.
 class _HistoryCard extends StatelessWidget {
   const _HistoryCard({
     required this.entry,
@@ -572,7 +543,7 @@ class _HistoryHeaderButton extends StatelessWidget {
             fixedSize: const Size(42, 42),
             padding: EdgeInsets.zero,
             borderRadius: 21,
-            pressedRadius: 15,
+            pressedRadius: 21,
             motion: M3EMotion.expressiveSpatialDefault,
             haptic: M3EHapticFeedback.light,
           ),

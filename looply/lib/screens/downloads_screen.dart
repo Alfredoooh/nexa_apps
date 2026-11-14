@@ -19,12 +19,6 @@ class DownloadsScreen extends StatefulWidget {
   State<DownloadsScreen> createState() => _DownloadsScreenState();
 }
 
-// Uma "run" é uma sequência consecutiva de entradas do mesmo tipo
-// (mídia visual ou documento/outro), preservando a ordem cronológica
-// original da lista. A timeline nunca mistura os dois tipos dentro da
-// mesma run: assim que o tipo muda, a run fecha e outra abre. Cada run
-// de mídia vira um SliverMasonryGrid próprio (2 colunas, altura real);
-// cada run de documento vira um SliverList (1 coluna, layout original).
 class _TimelineRun {
   _TimelineRun({required this.isMedia, required this.entries});
   final bool isMedia;
@@ -143,10 +137,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     return mime.startsWith('image/') || mime.startsWith('video/');
   }
 
-  // Quebra a lista (já ordenada por data, mais recente primeiro) em
-  // runs consecutivas do mesmo tipo. Isso é diferente de agrupar em
-  // pares fixos: uma run de mídia pode ter 1, 2, 5 ou 20 itens seguidos
-  // — o MasonryGrid é quem decide como eles se encaixam nas 2 colunas.
   List<_TimelineRun> _buildRuns(List<DownloadEntry> entries) {
     final runs = <_TimelineRun>[];
     var index = 0;
@@ -288,9 +278,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     );
   }
 
-  // Cada run vira 1 ou 2 slivers: o conteúdo (grid ou list) e um
-  // espaçador de 2px entre runs (exceto após a última), para manter o
-  // mesmo respiro visual que já existia entre cards soltos.
+  // Dentro de uma run de mídia, percorre em pares. Um par completo vira
+  // duas StaggeredGridTile de 1 coluna cada (lado a lado); um item que
+  // sobra sem par (run de tamanho ímpar) vira uma StaggeredGridTile de 2
+  // colunas (largura total), preenchendo a linha inteira em vez de
+  // deixar metade vazia — exatamente a regra pedida. Documentos nunca
+  // passam por aqui: seguem em SliverList normal, sem nenhum componente
+  // de segmented list cards, como pedido.
   List<Widget> _buildRunSlivers(
     _TimelineRun run, {
     required bool isFirstRun,
@@ -299,29 +293,78 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final slivers = <Widget>[];
 
     if (run.isMedia) {
-      slivers.add(
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-          sliver: SliverMasonryGrid.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: 2,
-            crossAxisSpacing: 2,
-            childCount: run.entries.length,
-            itemBuilder: (context, index) {
-              final entry = run.entries[index];
-              final isFirstItem = isFirstRun && index < 2;
-              final isLastItem = isLastRun && index >= run.entries.length - 2;
-              return _MediaTile(
-                entry: entry,
-                selected: _selectedIds.contains(entry.id),
-                onTap: () => _onEntryTap(entry),
-                onLongPress: () => _toggle(entry),
+      final tiles = <StaggeredGridTile>[];
+      var i = 0;
+      while (i < run.entries.length) {
+        final hasPair = i + 1 < run.entries.length;
+        final isFirstItem = isFirstRun && i == 0;
+        final isLastItem = isLastRun && (hasPair ? i + 1 : i) == run.entries.length - 1;
+
+        if (hasPair) {
+          final left = run.entries[i];
+          final right = run.entries[i + 1];
+          tiles.add(
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _MediaTile(
+                entry: left,
+                selected: _selectedIds.contains(left.id),
+                onTap: () => _onEntryTap(left),
+                onLongPress: () => _toggle(left),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isFirstItem ? 22 : 10),
+                  bottomLeft: Radius.circular(isLastItem ? 22 : 10),
+                ),
+              ),
+            ),
+          );
+          tiles.add(
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 1,
+              child: _MediaTile(
+                entry: right,
+                selected: _selectedIds.contains(right.id),
+                onTap: () => _onEntryTap(right),
+                onLongPress: () => _toggle(right),
+                borderRadius: BorderRadius.only(
+                  topRight: Radius.circular(isFirstItem ? 22 : 10),
+                  bottomRight: Radius.circular(isLastItem ? 22 : 10),
+                ),
+              ),
+            ),
+          );
+          i += 2;
+        } else {
+          // Item solo: ocupa as 2 colunas (largura total), como pedido —
+          // nunca fica metade vazio ao lado.
+          final solo = run.entries[i];
+          tiles.add(
+            StaggeredGridTile.fit(
+              crossAxisCellCount: 2,
+              child: _MediaTile(
+                entry: solo,
+                selected: _selectedIds.contains(solo.id),
+                onTap: () => _onEntryTap(solo),
+                onLongPress: () => _toggle(solo),
                 borderRadius: BorderRadius.vertical(
                   top: Radius.circular(isFirstItem ? 22 : 10),
                   bottom: Radius.circular(isLastItem ? 22 : 10),
                 ),
-              );
-            },
+              ),
+            ),
+          );
+          i += 1;
+        }
+      }
+
+      slivers.add(
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+          sliver: SliverStaggeredGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+            children: tiles,
           ),
         ),
       );
@@ -408,6 +451,7 @@ class _DownloadsFadeAppBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _DownloadHeaderButton(
                 key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
@@ -488,7 +532,6 @@ class _DownloadsSearchField extends StatelessWidget {
 
     return Container(
       height: 42,
-      margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: pillColor(context),
@@ -533,11 +576,6 @@ class _DownloadsSearchField extends StatelessWidget {
   }
 }
 
-// Tile individual de mídia dentro do SliverMasonryGrid. Resolve a
-// proporção real da imagem via ImageStreamListener (sem depender de
-// campo de dimensão pré-calculado em DownloadEntry) e usa AspectRatio
-// para reportar sua altura verdadeira ao masonry — é esse AspectRatio
-// que faz o encaixe staggered funcionar de verdade entre colunas.
 class _MediaTile extends StatefulWidget {
   const _MediaTile({
     required this.entry,
@@ -886,7 +924,7 @@ class _DownloadHeaderButton extends StatelessWidget {
             fixedSize: const Size(42, 42),
             padding: EdgeInsets.zero,
             borderRadius: 21,
-            pressedRadius: 15,
+            pressedRadius: 21,
             motion: M3EMotion.expressiveSpatialDefault,
             haptic: M3EHapticFeedback.light,
           ),

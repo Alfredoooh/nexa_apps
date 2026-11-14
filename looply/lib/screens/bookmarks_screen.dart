@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 import '../browser_library.dart';
@@ -18,10 +19,13 @@ class BookmarksScreen extends StatefulWidget {
 }
 
 class _BookmarksScreenState extends State<BookmarksScreen> {
+  final Set<String> _selectedIds = <String>{};
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _query = '';
   bool _searchActive = false;
+
+  bool get _isSelecting => _selectedIds.isNotEmpty;
 
   @override
   void initState() {
@@ -42,12 +46,35 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final existing = bookmarksController.entries.map((entry) => entry.id).toSet();
+    _selectedIds.removeWhere((id) => !existing.contains(id));
+    setState(() {});
   }
 
   void _onSearchChanged() {
     if (!mounted) return;
     setState(() => _query = _searchController.text.trim().toLowerCase());
+  }
+
+  void _toggle(dynamic entry) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (!_selectedIds.add(entry.id)) _selectedIds.remove(entry.id);
+    });
+  }
+
+  void _handleBack() {
+    if (_isSelecting) {
+      HapticFeedback.selectionClick();
+      setState(_selectedIds.clear);
+      return;
+    }
+    if (_searchActive) {
+      _closeSearch();
+      return;
+    }
+    Navigator.of(context).maybePop();
   }
 
   void _openSearch() {
@@ -61,7 +88,32 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   void _closeSearch() {
     _searchFocusNode.unfocus();
     _searchController.clear();
-    if (mounted) setState(() => _searchActive = false);
+    if (mounted) {
+      setState(() {
+        _searchActive = false;
+        _query = '';
+      });
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    if (_selectedIds.isEmpty) return;
+    final confirmed = await showLooplyDialog<bool>(
+      context: context,
+      title: appText('delete_bookmarks_selected'),
+      icon: AppIcons.trash,
+      content: Text(appText('delete_bookmarks_count').replaceAll('{count}', _selectedIds.length.toString())),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('delete'), value: true, isDestructive: true),
+      ],
+    );
+    if (confirmed != true || !mounted) return;
+    final ids = _selectedIds.toList(growable: false);
+    for (final id in ids) {
+      bookmarksController.remove(id);
+    }
+    setState(_selectedIds.clear);
   }
 
   List<dynamic> get _filtered => bookmarksController.entries.where((entry) {
@@ -70,6 +122,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
             entry.url.toLowerCase().contains(_query);
       }).toList(growable: false);
 
+  void _onEntryTap(dynamic entry) {
+    if (_isSelecting) {
+      _toggle(entry);
+    } else {
+      openOrbitTab(context, entry.url, title: entry.title);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
@@ -77,102 +137,23 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final entries = _filtered;
     final bg = pageBg(context);
     final topInset = MediaQuery.of(context).padding.top;
+    final selectedCount = _selectedIds.length;
 
-    return Scaffold(
-      backgroundColor: bg,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
+    return PopScope<void>(
+      canPop: !_isSelecting && !_searchActive,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
         backgroundColor: bg,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        titleSpacing: 6,
-        title: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 230),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SizeTransition(
-              sizeFactor: animation,
-              axis: Axis.horizontal,
-              axisAlignment: -1,
-              child: child,
-            ),
-          ),
-          child: _searchActive
-              ? _BookmarksSearchField(
-                  key: const ValueKey<String>('bookmarks-search-field'),
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                )
-              : Text(
-                  appText('bookmarks'),
-                  key: const ValueKey<String>('bookmarks-title'),
-                  style: TextStyle(color: text, fontWeight: FontWeight.w600),
-                ),
-        ),
-        actions: [
-          if (bookmarksController.entries.isNotEmpty && !_searchActive)
-            M3EButton(
-              tooltip: appText('clear_bookmarks'),
-              onPressed: () => _confirmClear(context),
-              style: M3EButtonStyle.tonal,
-              size: M3EButtonSize.sm,
-              shape: M3EButtonShape.round,
-              decoration: M3EButtonDecoration.styleFrom(
-                backgroundColor: Colors.transparent,
-                foregroundColor: text,
-                minimumSize: const Size(42, 42),
-                fixedSize: const Size(42, 42),
-                padding: EdgeInsets.zero,
-                borderRadius: 21,
-                pressedRadius: 15,
-                motion: M3EMotion.expressiveSpatialDefault,
-                haptic: M3EHapticFeedback.light,
-              ),
-              child: AppMaterialIcon(AppIcons.trash, color: text, size: 20),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8, left: 2),
-            child: M3EButton(
-              tooltip: _searchActive ? appText('close_search') : appText('search_hint'),
-              onPressed: _searchActive ? _closeSearch : _openSearch,
-              style: M3EButtonStyle.tonal,
-              size: M3EButtonSize.sm,
-              shape: M3EButtonShape.round,
-              decoration: M3EButtonDecoration.styleFrom(
-                backgroundColor: pillColor(context),
-                foregroundColor: text,
-                minimumSize: const Size(42, 42),
-                fixedSize: const Size(42, 42),
-                padding: EdgeInsets.zero,
-                borderRadius: 21,
-                pressedRadius: 15,
-                motion: M3EMotion.expressiveSpatialDefault,
-                haptic: M3EHapticFeedback.light,
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 170),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child)),
-                child: AppMaterialIcon(
-                  _searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
-                  key: ValueKey<bool>(_searchActive),
-                  color: text,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          SizedBox(height: topInset + kToolbarHeight + 8),
-          Expanded(
-            child: entries.isEmpty
+        extendBodyBehindAppBar: true,
+        body: Stack(
+          children: [
+            entries.isEmpty
                 ? Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(28),
+                      padding: EdgeInsets.fromLTRB(28, topInset + 72, 28, 24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -192,84 +173,237 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       ),
                     ),
                   )
+                // Cards menores: minHeight reduzido de 72 para 60, padding
+                // vertical reduzido de 8 para 6 — bookmarks não precisam da
+                // mesma altura generosa que itens com múltiplas linhas de
+                // metadado.
                 : M3ESegmentedList.builder(
                     itemCount: entries.length,
-                    listPadding: const EdgeInsets.fromLTRB(14, 2, 14, 24),
+                    listPadding: EdgeInsets.fromLTRB(14, topInset + 72, 14, 24),
                     color: settingsCardColor(context),
                     outerRadius: 22,
                     innerRadius: 8,
-                    gap: 3,
-                    onTap: (index) {
-                      final entry = entries[index];
-                      openOrbitTab(context, entry.url, title: entry.title);
-                    },
+                    gap: 2,
+                    onTap: (index) => _onEntryTap(entries[index]),
                     itemBuilder: (context, index) {
                       final entry = entries[index];
+                      final selected = _selectedIds.contains(entry.id);
                       final encoded = browserFaviconCache.forUrl(entry.url);
-                      Widget favicon = AppMaterialIcon(AppIcons.globe, color: muted, size: 22);
+                      Widget favicon = AppMaterialIcon(AppIcons.globe, color: muted, size: 19);
                       if (encoded != null) {
                         try {
                           favicon = Image.memory(
                             base64Decode(encoded),
-                            width: 25,
-                            height: 25,
+                            width: 21,
+                            height: 21,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted, size: 22),
+                            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted, size: 19),
                           );
                         } catch (_) {}
                       }
-                      return M3EListItem(
-                        leading: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(color: pillColor(context), shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: favicon,
+                      return GestureDetector(
+                        onLongPress: () => _toggle(entry),
+                        child: M3EListItem(
+                          leading: SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 160),
+                                  opacity: selected ? 0 : 1,
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(color: pillColor(context), shape: BoxShape.circle),
+                                    alignment: Alignment.center,
+                                    child: favicon,
+                                  ),
+                                ),
+                                TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(begin: 0, end: selected ? 1 : 0),
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutBack,
+                                  builder: (context, value, child) => Opacity(
+                                    opacity: value.clamp(0, 1),
+                                    child: Transform.scale(scale: value, child: child),
+                                  ),
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: accentColor(context)),
+                                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          headline: Text(
+                            entry.title.isNotEmpty ? entry.title : entry.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600),
+                          ),
+                          supportingText: Text(
+                            entry.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: muted, fontSize: 11),
+                          ),
+                          minHeight: 60,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         ),
-                        headline: Text(
-                          entry.title.isNotEmpty ? entry.title : entry.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                        supportingText: Text(
-                          entry.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: muted, fontSize: 11.5),
-                        ),
-                        trailing: IconButton(
-                          tooltip: appText('remove'),
-                          onPressed: () => bookmarksController.remove(entry.id),
-                          constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-                          icon: AppMaterialIcon(AppIcons.x, color: muted, size: 20),
-                        ),
-                        minHeight: 72,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       );
                     },
                   ),
-          ),
-        ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _BookmarksFadeAppBar(
+                topInset: topInset,
+                isSelecting: _isSelecting,
+                searchActive: _searchActive,
+                selectedCount: selectedCount,
+                searchController: _searchController,
+                searchFocusNode: _searchFocusNode,
+                onBack: _handleBack,
+                onOpenSearch: _openSearch,
+                onCloseSearch: _closeSearch,
+                onDelete: _deleteSelected,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
-
-  Future<void> _confirmClear(BuildContext context) async {
-    final confirmed = await showLooplyDialog<bool>(
-      context: context,
-      title: appText('clear_bookmarks_question'),
-      icon: AppIcons.trash,
-      content: Text(appText('clear_bookmarks_confirm')),
-      actions: <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
-        LooplyDialogAction<bool>(label: appText('clear'), value: true, isDestructive: true),
-      ],
-    );
-    if (confirmed == true) bookmarksController.clear();
-  }
 }
 
+// AppBar com o mesmo padrão de 3 estados do Histórico/Downloads: normal
+// (voltar + título + lupa), seleção (fechar + "X selecionados" + lixeira)
+// e busca (fechar + input expandido). O botão de lixeira NUNCA aparece
+// fora do modo de seleção — some por completo em vez de ficar oculto por
+// condição de lista vazia, e só surge quando _isSelecting é true.
+class _BookmarksFadeAppBar extends StatelessWidget {
+  const _BookmarksFadeAppBar({
+    required this.topInset,
+    required this.isSelecting,
+    required this.searchActive,
+    required this.selectedCount,
+    required this.searchController,
+    required this.searchFocusNode,
+    required this.onBack,
+    required this.onOpenSearch,
+    required this.onCloseSearch,
+    required this.onDelete,
+  });
+
+  final double topInset;
+  final bool isSelecting;
+  final bool searchActive;
+  final int selectedCount;
+  final TextEditingController searchController;
+  final FocusNode searchFocusNode;
+  final VoidCallback onBack;
+  final VoidCallback onOpenSearch;
+  final VoidCallback onCloseSearch;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = pageBg(context);
+    final text = mainText(context);
+    final muted = mutedText(context);
+
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [bg, bg, bg.withOpacity(0)],
+          stops: const [0, .58, 1],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Row(
+            // crossAxisAlignment.center garante que o botão de
+            // voltar/fechar e o campo de busca fiquem alinhados na mesma
+            // linha vertical, já que o campo de busca tem margin-top
+            // próprio (ver _BookmarksSearchField) que antes desalinhava
+            // os dois.
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _BookmarksHeaderButton(
+                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+                tooltip: isSelecting ? appText('close') : appText('back'),
+                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
+                onTap: onBack,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SizeTransition(
+                      sizeFactor: animation,
+                      axis: Axis.horizontal,
+                      axisAlignment: -1,
+                      child: child,
+                    ),
+                  ),
+                  child: searchActive
+                      ? _BookmarksSearchField(
+                          key: const ValueKey<String>('search-field'),
+                          controller: searchController,
+                          focusNode: searchFocusNode,
+                        )
+                      : Text(
+                          isSelecting
+                              ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                              : appText('bookmarks'),
+                          key: const ValueKey<String>('title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: isSelecting
+                    ? _BookmarksHeaderButton(
+                        key: const ValueKey<String>('delete'),
+                        tooltip: '${appText('delete')} ($selectedCount)',
+                        icon: AppIcons.trash,
+                        foreground: const Color(0xFFFF453A),
+                        onTap: onDelete,
+                      )
+                    : _BookmarksHeaderButton(
+                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                        tooltip: searchActive ? appText('close_search') : appText('search_hint'),
+                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _BookmarksSearchField extends StatelessWidget {
   const _BookmarksSearchField({super.key, required this.controller, required this.focusNode});
@@ -281,13 +415,17 @@ class _BookmarksSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
+    // margin-top removido: era o que desalinhava o input em relação ao
+    // botão de fechar, já que o Row pai não tinha altura fixa igual à do
+    // botão (42px). Agora a altura do campo (42) bate exatamente com a
+    // altura do botão (42), ambos centralizados pelo
+    // crossAxisAlignment.center do Row pai.
     return Container(
       height: 42,
-      margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: pillColor(context),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(21),
       ),
       child: Row(
         children: [
@@ -327,4 +465,43 @@ class _BookmarksSearchField extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BookmarksHeaderButton extends StatelessWidget {
+  const _BookmarksHeaderButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? foreground;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        // shape: M3EButtonShape.round já produzia pílula perfeita (height/2
+        // de raio); o problema de "não estar rounded" no botão de voltar
+        // era borderRadius: 21 fixo competindo com fixedSize 42x42 — 21 é
+        // exatamente metade de 42, então já estava correto, mas o
+        // pressedRadius: 15 quebrava a redondeza plena durante o press.
+        // Igualando pressedRadius a 21 garante pílula perfeita em todo
+        // estado, inclusive pressionado.
+        child: M3EButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          style: M3EButtonStyle.tonal,
+          size: M3EButtonSize.sm,
+          shape: M3EButtonShape.round,
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+            foregroundColor: foreground ?? mutedText(context),
+            minimumSize: const Size(42, 42),
+            fixedSize: const Size(42, 42),
+            padding: EdgeInsets.zero,
+            borderRadius: 21,
+            pressedRadius: 21,
+            motion: M3EMotion.expressiveSpatialDefault,
+            haptic: M3EHapticFeedback.light,
+          ),
+          child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
+        ),
+      );
 }
