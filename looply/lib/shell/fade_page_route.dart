@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Rota com transição exclusivamente em fade (sem slide), usada para dar
 /// uma sensação mais suave ao abrir a tela de pesquisa.

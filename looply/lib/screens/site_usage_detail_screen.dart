@@ -1,10 +1,8 @@
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 import 'package:flutter/services.dart';
-import 'package:m3e_segmented_list/m3e_segmented_list.dart';
-import 'package:m3e_progress_indicator/m3e_progress_indicator.dart';
-import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../browser_library.dart';
@@ -138,26 +136,26 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 24),
                   children: [
-                    // M3ESegmentedColumn resolve sozinho os raios do
-                    // primeiro/último item (outerRadius) e dos itens do
-                    // meio (innerRadius), seguindo o padrão M3 Expressive
-                    // de "cards segmentados" — sem cálculo manual de
-                    // BorderRadius por índice.
-                    M3ESegmentedColumn(
+                    // M3EList fornece os cartões segmentados, os raios
+                    // adaptativos e o comportamento de interação do M3E.
+                    // O conteúdo personalizado de cada linha preserva as
+                    // informações adicionais de visitas e o indicador wavy.
+                    M3EList(
+                      itemCount: stats.length,
                       outerRadius: 22,
                       innerRadius: 8,
                       gap: 2,
                       color: settingsCardColor(context),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       onTap: (index) => openOrbitTab(context, stats[index].url, title: stats[index].title),
-                      children: [
-                        for (final item in stats)
-                          _SiteUsageItemContent(
-                            item: item,
-                            fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
-                            onOpen: () => openOrbitTab(context, item.url, title: item.title),
-                          ),
-                      ],
+                      itemBuilder: (context, index) {
+                        final item = stats[index];
+                        return _SiteUsageItemContent(
+                          item: item,
+                          fraction: maxVisits == 0 ? 0 : item.visitCount / maxVisits,
+                          onOpen: () => openOrbitTab(context, item.url, title: item.title),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -400,15 +398,8 @@ class _SiteUsageSearchField extends StatelessWidget {
   }
 }
 
-// Conteúdo de cada item dentro do M3ESegmentedColumn. O card em si
-// (fundo, raios, splash, onTap) é resolvido pelo M3ESegmentedItem
-// interno do pacote; este widget só monta o conteúdo:
-// - M3EListItem para favicon/título/host
-// - M3EFilledButton.tonal (pílula xs) para a contagem de visitas,
-//   substituindo o antigo Container estático — agora com spring squish
-// - M3EButton estilo tonal, ícone apenas, para abrir o site
-// - M3ELinearWavyProgressIndicator (ondulada) no lugar da barra reta,
-//   para a proporção de visitas deste site frente ao mais visitado
+// Conteúdo de cada cartão segmentado M3E. O M3EList controla a superfície,
+// os raios e a interação da linha; estes widgets formam o conteúdo interno.
 class _SiteUsageItemContent extends StatelessWidget {
   const _SiteUsageItemContent({required this.item, required this.fraction, required this.onOpen});
 
@@ -437,79 +428,84 @@ class _SiteUsageItemContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        M3EListItem(
-          contentPadding: EdgeInsets.zero,
-          leading: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(14)),
-            child: ClipRRect(borderRadius: BorderRadius.circular(7), child: favicon),
-          ),
-          headline: Text(
-            item.title.trim().isEmpty ? item.host : item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-          supportingText: Text(
-            item.host,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: muted, fontSize: 11.5),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Pílula de contagem de visitas: antes era um Container
-              // estático com texto; agora é um botão M3E de verdade,
-              // com squish de spring ao toque (mesmo sem ação própria
-              // além de propagar o toque do card, ele já dá a textura
-              // tátil pedida).
-              M3EFilledButton.tonal(
-                onPressed: onOpen,
-                size: M3EButtonSize.xs,
-                shape: M3EButtonShape.round,
-                child: Text(
-                  appText('visit_count').replaceAll('{count}', item.visitCount.toString()),
-                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
-                ),
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(14)),
+              child: ClipRRect(borderRadius: BorderRadius.circular(7), child: favicon),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.title.trim().isEmpty ? item.host : item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.host,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 11.5),
+                  ),
+                ],
               ),
-              const SizedBox(width: 7),
-              M3EButton(
-                onPressed: onOpen,
-                style: M3EButtonStyle.text,
-                size: M3EButtonSize.xs,
-                shape: M3EButtonShape.round,
-                tooltip: appText('open'),
-                child: Icon(Symbols.open_in_new_rounded, size: 17, color: muted),
+            ),
+            const SizedBox(width: 6),
+            M3EButton.tonal(
+              onPressed: onOpen,
+              size: M3EButtonSize.xs,
+              shape: M3EButtonShape.round,
+              child: Text(
+                appText('visit_count').replaceAll('{count}', item.visitCount.toString()),
+                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 4),
+            M3EButton.text(
+              onPressed: onOpen,
+              size: M3EButtonSize.xs,
+              shape: M3EButtonShape.round,
+              tooltip: appText('open'),
+              child: Icon(Symbols.open_in_new_rounded, size: 17, color: muted),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
-        // Indicador ondulado M3 Expressive no lugar da barra reta
-        // anterior. A amplitude da onda acompanha o próprio valor do
-        // progresso (mais visitas = onda mais viva), usando o parâmetro
-        // amplitude do pacote em vez de um valor fixo.
-        M3ELinearWavyProgressIndicator(
-          value: fraction.clamp(0.0, 1.0),
-          color: accent,
-          backgroundColor: pillColor(context),
-          strokeWidth: 3,
-          trackStrokeWidth: 3,
-          wavelength: 18,
-          waveSpeed: 8,
+        SizedBox(
           height: 10,
+          child: M3EProgressIndicator.linearWavy(
+            value: fraction.clamp(0.0, 1.0),
+            color: accent,
+            trackColor: pillColor(context),
+            strokeWidth: 3,
+            trackStrokeWidth: 3,
+            wavelength: 18,
+            waveSpeed: 8,
+          ),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _VisitedMeta(icon: AppIcons.calendar, label: '${item.firstVisit.day.toString().padLeft(2, '0')}/${item.firstVisit.month.toString().padLeft(2, '0')}/${item.firstVisit.year}'),
+            _VisitedMeta(
+              icon: AppIcons.calendar,
+              label: '${item.firstVisit.day.toString().padLeft(2, '0')}/${item.firstVisit.month.toString().padLeft(2, '0')}/${item.firstVisit.year}',
+            ),
             const SizedBox(width: 14),
             _VisitedMeta(icon: AppIcons.clockCounterClockwise, label: _formatVisitedSpan(item.activeSpan)),
             const Spacer(),
-            Text('${item.percentOfTotal.toStringAsFixed(0)}%', style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
+            Text(
+              '${item.percentOfTotal.toStringAsFixed(0)}%',
+              style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
       ],

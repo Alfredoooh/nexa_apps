@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
@@ -62,29 +63,42 @@ class LooplyApp extends StatelessWidget {
           builder: (context, pureBlack, ___) => MaterialApp(
             title: 'BrowseIt',
             debugShowCheckedModeBanner: false,
-            builder: (context, child) => Directionality(
-              textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  // Offstage mantém os glifos Rounded necessários à Activity
-                  // Kotlin dentro da fonte submetida ao icon tree-shaker.
-                  Positioned(
-                    left: -10000,
-                    top: -10000,
-                    child: ExcludeSemantics(
-                      child: Offstage(
-                        child: Row(
-                          children: [
-                            for (final symbol in AppIcons.nativeBrowserGlyphs)
-                              Icon(symbol),
-                          ],
+            builder: (context, child) => M3ETheme(
+              // Converte o ColorScheme ativo do Looply (claro, escuro ou AMOLED)
+              // para os tokens próprios dos componentes Material 3 Expressive.
+              data: buildM3EThemeDefaults(
+                colorScheme: M3EColorScheme.fromColorScheme(
+                  Theme.of(context).colorScheme,
+                ),
+              ),
+              child: MaterialUiCompatibilityBridge(
+                // Compatibilidade para dependências antigas que ainda
+                // importam package:flutter/material.dart.
+                child: Directionality(
+                  textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      child ?? const SizedBox.shrink(),
+                      // Offstage mantém os glifos Rounded necessários à Activity
+                      // Kotlin dentro da fonte submetida ao icon tree-shaker.
+                      Positioned(
+                        left: -10000,
+                        top: -10000,
+                        child: ExcludeSemantics(
+                          child: Offstage(
+                            child: Row(
+                              children: [
+                                for (final symbol in AppIcons.nativeBrowserGlyphs)
+                                  Icon(symbol),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
             locale: language.locale,

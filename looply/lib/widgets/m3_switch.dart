@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 
-/// Interruptor compacto alinhado ao tema Material 3 do Looply.
+/// Wrapper público mantido para não alterar as chamadas existentes do app;
+/// o controlo visual agora é o componente Material 3 Expressive verdadeiro.
 class M3ExpressiveSwitch extends StatelessWidget {
   const M3ExpressiveSwitch({
     super.key,
@@ -13,21 +15,10 @@ class M3ExpressiveSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Switch.adaptive(
+    return M3ESwitch(
       value: value,
+      selectedIcon: const Icon(M3EIcons.check),
       onChanged: onChanged,
-      activeColor: Colors.white,
-      activeTrackColor: const Color(0xFF2596BE),
-      inactiveTrackColor: Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFF42484D)
-          : const Color(0xFFD9DEE2),
-      inactiveThumbColor: Colors.white,
-      trackOutlineColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return Colors.transparent;
-        return Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF596168)
-            : const Color(0xFFB9C0C5);
-      }),
     );
   }
 }
