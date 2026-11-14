@@ -1,78 +1,340 @@
-name: Nexa Android Release
+name: Nexa Apps Android Build
 
 on:
   push:
     branches:
       - main
+      - master
+
+  pull_request:
+    branches:
+      - main
+      - master
+
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Evita execuções duplicadas na mesma branch.
+concurrency:
+  group: nexa-android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Android Release APKs
+    name: Build Nexa Apps APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    env:
-      PACKAGE_NAME: "com.codeme.app"
-      GRADLE_OPTS: "-Xmx8G -XX:MaxMetaspaceSize=4G"
+    timeout-minutes: 45
 
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
+      # --------------------------------------------------
+      # CHECKOUT
+      # --------------------------------------------------
 
-      - name: Instalar Flutter
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # --------------------------------------------------
+      # JAVA 17
+      # Corrige Unsupported class file major version 69.
+      # --------------------------------------------------
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # --------------------------------------------------
+      # FLUTTER
+      # --------------------------------------------------
+
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.50.0'
+          cache: false
 
-      - name: Generate key.properties
+      # --------------------------------------------------
+      # CONFIGURAR FLUTTER PARA UTILIZAR JAVA 17
+      # --------------------------------------------------
+
+      - name: Configure Flutter JDK
+        shell: bash
         run: |
-          cat > android/key.properties << EOF
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=codeme-test
-          storeFile=codeme-release.jks
-          EOF
-          echo "✅ key.properties gerado"
+          set -euo pipefail
 
-      - name: Decodificar keystore
+          flutter config --jdk-dir="$JAVA_HOME"
+
+          echo "=== JAVA VERSION ==="
+          java -version
+
+          echo "=== FLUTTER VERSION ==="
+          flutter --version
+
+          echo "=== FLUTTER DOCTOR ==="
+          flutter doctor -v
+
+      # --------------------------------------------------
+      # DETECTAR DIRETÓRIO DO PROJETO
+      # --------------------------------------------------
+
+      - name: Detect Flutter project directory
+        shell: bash
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/codeme-release.jks
-          echo "✅ keystore decodificado"
+          set -euo pipefail
 
-      - name: Instalar dependências
-        run: flutter pub get
-
-      - name: Garantir AndroidX habilitado
-        run: |
-          GRADLE_PROPS="android/gradle.properties"
-          if ! grep -q "android.useAndroidX=true" "$GRADLE_PROPS"; then
-            echo "android.useAndroidX=true" >> "$GRADLE_PROPS"
+          if [[ -f "pubspec.yaml" ]]; then
+            echo "PROJECT_DIR=." >> "$GITHUB_ENV"
+          elif [[ -f "nexa_apps/pubspec.yaml" ]]; then
+            echo "PROJECT_DIR=nexa_apps" >> "$GITHUB_ENV"
+          else
+            echo "ERROR: pubspec.yaml not found."
+            exit 1
           fi
-          if ! grep -q "android.enableJetifier=true" "$GRADLE_PROPS"; then
-            echo "android.enableJetifier=true" >> "$GRADLE_PROPS"
+
+      # --------------------------------------------------
+      # VALIDAR GRADLE
+      # Não atualiza o wrapper desnecessariamente.
+      # Mantém a versão existente do projeto.
+      # --------------------------------------------------
+
+      - name: Verify Gradle environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR/android"
+
+          echo "=== GRADLE VERSION ==="
+          ./gradlew --version
+
+          echo "=== GRADLE WRAPPER ==="
+          cat gradle/wrapper/gradle-wrapper.properties
+
+      # --------------------------------------------------
+      # DEPENDÊNCIAS FLUTTER
+      # --------------------------------------------------
+
+      - name: Get Flutter dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
+
+          flutter pub get
+
+      # --------------------------------------------------
+      # VALIDAR PROJETO
+      # --------------------------------------------------
+
+      - name: Validate Flutter project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
+
+          flutter analyze --no-pub || {
+            echo "::warning::Flutter analyze reported issues."
+          }
+
+      # --------------------------------------------------
+      # BUILD APK
+      # Uma única execução, sem matrix ou jobs paralelos.
+      # Gera variantes por arquitetura.
+      # --------------------------------------------------
+
+      - name: Build Nexa Apps APK
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "$PROJECT_DIR"
+
+          echo "Starting Nexa Apps release build..."
+
+          flutter build apk --release --split-per-abi
+
+          APK_DIR="build/app/outputs/flutter-apk"
+
+          shopt -s nullglob
+          APKS=("$APK_DIR"/app-*-release.apk)
+
+          if [[ ${#APKS[@]} -eq 0 ]]; then
+            echo "ERROR: No APK files were generated."
+            exit 1
           fi
-          echo "✅ gradle.properties verificado"
-          cat "$GRADLE_PROPS"
 
-      - name: Build APKs divididos por arquitetura (release, com shrink)
-        run: flutter build apk --release --split-per-abi
+          echo "=== GENERATED APK FILES ==="
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          for apk in "${APKS[@]}"; do
+            ls -lh "$apk"
+          done
+
+          echo "APK_COUNT=${#APKS[@]}" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------
+      # RENOMEAR APKs
+      # --------------------------------------------------
+
+      - name: Rename APKs with build number
+        id: rename
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK_DIR="$PROJECT_DIR/build/app/outputs/flutter-apk"
+          OUT_DIR="$APK_DIR/release-assets"
+
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR"
+
+          shopt -s nullglob
+
+          APKS=("$APK_DIR"/app-*-release.apk)
+
+          if [[ ${#APKS[@]} -eq 0 ]]; then
+            echo "ERROR: No APKs available for publishing."
+            exit 1
+          fi
+
+          for apk in "${APKS[@]}"; do
+
+            name="$(basename "$apk")"
+
+            arch="${name#app-}"
+            arch="${arch%-release.apk}"
+
+            new_name="nexa-app-${arch}-build${{ github.run_number }}.apk"
+
+            cp "$apk" "$OUT_DIR/$new_name"
+
+            echo "Created: $new_name"
+
+          done
+
+          echo "asset_dir=$OUT_DIR" >> "$GITHUB_OUTPUT"
+
+          echo "=== RELEASE APK ASSETS ==="
+
+          ls -lh "$OUT_DIR"
+
+      # --------------------------------------------------
+      # PUBLICAR NO GITHUB RELEASES
+      # --------------------------------------------------
+
+      - name: Publish Nexa Apps release
+        id: release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+
         with:
-          name: release-apks
-          path: build/app/outputs/flutter-apk/*.apk
+          tag_name: latest-build
 
-      - name: Notificar por email (sucesso/falha)
-        if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "Build ${{ job.status }} — Nexa Android Release"
-          to: seu_email@exemplo.com
-          from: GitHub Actions
-          body: "Build finalizado com status: ${{ job.status }}"
+          name: "Nexa Apps Build #${{ github.run_number }}"
+
+          body: |
+            # Nexa Apps - Android Release
+
+            Build automático do Nexa Apps.
+
+            **Build:** #${{ github.run_number }}
+
+            **Commit:** `${{ github.sha }}`
+
+            **Branch:** `${{ github.ref_name }}`
+
+            ## Downloads
+
+            Escolhe o APK compatível com o teu dispositivo:
+
+            - **arm64-v8a:** recomendado para a maioria dos Android modernos.
+            - **armeabi-v7a:** dispositivos Android de 32 bits.
+            - **x86_64:** emuladores e dispositivos Intel compatíveis.
+
+          files: ${{ steps.rename.outputs.asset_dir }}/*.apk
+
+          fail_on_unmatched_files: true
+
+          make_latest: true
+
+      # --------------------------------------------------
+      # LINKS DIRETOS PARA DOWNLOAD
+      # --------------------------------------------------
+
+      - name: Write APK download links to summary
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK_DIR="$PROJECT_DIR/build/app/outputs/flutter-apk/release-assets"
+
+          echo "# Nexa Apps - Downloads Android" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Build: #${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "| Arquitetura | APK | Download |" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          shopt -s nullglob
+
+          APKS=("$APK_DIR"/*.apk)
+
+          if [[ ${#APKS[@]} -eq 0 ]]; then
+            echo "ERROR: No release assets found."
+            exit 1
+          fi
+
+          for apk in "${APKS[@]}"; do
+
+            name="$(basename "$apk")"
+
+            arch="$(echo "$name" | sed -E 's/^nexa-app-(.*)-build[0-9]+\.apk$/\1/')"
+
+            url="https://github.com/${GITHUB_REPOSITORY}/releases/download/latest-build/${name}"
+
+            echo "| $arch | $name | [Baixar APK]($url) |" >> "$GITHUB_STEP_SUMMARY"
+
+            echo "$name -> $url"
+
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "## Release" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "[Abrir Nexa Apps Releases](https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest-build)" >> "$GITHUB_STEP_SUMMARY"
+
+      # --------------------------------------------------
+      # RESUMO PARA BUILDS DE PULL REQUEST
+      # --------------------------------------------------
+
+      - name: Write pull request build summary
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "# Nexa Apps - Build de validação" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "A compilação foi concluída com sucesso." >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Nenhum GitHub Release foi publicado porque esta execução pertence a um Pull Request." >> "$GITHUB_STEP_SUMMARY"
