@@ -40,6 +40,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.50.0'
           channel: stable
           cache: false
 
@@ -57,38 +58,45 @@ jobs:
             exit 1
           fi
 
-      - name: Update Gradle Wrapper
+      - name: Verify Android Gradle configuration
         shell: bash
         run: |
           set -euo pipefail
 
           WRAPPER="$PROJECT_DIR/android/gradle/wrapper/gradle-wrapper.properties"
           GRADLEW="$PROJECT_DIR/android/gradlew"
-          TARGET_VERSION="9.5.0"
+          SETTINGS="$PROJECT_DIR/android/settings.gradle"
+          GRADLE_PROPERTIES="$PROJECT_DIR/android/gradle.properties"
+          APP_GRADLE="$PROJECT_DIR/android/app/build.gradle"
 
-          if [[ ! -f "$WRAPPER" ]]; then
-            echo "ERROR: Gradle wrapper properties not found."
+          test -f "$WRAPPER"
+          test -f "$GRADLEW"
+          test -f "$SETTINGS"
+          test -f "$GRADLE_PROPERTIES"
+          test -f "$APP_GRADLE"
+
+          grep -qF 'gradle-9.5.0-bin.zip' "$WRAPPER" || {
+            echo "ERROR: The project must use Gradle 9.5.0."
+            exit 1
+          }
+          grep -qF 'VERSION="9.5.0"' "$GRADLEW" || {
+            echo "ERROR: The Gradle wrapper script is not synchronized with Gradle 9.5.0."
+            exit 1
+          }
+          grep -qF 'id "com.android.application" version "9.3.2" apply false' "$SETTINGS" || {
+            echo "ERROR: Android Gradle Plugin 9.3.2 is not configured."
+            exit 1
+          }
+          grep -qF 'android.builtInKotlin=true' "$GRADLE_PROPERTIES" || {
+            echo "ERROR: AGP built-in Kotlin is not enabled."
+            exit 1
+          }
+          if grep -Eq 'org\.jetbrains\.kotlin\.android|kotlin-android' "$SETTINGS" "$APP_GRADLE"; then
+            echo "ERROR: Remove the legacy Kotlin Gradle plugin when using AGP 9 built-in Kotlin."
             exit 1
           fi
 
-          if [[ ! -f "$GRADLEW" ]]; then
-            echo "ERROR: gradlew script not found."
-            exit 1
-          fi
-
-          sed -i \
-            "s#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-${TARGET_VERSION}-bin.zip#" \
-            "$WRAPPER"
-          sed -i '/^distributionSha256Sum=/d' "$WRAPPER"
-          sed -i -E "s#^VERSION=\"[^\"]*\"#VERSION=\"${TARGET_VERSION}\"#" "$GRADLEW"
-
-          echo "=== gradle-wrapper.properties ==="
-          cat "$WRAPPER"
-          echo "=== gradlew VERSION ==="
-          grep '^VERSION=' "$GRADLEW"
-
-          grep -q "gradle-${TARGET_VERSION}-bin.zip" "$WRAPPER"
-          grep -q "VERSION=\"${TARGET_VERSION}\"" "$GRADLEW"
+          echo "Android Gradle configuration verified (AGP 9.3.2 / Gradle 9.5.0 / built-in Kotlin)."
 
       - name: Display build environment
         run: |
@@ -101,13 +109,6 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           flutter pub get
-
-      - name: Patch m3e_haptics for AGP 9
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$PROJECT_DIR"
-          python3 tools/patch_m3e_haptics_agp9.py
 
       - name: Configure BrowseIt release keystore
         shell: bash

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
 import 'material_symbols.dart';
+import 'm3_switch.dart';
 
 class LooplyPopupAction<T> {
   const LooplyPopupAction({required this.value, required this.label, required this.icon});
@@ -115,7 +116,7 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
                                   AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context)),
                                   const SizedBox(width: 12),
                                   Expanded(child: Text(aiToggleLabel, style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600))),
-                                  Switch.adaptive(
+                                  M3ExpressiveSwitch(
                                     value: localAiValue,
                                     onChanged: (value) {
                                       localAiValue = value;
