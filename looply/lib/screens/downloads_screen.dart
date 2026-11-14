@@ -351,11 +351,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       slivers.add(
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-          sliver: SliverStaggeredGrid.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: 2,
-            crossAxisSpacing: 2,
-            children: tiles,
+          sliver: SliverToBoxAdapter(
+            child: StaggeredGrid.count(
+              crossAxisCount: 2,
+              mainAxisSpacing: 2,
+              crossAxisSpacing: 2,
+              children: tiles,
+            ),
           ),
         ),
       );
