@@ -1,7 +1,9 @@
 import 'dart:io';
 
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../models.dart';
@@ -276,6 +278,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   searchFocusNode: _searchFocusNode,
                   onBack: _handleBack,
                   onOpenSearch: _openSearch,
+                  onCloseSearch: _closeSearch,
                   onDelete: _deleteSelected,
                 ),
               ),
@@ -370,6 +373,7 @@ class _DownloadsFadeAppBar extends StatelessWidget {
     required this.searchFocusNode,
     required this.onBack,
     required this.onOpenSearch,
+    required this.onCloseSearch,
     required this.onDelete,
   });
 
@@ -381,6 +385,7 @@ class _DownloadsFadeAppBar extends StatelessWidget {
   final FocusNode searchFocusNode;
   final VoidCallback onBack;
   final VoidCallback onOpenSearch;
+  final VoidCallback onCloseSearch;
   final VoidCallback onDelete;
 
   @override
@@ -406,9 +411,9 @@ class _DownloadsFadeAppBar extends StatelessWidget {
           child: Row(
             children: [
               _DownloadHeaderButton(
-                key: ValueKey<String>(isSelecting || searchActive ? 'close' : 'back'),
-                tooltip: isSelecting || searchActive ? appText('close') : appText('back'),
-                icon: isSelecting || searchActive ? AppIcons.x : AppIcons.arrowLeft,
+                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+                tooltip: isSelecting ? appText('close') : appText('back'),
+                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
                 onTap: onBack,
               ),
               const SizedBox(width: 12),
@@ -456,14 +461,12 @@ class _DownloadsFadeAppBar extends StatelessWidget {
                         foreground: const Color(0xFFFF453A),
                         onTap: onDelete,
                       )
-                    : searchActive
-                        ? const SizedBox(key: ValueKey<String>('empty'), width: 42, height: 42)
-                        : _DownloadHeaderButton(
-                            key: const ValueKey<String>('search'),
-                            tooltip: appText('search_downloads'),
-                            icon: AppIcons.magnifyingGlass,
-                            onTap: onOpenSearch,
-                          ),
+                    : _DownloadHeaderButton(
+                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                        tooltip: searchActive ? appText('close_search') : appText('search_downloads'),
+                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                      ),
               ),
             ],
           ),
@@ -486,6 +489,7 @@ class _DownloadsSearchField extends StatelessWidget {
 
     return Container(
       height: 42,
+      margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: pillColor(context),
@@ -500,13 +504,14 @@ class _DownloadsSearchField extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               autofocus: true,
+              textAlignVertical: TextAlignVertical.center,
               style: TextStyle(color: text, fontSize: 14),
               decoration: InputDecoration(
                 hintText: appText('search_downloads'),
                 hintStyle: TextStyle(color: muted, fontSize: 14),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: EdgeInsets.zero,
+                contentPadding: const EdgeInsets.symmetric(vertical: 9),
               ),
             ),
           ),
@@ -869,21 +874,24 @@ class _DownloadHeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
-        child: Material(
-          color: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
-          borderRadius: BorderRadius.circular(13),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(13),
-            onTap: onTap,
-            child: SizedBox(
-              width: 42,
-              height: 42,
-              child: Center(
-                child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
-              ),
-            ),
+        child: M3EButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          style: M3EButtonStyle.tonal,
+          size: M3EButtonSize.sm,
+          shape: M3EButtonShape.round,
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+            foregroundColor: foreground ?? mutedText(context),
+            minimumSize: const Size(42, 42),
+            fixedSize: const Size(42, 42),
+            padding: EdgeInsets.zero,
+            borderRadius: 21,
+            pressedRadius: 15,
+            motion: M3EMotion.expressiveSpatialDefault,
+            haptic: M3EHapticFeedback.light,
           ),
+          child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
         ),
       );
 }

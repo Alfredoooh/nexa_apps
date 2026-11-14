@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../localization.dart';
 import '../models.dart';
@@ -155,34 +157,38 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ),
                 )
               else
-                ...List.generate(recent.length, (index) {
-                  final isFirst = index == 0;
-                  final isLast = index == recent.length - 1;
-                  final top = isFirst ? 22.0 : 8.0;
-                  final bottom = isLast ? 22.0 : 8.0;
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: Duration(milliseconds: 320 + index * 45),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) => Opacity(
-                      opacity: value,
-                      child: Transform.translate(
-                        offset: Offset(0, (1 - value) * 14),
-                        child: child,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
-                      child: ActivityTile(
-                        entry: recent[index],
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(top),
-                          bottom: Radius.circular(bottom),
+                M3ESegmentedColumn(
+                  color: settingsCardColor(context),
+                  outerRadius: 22,
+                  innerRadius: 8,
+                  gap: 2,
+                  padding: EdgeInsets.zero,
+                  motion: M3EMotion.expressiveSpatialDefault,
+                  pressedMotion: M3EMotion.expressiveEffectsFast,
+                  onTap: (index) {
+                    final entry = recent[index];
+                    openOrbitTab(context, entry.url, title: entry.title);
+                  },
+                  children: [
+                    for (final entry in recent)
+                      M3EListItem(
+                        leading: SiteFaviconAvatar(url: entry.url, size: 38),
+                        headline: Text(
+                          entry.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
                         ),
+                        supportingText: Text(
+                          formatActivityTime(entry.timestamp),
+                          style: TextStyle(color: muted, fontSize: 11),
+                        ),
+                        trailing: AppMaterialIcon(AppIcons.caretRight, color: muted, size: 19),
+                        minHeight: 70,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
                       ),
-                    ),
-                  );
-                }),
+                  ],
+                ),
             ],
           ),
           // Appbar flutuante com o mesmo gradiente de esmaecimento usado em
@@ -290,61 +296,40 @@ class _RangeSelector extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
     final index = _ChartRange.values.indexOf(value);
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final segmentWidth = constraints.maxWidth / _ChartRange.values.length;
-          return Stack(
-            children: [
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 420),
-                curve: Curves.easeOutQuint,
-                left: segmentWidth * index,
-                top: 0,
-                bottom: 0,
-                width: segmentWidth,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: pageBg(context),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+    return M3ESegmentedRow(
+      equalWidth: true,
+      outerRadius: 999,
+      innerRadius: 9,
+      gap: 3,
+      color: settingsCardColor(context),
+      selectedColor: pillColor(context),
+      selectedRadius: 999,
+      selectedIndices: <int>{index},
+      selectionMode: M3ESelectionMode.single,
+      selectionTrigger: M3ESelectionTrigger.tap,
+      onSelectionChanged: (selection) {
+        if (selection.isNotEmpty) onChanged(_ChartRange.values[selection.first]);
+      },
+      motion: M3EMotion.expressiveSpatialDefault,
+      pressedMotion: M3EMotion.expressiveEffectsFast,
+      children: [
+        for (final range in _ChartRange.values)
+          M3EListItem(
+            headline: Center(
+              child: Text(
+                _label(range),
+                maxLines: 1,
+                style: TextStyle(
+                  color: range == value ? text : muted,
+                  fontSize: 12.5,
+                  fontWeight: range == value ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
-              Row(
-                children: _ChartRange.values.map((range) {
-                  final selected = range == value;
-                  return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onChanged(range),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        child: Center(
-                          child: AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 320),
-                            curve: Curves.easeOutQuint,
-                            style: TextStyle(
-                              color: selected ? text : muted,
-                              fontSize: 13,
-                              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                            ),
-                            child: Text(_label(range)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          );
-        },
-      ),
+            ),
+            minHeight: 42,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          ),
+      ],
     );
   }
 }

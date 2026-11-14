@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 import 'package:http/http.dart' as http;
 
 import '../models.dart';
@@ -380,35 +383,30 @@ class _SearchScreenState extends State<SearchScreen> {
     required VoidCallback onTap,
     bool active = false,
   }) {
-    final muted = mutedText(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 44,
+    final foreground = active ? Colors.white : mutedText(context);
+    final background = active ? accentColor(context) : pillColor(context);
+    return M3EButton(
+      onPressed: onTap,
+      style: active ? M3EButtonStyle.filled : M3EButtonStyle.tonal,
+      size: M3EButtonSize.sm,
+      shape: M3EButtonShape.round,
+      decoration: M3EButtonDecoration.styleFrom(
+        backgroundColor: background,
+        foregroundColor: foreground,
+        minimumSize: const Size(0, 42),
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: active
-              ? LinearGradient(colors: [accentColor(context), accentColor(context).withOpacity(.65)])
-              : null,
-          color: active ? null : pillColor(context),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppMaterialIcon(icon, size: 17, color: active ? Colors.white : muted),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: active ? Colors.white : muted,
-              ),
-            ),
-          ],
-        ),
+        borderRadius: 22,
+        pressedRadius: 16,
+        motion: M3EMotion.expressiveSpatialDefault,
+        haptic: M3EHapticFeedback.light,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppMaterialIcon(icon, size: 17, color: foreground),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: foreground)),
+        ],
       ),
     );
   }
@@ -553,23 +551,33 @@ class _SearchScreenState extends State<SearchScreen> {
                           final queries = searchHistoryController.queries;
                           if (queries.isEmpty) return const SizedBox.shrink();
                           return ListView(
-                            padding: const EdgeInsets.only(top: 4, bottom: 20),
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(18, 2, 18, 8),
+                                padding: const EdgeInsets.fromLTRB(6, 2, 6, 8),
                                 child: Text(appText('recent_searches'), style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
                               ),
-                              for (final query in queries)
-                                ListTile(
-                                  leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
-                                  title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
-                                  trailing: IconButton(
-                                    tooltip: appText('fill_search'),
-                                    icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
-                                    onPressed: () => _fillSuggestion(query),
-                                  ),
-                                  onTap: () => _submitSearch(query),
-                                ),
+                              M3ESegmentedColumn(
+                                color: settingsCardColor(context),
+                                outerRadius: 22,
+                                innerRadius: 8,
+                                gap: 2,
+                                padding: EdgeInsets.zero,
+                                motion: M3EMotion.expressiveSpatialDefault,
+                                onTap: (index) => _submitSearch(queries[index]),
+                                children: [
+                                  for (final query in queries)
+                                    M3EListItem(
+                                      leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
+                                      headline: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
+                                      trailing: IconButton(
+                                        tooltip: appText('fill_search'),
+                                        icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                                        onPressed: () => _fillSuggestion(query),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ],
                           );
                         },
@@ -578,9 +586,15 @@ class _SearchScreenState extends State<SearchScreen> {
                     // item entra com fade + leve deslocamento vertical.
                     : _suggestions.isEmpty
                         ? const SizedBox.shrink()
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
+                        : M3ESegmentedList.builder(
                             itemCount: _suggestions.length,
+                            listPadding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+                            color: settingsCardColor(context),
+                            outerRadius: 22,
+                            innerRadius: 8,
+                            gap: 2,
+                            motion: M3EMotion.expressiveSpatialDefault,
+                            onTap: (index) => _submitSearch(_suggestions[index]),
                             itemBuilder: (context, index) {
                               final suggestion = _suggestions[index];
                               final photo = _suggestionTrailingPhoto(suggestion);
@@ -591,21 +605,16 @@ class _SearchScreenState extends State<SearchScreen> {
                                 curve: Curves.easeOutCubic,
                                 builder: (context, value, child) => Opacity(
                                   opacity: value,
-                                  child: Transform.translate(
-                                    offset: Offset(0, (1 - value) * 8),
-                                    child: child,
-                                  ),
+                                  child: Transform.translate(offset: Offset(0, (1 - value) * 7), child: child),
                                 ),
-                                child: ListTile(
+                                child: M3EListItem(
                                   leading: _suggestionLeading(suggestion, muted),
-                                  title: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 15)),
-                                  trailing: photo ??
-                                      IconButton(
-                                        tooltip: appText('fill_search'),
-                                        icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
-                                        onPressed: () => _fillSuggestion(suggestion),
-                                      ),
-                                  onTap: () => _submitSearch(suggestion),
+                                  headline: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
+                                  trailing: photo ?? IconButton(
+                                    tooltip: appText('fill_search'),
+                                    icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                                    onPressed: () => _fillSuggestion(suggestion),
+                                  ),
                                 ),
                               );
                             },

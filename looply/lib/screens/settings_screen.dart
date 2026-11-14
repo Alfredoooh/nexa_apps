@@ -1,5 +1,7 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../models.dart';
 import '../browser_library.dart';
@@ -419,22 +421,15 @@ class _SettingsSection extends StatelessWidget {
         ),
         SizedBox(
           width: double.infinity,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < children.length; index++) ...[
-                Material(
-                  color: settingsCardColor(context),
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(index == 0 ? 22 : 8),
-                    bottom: Radius.circular(index == children.length - 1 ? 22 : 8),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: children[index],
-                ),
-                if (index != children.length - 1) const SizedBox(height: 2),
-              ],
-            ],
+          child: M3ESegmentedColumn(
+            children: children,
+            color: settingsCardColor(context),
+            outerRadius: 22,
+            innerRadius: 8,
+            gap: 2,
+            padding: EdgeInsets.zero,
+            motion: M3EMotion.expressiveSpatialDefault,
+            pressedMotion: M3EMotion.expressiveEffectsFast,
           ),
         ),
       ],

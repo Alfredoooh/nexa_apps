@@ -1,20 +1,21 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
+import 'package:m3e_buttons/m3e_buttons.dart';
+import 'package:m3e_menu/m3e_menu.dart';
 
 import '../theme.dart';
 import 'material_symbols.dart';
-import 'm3_switch.dart';
 
 class LooplyPopupAction<T> {
   const LooplyPopupAction({required this.value, required this.label, required this.icon});
-
   final T value;
   final String label;
   final IconData icon;
 }
 
-/// Menu flutuante totalmente desenhado em Flutter. Não depende de PopupMenu
-/// Kotlin nem de canais nativos, e conserva a posição do botão acionador.
-class LooplyPopupMenuButton<T> extends StatelessWidget {
+/// Shared app menu built with M3 Expressive spring-driven menu components.
+/// The existing Looply palette remains the source for menu, text and icon colors.
+class LooplyPopupMenuButton<T> extends StatefulWidget {
   const LooplyPopupMenuButton({
     super.key,
     required this.actions,
@@ -40,143 +41,101 @@ class LooplyPopupMenuButton<T> extends StatelessWidget {
   final String aiToggleLabel;
   final ValueChanged<bool>? onAiToggleChanged;
 
-  Future<void> _show(BuildContext buttonContext) async {
-    if (actions.isEmpty && !includeAiToggle) return;
-    final object = buttonContext.findRenderObject();
-    if (object is! RenderBox || !object.hasSize) return;
+  @override
+  State<LooplyPopupMenuButton<T>> createState() => _LooplyPopupMenuButtonState<T>();
+}
 
-    final origin = object.localToGlobal(Offset.zero);
-    final anchor = origin & object.size;
-    final screen = MediaQuery.sizeOf(buttonContext);
-    final availableWidth = (screen.width - 24).clamp(1.0, screen.width).toDouble();
-    final width = availableWidth < 210
-        ? availableWidth
-        : menuWidth.clamp(210.0, availableWidth).toDouble();
-    // Os rótulos podem ocupar duas linhas em alguns idiomas. Reservamos uma
-    // altura mais realista e deixamos o conteúdo rolar quando necessário.
-    final maxMenuHeight = (screen.height * .68).clamp(1.0, screen.height).toDouble();
-    final estimatedHeight = ((actions.length * 66.0) + (includeAiToggle ? 66.0 : 0.0) + 16.0)
-        .clamp(1.0, maxMenuHeight)
-        .toDouble();
-    final maxLeft = (screen.width - width - 12).clamp(12.0, screen.width).toDouble();
-    final left = (anchor.right - width).clamp(12.0, maxLeft).toDouble();
-    final preferredTop = anchor.bottom + 7;
-    final bottomLimit = (screen.height - estimatedHeight - 12).clamp(12.0, screen.height).toDouble();
-    final top = preferredTop + estimatedHeight > screen.height - 16
-        ? (anchor.top - estimatedHeight - 7).clamp(12.0, bottomLimit).toDouble()
-        : preferredTop.clamp(12.0, bottomLimit).toDouble();
+class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
+  late bool _aiValue = widget.aiToggleValue;
 
-    final selected = await showGeneralDialog<T>(
-      context: buttonContext,
-      barrierDismissible: true,
-      barrierLabel: 'Fechar menu',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 150),
-      pageBuilder: (dialogContext, animation, secondaryAnimation) {
-        final surface = panelColor(dialogContext);
-        final muted = mutedText(dialogContext);
-        final text = mainText(dialogContext);
-        var localAiValue = aiToggleValue;
-        return StatefulBuilder(
-          builder: (context, setLocalState) => Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => Navigator.of(dialogContext).pop(),
-                  child: const SizedBox.expand(),
-                ),
-              ),
-              Positioned(
-                left: left,
-                top: top,
-                width: width,
-                child: Material(
-                  color: surface,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 14,
-                  borderRadius: BorderRadius.circular(19),
-                  clipBehavior: Clip.antiAlias,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 7),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxHeight: maxMenuHeight),
-                      child: SingleChildScrollView(
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          if (includeAiToggle) ...[
-                            InkWell(
-                              onTap: () {
-                                localAiValue = !localAiValue;
-                                setLocalState(() {});
-                                onAiToggleChanged?.call(localAiValue);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(15, 7, 10, 7),
-                                child: Row(children: [
-                                  AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context)),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: Text(aiToggleLabel, style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600))),
-                                  M3ExpressiveSwitch(
-                                    value: localAiValue,
-                                    onChanged: (value) {
-                                      localAiValue = value;
-                                      setLocalState(() {});
-                                      onAiToggleChanged?.call(value);
-                                    },
-                                  ),
-                                ]),
-                              ),
-                            ),
-                            if (actions.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Divider(height: 9, color: muted.withOpacity(.16)),
-                              ),
-                          ],
-                          for (final action in actions)
-                            InkWell(
-                              onTap: () => Navigator.of(dialogContext).pop(action.value),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-                                child: Row(children: [
-                                  AppMaterialIcon(action.icon, size: 20, color: muted),
-                                  const SizedBox(width: 13),
-                                  Expanded(child: Text(action.label, maxLines: 2, overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500))),
-                                ]),
-                              ),
-                            ),
-                        ]),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            alignment: Alignment.topRight,
-            scale: Tween<double>(begin: .96, end: 1).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-    if (selected != null) onSelected(selected);
+  @override
+  void didUpdateWidget(covariant LooplyPopupMenuButton<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.aiToggleValue != widget.aiToggleValue) _aiValue = widget.aiToggleValue;
   }
 
   @override
-  Widget build(BuildContext context) => Builder(
-        builder: (buttonContext) => IconButton(
-          tooltip: tooltip,
-          icon: AppMaterialIcon(icon, color: iconColor ?? mainText(buttonContext)),
-          onPressed: () => _show(buttonContext),
+  Widget build(BuildContext context) {
+    final surface = panelColor(context);
+    final text = mainText(context);
+    final muted = mutedText(context);
+    final width = widget.menuWidth.clamp(210.0, 320.0).toDouble();
+    final itemStyle = M3EMenuItemStyle(
+      backgroundColor: surface,
+      foregroundColor: text,
+      leadingIconColor: muted,
+      textStyle: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      spatialMotion: M3EMotion.expressiveSpatialDefault,
+    );
+    final children = <Widget>[
+      if (widget.includeAiToggle)
+        M3ECheckboxMenuButton(
+          value: _aiValue,
+          closeOnActivate: false,
+          leadingIcon: AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context)),
+          itemStyle: itemStyle,
+          onChanged: (value) {
+            final next = value ?? false;
+            setState(() => _aiValue = next);
+            widget.onAiToggleChanged?.call(next);
+          },
+          child: Text(widget.aiToggleLabel, style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600)),
         ),
-      );
+      if (widget.includeAiToggle && widget.actions.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Divider(height: 9, color: muted.withOpacity(.18)),
+        ),
+      for (final action in widget.actions)
+        M3EMenuItemButton(
+          itemStyle: itemStyle,
+          leadingIcon: AppMaterialIcon(action.icon, size: 20, color: muted),
+          onPressed: () => widget.onSelected(action.value),
+          child: Text(action.label, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w500)),
+        ),
+    ];
+
+    return M3EMenuAnchor(
+      clipBehavior: Clip.antiAlias,
+      alignmentOffset: Offset(0, 5),
+      style: M3EMenuStyle(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black.withOpacity(.20),
+        elevation: 13,
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        minWidth: width,
+        maxWidth: width,
+        position: M3EMenuPosition.under,
+        animationStyle: M3EMenuAnimationStyle.popup,
+        spatialMotion: M3EMotion.expressiveSpatialDefault,
+        effectsMotion: M3EMotion.expressiveEffectsDefault,
+      ),
+      menuChildren: children,
+      builder: (context, controller, child) => Tooltip(
+        message: widget.tooltip,
+        child: M3EButton(
+          onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+          style: M3EButtonStyle.text,
+          size: M3EButtonSize.md,
+          shape: M3EButtonShape.round,
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: widget.iconColor ?? mainText(context),
+            minimumSize: const Size(44, 44),
+            fixedSize: const Size(44, 44),
+            padding: EdgeInsets.zero,
+            borderRadius: 22,
+            pressedRadius: 15,
+            motion: M3EMotion.expressiveSpatialDefault,
+            haptic: M3EHapticFeedback.light,
+          ),
+          child: AppMaterialIcon(widget.icon, color: widget.iconColor ?? mainText(context)),
+        ),
+      ),
+    );
+  }
 }

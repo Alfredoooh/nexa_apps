@@ -1,5 +1,7 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../models.dart';
 import '../theme.dart';
@@ -235,6 +237,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   searchFocusNode: _searchFocusNode,
                   onBack: _handleBack,
                   onOpenSearch: _openSearch,
+                  onCloseSearch: _closeSearch,
                   onDelete: _deleteSelected,
                 ),
               ),
@@ -260,6 +263,7 @@ class _HistoryFadeAppBar extends StatelessWidget {
     required this.searchFocusNode,
     required this.onBack,
     required this.onOpenSearch,
+    required this.onCloseSearch,
     required this.onDelete,
   });
 
@@ -271,6 +275,7 @@ class _HistoryFadeAppBar extends StatelessWidget {
   final FocusNode searchFocusNode;
   final VoidCallback onBack;
   final VoidCallback onOpenSearch;
+  final VoidCallback onCloseSearch;
   final VoidCallback onDelete;
 
   @override
@@ -298,9 +303,9 @@ class _HistoryFadeAppBar extends StatelessWidget {
               // Botão de voltar/fechar: sempre visível, troca de ícone
               // conforme o estado (voltar / sair da seleção / fechar busca).
               _HistoryHeaderButton(
-                key: ValueKey<String>(isSelecting || searchActive ? 'close' : 'back'),
-                tooltip: isSelecting || searchActive ? appText('close') : appText('back'),
-                icon: isSelecting || searchActive ? AppIcons.x : AppIcons.arrowLeft,
+                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+                tooltip: isSelecting ? appText('close') : appText('back'),
+                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
                 onTap: onBack,
               ),
               const SizedBox(width: 12),
@@ -353,14 +358,12 @@ class _HistoryFadeAppBar extends StatelessWidget {
                         foreground: const Color(0xFFFF453A),
                         onTap: onDelete,
                       )
-                    : searchActive
-                        ? const SizedBox(key: ValueKey<String>('empty'), width: 42, height: 42)
-                        : _HistoryHeaderButton(
-                            key: const ValueKey<String>('search'),
-                            tooltip: appText('search_history'),
-                            icon: AppIcons.magnifyingGlass,
-                            onTap: onOpenSearch,
-                          ),
+                    : _HistoryHeaderButton(
+                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                        tooltip: searchActive ? appText('close_search') : appText('search_history'),
+                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                      ),
               ),
             ],
           ),
@@ -386,6 +389,7 @@ class _HistorySearchField extends StatelessWidget {
 
     return Container(
       height: 42,
+      margin: const EdgeInsets.only(top: 5),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: pillColor(context),
@@ -400,13 +404,14 @@ class _HistorySearchField extends StatelessWidget {
               controller: controller,
               focusNode: focusNode,
               autofocus: true,
+              textAlignVertical: TextAlignVertical.center,
               style: TextStyle(color: text, fontSize: 14),
               decoration: InputDecoration(
                 hintText: appText('search_history'),
                 hintStyle: TextStyle(color: muted, fontSize: 14),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: EdgeInsets.zero,
+                contentPadding: const EdgeInsets.symmetric(vertical: 9),
               ),
             ),
           ),
@@ -555,21 +560,24 @@ class _HistoryHeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
         message: tooltip,
-        child: Material(
-          color: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
-          borderRadius: BorderRadius.circular(13),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(13),
-            onTap: onTap,
-            child: SizedBox(
-              width: 42,
-              height: 42,
-              child: Center(
-                child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
-              ),
-            ),
+        child: M3EButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          style: M3EButtonStyle.tonal,
+          size: M3EButtonSize.sm,
+          shape: M3EButtonShape.round,
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
+            foregroundColor: foreground ?? mutedText(context),
+            minimumSize: const Size(42, 42),
+            fixedSize: const Size(42, 42),
+            padding: EdgeInsets.zero,
+            borderRadius: 21,
+            pressedRadius: 15,
+            motion: M3EMotion.expressiveSpatialDefault,
+            haptic: M3EHapticFeedback.light,
           ),
+          child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
         ),
       );
 }

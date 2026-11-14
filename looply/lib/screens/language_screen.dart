@@ -1,4 +1,7 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
+import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
 
 import '../localization.dart';
 import '../theme.dart';
@@ -14,14 +17,27 @@ class LanguageScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: pageBg(context),
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: appText('back'),
-          onPressed: () => Navigator.of(context).maybePop(),
-          style: IconButton.styleFrom(
-            foregroundColor: text,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: M3EButton(
+            tooltip: appText('back'),
+            onPressed: () => Navigator.of(context).maybePop(),
+            style: M3EButtonStyle.tonal,
+            size: M3EButtonSize.sm,
+            shape: M3EButtonShape.round,
+            decoration: M3EButtonDecoration.styleFrom(
+              backgroundColor: pillColor(context),
+              foregroundColor: text,
+              minimumSize: const Size(42, 42),
+              fixedSize: const Size(42, 42),
+              padding: EdgeInsets.zero,
+              borderRadius: 21,
+              pressedRadius: 15,
+              motion: M3EMotion.expressiveSpatialDefault,
+              haptic: M3EHapticFeedback.light,
+            ),
+            child: AppMaterialIcon(AppIcons.arrowLeft, color: text, size: 20),
           ),
-          icon: AppMaterialIcon(AppIcons.arrowLeft, color: text),
         ),
         title: Text(appText('select_language')),
         backgroundColor: pageBg(context),
@@ -29,35 +45,51 @@ class LanguageScreen extends StatelessWidget {
       ),
       body: ValueListenableBuilder<AppLanguage>(
         valueListenable: appLanguageController,
-        builder: (context, selected, _) => ListView.builder(
+        builder: (context, selected, _) => ListView(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
-          itemCount: supportedAppLanguages.length,
-          itemBuilder: (context, index) {
-            final language = supportedAppLanguages[index];
-            final isSelected = language.code == selected.code;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Material(
-                color: settingsCardColor(context),
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(index == 0 ? 21 : 8),
-                  bottom: Radius.circular(index == supportedAppLanguages.length - 1 ? 21 : 8),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: ListTile(
-                  onTap: () {
-                    appLanguageController.select(language);
-                    Navigator.of(context).maybePop();
-                  },
-                  title: Text(language.nativeName, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                  subtitle: Text(language.name, style: TextStyle(color: muted, fontSize: 12)),
-                  trailing: isSelected
-                      ? AppMaterialIcon(AppIcons.checkCircle, color: accentColor(context))
-                      : AppMaterialIcon(AppIcons.circle, color: muted),
-                ),
-              ),
-            );
-          },
+          children: [
+            M3ESegmentedColumn(
+              color: settingsCardColor(context),
+              outerRadius: 22,
+              innerRadius: 8,
+              gap: 3,
+              padding: EdgeInsets.zero,
+              motion: M3EMotion.expressiveSpatialDefault,
+              pressedMotion: M3EMotion.expressiveEffectsFast,
+              onTap: (index) {
+                appLanguageController.select(supportedAppLanguages[index]);
+                Navigator.of(context).maybePop();
+              },
+              children: [
+                for (final language in supportedAppLanguages)
+                  M3EListItem(
+                    leading: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: pillColor(context),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: AppMaterialIcon(AppIcons.globe, color: text, size: 19),
+                    ),
+                    headline: Text(
+                      language.nativeName,
+                      style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    supportingText: Text(
+                      language.name,
+                      style: TextStyle(color: muted, fontSize: 12),
+                    ),
+                    trailing: language.code == selected.code
+                        ? AppMaterialIcon(AppIcons.checkCircle, color: accentColor(context))
+                        : AppMaterialIcon(AppIcons.circle, color: muted),
+                    minHeight: 72,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );
