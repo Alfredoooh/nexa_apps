@@ -11,6 +11,18 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
+// m3e_haptics 1.0.0 does not declare compileSdk in its Android library module.
+// Configure it before AGP validates the module.
+subprojects { subproject ->
+    if (subproject.name == "m3e_haptics") {
+        subproject.plugins.withId("com.android.library") {
+            subproject.extensions.configure("android") {
+                compileSdkVersion 36
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
