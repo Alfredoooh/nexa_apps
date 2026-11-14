@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../theme.dart';
 import 'material_symbols.dart';
@@ -27,7 +27,7 @@ Future<T?> showLooplyDialog<T>({
     barrierDismissible: barrierDismissible,
     barrierLabel: 'Fechar diálogo',
     barrierColor: Colors.black.withOpacity(.42),
-    transitionDuration: const Duration(milliseconds: 190),
+    transitionDuration: const Duration(milliseconds: 310),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       final scheme = Theme.of(dialogContext).colorScheme;
       final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
@@ -113,14 +113,18 @@ Future<T?> showLooplyDialog<T>({
         ),
       );
     },
-    // Mantém o movimento original do diálogo; não altera Container Transform.
+    // Entrada expressiva com mola suave, mantendo a superfície e as cores Looply.
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final spatial = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
+      final effects = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
       return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: .94, end: 1).animate(curved),
-          child: child,
+        opacity: effects,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(spatial),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .93, end: 1).animate(spatial),
+            child: child,
+          ),
         ),
       );
     },

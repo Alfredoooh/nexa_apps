@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1093,10 +1093,10 @@ class DownloadEntry {
   final DateTime createdAt;
 
   static const Map<String, List<String>> _extensionGroups = {
-    'image': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'],
+    'image': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.heic', '.heif', '.bmp', '.svg'],
     'video': ['.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'],
     'audio': ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'],
-    'archive': ['.zip', '.rar', '.7z', '.tar', '.gz'],
+    'archive': ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.apk', '.jar', '.epub'],
     'code': ['.dart', '.js', '.ts', '.py', '.java', '.kt', '.html', '.css',
              '.json', '.xml', '.yaml', '.yml', '.c', '.cpp', '.h', '.swift'],
     'pdf': ['.pdf'],
@@ -1276,6 +1276,153 @@ class DownloadsController extends ChangeNotifier {
     return 'ficheiro_${DateTime.now().millisecondsSinceEpoch}';
   }
 
+
+  String? _filenameFromContentDisposition(String? header) {
+    if (header == null || header.trim().isEmpty) return null;
+    final extended = RegExp(r"filename\*\s*=\s*(?:UTF-8''|[^']*'[^']*'')?([^;]+)", caseSensitive: false)
+        .firstMatch(header)
+        ?.group(1);
+    final plain = RegExp(r'filename\s*=\s*"?([^";]+)', caseSensitive: false)
+        .firstMatch(header)
+        ?.group(1);
+    var value = (extended ?? plain)?.trim();
+    if (value == null || value.isEmpty) return null;
+    if (value.startsWith('"') || value.startsWith("'")) value = value.substring(1);
+    if (value.endsWith('"') || value.endsWith("'")) value = value.substring(0, value.length - 1);
+    try {
+      value = Uri.decodeComponent(value);
+    } catch (_) {}
+    value = value.split('/').last.split('\\').last.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  String? _usableMimeType(String? raw) {
+    final value = raw?.split(';').first.trim().toLowerCase();
+    if (value == null ||
+        value.isEmpty ||
+        value == 'application/octet-stream' ||
+        value == 'binary/octet-stream' ||
+        value == 'application/download' ||
+        value == 'application/x-download' ||
+        value == '*/*') {
+      return null;
+    }
+    return value.contains('/') ? value : null;
+  }
+
+  String? _mimeFromExtension(String filename) => _guessMimeType(filename);
+
+  String? _extensionForMime(String? mime) {
+    const extensions = <String, String>{
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'image/avif': '.avif',
+      'image/heic': '.heic',
+      'image/bmp': '.bmp',
+      'image/svg+xml': '.svg',
+      'video/mp4': '.mp4',
+      'video/webm': '.webm',
+      'video/quicktime': '.mov',
+      'audio/mpeg': '.mp3',
+      'audio/mp4': '.m4a',
+      'audio/wav': '.wav',
+      'audio/ogg': '.ogg',
+      'audio/flac': '.flac',
+      'application/pdf': '.pdf',
+      'application/zip': '.zip',
+      'application/x-rar-compressed': '.rar',
+      'application/vnd.rar': '.rar',
+      'application/x-7z-compressed': '.7z',
+      'application/x-tar': '.tar',
+      'application/wasm': '.wasm',
+      'application/x-sqlite3': '.sqlite',
+      'application/rtf': '.rtf',
+      'application/gzip': '.gz',
+      'application/x-gzip': '.gz',
+      'application/x-tar': '.tar',
+      'application/wasm': '.wasm',
+      'application/x-sqlite3': '.sqlite',
+      'application/rtf': '.rtf',
+      'application/vnd.android.package-archive': '.apk',
+      'application/json': '.json',
+      'application/xml': '.xml',
+      'text/xml': '.xml',
+      'text/html': '.html',
+      'text/plain': '.txt',
+      'text/css': '.css',
+      'text/javascript': '.js',
+      'application/javascript': '.js',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'application/vnd.ms-excel': '.xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+      'application/vnd.ms-powerpoint': '.ppt',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    };
+    return extensions[mime?.toLowerCase()];
+  }
+
+  String _correctDownloadFilename(String rawName, String? mime) {
+    var name = rawName.trim().split('/').last.split('\\').last;
+    name = name.replaceAll(RegExp(r'[\x00-\x1F]'), '').trim();
+    if (name.isEmpty) name = 'ficheiro_${DateTime.now().millisecondsSinceEpoch}';
+    final expectedExtension = _extensionForMime(mime);
+    if (expectedExtension == null) return name;
+
+    final dot = name.lastIndexOf('.');
+    final currentExtension = dot >= 0 ? name.substring(dot).toLowerCase() : '';
+    const genericExtensions = <String>{'.bin', '.dat', '.download', '.tmp', '.file'};
+    final currentMime = _mimeFromExtension(name);
+    if (currentExtension.isEmpty ||
+        genericExtensions.contains(currentExtension) ||
+        (currentMime != null && currentMime != mime)) {
+      final base = dot > 0 ? name.substring(0, dot) : name;
+      return '$base$expectedExtension';
+    }
+    return name;
+  }
+
+  String? _sniffMimeType(List<int> bytes) {
+    bool starts(List<int> signature) => bytes.length >= signature.length &&
+        List<int>.generate(signature.length, (i) => bytes[i]).toString() == signature.toString();
+    bool asciiAt(int offset, String text) {
+      final signature = text.codeUnits;
+      return bytes.length >= offset + signature.length &&
+          List<int>.generate(signature.length, (i) => bytes[offset + i]).toString() == signature.toString();
+    }
+
+    if (starts(const <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) return 'image/png';
+    if (starts(const <int>[0xFF, 0xD8, 0xFF])) return 'image/jpeg';
+    if (starts(const <int>[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C])) return 'application/x-7z-compressed';
+    if (asciiAt(0, 'Rar!')) return 'application/vnd.rar';
+    if (starts(const <int>[0x1F, 0x8B])) return 'application/gzip';
+    if (asciiAt(0, '\x00asm')) return 'application/wasm';
+    if (asciiAt(0, 'SQLite format 3\x00')) return 'application/x-sqlite3';
+    if (asciiAt(0, '{\\rtf') || asciiAt(0, '{\\RTF')) return 'application/rtf';
+    if (asciiAt(257, 'ustar')) return 'application/x-tar';
+    if (asciiAt(0, 'GIF87a') || asciiAt(0, 'GIF89a')) return 'image/gif';
+    if (asciiAt(0, 'RIFF') && asciiAt(8, 'WEBP')) return 'image/webp';
+    if (asciiAt(0, 'BM')) return 'image/bmp';
+    if (asciiAt(0, '%PDF-')) return 'application/pdf';
+    if (asciiAt(0, 'PK\x03\x04') || asciiAt(0, 'PK\x05\x06') || asciiAt(0, 'PK\x07\x08')) return 'application/zip';
+    if (asciiAt(4, 'ftyp')) {
+      if (asciiAt(8, 'avif') || asciiAt(8, 'avis')) return 'image/avif';
+      if (asciiAt(8, 'heic') || asciiAt(8, 'heix') || asciiAt(8, 'hevc')) return 'image/heic';
+      if (asciiAt(8, 'M4A ') || asciiAt(8, 'M4B ')) return 'audio/mp4';
+      return 'video/mp4';
+    }
+    if (asciiAt(0, 'OggS')) return 'audio/ogg';
+    if (asciiAt(0, 'ID3')) return 'audio/mpeg';
+    if (asciiAt(0, 'fLaC')) return 'audio/flac';
+    if (asciiAt(0, 'RIFF') && asciiAt(8, 'WAVE')) return 'audio/wav';
+
+    final prefix = String.fromCharCodes(bytes.take(256)).trimLeft().toLowerCase();
+    if (prefix.startsWith('<svg') || (prefix.startsWith('<?xml') && prefix.contains('<svg'))) return 'image/svg+xml';
+    return null;
+  }
+
   Future<void> _download(
     DownloadEntry entry, {
     Map<String, String> requestHeaders = const <String, String>{},
@@ -1285,32 +1432,39 @@ class DownloadsController extends ChangeNotifier {
     entry.status = DownloadStatus.downloading;
     notifyListeners();
 
+    File? temporaryFile;
+    IOSink? sink;
     try {
       final request = http.Request('GET', Uri.parse(entry.url));
       request.headers.addAll(requestHeaders);
       final response = await client.send(request);
-
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException('HTTP ${response.statusCode}');
       }
 
+      final responseFilename = _filenameFromContentDisposition(response.headers['content-disposition']);
+      final headerName = responseFilename ?? entry.filename;
+      final headerMime = _usableMimeType(response.headers['content-type']) ??
+          _usableMimeType(entry.mimeType) ??
+          _mimeFromExtension(headerName);
+
       final directory = await _downloadsDirectory();
-      final safeName = _safeFileName(entry.filename, entry.id);
-      final file = File('${directory.path}${Platform.pathSeparator}$safeName');
-      final sink = file.openWrite();
+      temporaryFile = File('${directory.path}${Platform.pathSeparator}${entry.id}.part');
+      if (await temporaryFile.exists()) await temporaryFile.delete();
+      sink = temporaryFile.openWrite();
 
       final total = response.contentLength ?? 0;
       var received = 0;
       var lastNotify = DateTime.now();
+      final signature = <int>[];
 
       await response.stream.listen(
         (chunk) {
-          sink.add(chunk);
+          sink!.add(chunk);
+          if (signature.length < 1024) signature.addAll(chunk.take(1024 - signature.length));
           received += chunk.length;
           if (total > 0) {
             entry.progress = (received / total).clamp(0.0, 1.0);
-            // Limita a frequência de notifyListeners para não sobrecarregar
-            // a UI em downloads rápidos de ficheiros pequenos.
             final now = DateTime.now();
             if (now.difference(lastNotify).inMilliseconds > 120) {
               lastNotify = now;
@@ -1324,12 +1478,37 @@ class DownloadsController extends ChangeNotifier {
 
       await sink.flush();
       await sink.close();
+      sink = null;
 
-      entry.localPath = file.path;
+      // Assinaturas reais prevalecem sobre MIME genérico. Formatos Office,
+      // APK, EPUB e semelhantes também usam contêiner ZIP, portanto a extensão
+      // específica já conhecida deve ser preservada nesses casos.
+      final sniffedMime = _sniffMimeType(signature);
+      final extensionMime = _mimeFromExtension(headerName);
+      final headerSpecificExtension = _extensionForMime(headerMime);
+      final resolvedMime = sniffedMime == 'application/zip'
+          ? (extensionMime != null && extensionMime != 'application/zip'
+              ? extensionMime
+              : headerSpecificExtension != null && headerMime != 'application/zip'
+                  ? headerMime
+                  : sniffedMime)
+          : sniffedMime ?? headerMime ?? extensionMime;
+      final canonicalName = _correctDownloadFilename(headerName, resolvedMime);
+      final finalName = _safeFileName(canonicalName, entry.id);
+      final finalFile = File('${directory.path}${Platform.pathSeparator}$finalName');
+      if (await finalFile.exists()) await finalFile.delete();
+      final savedFile = await temporaryFile.rename(finalFile.path);
+
+      entry.filename = canonicalName;
+      entry.mimeType = resolvedMime ?? entry.mimeType ?? _guessMimeType(canonicalName);
+      entry.localPath = savedFile.path;
       entry.progress = 1;
       entry.status = DownloadStatus.completed;
-      entry.mimeType ??= _guessMimeType(entry.filename);
     } catch (error) {
+      try {
+        await sink?.close();
+        if (temporaryFile != null && await temporaryFile.exists()) await temporaryFile.delete();
+      } catch (_) {}
       entry.status = DownloadStatus.failed;
       entry.errorMessage = error.toString();
     } finally {
@@ -1344,10 +1523,16 @@ class DownloadsController extends ChangeNotifier {
     final lower = filename.toLowerCase();
     const map = {
       '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-      '.gif': 'image/gif', '.webp': 'image/webp', '.mp4': 'video/mp4',
-      '.pdf': 'application/pdf', '.zip': 'application/zip',
-      '.mp3': 'audio/mpeg', '.txt': 'text/plain', '.json': 'application/json',
-      '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+      '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.heic': 'image/heic', '.heif': 'image/heic',
+      '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4',
+      '.webm': 'video/webm', '.mov': 'video/quicktime', '.pdf': 'application/pdf',
+      '.zip': 'application/zip', '.rar': 'application/vnd.rar', '.7z': 'application/x-7z-compressed', '.tar': 'application/x-tar', '.gz': 'application/gzip', '.wasm': 'application/wasm', '.sqlite': 'application/x-sqlite3', '.rtf': 'application/rtf',
+      '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+      '.flac': 'audio/flac', '.txt': 'text/plain', '.json': 'application/json', '.apk': 'application/vnd.android.package-archive',
+      '.html': 'text/html', '.xml': 'application/xml', '.css': 'text/css', '.js': 'text/javascript',
+      '.doc': 'application/msword', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls': 'application/vnd.ms-excel', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.ppt': 'application/vnd.ms-powerpoint', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     };
     for (final entry in map.entries) {
       if (lower.endsWith(entry.key)) return entry.value;
