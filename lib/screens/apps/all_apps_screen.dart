@@ -422,7 +422,7 @@ class _AppRowState extends State<_AppRow>
                           )
                         : Icon(
                             key: const ValueKey('chevron'),
-                            CupertinoIcons.chevron_right,
+                            RoundedSymbols.chevronRight,
                             size: 16,
                             color: s.onSurfaceVariant,
                           ),

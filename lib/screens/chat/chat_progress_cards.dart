@@ -472,7 +472,7 @@ Future<void> showCanvasPreviewModal(
           Row(
             children: [
               Icon(
-                Icons.description,
+                RoundedSymbols.description,
                 size: 28,
                 color: s.onSurfaceVariant,
               ),
@@ -785,7 +785,7 @@ class _ProcessStepRow extends StatelessWidget {
                               _faviconUrl(domain),
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) =>
-                                  Icon(Icons.public, size: 10, color: s.onSurfaceVariant),
+                                  Icon(RoundedSymbols.public, size: 10, color: s.onSurfaceVariant),
                             ),
                           ),
                         );

@@ -89,19 +89,8 @@ class _CraftLabAppState extends State<CraftLabApp> {
           title: 'CraftLab',
           debugShowCheckedModeBanner: false,
           scrollBehavior: const AppScrollBehavior(),
-          theme: ThemeData(
-            useMaterial3: true,
-            brightness: Brightness.light,
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F7BF6)),
-          ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            brightness: Brightness.dark,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF2F7BF6),
-              brightness: Brightness.dark,
-            ),
-          ),
+          theme: buildBrowseItTheme(AppColorScheme(false, appTheme.primaryPairIndex)),
+          darkTheme: buildBrowseItTheme(AppColorScheme(true, appTheme.primaryPairIndex)),
           themeMode: s.isDark ? ThemeMode.dark : ThemeMode.light,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(

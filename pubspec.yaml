@@ -17,6 +17,7 @@ dependencies:
   record: any
   animated_check: ^1.0.0
   google_fonts: ^6.2.1
+  material_symbols_icons: ^4.2815.0
   flutter_inappwebview: ^6.1.5
   flutter_svg: ^2.0.10+1
   file_picker: ^8.0.0

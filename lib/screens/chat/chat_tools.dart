@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import '../../widgets/widgets.dart';
 import '../../core/theme/colors.dart';
 // TODO: depende de api_service.dart (split futuro); manter este import para a etapa futura de split.
 import '../../services/api_service.dart';
@@ -14,9 +14,8 @@ import 'chat_tools_local_bridge.dart';
 // ÍCONE POR-TOOL COM FALLBACK
 // ══════════════════════════════════════════════════════════════
 
-/// Mostra o SVG específico da tool (via kToolIconAssets). Se o
-/// ficheiro não existir em assets/icons/outline/, cai automaticamente
-/// para o ícone genérico 'tools' — nunca deixa o card sem ícone.
+/// Resolve cada ferramenta para um glifo Material Symbols Rounded.
+/// Mantém sempre uma representação visual, mesmo para ferramentas novas.
 class ToolIcon extends StatelessWidget {
   final String toolName;
   final double size;
@@ -30,25 +29,21 @@ class ToolIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final specificAsset = kToolIconAssets[toolName];
-    final assetPath = specificAsset != null
-        ? 'assets/icons/outline/$specificAsset.svg'
-        : 'assets/icons/outline/tools.svg';
-
-    return SvgPicture.asset(
-      assetPath,
-      width: size,
-      height: size,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      // Fallback: se o SVG específico não existir no bundle, o
-      // errorBuilder desenha o genérico em vez de deixar um buraco.
-      placeholderBuilder: (_) => SvgPicture.asset(
-        'assets/icons/outline/tools.svg',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      ),
-    );
+    final normalized = toolName.toLowerCase();
+    final symbol = switch (normalized) {
+      'get_weather' || 'get_current_weather' => RoundedSymbols.public,
+      'search_images' || 'generate_qrcode' || 'generate_barcode' => RoundedSymbols.image,
+      'generate_chart' || 'generate_function_plot' || 'generate_math_sheet' => RoundedSymbols.insertChart,
+      'generate_mindmap' => RoundedSymbols.accountTree,
+      'create_pdf' || 'merge_pdfs' || 'split_pdf_pages' => RoundedSymbols.pictureAsPdf,
+      'create_docx' => RoundedSymbols.description,
+      'create_xlsx' || 'csv_to_xlsx' => RoundedSymbols.tableChart,
+      'create_pptx' => RoundedSymbols.slideshow,
+      'create_file' || 'download_image_for_project' => RoundedSymbols.download,
+      'resize_image' || 'crop_image' || 'convert_image_format' || 'watermark_image' => RoundedSymbols.image,
+      _ => RoundedSymbols.handyman,
+    };
+    return Icon(symbol, size: size, color: color);
   }
 }
 

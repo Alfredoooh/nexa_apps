@@ -192,7 +192,7 @@ class _UserBubbleState extends State<UserBubble> {
                               turns: _expanded ? 0.5 : 0,
                               duration: const Duration(milliseconds: 220),
                               curve: Curves.easeOutCubic,
-                              child: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor.withOpacity(0.85)),
+                              child: Icon(RoundedSymbols.keyboardArrowDown, size: 16, color: textColor.withOpacity(0.85)),
                             ),
                           ],
                         ),
@@ -280,7 +280,7 @@ class _ImageAttachmentThumb extends StatelessWidget {
                 width: 84,
                 height: 84,
                 color: s.cardBackground,
-                child: Icon(Icons.image, color: s.onSurfaceVariant),
+                child: Icon(RoundedSymbols.image, color: s.onSurfaceVariant),
               ),
       ),
     );
@@ -579,7 +579,7 @@ class _ToolResultImageCardState extends State<ToolResultImageCard> {
                   color: s.hover,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.image_not_supported_outlined, size: 18, color: s.onSurfaceVariant),
+                child: Icon(RoundedSymbols.imageNotSupported, size: 18, color: s.onSurfaceVariant),
               ),
             const SizedBox(width: 12),
             Expanded(
@@ -703,7 +703,7 @@ class _CircularBackButtonDarkState extends State<_CircularBackButtonDark> {
           color: _p ? Colors.white24 : Colors.white12,
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+        child: const Icon(RoundedSymbols.arrowBack, color: Colors.white, size: 18),
       ),
     );
   }
@@ -989,7 +989,7 @@ class _ImageSearchFullscreenScreenState extends State<_ImageSearchFullscreenScre
                           url,
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => Icon(
-                            Icons.image_not_supported_outlined,
+                            RoundedSymbols.imageNotSupported,
                             color: s.onSurfaceVariant,
                             size: 48,
                           ),

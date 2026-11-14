@@ -517,11 +517,11 @@ class _AlbumCardState extends State<_AlbumCard> {
                         track.thumbnailUrl!,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) =>
-                            const Icon(Icons.music_note, color: Colors.white, size: 40),
+                            const Icon(RoundedSymbols.musicNote, color: Colors.white, size: 40),
                       )
                     else
                       const Center(
-                        child: Icon(Icons.music_note, color: Colors.white, size: 40),
+                        child: Icon(RoundedSymbols.musicNote, color: Colors.white, size: 40),
                       ),
                     AnimatedOpacity(
                       opacity: widget.isCurrent ? 1.0 : 0.0,
@@ -539,7 +539,7 @@ class _AlbumCardState extends State<_AlbumCard> {
                                 ),
                               )
                             : Icon(
-                                isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                                isPlaying ? RoundedSymbols.pauseCircle : RoundedSymbols.playCircle,
                                 color: Colors.white,
                                 size: 40,
                               ),
@@ -707,7 +707,7 @@ class _FeedErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_rounded, color: s.onSurfaceVariant, size: 40),
+            Icon(RoundedSymbols.cloudOff, color: s.onSurfaceVariant, size: 40),
             const SizedBox(height: 14),
             Text(
               message,

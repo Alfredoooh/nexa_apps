@@ -3,9 +3,8 @@
 // ══════════════════════════════════════════════════════════════
 //
 // Rota de navegação nativa customizada:
-//  - Slide horizontal padrão (entra da direita, sai para a esquerda),
-//    respeitando a orientação correta em RTL.
-//  - Sem sombra/parallax do CupertinoPageRoute.
+//  - Fade curto e suave, seguindo a transição de navegação do BrowseIt.
+//  - Sem deslocamento horizontal nem parallax do CupertinoPageRoute.
 //  - Sem glow de overscroll do Android (tratado à parte via
 //    AppScrollBehavior, aplicado uma única vez no MaterialApp).
 //  - PopScope(canPop: true) explícito em cada rota: garante que o
@@ -23,8 +22,8 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
     super.settings,
     this.maintainState = true,
     this.fullscreenDialog = false,
-    Duration duration = const Duration(milliseconds: 300),
-    Duration reverseDuration = const Duration(milliseconds: 260),
+    Duration duration = const Duration(milliseconds: 260),
+    Duration reverseDuration = const Duration(milliseconds: 200),
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) => PopScope(
             canPop: true,
@@ -51,38 +50,12 @@ class AppPageRoute<T> extends PageRouteBuilder<T> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-    final beginOffsetIn = Offset(isRtl ? -1.0 : 1.0, 0.0);
-    final beginOffsetOutSecondary = Offset(isRtl ? 0.30 : -0.30, 0.0);
-
     final curved = CurvedAnimation(
       parent: animation,
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
-    final curvedSecondary = CurvedAnimation(
-      parent: secondaryAnimation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-
-    final incomingOffset = Tween<Offset>(
-      begin: beginOffsetIn,
-      end: Offset.zero,
-    ).animate(curved);
-
-    final outgoingOffset = Tween<Offset>(
-      begin: Offset.zero,
-      end: beginOffsetOutSecondary,
-    ).animate(curvedSecondary);
-
-    return SlideTransition(
-      position: outgoingOffset,
-      child: SlideTransition(
-        position: incomingOffset,
-        child: child,
-      ),
-    );
+    return FadeTransition(opacity: curved, child: child);
   }
 }
 

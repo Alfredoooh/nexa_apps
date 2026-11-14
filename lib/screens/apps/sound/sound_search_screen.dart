@@ -420,7 +420,7 @@ class _SearchResultTile extends StatelessWidget {
                         )
                       : ColoredBox(
                           color: cover,
-                          child: const Icon(Icons.music_note, color: Colors.white, size: 22),
+                          child: const Icon(RoundedSymbols.musicNote, color: Colors.white, size: 22),
                         ),
                   if (isCurrent)
                     Container(
@@ -436,7 +436,7 @@ class _SearchResultTile extends StatelessWidget {
                               ),
                             )
                           : Icon(
-                              isPlaying ? Icons.pause : Icons.play_arrow,
+                              isPlaying ? RoundedSymbols.pause : RoundedSymbols.playArrow,
                               color: Colors.white,
                               size: 22,
                             ),

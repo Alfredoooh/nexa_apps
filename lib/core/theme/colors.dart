@@ -25,7 +25,7 @@ class FluentColorPair {
 }
 
 const List<FluentColorPair> kPrimaryColorPairs = [
-  FluentColorPair(Color(0xFF0F6CBD), Color(0xFF479EF5)),
+  FluentColorPair(Color(0xFF1A73E8), Color(0xFF8AB4F8)),
   FluentColorPair(Color(0xFF8764B8), Color(0xFFB4A0FF)),
   FluentColorPair(Color(0xFFC239B3), Color(0xFFE68AD8)),
   FluentColorPair(Color(0xFFD13438), Color(0xFFF1707B)),
@@ -98,16 +98,16 @@ class AppColorScheme {
   }
 
   // Superfícies neutras
-  Color get surface            => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-  Color get onSurface          => isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1C1C1E);
-  Color get onSurfaceVariant   => isDark ? const Color(0xFF9B9B9F) : const Color(0xFF6E6E73);
-  Color get pageBackground     => isDark ? const Color(0xFF0D0D0D) : const Color(0xFFFFFFFF);
+  Color get surface            => isDark ? const Color(0xFF212325) : const Color(0xFFFFFFFF);
+  Color get onSurface          => isDark ? const Color(0xFFE6E6E8) : const Color(0xFF202124);
+  Color get onSurfaceVariant   => isDark ? const Color(0xFFB2B4B8) : const Color(0xFF5F6368);
+  Color get pageBackground     => isDark ? const Color(0xFF141517) : const Color(0xFFFFFFFF);
 
-  Color get cardBackground     => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFF5F5F5);
-  Color get floatingSurface    => isDark ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
+  Color get cardBackground     => isDark ? const Color(0xFF2B2D30) : const Color(0xFFF0F1F3);
+  Color get floatingSurface    => isDark ? const Color(0xFF212325) : const Color(0xFFFFFFFF);
 
-  Color get outline            => isDark ? const Color(0xFF48484A) : const Color(0xFFDCDCE0);
-  Color get outlineVariant     => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFECECEE);
+  Color get outline            => isDark ? const Color(0xFF34363A) : const Color(0xFFE8EAED);
+  Color get outlineVariant     => isDark ? const Color(0xFF2B2D30) : const Color(0xFFE8EAED);
 
   // Cores de estado
   Color get error              => isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30);
@@ -123,7 +123,7 @@ class AppColorScheme {
   Color get pressed            => isDark ? const Color(0x22FFFFFF) : const Color(0x10000000);
 
   // Navegação e tabs
-  Color get navBarBg           => isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFBFBFC);
+  Color get navBarBg           => isDark ? const Color(0xFF212325) : const Color(0xFFFFFFFF);
   Color get navIconInactive    => isDark ? const Color(0xFF8E8E93) : const Color(0xFF8E8E93);
   Color get navIconActive      => isDark ? Colors.white : primary;
   Color get navLabelActive     => onPrimaryContainer;
@@ -132,27 +132,27 @@ class AppColorScheme {
   Color get projectsTabBg      => primary;
   Color get projectsTabFg      => onPrimary;
 
-  Color get previewBackdrop    => isDark ? const Color(0xFF242426) : const Color(0xFFEFEFF1);
-  Color get downloadButtonBg   => isDark ? const Color(0xFF3A3A3C) : const Color(0xFFEFEFF1);
+  Color get previewBackdrop    => isDark ? const Color(0xFF2B2D30) : const Color(0xFFF0F1F3);
+  Color get downloadButtonBg   => isDark ? const Color(0xFF34363A) : const Color(0xFFF0F1F3);
 
   List<BoxShadow> get cardShadow => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 7, offset: const Offset(0, 1))]
-      : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1))];
+      ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5, offset: const Offset(0, 1))]
+      : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 3, offset: const Offset(0, 1))];
 
   List<BoxShadow> get floatingShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 5))]
       : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))];
 
   List<BoxShadow> get cardShadowSoft => isDark
-      ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 1))]
+      ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 3, offset: const Offset(0, 1))]
       : [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 3, offset: const Offset(0, 1))];
 
   List<BoxShadow> get navBarShadow => isDark
       ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 3))]
       : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2))];
 
-  Color get incognitoBackground => const Color(0xFF121212);
-  Color get incognitoSurface    => const Color(0xFF1C1C1E);
+  Color get incognitoBackground => const Color(0xFF141517);
+  Color get incognitoSurface    => const Color(0xFF212325);
   Color get incognitoOnSurface  => const Color(0xFFFFFFFF);
   Color get sheetBackdrop => const Color(0xFF0B0B0D);
 
@@ -164,6 +164,181 @@ class AppColorScheme {
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarDividerColor: pageBackground,
       );
+}
+
+/// Tema Material 3 partilhado por todas as telas, alinhado com o BrowseIt.
+ThemeData buildBrowseItTheme(AppColorScheme s) {
+  final brightness = s.isDark ? Brightness.dark : Brightness.light;
+  final colorScheme = ColorScheme.fromSeed(
+    seedColor: s.primary,
+    brightness: brightness,
+    surface: s.surface,
+  ).copyWith(
+    primary: s.primary,
+    onPrimary: s.onPrimary,
+    primaryContainer: s.primaryContainer,
+    onPrimaryContainer: s.onPrimaryContainer,
+    secondary: s.primary,
+    onSecondary: s.onPrimary,
+    surface: s.surface,
+    onSurface: s.onSurface,
+    surfaceContainerHighest: s.cardBackground,
+    onSurfaceVariant: s.onSurfaceVariant,
+    outline: s.outline,
+    outlineVariant: s.outlineVariant,
+    error: s.error,
+    onError: s.onError,
+  );
+  final baseText = Typography.material2021().black;
+  final textTheme = baseText.apply(
+    bodyColor: s.onSurface,
+    displayColor: s.onSurface,
+    fontFamily: 'Inter',
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: s.pageBackground,
+    canvasColor: s.surface,
+    cardColor: s.cardBackground,
+    cardTheme: CardThemeData(
+      color: s.cardBackground,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.black.withOpacity(s.isDark ? .08 : .025),
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    ),
+    dividerColor: s.outlineVariant,
+    fontFamily: 'Inter',
+    textTheme: textTheme,
+    splashFactory: NoSplash.splashFactory,
+    splashColor: Colors.transparent,
+    highlightColor: Colors.transparent,
+    hoverColor: s.hover,
+    focusColor: s.hover,
+    iconTheme: IconThemeData(color: s.onSurface, size: 22),
+    appBarTheme: AppBarTheme(
+      backgroundColor: s.pageBackground,
+      foregroundColor: s.onSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        color: s.onSurface,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        fontFamily: 'Inter',
+      ),
+      systemOverlayStyle: s.statusBarStyle,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: s.cardBackground,
+      hintStyle: TextStyle(color: s.onSurfaceVariant, fontSize: 14),
+      labelStyle: TextStyle(color: s.onSurfaceVariant),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: s.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: s.outlineVariant),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: s.primary, width: 1.35),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: s.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: s.error, width: 1.35),
+      ),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: s.primary,
+        foregroundColor: s.onPrimary,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        minimumSize: const Size(48, 48),
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: s.onSurface,
+        side: BorderSide(color: s.outline),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        minimumSize: const Size(48, 46),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: s.primary,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: s.cardBackground,
+      contentTextStyle: TextStyle(color: s.onSurface, fontSize: 13.5, fontWeight: FontWeight.w500),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+      elevation: 4,
+      showCloseIcon: false,
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: s.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      titleTextStyle: TextStyle(color: s.onSurface, fontSize: 19, fontWeight: FontWeight.w600, fontFamily: 'Inter'),
+      contentTextStyle: TextStyle(color: s.onSurface, fontSize: 14, height: 1.4, fontFamily: 'Inter'),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: s.surface,
+      modalBackgroundColor: s.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      showDragHandle: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      modalBarrierColor: Colors.black54,
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: s.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      textStyle: TextStyle(color: s.onSurface, fontSize: 14, fontFamily: 'Inter'),
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: s.onSurfaceVariant,
+      textColor: s.onSurface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      minLeadingWidth: 32,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: s.primary,
+      linearTrackColor: s.outlineVariant,
+      circularTrackColor: s.outlineVariant,
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: s.primary,
+      selectionColor: s.primary.withOpacity(.22),
+      selectionHandleColor: s.primary,
+    ),
+  );
 }
 
 // ══════════════════════════════════════════════════════════════

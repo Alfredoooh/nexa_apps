@@ -83,37 +83,7 @@ class _EditorIcon extends StatelessWidget {
   const _EditorIcon(this.asset, {required this.size, required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    final rawName = asset.endsWith('.svg') ? asset.substring(0, asset.length - 4) : asset;
-    final key = _kEditorIconAliases[rawName] ?? rawName;
-    final fileName = '$key.svg';
-
-    if (_kOutlineSvgIcons.contains(key)) {
-      return SvgPicture.asset(
-        'assets/icons/outline/$fileName',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    if (_kColoredSvgIcons.contains(key)) {
-      // SVG colorido — sem colorFilter, preserva as cores do ficheiro.
-      return SvgPicture.asset(
-        'assets/icons/editor/$fileName',
-        width: size,
-        height: size,
-      );
-    }
-    if (_kEditorSvgIcons.contains(key)) {
-      return SvgPicture.asset(
-        'assets/icons/editor/$fileName',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    return AppIcon(fileName, size: size, color: color);
-  }
+  Widget build(BuildContext context) => AppIcon(asset, size: size, color: color);
 }
 
 // ══════════════════════════════════════════════════════════════

@@ -232,7 +232,7 @@ class PlayerPill extends StatelessWidget {
                     )
                   : ColoredBox(
                       color: cover,
-                      child: const Icon(Icons.music_note, color: Colors.white, size: 18),
+                      child: const Icon(RoundedSymbols.musicNote, color: Colors.white, size: 18),
                     ),
             ),
           ),
@@ -283,7 +283,7 @@ class PlayerPill extends StatelessWidget {
                       ),
                     )
                   : isError
-                      ? const Icon(Icons.refresh, color: Colors.white, size: 20)
+                      ? const Icon(RoundedSymbols.refresh, color: Colors.white, size: 20)
                       : AppIcon(
                           isPlaying ? 'pause' : 'play',
                           color: Colors.white,

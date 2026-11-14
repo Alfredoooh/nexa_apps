@@ -502,7 +502,7 @@ class _FeedbackRowState extends State<_FeedbackRow> {
                 ),
               ),
             ),
-            Icon(CupertinoIcons.chevron_right, size: 17, color: s.onSurfaceVariant),
+            Icon(RoundedSymbols.chevronRight, size: 17, color: s.onSurfaceVariant),
           ],
         ),
       ),

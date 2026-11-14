@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 import '../../../services/local_accounts_service.dart';
 
+import '../../../widgets/widgets.dart';
 /// Mostra o bottom sheet de contas guardadas.
 /// Devolve a [LocalAccount] escolhida, ou `null` se o utilizador
 /// tocou em "Usar outra conta" / fechou o sheet.
@@ -132,7 +133,7 @@ class _AccountTile extends StatelessWidget {
         a.identifier,
         style: TextStyle(fontSize: 12.5, color: s.onSurfaceVariant),
       ),
-      trailing: Icon(Icons.chevron_right_rounded,
+      trailing: Icon(RoundedSymbols.chevronRight,
           size: 20, color: s.onSurfaceVariant),
     );
   }

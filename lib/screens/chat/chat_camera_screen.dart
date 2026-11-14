@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'chat_models.dart';
 
+import '../../widgets/widgets.dart';
 class AitabCameraScreen extends StatefulWidget {
   const AitabCameraScreen({super.key});
 
@@ -220,11 +221,11 @@ class _TopBar extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _CircleGlassButton(
-          icon: Icons.close_rounded,
+          icon: RoundedSymbols.close,
           onTap: onClose,
         ),
         _CircleGlassButton(
-          icon: flashOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
+          icon: flashOn ? RoundedSymbols.flashOn : RoundedSymbols.flashOff,
           onTap: onToggleFlash,
         ),
       ],
@@ -252,7 +253,7 @@ class _BottomBar extends StatelessWidget {
           const SizedBox(width: 48, height: 48),
           _ShutterButton(onTap: capturing ? null : onCapture, busy: capturing),
           _CircleGlassButton(
-            icon: Icons.cameraswitch_rounded,
+            icon: RoundedSymbols.cameraSwitch,
             onTap: onSwitchCamera,
           ),
         ],

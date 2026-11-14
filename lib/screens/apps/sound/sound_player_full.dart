@@ -305,10 +305,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                                     track.thumbnailUrl!,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.music_note, color: Colors.white, size: 60),
+                                        RoundedSymbols.musicNote, color: Colors.white, size: 60),
                                   )
                                 : const Center(
-                                    child: Icon(Icons.music_note,
+                                    child: Icon(RoundedSymbols.musicNote,
                                         color: Colors.white, size: 60),
                                   ),
                           ),
@@ -426,7 +426,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen> {
                                       ),
                                     )
                                   : isError
-                                      ? const Icon(Icons.refresh, size: 26, color: Colors.black)
+                                      ? const Icon(RoundedSymbols.refresh, size: 26, color: Colors.black)
                                       : AppIcon(
                                           isPlaying ? 'pause' : 'play',
                                           size: 28,

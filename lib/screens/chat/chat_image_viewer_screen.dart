@@ -39,7 +39,7 @@ class AitabImageViewerScreen extends StatelessWidget {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.insert_drive_file,
+                              const Icon(RoundedSymbols.insertDriveFile,
                                   size: 48, color: Colors.white70),
                               const SizedBox(height: 14),
                               Text(

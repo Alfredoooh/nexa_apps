@@ -649,7 +649,7 @@ class LockIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Icon(Icons.lock_outline_rounded, size: size, color: color);
+      Icon(RoundedSymbols.lock, size: size, color: color);
 }
 
 // ── RADIO DE TERMOS — "Li e aceito Termos de Utilização e Política
