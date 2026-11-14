@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
@@ -1292,7 +1292,7 @@ class DownloadsController extends ChangeNotifier {
     try {
       value = Uri.decodeComponent(value);
     } catch (_) {}
-    value = value.split('/').last.split('\\').last.trim();
+    value = value!.split('/').last.split('\\').last.trim();
     return value.isEmpty ? null : value;
   }
 
@@ -1341,10 +1341,6 @@ class DownloadsController extends ChangeNotifier {
       'application/rtf': '.rtf',
       'application/gzip': '.gz',
       'application/x-gzip': '.gz',
-      'application/x-tar': '.tar',
-      'application/wasm': '.wasm',
-      'application/x-sqlite3': '.sqlite',
-      'application/rtf': '.rtf',
       'application/vnd.android.package-archive': '.apk',
       'application/json': '.json',
       'application/xml': '.xml',

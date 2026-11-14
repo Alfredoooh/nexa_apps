@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:material_ui/material_ui.dart' as material_ui; // Required by M3E packages on Flutter 3.47+.
-import 'package:m3e_buttons/m3e_buttons.dart';
-import 'package:m3e_menu/m3e_menu.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:m3e_buttons/m3e_buttons.dart' as m3e_buttons;
+import 'package:m3e_menu/m3e_menu.dart' as m3e_menu;
 
 import '../theme.dart';
 import 'material_symbols.dart';
@@ -60,17 +59,17 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
     final text = mainText(context);
     final muted = mutedText(context);
     final width = widget.menuWidth.clamp(210.0, 320.0).toDouble();
-    final itemStyle = M3EMenuItemStyle(
+    final itemStyle = m3e_menu.M3EMenuItemStyle(
       backgroundColor: surface,
       foregroundColor: text,
       leadingIconColor: muted,
       textStyle: TextStyle(color: text, fontSize: 13.5, fontWeight: FontWeight.w600),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      spatialMotion: M3EMotion.expressiveSpatialDefault,
+      spatialMotion: m3e_menu.M3EMotion.expressiveSpatialDefault,
     );
     final children = <Widget>[
       if (widget.includeAiToggle)
-        M3ECheckboxMenuButton(
+        m3e_menu.M3ECheckboxMenuButton(
           value: _aiValue,
           closeOnActivate: false,
           leadingIcon: AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context)),
@@ -88,7 +87,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
           child: Divider(height: 9, color: muted.withOpacity(.18)),
         ),
       for (final action in widget.actions)
-        M3EMenuItemButton(
+        m3e_menu.M3EMenuItemButton(
           itemStyle: itemStyle,
           leadingIcon: AppMaterialIcon(action.icon, size: 20, color: muted),
           onPressed: () => widget.onSelected(action.value),
@@ -97,10 +96,10 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         ),
     ];
 
-    return M3EMenuAnchor(
+    return m3e_menu.M3EMenuAnchor(
       clipBehavior: Clip.antiAlias,
       alignmentOffset: Offset(0, 5),
-      style: M3EMenuStyle(
+      style: m3e_menu.M3EMenuStyle(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.black.withOpacity(.20),
@@ -109,20 +108,20 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         minWidth: width,
         maxWidth: width,
-        position: M3EMenuPosition.under,
-        animationStyle: M3EMenuAnimationStyle.popup,
-        spatialMotion: M3EMotion.expressiveSpatialDefault,
-        effectsMotion: M3EMotion.expressiveEffectsDefault,
+        position: m3e_menu.M3EMenuPosition.under,
+        animationStyle: m3e_menu.M3EMenuAnimationStyle.popup,
+        spatialMotion: m3e_menu.M3EMotion.expressiveSpatialDefault,
+        effectsMotion: m3e_menu.M3EMotion.expressiveEffectsDefault,
       ),
       menuChildren: children,
       builder: (context, controller, child) => Tooltip(
         message: widget.tooltip,
-        child: M3EButton(
+        child: m3e_buttons.M3EButton(
           onPressed: () => controller.isOpen ? controller.close() : controller.open(),
-          style: M3EButtonStyle.text,
-          size: M3EButtonSize.md,
-          shape: M3EButtonShape.round,
-          decoration: M3EButtonDecoration.styleFrom(
+          style: m3e_buttons.M3EButtonStyle.text,
+          size: m3e_buttons.M3EButtonSize.md,
+          shape: m3e_buttons.M3EButtonShape.round,
+          decoration: m3e_buttons.M3EButtonDecoration.styleFrom(
             backgroundColor: Colors.transparent,
             foregroundColor: widget.iconColor ?? mainText(context),
             minimumSize: const Size(44, 44),
@@ -130,8 +129,8 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
             padding: EdgeInsets.zero,
             borderRadius: 22,
             pressedRadius: 15,
-            motion: M3EMotion.expressiveSpatialDefault,
-            haptic: M3EHapticFeedback.light,
+            motion: m3e_buttons.M3EMotion.expressiveSpatialDefault,
+            haptic: m3e_buttons.M3EHapticFeedback.light,
           ),
           child: AppMaterialIcon(widget.icon, color: widget.iconColor ?? mainText(context)),
         ),
