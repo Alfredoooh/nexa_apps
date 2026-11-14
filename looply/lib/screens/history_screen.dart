@@ -136,7 +136,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     final entries = _filteredEntries();
-    final topInset = MediaQuery.of(context).padding.top;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final selectedCount = _selectedKeys.length;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -150,91 +149,90 @@ class _HistoryScreenState extends State<HistoryScreen> {
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
-            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
         child: Scaffold(
           backgroundColor: bg,
-          extendBodyBehindAppBar: true,
-          body: Stack(
-            children: [
-              entries.isEmpty
-                  ? Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        AppMaterialIcon(AppIcons.clockCounterClockwise, size: 48, color: muted),
-                        const SizedBox(height: 12),
-                        Text(
-                          _query.isEmpty ? appText('no_history') : appText('no_results'),
-                          style: TextStyle(color: text, fontWeight: FontWeight.w700),
-                        ),
-                      ]),
-                    )
-                  : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, bottomInset + 24),
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        final entry = entries[index];
-                        final isFirst = index == 0;
-                        final isLast = index == entries.length - 1;
-                        final previous = index > 0 ? entries[index - 1] : null;
-                        final day = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
-                        final previousDay = previous == null ? null : DateTime(previous.timestamp.year, previous.timestamp.month, previous.timestamp.day);
-                        final showDay = previousDay == null || day != previousDay;
-                        final groupFirst = isFirst || showDay;
-                        final nextEntry = index < entries.length - 1 ? entries[index + 1] : null;
-                        final nextDay = nextEntry == null
-                            ? null
-                            : DateTime(nextEntry.timestamp.year, nextEntry.timestamp.month, nextEntry.timestamp.day);
-                        final groupLast = isLast || nextDay != day;
-                        final card = _HistoryCard(
-                          entry: entry,
-                          selected: _selectedKeys.contains(_key(entry)),
-                          onTap: () {
-                            if (_isSelecting) {
-                              _toggle(entry);
-                            } else if (entry.kind == ActivityKind.site) {
-                              openOrbitTab(context, entry.url, title: entry.title);
-                            }
-                          },
-                          onLongPress: () => _toggle(entry),
-                          borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(groupFirst ? 22 : 8),
-                            bottom: Radius.circular(groupLast ? 22 : 8),
-                          ),
-                        );
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: groupLast ? 0 : 2),
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            if (showDay) ...[
-                              Padding(
-                                padding: EdgeInsets.fromLTRB(4, isFirst ? 0 : 16, 4, 8),
-                                child: Text(
-                                  '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}/${day.year}',
-                                  style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: .2),
-                                ),
-                              ),
-                            ],
-                            card,
-                          ]),
-                        );
-                      },
-                    ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _HistoryFadeAppBar(
-                  topInset: topInset,
-                  isSelecting: _isSelecting,
-                  searchActive: _searchActive,
-                  selectedCount: selectedCount,
-                  searchController: _searchController,
-                  searchFocusNode: _searchFocusNode,
-                  onBack: _handleBack,
-                  onOpenSearch: _openSearch,
-                  onCloseSearch: _closeSearch,
-                  onDelete: _deleteSelected,
-                ),
+          body: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              _HistorySliverAppBar(
+                isSelecting: _isSelecting,
+                searchActive: _searchActive,
+                selectedCount: selectedCount,
+                searchController: _searchController,
+                searchFocusNode: _searchFocusNode,
+                onBack: _handleBack,
+                onOpenSearch: _openSearch,
+                onCloseSearch: _closeSearch,
+                onDelete: _deleteSelected,
               ),
+              if (entries.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      AppMaterialIcon(AppIcons.clockCounterClockwise, size: 48, color: muted),
+                      const SizedBox(height: 12),
+                      Text(
+                        _query.isEmpty ? appText('no_history') : appText('no_results'),
+                        style: TextStyle(color: text, fontWeight: FontWeight.w700),
+                      ),
+                    ]),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(14, 10, 14, bottomInset + 24),
+                  sliver: SliverList.builder(
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final isFirst = index == 0;
+                      final isLast = index == entries.length - 1;
+                      final previous = index > 0 ? entries[index - 1] : null;
+                      final day = DateTime(entry.timestamp.year, entry.timestamp.month, entry.timestamp.day);
+                      final previousDay = previous == null ? null : DateTime(previous.timestamp.year, previous.timestamp.month, previous.timestamp.day);
+                      final showDay = previousDay == null || day != previousDay;
+                      final groupFirst = isFirst || showDay;
+                      final nextEntry = index < entries.length - 1 ? entries[index + 1] : null;
+                      final nextDay = nextEntry == null
+                          ? null
+                          : DateTime(nextEntry.timestamp.year, nextEntry.timestamp.month, nextEntry.timestamp.day);
+                      final groupLast = isLast || nextDay != day;
+                      final card = _HistoryCard(
+                        entry: entry,
+                        selected: _selectedKeys.contains(_key(entry)),
+                        onTap: () {
+                          if (_isSelecting) {
+                            _toggle(entry);
+                          } else if (entry.kind == ActivityKind.site) {
+                            openOrbitTab(context, entry.url, title: entry.title);
+                          }
+                        },
+                        onLongPress: () => _toggle(entry),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(groupFirst ? 22 : 8),
+                          bottom: Radius.circular(groupLast ? 22 : 8),
+                        ),
+                      );
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: groupLast ? 0 : 2),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          if (showDay)
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(4, isFirst ? 0 : 16, 4, 8),
+                              child: Text(
+                                '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}/${day.year}',
+                                style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: .2),
+                              ),
+                            ),
+                          card,
+                        ]),
+                      );
+                    },
+                  ),
+                ),
             ],
           ),
         ),
@@ -243,9 +241,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-class _HistoryFadeAppBar extends StatelessWidget {
-  const _HistoryFadeAppBar({
-    required this.topInset,
+class _HistorySliverAppBar extends StatelessWidget {
+  const _HistorySliverAppBar({
     required this.isSelecting,
     required this.searchActive,
     required this.selectedCount,
@@ -257,7 +254,6 @@ class _HistoryFadeAppBar extends StatelessWidget {
     required this.onDelete,
   });
 
-  final double topInset;
   final bool isSelecting;
   final bool searchActive;
   final int selectedCount;
@@ -272,91 +268,92 @@ class _HistoryFadeAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = pageBg(context);
     final text = mainText(context);
-    final muted = mutedText(context);
 
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0)],
-          stops: const [0, .58, 1],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _HistoryHeaderButton(
-                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
-                tooltip: isSelecting ? appText('close') : appText('back'),
-                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
-                onTap: onBack,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axis: Axis.horizontal,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  ),
-                  child: searchActive
-                      ? _HistorySearchField(
-                          key: const ValueKey<String>('search-field'),
-                          controller: searchController,
-                          focusNode: searchFocusNode,
-                        )
-                      : Text(
-                          isSelecting
-                              ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                              : appText('history'),
-                          key: const ValueKey<String>('title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
+    return SliverAppBar(
+      pinned: true,
+      floating: false,
+      snap: false,
+      primary: true,
+      toolbarHeight: 64,
+      automaticallyImplyLeading: false,
+      leadingWidth: 0,
+      leading: const SizedBox.shrink(),
+      titleSpacing: 0,
+      backgroundColor: bg,
+      foregroundColor: text,
+      surfaceTintColor: bg,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      title: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _HistoryHeaderButton(
+              key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+              tooltip: isSelecting ? appText('close') : appText('back'),
+              icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
+              onTap: onBack,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axis: Axis.horizontal,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
                 ),
-                child: isSelecting
-                    ? _HistoryHeaderButton(
-                        key: const ValueKey<String>('delete'),
-                        tooltip: '${appText('delete')} ($selectedCount)',
-                        icon: AppIcons.trash,
-                        foreground: const Color(0xFFFF453A),
-                        onTap: onDelete,
+                child: searchActive
+                    ? _HistorySearchField(
+                        key: const ValueKey<String>('search-field'),
+                        controller: searchController,
+                        focusNode: searchFocusNode,
                       )
-                    : _HistoryHeaderButton(
-                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
-                        tooltip: searchActive ? appText('close_search') : appText('search_history'),
-                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
-                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    : Text(
+                        isSelecting
+                            ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                            : appText('history'),
+                        key: const ValueKey<String>('title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
                       ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+              child: isSelecting
+                  ? _HistoryHeaderButton(
+                      key: const ValueKey<String>('delete'),
+                      tooltip: '${appText('delete')} ($selectedCount)',
+                      icon: AppIcons.trash,
+                      foreground: const Color(0xFFFF453A),
+                      onTap: onDelete,
+                    )
+                  : _HistoryHeaderButton(
+                      key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                      tooltip: searchActive ? appText('close_search') : appText('search_history'),
+                      icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                      onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-
 class _HistorySearchField extends StatelessWidget {
   const _HistorySearchField({super.key, required this.controller, required this.focusNode});
 
@@ -368,47 +365,50 @@ class _HistorySearchField extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
 
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: pillColor(context),
-        borderRadius: BorderRadius.circular(21),
-      ),
-      child: Row(
-        children: [
-          AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              autofocus: true,
-              textAlignVertical: TextAlignVertical.center,
-              style: TextStyle(color: text, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: appText('search_history'),
-                hintStyle: TextStyle(color: muted, fontSize: 14),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
+    return Transform.translate(
+      offset: const Offset(0, 8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: pillColor(context),
+          borderRadius: BorderRadius.circular(21),
+        ),
+        child: Row(
+          children: [
+            AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
+                textAlignVertical: TextAlignVertical.center,
+                style: TextStyle(color: text, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: appText('search_history'),
+                  hintStyle: TextStyle(color: muted, fontSize: 14),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: controller.clear,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
-                ),
-              );
-            },
-          ),
-        ],
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return GestureDetector(
+                  onTap: controller.clear,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

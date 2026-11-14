@@ -136,8 +136,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final muted = mutedText(context);
     final entries = _filtered;
     final bg = pageBg(context);
-    final topInset = MediaQuery.of(context).padding.top;
     final selectedCount = _selectedIds.length;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return PopScope<void>(
       canPop: !_isSelecting && !_searchActive,
@@ -145,41 +146,59 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         if (didPop) return;
         _handleBack();
       },
-      child: Scaffold(
-        backgroundColor: bg,
-        extendBodyBehindAppBar: true,
-        body: Stack(
-          children: [
-            entries.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(28, topInset + 72, 28, 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AppMaterialIcon(AppIcons.bookmarksSimple, size: 46, color: muted),
-                          const SizedBox(height: 12),
-                          Text(
-                            _query.isEmpty ? appText('no_bookmarks') : appText('no_results'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: text, fontWeight: FontWeight.w600),
-                          ),
-                          if (_query.isEmpty) ...[
-                            const SizedBox(height: 5),
-                            Text(appText('bookmark_help'), textAlign: TextAlign.center,
-                                style: TextStyle(color: muted, fontSize: 12)),
-                          ],
-                        ],
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: isDark
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
+        child: Scaffold(
+          backgroundColor: bg,
+          body: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+            _BookmarksSliverAppBar(
+              isSelecting: _isSelecting,
+              searchActive: _searchActive,
+              selectedCount: selectedCount,
+              searchController: _searchController,
+              searchFocusNode: _searchFocusNode,
+              onBack: _handleBack,
+              onOpenSearch: _openSearch,
+              onCloseSearch: _closeSearch,
+              onDelete: _deleteSelected,
+            ),
+            if (entries.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 0, 28, 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppMaterialIcon(AppIcons.bookmarksSimple, size: 46, color: muted),
+                      const SizedBox(height: 12),
+                      Text(
+                        _query.isEmpty ? appText('no_bookmarks') : appText('no_results'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: text, fontWeight: FontWeight.w600),
                       ),
-                    ),
-                  )
-                // Cards menores: minHeight reduzido de 72 para 60, padding
-                // vertical reduzido de 8 para 6 — bookmarks não precisam da
-                // mesma altura generosa que itens com múltiplas linhas de
-                // metadado.
-                : M3ESegmentedList.builder(
+                      if (_query.isEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          appText('bookmark_help'),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: muted, fontSize: 12),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+                sliver: SliverM3ESegmentedList(
                     itemCount: entries.length,
-                    listPadding: EdgeInsets.fromLTRB(14, topInset + 72, 14, 24),
                     color: settingsCardColor(context),
                     outerRadius: 22,
                     innerRadius: 8,
@@ -257,24 +276,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       );
                     },
                   ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _BookmarksFadeAppBar(
-                topInset: topInset,
-                isSelecting: _isSelecting,
-                searchActive: _searchActive,
-                selectedCount: selectedCount,
-                searchController: _searchController,
-                searchFocusNode: _searchFocusNode,
-                onBack: _handleBack,
-                onOpenSearch: _openSearch,
-                onCloseSearch: _closeSearch,
-                onDelete: _deleteSelected,
               ),
-            ),
           ],
+          ),
         ),
       ),
     );
@@ -286,9 +290,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 // e busca (fechar + input expandido). O botão de lixeira NUNCA aparece
 // fora do modo de seleção — some por completo em vez de ficar oculto por
 // condição de lista vazia, e só surge quando _isSelecting é true.
-class _BookmarksFadeAppBar extends StatelessWidget {
-  const _BookmarksFadeAppBar({
-    required this.topInset,
+class _BookmarksSliverAppBar extends StatelessWidget {
+  const _BookmarksSliverAppBar({
     required this.isSelecting,
     required this.searchActive,
     required this.selectedCount,
@@ -300,7 +303,6 @@ class _BookmarksFadeAppBar extends StatelessWidget {
     required this.onDelete,
   });
 
-  final double topInset;
   final bool isSelecting;
   final bool searchActive;
   final int selectedCount;
@@ -315,96 +317,92 @@ class _BookmarksFadeAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = pageBg(context);
     final text = mainText(context);
-    final muted = mutedText(context);
 
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0)],
-          stops: const [0, .58, 1],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            // crossAxisAlignment.center garante que o botão de
-            // voltar/fechar e o campo de busca fiquem alinhados na mesma
-            // linha vertical, já que o campo de busca tem margin-top
-            // próprio (ver _BookmarksSearchField) que antes desalinhava
-            // os dois.
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _BookmarksHeaderButton(
-                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
-                tooltip: isSelecting ? appText('close') : appText('back'),
-                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
-                onTap: onBack,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axis: Axis.horizontal,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  ),
-                  child: searchActive
-                      ? _BookmarksSearchField(
-                          key: const ValueKey<String>('search-field'),
-                          controller: searchController,
-                          focusNode: searchFocusNode,
-                        )
-                      : Text(
-                          isSelecting
-                              ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                              : appText('bookmarks'),
-                          key: const ValueKey<String>('title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
+    return SliverAppBar(
+      pinned: true,
+      floating: false,
+      snap: false,
+      primary: true,
+      toolbarHeight: 64,
+      automaticallyImplyLeading: false,
+      leadingWidth: 0,
+      leading: const SizedBox.shrink(),
+      titleSpacing: 0,
+      backgroundColor: bg,
+      foregroundColor: text,
+      surfaceTintColor: bg,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      title: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _BookmarksHeaderButton(
+              key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+              tooltip: isSelecting ? appText('close') : appText('back'),
+              icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
+              onTap: onBack,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axis: Axis.horizontal,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
                 ),
-                child: isSelecting
-                    ? _BookmarksHeaderButton(
-                        key: const ValueKey<String>('delete'),
-                        tooltip: '${appText('delete')} ($selectedCount)',
-                        icon: AppIcons.trash,
-                        foreground: const Color(0xFFFF453A),
-                        onTap: onDelete,
+                child: searchActive
+                    ? _BookmarksSearchField(
+                        key: const ValueKey<String>('search-field'),
+                        controller: searchController,
+                        focusNode: searchFocusNode,
                       )
-                    : _BookmarksHeaderButton(
-                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
-                        tooltip: searchActive ? appText('close_search') : appText('search_hint'),
-                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
-                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    : Text(
+                        isSelecting
+                            ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                            : appText('bookmarks'),
+                        key: const ValueKey<String>('title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
                       ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+              child: isSelecting
+                  ? _BookmarksHeaderButton(
+                      key: const ValueKey<String>('delete'),
+                      tooltip: '${appText('delete')} ($selectedCount)',
+                      icon: AppIcons.trash,
+                      foreground: const Color(0xFFFF453A),
+                      onTap: onDelete,
+                    )
+                  : _BookmarksHeaderButton(
+                      key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                      tooltip: searchActive ? appText('close_search') : appText('search_hint'),
+                      icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                      onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
-
 class _BookmarksSearchField extends StatelessWidget {
   const _BookmarksSearchField({super.key, required this.controller, required this.focusNode});
 
@@ -415,53 +413,53 @@ class _BookmarksSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    // margin-top removido: era o que desalinhava o input em relação ao
-    // botão de fechar, já que o Row pai não tinha altura fixa igual à do
-    // botão (42px). Agora a altura do campo (42) bate exatamente com a
-    // altura do botão (42), ambos centralizados pelo
-    // crossAxisAlignment.center do Row pai.
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: pillColor(context),
-        borderRadius: BorderRadius.circular(21),
-      ),
-      child: Row(
-        children: [
-          AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              autofocus: true,
+
+    return Transform.translate(
+      offset: const Offset(0, 8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: pillColor(context),
+          borderRadius: BorderRadius.circular(21),
+        ),
+        child: Row(
+          children: [
+            AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
               textInputAction: TextInputAction.search,
-              textAlignVertical: TextAlignVertical.center,
-              style: TextStyle(color: text, fontSize: 14),
+                textAlignVertical: TextAlignVertical.center,
+                style: TextStyle(color: text, fontSize: 14),
               cursorColor: accentColor(context),
-              decoration: InputDecoration(
-                hintText: appText('search_hint'),
-                hintStyle: TextStyle(color: muted, fontSize: 13),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                decoration: InputDecoration(
+                  hintText: appText('search_hint'),
+                  hintStyle: TextStyle(color: muted, fontSize: 13),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) => value.text.isEmpty
-                ? const SizedBox.shrink()
-                : GestureDetector(
-                    onTap: controller.clear,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
-                    ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return GestureDetector(
+                  onTap: controller.clear,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
                   ),
-          ),
-        ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -203,7 +203,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final muted = mutedText(context);
     final entries = _filteredEntries();
     final runs = _buildRuns(entries);
-    final topInset = MediaQuery.of(context).padding.top;
     final bottomInset = MediaQuery.of(context).padding.bottom;
     final selectedCount = _selectedIds.length;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -217,60 +216,52 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: isDark
-            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
         child: Scaffold(
           backgroundColor: bg,
-          extendBodyBehindAppBar: true,
-          body: Stack(
-            children: [
-              entries.isEmpty
-                  ? Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        AppMaterialIcon(AppIcons.downloadSimple, size: 48, color: muted),
-                        const SizedBox(height: 12),
-                        Text(
-                          _query.isEmpty ? appText('no_downloads') : appText('no_results'),
-                          style: TextStyle(color: text, fontWeight: FontWeight.w700),
-                        ),
-                        if (_query.isEmpty) ...[
-                          const SizedBox(height: 5),
-                          Text(appText('downloads_intro'), style: TextStyle(color: muted, fontSize: 12)),
-                        ],
-                      ]),
-                    )
-                  : CustomScrollView(
-                      slivers: [
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(14, topInset + 72, 14, 0),
-                          sliver: const SliverToBoxAdapter(child: SizedBox.shrink()),
-                        ),
-                        for (var runIndex = 0; runIndex < runs.length; runIndex++)
-                          ..._buildRunSlivers(
-                            runs[runIndex],
-                            isFirstRun: runIndex == 0,
-                            isLastRun: runIndex == runs.length - 1,
-                          ),
-                        SliverPadding(padding: EdgeInsets.only(bottom: bottomInset + 24)),
-                      ],
-                    ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _DownloadsFadeAppBar(
-                  topInset: topInset,
-                  isSelecting: _isSelecting,
-                  searchActive: _searchActive,
-                  selectedCount: selectedCount,
-                  searchController: _searchController,
-                  searchFocusNode: _searchFocusNode,
-                  onBack: _handleBack,
-                  onOpenSearch: _openSearch,
-                  onCloseSearch: _closeSearch,
-                  onDelete: _deleteSelected,
-                ),
+          body: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              _DownloadsSliverAppBar(
+                isSelecting: _isSelecting,
+                searchActive: _searchActive,
+                selectedCount: selectedCount,
+                searchController: _searchController,
+                searchFocusNode: _searchFocusNode,
+                onBack: _handleBack,
+                onOpenSearch: _openSearch,
+                onCloseSearch: _closeSearch,
+                onDelete: _deleteSelected,
               ),
+              if (entries.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      AppMaterialIcon(AppIcons.downloadSimple, size: 48, color: muted),
+                      const SizedBox(height: 12),
+                      Text(
+                        _query.isEmpty ? appText('no_downloads') : appText('no_results'),
+                        style: TextStyle(color: text, fontWeight: FontWeight.w700),
+                      ),
+                      if (_query.isEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(appText('downloads_intro'), style: TextStyle(color: muted, fontSize: 12)),
+                      ],
+                    ]),
+                  ),
+                )
+              else ...[
+                const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                for (var runIndex = 0; runIndex < runs.length; runIndex++)
+                  ..._buildRunSlivers(
+                    runs[runIndex],
+                    isFirstRun: runIndex == 0,
+                    isLastRun: runIndex == runs.length - 1,
+                  ),
+                SliverPadding(padding: EdgeInsets.only(bottom: bottomInset + 24)),
+              ],
             ],
           ),
         ),
@@ -360,13 +351,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       slivers.add(
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
-          sliver: SliverToBoxAdapter(
-            child: StaggeredGrid.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 2,
-              crossAxisSpacing: 2,
-              children: tiles,
-            ),
+          sliver: SliverStaggeredGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 2,
+            crossAxisSpacing: 2,
+            children: tiles,
           ),
         ),
       );
@@ -407,9 +396,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 }
 
-class _DownloadsFadeAppBar extends StatelessWidget {
-  const _DownloadsFadeAppBar({
-    required this.topInset,
+class _DownloadsSliverAppBar extends StatelessWidget {
+  const _DownloadsSliverAppBar({
     required this.isSelecting,
     required this.searchActive,
     required this.selectedCount,
@@ -421,7 +409,6 @@ class _DownloadsFadeAppBar extends StatelessWidget {
     required this.onDelete,
   });
 
-  final double topInset;
   final bool isSelecting;
   final bool searchActive;
   final int selectedCount;
@@ -436,85 +423,87 @@ class _DownloadsFadeAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = pageBg(context);
     final text = mainText(context);
-    final muted = mutedText(context);
 
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0)],
-          stops: const [0, .58, 1],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _DownloadHeaderButton(
-                key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
-                tooltip: isSelecting ? appText('close') : appText('back'),
-                icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
-                onTap: onBack,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SizeTransition(
-                      sizeFactor: animation,
-                      axis: Axis.horizontal,
-                      axisAlignment: -1,
-                      child: child,
-                    ),
-                  ),
-                  child: searchActive
-                      ? _DownloadsSearchField(
-                          key: const ValueKey<String>('search-field'),
-                          controller: searchController,
-                          focusNode: searchFocusNode,
-                        )
-                      : Text(
-                          isSelecting
-                              ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                              : appText('downloads'),
-                          key: const ValueKey<String>('title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
+    return SliverAppBar(
+      pinned: true,
+      floating: false,
+      snap: false,
+      primary: true,
+      toolbarHeight: 64,
+      automaticallyImplyLeading: false,
+      leadingWidth: 0,
+      leading: const SizedBox.shrink(),
+      titleSpacing: 0,
+      backgroundColor: bg,
+      foregroundColor: text,
+      surfaceTintColor: bg,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      title: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _DownloadHeaderButton(
+              key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+              tooltip: isSelecting ? appText('close') : appText('back'),
+              icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
+              onTap: onBack,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
                 transitionBuilder: (child, animation) => FadeTransition(
                   opacity: animation,
-                  child: ScaleTransition(scale: animation, child: child),
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axis: Axis.horizontal,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
                 ),
-                child: isSelecting
-                    ? _DownloadHeaderButton(
-                        key: const ValueKey<String>('delete'),
-                        tooltip: '${appText('delete')} ($selectedCount)',
-                        icon: AppIcons.trash,
-                        foreground: const Color(0xFFFF453A),
-                        onTap: onDelete,
+                child: searchActive
+                    ? _DownloadsSearchField(
+                        key: const ValueKey<String>('search-field'),
+                        controller: searchController,
+                        focusNode: searchFocusNode,
                       )
-                    : _DownloadHeaderButton(
-                        key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
-                        tooltip: searchActive ? appText('close_search') : appText('search_downloads'),
-                        icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
-                        onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    : Text(
+                        isSelecting
+                            ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                            : appText('downloads'),
+                        key: const ValueKey<String>('title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
                       ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+              child: isSelecting
+                  ? _DownloadHeaderButton(
+                      key: const ValueKey<String>('delete'),
+                      tooltip: '${appText('delete')} ($selectedCount)',
+                      icon: AppIcons.trash,
+                      foreground: const Color(0xFFFF453A),
+                      onTap: onDelete,
+                    )
+                  : _DownloadHeaderButton(
+                      key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
+                      tooltip: searchActive ? appText('close_search') : appText('search_downloads'),
+                      icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
+                      onTap: searchActive ? onCloseSearch : onOpenSearch,
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -532,47 +521,50 @@ class _DownloadsSearchField extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
 
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: pillColor(context),
-        borderRadius: BorderRadius.circular(21),
-      ),
-      child: Row(
-        children: [
-          AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              autofocus: true,
-              textAlignVertical: TextAlignVertical.center,
-              style: TextStyle(color: text, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: appText('search_downloads'),
-                hintStyle: TextStyle(color: muted, fontSize: 14),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
+    return Transform.translate(
+      offset: const Offset(0, 8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: pillColor(context),
+          borderRadius: BorderRadius.circular(21),
+        ),
+        child: Row(
+          children: [
+            AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                autofocus: true,
+                textAlignVertical: TextAlignVertical.center,
+                style: TextStyle(color: text, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: appText('search_downloads'),
+                  hintStyle: TextStyle(color: muted, fontSize: 14),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-          ),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return GestureDetector(
-                onTap: controller.clear,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 6),
-                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
-                ),
-              );
-            },
-          ),
-        ],
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return GestureDetector(
+                  onTap: controller.clear,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
