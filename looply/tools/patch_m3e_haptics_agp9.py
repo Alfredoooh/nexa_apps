@@ -8,6 +8,7 @@ so the legacy plugin must be removed and the library's compile SDK declared.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -61,13 +62,31 @@ def patch_gradle_file(path: Path) -> bool:
 
 
 def main() -> int:
-    pub_cache = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
-    candidates = sorted(pub_cache.glob("m3e_haptics-*/android/build.gradle"))
+    # Respect the same cache location used by `flutter pub get` in CI.
+    # PUB_CACHE is commonly set by GitHub Actions; otherwise use Dart's
+    # platform default cache location.
+    configured_cache = os.environ.get("PUB_CACHE")
+    if configured_cache:
+        pub_cache = Path(configured_cache).expanduser()
+    elif os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        pub_cache = (
+            Path(local_app_data) / "Pub" / "Cache"
+            if local_app_data
+            else Path.home() / "AppData" / "Local" / "Pub" / "Cache"
+        )
+    else:
+        pub_cache = Path.home() / ".pub-cache"
+
+    candidates = sorted(
+        pub_cache.glob("hosted/*/m3e_haptics-*/android/build.gradle")
+    )
 
     if not candidates:
         print(
-            "ERROR: m3e_haptics Android Gradle file was not found in the Pub cache. "
-            "Run 'flutter pub get' before this patch step.",
+            "ERROR: m3e_haptics Android Gradle file was not found in "
+            f"the Pub cache at {pub_cache}. Run 'flutter pub get' before "
+            "the Gradle build and make sure PUB_CACHE points to that cache.",
             file=sys.stderr,
         )
         return 1

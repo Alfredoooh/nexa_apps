@@ -1,6 +1,20 @@
 #!/usr/bin/env sh
 # Small Gradle bootstrapper for this ZIP. Uses the pinned Gradle release.
 set -eu
+
+# Patch the published m3e_haptics Android module for AGP 9 before Gradle
+# configures it. Flutter resolves Pub dependencies before invoking this wrapper.
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+PATCH_SCRIPT="$PROJECT_DIR/tools/patch_m3e_haptics_agp9.py"
+if [ -f "$PATCH_SCRIPT" ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Erro: Python 3 é necessário para corrigir m3e_haptics antes do Gradle." >&2
+    exit 1
+  fi
+  python3 "$PATCH_SCRIPT"
+fi
+
 VERSION="9.5.0"
 GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/.gradle}"
 DIST_DIR="$GRADLE_USER_HOME/wrapper/dists/looply-gradle-$VERSION"
