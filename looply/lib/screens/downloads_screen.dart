@@ -398,6 +398,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 }
 
+// AppBar M3 expressive padrão: título na posição padrão (sem transparência,
+// sem surfaceTint, sem elevation ao rolar), e os botões (voltar/pesquisar/
+// lixeira) são ícones puros, sem nenhum container circular por trás.
+// Ao tocar em pesquisar, o campo de busca ocupa o título e já traz o botão
+// de voltar embutido dentro dele, que ao ser tocado fecha a busca.
 class _DownloadsSliverAppBar extends StatelessWidget {
   const _DownloadsSliverAppBar({
     required this.isSelecting,
@@ -432,141 +437,150 @@ class _DownloadsSliverAppBar extends StatelessWidget {
       snap: false,
       primary: true,
       toolbarHeight: 64,
-      automaticallyImplyLeading: false,
-      leadingWidth: 0,
-      leading: const SizedBox.shrink(),
-      titleSpacing: 0,
+      titleSpacing: NavigationToolbar.kMiddleSpacing,
       backgroundColor: bg,
       foregroundColor: text,
-      surfaceTintColor: bg,
+      surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      title: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _DownloadHeaderButton(
-              key: ValueKey<String>(isSelecting ? 'close-selection' : 'back'),
+      automaticallyImplyLeading: false,
+      // Quando a busca está ativa, o campo de busca (com o voltar embutido)
+      // toma conta de toda a largura do appbar, no lugar do leading+title.
+      leading: searchActive
+          ? null
+          : _DownloadsIconButton(
               tooltip: isSelecting ? appText('close') : appText('back'),
               icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
               onTap: onBack,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SizeTransition(
-                    sizeFactor: animation,
-                    axis: Axis.horizontal,
-                    axisAlignment: -1,
-                    child: child,
-                  ),
+      title: searchActive
+          ? _DownloadsSearchField(
+              controller: searchController,
+              focusNode: searchFocusNode,
+              onBack: onCloseSearch,
+            )
+          : Text(
+              isSelecting
+                  ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                  : appText('downloads'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w500),
+            ),
+      actions: searchActive
+          ? const []
+          : [
+              if (isSelecting)
+                _DownloadsIconButton(
+                  tooltip: '${appText('delete')} ($selectedCount)',
+                  icon: AppIcons.trash,
+                  foreground: const Color(0xFFFF453A),
+                  onTap: onDelete,
+                )
+              else
+                _DownloadsIconButton(
+                  tooltip: appText('search_downloads'),
+                  icon: AppIcons.magnifyingGlass,
+                  onTap: onOpenSearch,
                 ),
-                child: searchActive
-                    ? _DownloadsSearchField(
-                        key: const ValueKey<String>('search-field'),
-                        controller: searchController,
-                        focusNode: searchFocusNode,
-                      )
-                    : Text(
-                        isSelecting
-                            ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                            : appText('downloads'),
-                        key: const ValueKey<String>('title'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(scale: animation, child: child),
-              ),
-              child: isSelecting
-                  ? _DownloadHeaderButton(
-                      key: const ValueKey<String>('delete'),
-                      tooltip: '${appText('delete')} ($selectedCount)',
-                      icon: AppIcons.trash,
-                      foreground: const Color(0xFFFF453A),
-                      onTap: onDelete,
-                    )
-                  : _DownloadHeaderButton(
-                      key: ValueKey<String>(searchActive ? 'close-search' : 'search'),
-                      tooltip: searchActive ? appText('close_search') : appText('search_downloads'),
-                      icon: searchActive ? AppIcons.x : AppIcons.magnifyingGlass,
-                      onTap: searchActive ? onCloseSearch : onOpenSearch,
-                    ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(width: 4),
+            ],
     );
   }
 }
 
+// Campo de busca com o botão de voltar embutido dentro dele (ícone puro,
+// sem container circular): seta à esquerda dentro do próprio input, texto
+// ao lado, botão de limpar (x) quando há texto digitado.
 class _DownloadsSearchField extends StatelessWidget {
-  const _DownloadsSearchField({super.key, required this.controller, required this.focusNode});
+  const _DownloadsSearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.onBack,
+  });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
 
-    return Transform.translate(
-      offset: const Offset(0, 8),
-      child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: pillColor(context),
-          borderRadius: BorderRadius.circular(21),
+    return Row(
+      children: [
+        _DownloadsIconButton(
+          tooltip: appText('close_search'),
+          icon: AppIcons.arrowLeft,
+          onTap: onBack,
         ),
-        child: Row(
-          children: [
-            AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 17),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                autofocus: true,
-                textAlignVertical: TextAlignVertical.center,
-                style: TextStyle(color: text, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: appText('search_downloads'),
-                  hintStyle: TextStyle(color: muted, fontSize: 14),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            textAlignVertical: TextAlignVertical.center,
+            style: TextStyle(color: text, fontSize: 18),
+            cursorColor: accentColor(context),
+            decoration: InputDecoration(
+              hintText: appText('search_downloads'),
+              hintStyle: TextStyle(color: muted, fontSize: 18),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, _) {
+                  if (value.text.isEmpty) return const SizedBox.shrink();
+                  return _DownloadsIconButton(
+                    tooltip: appText('close'),
+                    icon: AppIcons.x,
+                    size: 20,
+                    onTap: controller.clear,
+                  );
+                },
               ),
             ),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                if (value.text.isEmpty) return const SizedBox.shrink();
-                return GestureDetector(
-                  onTap: controller.clear,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 6),
-                    child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
-                  ),
-                );
-              },
-            ),
-          ],
+          ),
         ),
+      ],
+    );
+  }
+}
+
+// Botão de ícone puro do appbar: sem container, sem círculo, sem fundo —
+// apenas o ícone com feedback tátil e splash padrão de InkResponse.
+class _DownloadsIconButton extends StatelessWidget {
+  const _DownloadsIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.foreground,
+    this.size = 24,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? foreground;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = foreground ?? mainText(context);
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: AppMaterialIcon(icon, color: color, size: size),
+      splashRadius: 22,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        padding: EdgeInsets.zero,
       ),
     );
   }
@@ -895,36 +909,4 @@ class _DownloadCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DownloadHeaderButton extends StatelessWidget {
-  const _DownloadHeaderButton({super.key, required this.tooltip, required this.icon, required this.onTap, this.foreground});
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? foreground;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: M3EButton(
-          tooltip: tooltip,
-          onPressed: onTap,
-          style: M3EButtonStyle.tonal,
-          size: M3EButtonSize.sm,
-          shape: M3EButtonShape.round,
-          decoration: M3EButtonDecoration.styleFrom(
-            backgroundColor: icon == AppIcons.arrowLeft ? Colors.transparent : pillColor(context),
-            foregroundColor: foreground ?? mutedText(context),
-            minimumSize: const Size(42, 42),
-            fixedSize: const Size(42, 42),
-            padding: EdgeInsets.zero,
-            borderRadius: 21,
-            pressedRadius: 21,
-            motion: M3EMotion.expressiveSpatialDefault,
-            haptic: M3EHapticFeedback.light,
-          ),
-          child: AppMaterialIcon(icon, color: foreground ?? mutedText(context), size: 20),
-        ),
-      );
 }

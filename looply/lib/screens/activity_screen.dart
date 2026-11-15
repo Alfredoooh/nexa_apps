@@ -47,16 +47,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
     super.dispose();
   }
 
-
   void _onChanged() {
     if (mounted) setState(() {});
     _prefetchVisitedSiteFavicons();
   }
 
-  // Garante que os favicons dos hosts mostrados na pilha de "sites
-  // visitados" já estão em cache antes de o card desenhar — sem isto, o
-  // card nasce sempre com o fallback genérico mesmo quando o favicon já
-  // foi visto noutra parte da app.
   void _prefetchVisitedSiteFavicons() {
     final seen = <String>{};
     for (final entry in activityController.entries) {
@@ -218,6 +213,7 @@ class _ActivitySliverAppBar extends StatelessWidget {
     );
   }
 }
+
 /// Seletor de período (Day / Week / Month / Year), em cápsula arredondada.
 /// O indicador deslizante usa AnimatedPositioned sobre os rótulos fixos,
 /// em vez de recriar o fundo a cada item — isto evita o "salto" e dá um
@@ -283,36 +279,18 @@ class _RangeSelector extends StatelessWidget {
   }
 }
 
-/// Gráfico de barras com anúncios bloqueados por período, com bordas
-/// totalmente arredondadas (estilo cápsula) em cada barra. A troca de
-/// período agora anima a altura E a cor de cada barra ao reconstruir
-/// (chave por range para disparar uma nova animação do zero). Curva
-/// trocada para easeOutQuint e durações alongadas para um motion mais
-/// suave na subida das barras.
+/// Gráfico de barras com anúncios bloqueados por período. Cabeçalho com
+/// ícone/título/badge removido — o card vai direto ao número grande e ao
+/// gráfico. Barras muito mais gordas (92% da largura de cada coluna, com
+/// só 2px de respiro entre elas) para bater a proporção de referência:
+/// quase um bloco contínuo, não barras finas cercadas de vazio. Usa
+/// apenas accent e tertiary do próprio ColorScheme do app — nenhuma cor
+/// fixa nova foi introduzida.
 class _AdBlockBarChart extends StatelessWidget {
   const _AdBlockBarChart({required this.data, required this.range});
 
   final List<MapEntry<String, int>> data;
   final _ChartRange range;
-
-  String _periodTitle() {
-    switch (range) {
-      case _ChartRange.day:
-        return appText('last_7_days');
-      case _ChartRange.week:
-        return appText('last_7_weeks');
-      case _ChartRange.month:
-        return appText('last_7_months');
-      case _ChartRange.year:
-        return appText('last_5_years');
-    }
-  }
-
-  String _formatAxisValue(int value) {
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(value >= 10000000 ? 0 : 1)}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1)}k';
-    return value.toString();
-  }
 
   String _formatCount(int value) {
     final separator = appLanguageController.value.code == 'en' ? ',' : '.';
@@ -350,7 +328,7 @@ class _AdBlockBarChart extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(18, 18, 16, 16),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
         borderRadius: BorderRadius.circular(28),
@@ -358,44 +336,6 @@ class _AdBlockBarChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(.13),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: AppMaterialIcon(AppIcons.shieldCheck, color: accent, size: 22),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Text(
-                  appText('ad_blocker'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w700),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(999)),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppMaterialIcon(AppIcons.calendar, color: muted, size: 15),
-                    const SizedBox(width: 6),
-                    Text(
-                      _periodTitle(),
-                      style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -440,147 +380,163 @@ class _AdBlockBarChart extends StatelessWidget {
             style: TextStyle(color: muted, fontSize: 12, height: 1.35),
           ),
           const SizedBox(height: 22),
+          // Linha de topo com a escala máxima e a linha de média, ambas
+          // acima do plot — simples, sem eixo lateral consumindo largura.
+          if (average > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Container(width: 7, height: 7, decoration: BoxDecoration(color: tertiary, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${appText('average_short')} ${_formatCount(average)}',
+                    style: TextStyle(color: tertiary, fontSize: 10.5, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
           SizedBox(
-            height: 190,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                CustomPaint(
-                                  painter: _ActivityChartGuidesPainter(
-                                    guideColor: lineColor(context).withOpacity(.75),
-                                    averageColor: tertiary.withOpacity(.72),
-                                    averageFraction: averageFraction,
-                                  ),
-                                ),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    for (var index = 0; index < data.length; index++)
-                                      Expanded(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                                          child: Align(
-                                            alignment: Alignment.bottomCenter,
-                                            child: TweenAnimationBuilder<double>(
-                                              key: ValueKey('${range.name}-$index-${data[index].value}'),
-                                              tween: Tween<double>(
-                                                begin: 0,
-                                                end: maxValue == 0
-                                                    ? 4.0
-                                                    : (constraints.maxHeight * .88 * data[index].value / scaleMax)
-                                                        .clamp(4.0, constraints.maxHeight * .88)
-                                                        .toDouble(),
-                                              ),
-                                              duration: Duration(milliseconds: 520 + index * 55),
-                                              curve: Curves.easeOutBack,
-                                              builder: (context, height, _) {
-                                                final aboveAverage = average > 0 && data[index].value >= average;
-                                                final barColor = aboveAverage
-                                                    ? tertiary
-                                                    : accent.withOpacity(.48);
-                                                return Container(
-                                                  height: height,
-                                                  width: 22,
-                                                  decoration: BoxDecoration(
-                                                    color: barColor,
-                                                    borderRadius: BorderRadius.circular(999),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            );
-                          },
+            height: 196,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final plotHeight = constraints.maxHeight - 26;
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: plotHeight,
+                      child: CustomPaint(
+                        painter: _ActivityChartGuidesPainter(
+                          guideColor: lineColor(context).withOpacity(.55),
+                          averageColor: tertiary,
+                          averageFraction: averageFraction,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 20,
-                        child: Row(
-                          children: [
-                            for (final entry in data)
-                              Expanded(
-                                child: Center(
-                                  child: Text(
-                                    entry.key,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.clip,
-                                    style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: plotHeight,
+                      // Espaçamento horizontal entre colunas reduzido de
+                      // 4 para 1.5px — é o principal responsável pelo
+                      // efeito "quase um bloco contínuo" da referência.
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          for (var index = 0; index < data.length; index++)
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: TweenAnimationBuilder<double>(
+                                    key: ValueKey('${range.name}-$index-${data[index].value}'),
+                                    tween: Tween<double>(
+                                      begin: 0,
+                                      end: maxValue == 0
+                                          ? 4.0
+                                          : (plotHeight * .92 * data[index].value / scaleMax)
+                                              .clamp(4.0, plotHeight * .92)
+                                              .toDouble(),
+                                    ),
+                                    duration: Duration(milliseconds: 560 + index * 60),
+                                    curve: Curves.easeOutBack,
+                                    builder: (context, height, _) {
+                                      final aboveAverage = average > 0 && data[index].value >= average;
+                                      final topColor = aboveAverage ? tertiary : accent;
+                                      final bottomColor = aboveAverage
+                                          ? tertiary.withOpacity(.70)
+                                          : accent.withOpacity(.55);
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        alignment: Alignment.topCenter,
+                                        children: [
+                                          // widthFactor subiu de .85 para
+                                          // .92 — barra bem mais gorda,
+                                          // ocupando quase toda a coluna,
+                                          // igual à referência.
+                                          FractionallySizedBox(
+                                            widthFactor: .92,
+                                            child: Container(
+                                              height: height,
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                  colors: [topColor, bottomColor],
+                                                ),
+                                                borderRadius: BorderRadius.circular(999),
+                                                boxShadow: aboveAverage
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: tertiary.withOpacity(.32),
+                                                          blurRadius: 9,
+                                                          offset: const Offset(0, 3),
+                                                        ),
+                                                      ]
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                          if (aboveAverage)
+                                            Positioned(
+                                              top: -5,
+                                              child: TweenAnimationBuilder<double>(
+                                                tween: Tween<double>(begin: 0, end: 1),
+                                                duration: const Duration(milliseconds: 420),
+                                                curve: Curves.elasticOut,
+                                                builder: (context, value, child) => Transform.scale(
+                                                  scale: value.clamp(0.0, 1.2),
+                                                  child: child,
+                                                ),
+                                                child: Container(
+                                                  width: 10,
+                                                  height: 10,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    color: tertiary,
+                                                    border: Border.all(
+                                                      color: settingsCardColor(context),
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 38,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final plotHeight = constraints.maxHeight - 28;
-                      final avgTop = (plotHeight * (1 - averageFraction) - 7)
-                          .clamp(0.0, plotHeight - 14)
-                          .toDouble();
-                      final middleTop = (plotHeight * .5 - 7).clamp(0.0, plotHeight - 14).toDouble();
-                      final showMiddleLabel = (averageFraction - .5).abs() > .15;
-                      return Stack(
-                        children: [
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Text(_formatAxisValue(scaleMax), style: TextStyle(color: muted, fontSize: 10)),
-                          ),
-                          if (showMiddleLabel)
-                            Positioned(
-                              top: middleTop,
-                              right: 0,
-                              child: Text(_formatAxisValue(scaleMax ~/ 2), style: TextStyle(color: muted, fontSize: 10)),
                             ),
-                          Positioned(
-                            top: avgTop,
-                            right: 0,
-                            child: Text(_formatAxisValue(average), style: TextStyle(color: tertiary, fontSize: 10, fontWeight: FontWeight.w700)),
-                          ),
-                          Positioned(
-                            bottom: 20,
-                            right: 0,
-                            child: Text('0', style: TextStyle(color: muted, fontSize: 10)),
-                          ),
                         ],
-                      );
-                    },
-                  ),
-                ),
-              ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: tertiary, shape: BoxShape.circle)),
-              const SizedBox(width: 6),
-              Text(appText('above_average'), style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 14),
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: accent.withOpacity(.48), shape: BoxShape.circle)),
-              const SizedBox(width: 6),
-              Text(appText('below_average'), style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600)),
+              for (final entry in data)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      entry.key,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -607,8 +563,8 @@ class _ActivityChartGuidesPainter extends CustomPainter {
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
     for (final fraction in const [0.0, 0.5, 1.0]) {
-      final y = size.height * fraction;
-      canvas.drawLine(Offset.zero.translate(0, y), Offset(size.width, y), guidePaint);
+      final y = size.height * (1 - fraction);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), guidePaint);
     }
 
     if (averageFraction > 0) {
@@ -616,9 +572,15 @@ class _ActivityChartGuidesPainter extends CustomPainter {
         ..color = averageColor
         ..strokeWidth = 1.5
         ..style = PaintingStyle.stroke;
+      final dashWidth = 5.0;
+      final dashSpace = 4.0;
       final clampedFraction = averageFraction.clamp(0.0, 1.0).toDouble();
       final y = size.height * (1.0 - clampedFraction);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), averagePaint);
+      var startX = 0.0;
+      while (startX < size.width) {
+        canvas.drawLine(Offset(startX, y), Offset((startX + dashWidth).clamp(0, size.width), y), averagePaint);
+        startX += dashWidth + dashSpace;
+      }
     }
   }
 
@@ -628,6 +590,7 @@ class _ActivityChartGuidesPainter extends CustomPainter {
       oldDelegate.averageColor != averageColor ||
       oldDelegate.averageFraction != averageFraction;
 }
+
 /// Sequência de dias de uso da semana atual, com check animado nos dias em
 /// que o Looply registou pelo menos uma visita a um site. Além da
 /// transição de cor/escala já existente ao marcar, os 7 círculos agora
@@ -785,10 +748,6 @@ class _VisitedSitesCard extends StatelessWidget {
     final accent = accentColor(context);
     final hosts = _recentUniqueHosts(context);
 
-    // Overlap bem mais apertado que antes: cada avatar seguinte avança só
-    // 8px sobre um diâmetro de 34px — deixa cerca de 25% de cada círculo
-    // visível, bem mais próximo de um grupo compacto do que a versão
-    // anterior (15px de avanço, ~56% visível).
     const avatarSize = 34.0;
     const overlapStep = 8.0;
 
