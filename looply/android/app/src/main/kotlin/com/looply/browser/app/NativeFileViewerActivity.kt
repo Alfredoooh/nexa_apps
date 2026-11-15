@@ -535,7 +535,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
             setPadding(dp(20), dp(18), dp(20), dp(30))
             typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
         }
-        scroll.addView(text, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(text, ViewGroup.LayoutParams(-1, -2))
         contentHost.addView(scroll, FrameLayout.LayoutParams(-1, -1))
     }
 
