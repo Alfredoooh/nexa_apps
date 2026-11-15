@@ -356,7 +356,7 @@ class _SiteUsageSearchField extends StatelessWidget {
                   return _SiteUsageIconButton(
                     tooltip: appText('close'),
                     icon: AppIcons.x,
-                    size: 20,
+                    size: 24, weight: 400, opticalSize: 24,
                     onTap: controller.clear,
                   );
                 },
@@ -413,7 +413,7 @@ class _SiteUsageItemContent extends StatelessWidget {
     final muted = mutedText(context);
     final accent = accentColor(context);
     final encoded = browserFaviconCache.forUrl('https://${item.host}');
-    Widget favicon = AppMaterialIcon(AppIcons.globe, color: muted, size: 20);
+    Widget favicon = AppMaterialIcon(AppIcons.globe, color: muted, size: 24, weight: 400, opticalSize: 24);
     if (encoded != null) {
       try {
         favicon = Image.memory(
@@ -421,7 +421,7 @@ class _SiteUsageItemContent extends StatelessWidget {
           width: 27,
           height: 27,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted, size: 20),
+          errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted, size: 24, weight: 400, opticalSize: 24),
         );
       } catch (_) {}
     }
@@ -476,7 +476,7 @@ class _SiteUsageItemContent extends StatelessWidget {
               size: M3EButtonSize.xs,
               shape: M3EButtonShape.round,
               tooltip: appText('open'),
-              child: Icon(Symbols.open_in_new_rounded, size: 20, color: muted),
+              child: Icon(Symbols.open_in_new_rounded, size: 24, weight: 400, opticalSize: 24, color: muted),
             ),
           ],
         ),

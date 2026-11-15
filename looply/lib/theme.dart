@@ -156,13 +156,15 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    iconTheme: const IconThemeData(size: 20, weight: 300, opticalSize: 20),
+    iconTheme: const IconThemeData(size: 24, weight: 400, opticalSize: 24),
     colorScheme: scheme,
     scaffoldBackgroundColor: bg,
     canvasColor: panel,
     splashFactory: NoSplash.splashFactory,
     splashColor: Colors.transparent,
     highlightColor: Colors.transparent,
+    focusColor: Colors.transparent,
+    hoverColor: Colors.transparent,
     dividerColor: isDark ? (pureBlack ? looplyLineAmoled : looplyLineDark) : looplyLineLight,
     dialogTheme: DialogThemeData(
       backgroundColor: isDark ? panel : Colors.white,
@@ -209,9 +211,9 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
         color: states.contains(WidgetState.selected) ? text : muted,
-        size: 20,
-        weight: 300,
-        opticalSize: 20,
+        size: 24,
+        weight: 400,
+        opticalSize: 24,
       )),
     ),
     textTheme: TextTheme(

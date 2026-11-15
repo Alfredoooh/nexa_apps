@@ -143,14 +143,14 @@ class AppMaterialIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Icon(
       icon,
-      // Standardiza os ícones normais em 20dp e mantém apenas os glifos
-      // deliberadamente grandes (estados vazios/ilustrações) no tamanho pedido.
-      size: size == null ? 20 : (size! <= 24 ? 20 : size!),
+      // Todos os glifos de interface usam a mesma métrica visual de 24dp.
+      // Apenas ilustrações explicitamente maiores preservam o tamanho pedido.
+      size: size == null ? 24 : (size! <= 24 ? 24 : size!),
       color: color,
       fill: fill,
-      weight: weight ?? 300,
+      weight: weight ?? 400,
       grade: grade,
-      opticalSize: opticalSize ?? 20,
+      opticalSize: opticalSize ?? 24,
       shadows: shadows,
       semanticLabel: semanticLabel,
       textDirection: textDirection,

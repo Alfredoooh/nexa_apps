@@ -542,7 +542,7 @@ class _DownloadsSearchField extends StatelessWidget {
           _DownloadsIconButton(
             tooltip: appText('close_search'),
             icon: AppIcons.arrowLeft,
-            size: 20,
+            size: 24, weight: 400, opticalSize: 24,
             onTap: onBack,
           ),
           const SizedBox(width: 4),
@@ -783,7 +783,7 @@ class _MediaTileState extends State<_MediaTile> {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 24, weight: 400, opticalSize: 24),
                   ),
                 ),
               ),
@@ -867,7 +867,7 @@ class _DownloadCard extends StatelessWidget {
                             child: AppMaterialIcon(
                               isFailed ? AppIcons.warningCircle : entry.icon,
                               color: isFailed ? const Color(0xFFFF453A) : accent,
-                              size: 20,
+                              size: 24, weight: 400, opticalSize: 24,
                             ),
                           ),
                         ),
@@ -883,7 +883,7 @@ class _DownloadCard extends StatelessWidget {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                            child: const Icon(Symbols.check_rounded, color: Colors.white, size: 20),
+                            child: const Icon(Symbols.check_rounded, color: Colors.white, size: 24, weight: 400, opticalSize: 24),
                           ),
                         ),
                       ],
@@ -913,7 +913,7 @@ class _DownloadCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   if (entry.canOpenLocally)
-                    Icon(Symbols.open_in_new_rounded, color: muted, size: 20)
+                    Icon(Symbols.open_in_new_rounded, color: muted, size: 24, weight: 400, opticalSize: 24)
                   else if (isDownloading)
                     SizedBox(
                       width: 18,

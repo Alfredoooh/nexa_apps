@@ -4,6 +4,7 @@ import 'package:m3e_menu/m3e_menu.dart' as m3e_menu;
 
 import '../theme.dart';
 import 'material_symbols.dart';
+import 'search_engine_pngs.dart';
 
 class LooplyPopupAction<T> {
   const LooplyPopupAction({required this.value, required this.label, required this.icon});
@@ -72,7 +73,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         m3e_menu.M3ECheckboxMenuButton(
           value: _aiValue,
           closeOnActivate: false,
-          leadingIcon: AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context)),
+          leadingIcon: Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
           itemStyle: itemStyle,
           onChanged: (value) {
             final next = value ?? false;

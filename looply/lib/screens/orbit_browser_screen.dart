@@ -295,7 +295,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
         case 'search':
           await _pushFlutterPage(
-            SearchScreen(isIncognito: widget.isIncognito),
+            SearchScreen(isIncognito: widget.isIncognito, showCurrentPageCard: true),
           );
           return;
 

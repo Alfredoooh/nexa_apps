@@ -207,7 +207,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
             contentDescription = description
             background = selectableBackground()
             addView(
-                MaterialSymbolsRounded.textView(this@NativeFileViewerActivity, symbol, textColor, 20f),
+                MaterialSymbolsRounded.textView(this@NativeFileViewerActivity, symbol, textColor, 24f),
                 FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER),
             )
             setOnClickListener { action() }

@@ -7,6 +7,7 @@ import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 import 'package:http/http.dart' as http;
 
 import '../models.dart';
+import '../browser_library.dart';
 import '../theme.dart';
 import '../shell/browser_navigation.dart';
 import '../shell/shell_tab_request.dart';
@@ -14,16 +15,22 @@ import '../widgets/search_engine_picker.dart';
 import '../localization.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
+import 'home_screen.dart' show SiteFaviconForHome;
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.isIncognito = false});
+  const SearchScreen({
+    super.key,
+    this.isIncognito = false,
+    this.showCurrentPageCard = false,
+  });
   final bool isIncognito;
+  final bool showCurrentPageCard;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
   Timer? _debounce;
@@ -31,16 +38,32 @@ class _SearchScreenState extends State<SearchScreen> {
   final Map<String, String?> _entityPhotoCache = <String, String?>{};
   final Map<String, Future<String?>> _entityPhotoRequests = <String, Future<String?>>{};
   int _requestSequence = 0;
+  late final AnimationController _searchEntranceController;
+  late final Animation<double> _searchEntranceScale;
+  late final Animation<double> _searchEntranceFade;
+  static const MethodChannel _nativeUiChannel = MethodChannel('looply/native_ui');
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController();
     _focusNode = FocusNode();
+    _searchEntranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    final entranceCurve = CurvedAnimation(
+      parent: _searchEntranceController,
+      curve: Curves.easeOutCubic,
+    );
+    _searchEntranceScale = Tween<double>(begin: .94, end: 1).animate(entranceCurve);
+    _searchEntranceFade = Tween<double>(begin: 0, end: 1).animate(entranceCurve);
     _controller.addListener(_onQueryChanged);
     aiSearchModeEnabled.addListener(_onAiModeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (!mounted) return;
+      _searchEntranceController.forward();
+      _focusNode.requestFocus();
     });
   }
 
@@ -51,21 +74,24 @@ class _SearchScreenState extends State<SearchScreen> {
     aiSearchModeEnabled.removeListener(_onAiModeChanged);
     _controller.dispose();
     _focusNode.dispose();
+    _searchEntranceController.dispose();
     super.dispose();
   }
 
   void _onAiModeChanged() {
-    _debounce?.cancel();
-    _requestSequence++;
-    if (!mounted) return;
-    setState(() => _suggestions = <String>[]);
+    // Alternar o motor não deve apagar as sugestões já carregadas nem
+    // interromper a pesquisa automática: AI Search também é um motor.
+    if (mounted) setState(() {});
   }
 
   void _onQueryChanged() {
     if (mounted) setState(() {});
     final query = _controller.text.trim();
+    // Invalida respostas de uma consulta anterior assim que o texto muda,
+    // inclusive quando o utilizador apaga o campo antes da resposta chegar.
+    _requestSequence++;
     _debounce?.cancel();
-    if (widget.isIncognito || aiSearchModeEnabled.value || query.isEmpty) {
+    if (widget.isIncognito || query.isEmpty) {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = <String>[]);
       return;
     }
@@ -73,7 +99,6 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _fetchSuggestions(String query) async {
-    if (aiSearchModeEnabled.value) return;
     final sequence = ++_requestSequence;
     try {
       final uri = Uri.https('suggestqueries.google.com', '/complete/search', <String, String>{
@@ -171,87 +196,138 @@ class _SearchScreenState extends State<SearchScreen> {
     return tab.url.startsWith('https://') || tab.url.startsWith('http://');
   }
 
+  Widget _pageFavicon(String url, Color muted) {
+    unawaited(browserFaviconCache.fetchForUrl(url));
+    final host = Uri.tryParse(url)?.host ?? '';
+    final fallbackUrl = host.isEmpty
+        ? null
+        : 'https://www.google.com/s2/favicons?domain=${Uri.encodeComponent(host)}&sz=64';
+    return AnimatedBuilder(
+      animation: browserFaviconCache,
+      builder: (context, _) {
+        final cached = browserFaviconCache.forUrl(url);
+        Widget image;
+        if (cached != null && cached.isNotEmpty) {
+          try {
+            image = Image.memory(
+              base64Decode(cached),
+              width: 26,
+              height: 26,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted),
+            );
+          } catch (_) {
+            image = AppMaterialIcon(AppIcons.globe, color: muted);
+          }
+        } else if (fallbackUrl != null) {
+          image = Image.network(
+            fallbackUrl,
+            width: 26,
+            height: 26,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, color: muted),
+          );
+        } else {
+          image = AppMaterialIcon(AppIcons.globe, color: muted);
+        }
+        return SizedBox(width: 28, height: 28, child: Center(child: image));
+      },
+    );
+  }
+
+  Future<void> _shareCurrentPage(BrowserTab tab) async {
+    final title = (tab.title?.trim().isNotEmpty ?? false) ? tab.title!.trim() : tab.url;
+    try {
+      await _nativeUiChannel.invokeMethod<bool>('shareText', <String, Object?>{
+        'text': tab.url,
+        'subject': title,
+      });
+    } on PlatformException {
+      await Clipboard.setData(ClipboardData(text: tab.url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(appText('copied'))),
+        );
+      }
+    } on MissingPluginException {
+      await Clipboard.setData(ClipboardData(text: tab.url));
+    }
+  }
+
   Widget _currentPageCard(BrowserTab tab, Color text, Color muted) {
     final host = Uri.tryParse(tab.url)?.host.replaceFirst(RegExp(r'^www\.'), '') ?? tab.url;
     final title = (tab.title?.trim().isNotEmpty ?? false) ? tab.title!.trim() : host;
     return Container(
-      margin: const EdgeInsets.fromLTRB(2, 2, 2, 14),
-      padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
+      margin: const EdgeInsets.fromLTRB(2, 2, 2, 12),
+      padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              AppMaterialIcon(AppIcons.globe, color: muted, size: 20),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
+          _pageFavicon(tab.url, muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700),
                 ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 34, top: 3),
-            child: Text(
-              tab.url,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: accentColor(context), fontSize: 12.5),
+                const SizedBox(height: 2),
+                Text(
+                  tab.url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: accentColor(context), fontSize: 12),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const SizedBox(width: 30),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => _copyCurrentPage(tab),
-                  icon: AppMaterialIcon(AppIcons.copy, size: 20, color: muted),
-                  label: Text(
-                    appText('copy_address'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: muted, fontSize: 12.5),
-                  ),
-                  style: TextButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextButton.icon(
-                  onPressed: () => _editCurrentPage(tab),
-                  icon: AppMaterialIcon(AppIcons.pencilSimple, size: 20, color: muted),
-                  label: Text(
-                    appText('edit_link'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: muted, fontSize: 12.5),
-                  ),
-                  style: TextButton.styleFrom(
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(width: 5),
+          _pageAction(
+            tooltip: appText('share_page'),
+            icon: AppIcons.share,
+            onPressed: () => _shareCurrentPage(tab),
+            color: muted,
+          ),
+          _pageAction(
+            tooltip: appText('copy_address'),
+            icon: AppIcons.copy,
+            onPressed: () => _copyCurrentPage(tab),
+            color: muted,
+          ),
+          _pageAction(
+            tooltip: appText('edit_link'),
+            icon: AppIcons.pencilSimple,
+            onPressed: () => _editCurrentPage(tab),
+            color: muted,
           ),
         ],
       ),
     );
   }
+
+  Widget _pageAction({
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color color,
+  }) => IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 34, height: 36),
+        icon: AppMaterialIcon(icon, color: color),
+      );
 
   Widget _searchEngineButton(Color muted) {
     return ValueListenableBuilder<bool>(
@@ -262,17 +338,24 @@ class _SearchScreenState extends State<SearchScreen> {
         constraints: const BoxConstraints.tightFor(width: 40, height: 40),
         onPressed: () => showSearchEnginePicker(context),
         icon: aiEnabled
-            ? AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context))
+            ? Image.memory(
+                searchEnginePng('AI Search')!,
+                width: 24,
+                height: 24,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                gaplessPlayback: true,
+              )
             : ValueListenableBuilder<SearchEngine>(
                 valueListenable: activeSearchEngine,
                 builder: (context, engine, _) {
                   final png = searchEnginePng(engine.name);
                   return png == null
-                      ? const SizedBox(width: 20, height: 20)
+                      ? const SizedBox(width: 24, height: 24)
                       : Image.memory(
                           png,
-                          width: 20,
-                          height: 20,
+                          width: 24,
+                          height: 24,
                           fit: BoxFit.contain,
                           filterQuality: FilterQuality.high,
                           gaplessPlayback: true,
@@ -465,6 +548,73 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Widget _recentSites(Color text) {
+    final recent = <ActivityEntry>[];
+    final hosts = <String>{};
+    for (final entry in activityController.entries) {
+      if (entry.kind != ActivityKind.site) continue;
+      final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
+      if (host.isEmpty || !hosts.add(host)) continue;
+      recent.add(entry);
+      if (recent.length >= 10) break;
+    }
+    if (recent.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SizedBox(
+        height: 112,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: recent.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 9),
+          itemBuilder: (context, index) {
+            final entry = recent[index];
+            unawaited(browserFaviconCache.fetchForUrl(entry.url));
+            final host = Uri.tryParse(entry.url)?.host ?? entry.url;
+            final label = entry.title.trim().isNotEmpty
+                ? entry.title.trim()
+                : host.replaceFirst(RegExp(r'^www\.'), '');
+            return SizedBox(
+              width: 76,
+              child: Semantics(
+                button: true,
+                label: label,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(22),
+                  onTap: () => openOrbitTab(context, entry.url, title: entry.title),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SiteFaviconForHome(url: entry.url),
+                        const SizedBox(height: 5),
+                        Text(
+                          label,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: text,
+                            fontSize: 12.5,
+                            height: 1.16,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _recentSearches(List<String> queries, Color text, Color muted) {
     if (queries.isEmpty) return const SizedBox.shrink();
     return Column(
@@ -545,49 +695,60 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(10, 6, 10, 12),
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: pillColor(context),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 2),
-                        _searchEngineButton(muted),
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            focusNode: _focusNode,
-                            textInputAction: TextInputAction.search,
-                            textAlignVertical: TextAlignVertical.center,
-                            style: TextStyle(color: text, fontSize: 15),
-                            cursorColor: accentColor(context),
-                            onSubmitted: _submitSearch,
-                            decoration: InputDecoration(
-                              hintText: appText('search_hint'),
-                              hintStyle: TextStyle(color: muted, fontSize: 14),
-                              contentPadding: EdgeInsets.zero,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              isDense: true,
-                              isCollapsed: true,
-                            ),
-                          ),
+                  child: FadeTransition(
+                    opacity: _searchEntranceFade,
+                    child: ScaleTransition(
+                      scale: _searchEntranceScale,
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: pillColor(context),
+                          borderRadius: BorderRadius.circular(24),
                         ),
-                        if (_controller.text.isNotEmpty) _clearButton(muted),
-                        const SizedBox(width: 5),
-                      ],
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 2),
+                            _searchEngineButton(muted),
+                            Expanded(
+                              child: TextField(
+                                controller: _controller,
+                                focusNode: _focusNode,
+                                textInputAction: TextInputAction.search,
+                                textAlignVertical: TextAlignVertical.center,
+                                style: TextStyle(color: text, fontSize: 15),
+                                cursorColor: accentColor(context),
+                                onSubmitted: _submitSearch,
+                                decoration: InputDecoration(
+                                  hintText: appText('search_hint'),
+                                  hintStyle: TextStyle(color: muted, fontSize: 14),
+                                  contentPadding: EdgeInsets.zero,
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  isDense: true,
+                                  isCollapsed: true,
+                                ),
+                              ),
+                            ),
+                            if (_controller.text.isNotEmpty) _clearButton(muted),
+                            const SizedBox(width: 5),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
                 Expanded(
                   child: AnimatedBuilder(
-                    animation: Listenable.merge([tabsController, searchHistoryController]),
+                    animation: Listenable.merge([
+                      tabsController,
+                      searchHistoryController,
+                      activityController,
+                      browserFaviconCache,
+                    ]),
                     builder: (context, _) {
                       final activeTab = tabsController.activeTab;
-                      final showPageCard = _isWebTab(activeTab);
+                      final showPageCard = widget.showCurrentPageCard && _isWebTab(activeTab);
                       final isEmpty = _controller.text.trim().isEmpty;
                       final queries = widget.isIncognito ? const <String>[] : searchHistoryController.queries;
                       return ListView(
@@ -595,29 +756,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                         children: [
                           if (showPageCard) _currentPageCard(activeTab!, text, muted),
+                          if (isEmpty) _recentSites(text),
                           if (isEmpty) _recentSearches(queries, text, muted),
-                          if (!isEmpty && aiSearchModeEnabled.value)
-                            Container(
-                              margin: const EdgeInsets.only(top: 6),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: settingsCardColor(context),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                children: [
-                                  AppMaterialIcon(AppIcons.sparkles, color: accentColor(context), size: 21),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'A pesquisa será aberta na tela AI Search.',
-                                      style: TextStyle(color: muted, fontSize: 13),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (!isEmpty && !aiSearchModeEnabled.value) _suggestionList(text, muted),
+                          if (!isEmpty) _suggestionList(text, muted),
                         ],
                       );
                     },
@@ -643,10 +784,10 @@ class _FaviconIcon extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         child: Image.network(
           url,
-          width: 20,
-          height: 20,
+          width: 24,
+          height: 24,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => AppMaterialIcon(fallback, color: muted, size: 18),
+          errorBuilder: (_, __, ___) => AppMaterialIcon(fallback, color: muted),
         ),
       );
 }

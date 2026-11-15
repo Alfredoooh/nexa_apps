@@ -90,7 +90,7 @@ class LooplyApp extends StatelessWidget {
                             child: Row(
                               children: [
                                 for (final symbol in AppIcons.nativeBrowserGlyphs)
-                                  Icon(symbol),
+                                  Icon(symbol, size: 24, weight: 400, opticalSize: 24),
                               ],
                             ),
                           ),
@@ -178,9 +178,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
   final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise];
   late final AnimationController _morphController;
-  late final AnimationController _browserSlideController;
+  late final AnimationController _browserFadeController;
   late final AnimationController _drawerController;
-  late final Animation<Offset> _browserSlidePosition;
+  late final Animation<double> _browserFadeOpacity;
   OverlayEntry? _morphEntry;
   ImageProvider? _morphImage;
   Rect? _morphFrom;
@@ -230,19 +230,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
     drawer_menu.LooplyDrawerBridge.open = _openShellDrawer;
     drawer_menu.LooplyDrawerBridge.close = _closeShellDrawer;
-    _browserSlideController = AnimationController(
+    _browserFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 420),
       reverseDuration: const Duration(milliseconds: 390),
     )..value = 1;
-    _browserSlidePosition = Tween<Offset>(
-      begin: const Offset(1, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _browserSlideController,
+    _browserFadeOpacity = CurvedAnimation(
+      parent: _browserFadeController,
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
-    ));
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRestoreSession();
       _consumePendingDefaultBrowserUrls();
@@ -290,7 +287,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _defaultBrowserIntentChannel.setMethodCallHandler(null);
     _removeSnapshotOverlay();
     _morphController.dispose();
-    _browserSlideController.dispose();
+    _browserFadeController.dispose();
     _drawerController.dispose();
     drawer_menu.LooplyDrawerBridge.open = null;
     drawer_menu.LooplyDrawerBridge.close = null;
@@ -528,11 +525,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
   void _activateBrowserTab(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
-    // A abertura pela grelha usa exclusivamente o Container Transform.
-    // Repor a posição final do slide normal impede que a WebView fique
-    // deslocada para fora do ecrã depois de uma navegação Home -> Browser.
-    _browserSlideController.stop();
-    _browserSlideController.value = 1;
+    // A abertura pela grelha usa o Container Transform existente. O percurso
+    // normal Home -> Browser usa apenas fade, sem deslocar a WebView.
+    _browserFadeController.stop();
+    _browserFadeController.value = 1;
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
@@ -541,15 +537,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _persistCurrentActivity();
   }
 
-  // Transição vertical usada apenas na navegação normal entre Home e Browser.
-  // O Container Transform dos separadores continua a usar o seu overlay/captura
-  // original, sem passar por este controlador.
-  void _activateBrowserTabWithSlide(BrowserTab tab) {
+  // Transição fade usada na navegação normal entre Home e Browser.
+  // O Container Transform da grelha continua independente deste controlador.
+  void _activateBrowserTabWithFade(BrowserTab tab) {
     _ensureBrowserTabMounted(tab);
     final browserAlreadyVisible =
         _activeBrowserTabId != null && !_showingTabsGrid;
-    _browserSlideController.stop();
-    _browserSlideController.value = browserAlreadyVisible ? 1 : 0;
+    _browserFadeController.stop();
+    _browserFadeController.value = browserAlreadyVisible ? 1 : 0;
     setState(() {
       _activeBrowserTabId = tab.id;
       _showingTabsGrid = false;
@@ -572,23 +567,22 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
 
     // Deixa o Android anexar a superfície nativa e o Flutter concluir um
-    // frame antes de iniciar o movimento. A transição continua a ser um slide
-    // real, sem fade ou screenshot e sem tocar no Container Transform.
+    // frame antes de iniciar o fade, evitando um frame inicial em branco.
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted ||
         _activeBrowserTabId != tabId ||
         _showingTabsGrid ||
-        _browserSlideController.isAnimating) {
+        _browserFadeController.isAnimating) {
       return;
     }
-    await _browserSlideController.forward();
+    await _browserFadeController.forward();
   }
 
   Future<void> _navigateToShellScreen(int index) async {
     if (_activeBrowserTabId != null && !_showingTabsGrid) {
-      _browserSlideController.stop();
+      _browserFadeController.stop();
       try {
-        await _browserSlideController.reverse();
+        await _browserFadeController.reverse();
       } catch (_) {}
       if (!mounted) return;
     }
@@ -640,7 +634,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       request.orbitBrowserRequested = false;
       final tab = tabsController.getOrbitBrowserTab() ??
           tabsController.upsertOrbitBrowserTab(null);
-      _activateBrowserTabWithSlide(tab);
+      _activateBrowserTabWithFade(tab);
       return;
     }
 
@@ -648,7 +642,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     request.browserTabRequested = null;
     if (requestedBrowserId != null) {
       final tab = tabsController.getTab(requestedBrowserId);
-      if (tab != null) _activateBrowserTabWithSlide(tab);
+      if (tab != null) _activateBrowserTabWithFade(tab);
       return;
     }
 
@@ -820,6 +814,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       );
       _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
       _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
+      _preferredReturnTabId = appTab.id;
       setState(() {
         _showingTabsGrid = true;
         _morphing = false;
@@ -842,6 +837,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     );
     _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
     _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
+    _preferredReturnTabId = appTab.id;
 
     if (imageProvider == null) {
       setState(() {
@@ -994,11 +990,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (targetTab != null && targetTab.kind != TabKind.appScreen) {
       _ensureBrowserTabMounted(targetTab);
       // Ao regressar da grelha, o movimento é feito pelo Container Transform.
-      // O slide de navegação normal deve começar já na posição final.
-      _browserSlideController.stop();
-      _browserSlideController.value = 1;
+      // O fade de navegação normal deve começar já na posição final.
+      _browserFadeController.stop();
+      _browserFadeController.value = 1;
       // A abertura já está a ser executada pelo Container Transform. Não
-      // permitir que a Activity Kotlin acrescente um segundo slide por cima.
+      // impedir que a Activity Kotlin acrescente uma segunda transição.
       _skipNextNativeEnterAnimation = true;
       setState(() {
         _activeBrowserTabId = targetTab.id;
@@ -1133,8 +1129,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphing = true;
     _skipNextNativeEnterAnimation = true;
     _ensureBrowserTabMounted(tab);
-    _browserSlideController.stop();
-    _browserSlideController.value = 1;
+    _browserFadeController.stop();
+    _browserFadeController.value = 1;
     tabsController.activate(tab.id);
     unawaited(SessionStore.instance.saveLastActivity({
       'type': 'browser',
@@ -1187,7 +1183,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     if (!mounted) return;
     setState(() => _morphing = false);
     // O browser só é ativado depois de a captura terminar a expansão. O extra
-    // skipNativeEnterAnimation elimina o segundo slide da Activity Android.
+    // skipNativeEnterAnimation elimina a segunda transição da Activity Android.
     await WidgetsBinding.instance.endOfFrame;
     if (mounted) setState(() => _skipNextNativeEnterAnimation = false);
   }
@@ -1268,14 +1264,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         extendBody: true,
         body: Stack(
           children: [
-            // Página anterior: desloca-se ligeiramente para a esquerda
-            // enquanto o browser entra pela direita.
-            // Este é o conteúdo vivo da tela anterior, não uma screenshot.
             Positioned.fill(
               child: Offstage(
                 offstage: _showingTabsGrid,
-                child: AnimatedBuilder(
-                  animation: _browserSlideController,
+                child: IgnorePointer(
+                  ignoring: _activeBrowserTabId != null,
                   child: SafeArea(
                     bottom: false,
                     child: SizedBox.expand(
@@ -1288,21 +1281,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                       ),
                     ),
                   ),
-                  builder: (context, child) {
-                    // Usa o mesmo progresso curvo da página que entra
-                    // pela direita para manter as duas camadas sincronizadas.
-                    final progress = _activeBrowserTabId == null
-                        ? 0.0
-                        : (1 - _browserSlidePosition.value.dx).clamp(0.0, 1.0).toDouble();
-                    return IgnorePointer(
-                      ignoring: _activeBrowserTabId != null,
-                      // O conteúdo anterior recua subtilmente para a esquerda.
-                      child: Transform.translate(
-                        offset: Offset(-16 * progress, 0),
-                        child: child,
-                      ),
-                    );
-                  },
                 ),
               ),
             ),
@@ -1311,8 +1289,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
             Positioned.fill(
               child: Offstage(
                 offstage: _activeBrowserTabId == null || _showingTabsGrid,
-                child: SlideTransition(
-                  position: _browserSlidePosition,
+                child: FadeTransition(
+                  opacity: _browserFadeOpacity,
                   child: RepaintBoundary(
                     key: activeBrowserTab == null
                         ? null

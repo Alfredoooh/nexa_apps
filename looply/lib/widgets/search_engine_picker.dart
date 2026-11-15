@@ -60,10 +60,13 @@ void showSearchEnginePicker(BuildContext context) {
                       shape: BoxShape.circle,
                       color: pillForMode(context, mode),
                     ),
-                    child: AppMaterialIcon(
-                      AppIcons.sparkles,
-                      color: accentForMode(context, mode),
-                      size: 19,
+                    child: Image.memory(
+                      searchEnginePng('AI Search')!,
+                      width: 24,
+                      height: 24,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                      gaplessPlayback: true,
                     ),
                   ),
                   title: Text(
@@ -96,15 +99,15 @@ void showSearchEnginePicker(BuildContext context) {
                   leading: Container(
                     width: 34,
                     height: 34,
-                    padding: const EdgeInsets.all(6),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: pillForMode(context, mode),
                     ),
                     child: Image.memory(
                       searchEnginePng(engine.name) ?? searchEnginePng('Google')!,
-                      width: 20,
-                      height: 20,
+                      width: 24,
+                      height: 24,
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.high,
                       gaplessPlayback: true,

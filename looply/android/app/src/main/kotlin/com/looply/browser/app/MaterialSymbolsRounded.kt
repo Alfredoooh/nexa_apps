@@ -84,12 +84,12 @@ internal object MaterialSymbolsRounded {
     }
 
     /**
-     * Material Symbols Rounded é uma fonte variável. Reduzimos o eixo de peso
-     * e o grade sem alterar o desenho SVG específico do contador de separadores.
+     * Material Symbols Rounded é uma fonte variável. Mantemos o peso padrão
+     * solicitado pelo sistema visual (400) e grade neutro.
      */
     private fun fontVariationSettings(opticalSizeSp: Float): String {
-        val opticalSize = opticalSizeSp.coerceIn(20f, 48f)
-        return "'FILL' 0, 'wght' 300, 'GRAD' -25, 'opsz' $opticalSize"
+        val opticalSize = opticalSizeSp.coerceIn(24f, 48f)
+        return "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' $opticalSize"
     }
 
     /**

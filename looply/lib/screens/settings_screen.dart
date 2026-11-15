@@ -422,13 +422,18 @@ class _SettingsSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           child: SizedBox(
             width: double.infinity,
-            child: M3ESegmentedColumn(
-              children: children,
-              color: settingsCardColor(context),
-              outerRadius: 20,
-              innerRadius: 16,
-              gap: 4,
-              padding: EdgeInsets.zero,
+            // Os itens continuam a ser os cards segmentados M3 Expressive.
+            // Só se desativa o foco de teclado nesta lista táctil para impedir
+            // que o switch deixe um contorno azul persistente no card inteiro.
+            child: ExcludeFocus(
+              child: M3ESegmentedColumn(
+                children: children,
+                color: settingsCardColor(context),
+                outerRadius: 20,
+                innerRadius: 16,
+                gap: 4,
+                padding: EdgeInsets.zero,
+              ),
             ),
           ),
         ),
@@ -488,6 +493,13 @@ class _SettingsTile extends StatelessWidget {
       width: double.infinity,
       child: InkWell(
         onTap: onTap,
+        canRequestFocus: false,
+        focusColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+          if (states.contains(WidgetState.focused)) return Colors.transparent;
+          return null;
+        }),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: subtitle == null ? 52 : 64),
           child: Padding(

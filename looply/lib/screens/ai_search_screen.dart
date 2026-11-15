@@ -5,6 +5,7 @@ import '../models.dart';
 import '../shell/shell_tab_request.dart';
 import '../theme.dart';
 import '../widgets/material_symbols.dart';
+import '../widgets/search_engine_pngs.dart';
 
 /// Ecrã inicial da pesquisa com IA. A apresentação é nativa em Flutter e
 /// mantém a consulta na própria aba interna do browser.
@@ -78,7 +79,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                     onPressed: () => ShellTabRequest.instance.request(0),
                     icon: AppMaterialIcon(AppIcons.arrowLeft, color: text, size: 22),
                   ),
-                  AppMaterialIcon(AppIcons.sparkles, color: accent, size: 21),
+                  Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
                   const SizedBox(width: 10),
                   Text(
                     'AI Search',
@@ -98,7 +99,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 ),
                 child: Row(
                   children: [
-                    AppMaterialIcon(AppIcons.sparkles, color: accent, size: 19),
+                    Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
@@ -141,7 +142,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                           color: accent.withOpacity(.12),
                           shape: BoxShape.circle,
                         ),
-                        child: AppMaterialIcon(AppIcons.sparkles, color: accent, size: 30),
+                        child: Image.memory(searchEnginePng('AI Search')!, width: 40, height: 40, fit: BoxFit.contain),
                       ),
                       const SizedBox(height: 18),
                       Text(

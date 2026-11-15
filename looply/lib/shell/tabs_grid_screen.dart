@@ -46,6 +46,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
   bool _selectionMode = false;
   bool _showIncognitoTabs = false;
   bool _initialScrollScheduled = false;
+  bool _gridPositionReady = false;
   final ScrollController _gridScrollController = ScrollController();
   final Set<String> _selectedIds = <String>{};
   int _visibleTabsHash = 0;
@@ -227,6 +228,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                         onPressed: () => setState(() {
                           _showIncognitoTabs = !_showIncognitoTabs;
                           _initialScrollScheduled = false;
+                          _gridPositionReady = false;
                           _visibleTabsHash = 0;
                           _visibleTabsCount = -1;
                           if (_gridScrollController.hasClients) {
@@ -316,7 +318,11 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                               for (var i = 0; i < tabs.length; i++) tabs[i].id: i,
                             };
 
-                            return GridView.builder(
+                            return Opacity(
+                              opacity: _gridPositionReady ? 1 : 0,
+                              child: IgnorePointer(
+                                ignoring: !_gridPositionReady,
+                                child: GridView.builder(
                               controller: _gridScrollController,
                               padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
                               cacheExtent: 420,
@@ -342,6 +348,8 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                                   child: _tabGridItem(context, tab),
                                 );
                               },
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -359,7 +367,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                 shape: const CircleBorder(),
                 elevation: 4,
                 onPressed: _showIncognitoTabs ? widget.onNewIncognitoTab : widget.onNewTab,
-                child: AppMaterialIcon(AppIcons.plus, size: 27, color: _showIncognitoTabs ? Colors.black : Colors.white),
+                child: AppMaterialIcon(AppIcons.plus, size: 24, color: _showIncognitoTabs ? Colors.black : Colors.white),
               ),
             ),
           ],
@@ -382,21 +390,28 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
     if (preferredId != null) {
       targetIndex = tabs.indexWhere((tab) => tab.id == preferredId);
     }
-    // Ao alternar entre abas normais e privadas, mantém a grelha próxima da
-    // aba mais recente daquele conjunto em vez de deixar a seleção fora de vista.
+    // Ao alternar entre conjuntos de separadores, preserva a posição da
+    // seleção mais recente daquele conjunto se a seleção anterior não existir.
     if (targetIndex < 0 && preferredId != null && tabs.isNotEmpty) {
       targetIndex = tabs.length - 1;
     }
-    if (targetIndex < 0) return;
+    if (targetIndex < 0) {
+      _gridPositionReady = true;
+      return;
+    }
 
     final targetOffset = (targetIndex ~/ columns) * itemExtent;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_gridScrollController.hasClients) return;
-      final max = _gridScrollController.position.maxScrollExtent;
-      final offset = targetOffset.clamp(0.0, max).toDouble();
-      if ((_gridScrollController.offset - offset).abs() > 1) {
-        _gridScrollController.jumpTo(offset);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      if (_gridScrollController.hasClients) {
+        final max = _gridScrollController.position.maxScrollExtent;
+        final offset = targetOffset.clamp(0.0, max).toDouble();
+        if ((_gridScrollController.offset - offset).abs() > 1) {
+          _gridScrollController.jumpTo(offset);
+        }
       }
+      if (mounted) setState(() => _gridPositionReady = true);
     });
   }
 

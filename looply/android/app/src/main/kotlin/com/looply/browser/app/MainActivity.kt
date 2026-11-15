@@ -163,6 +163,7 @@ class MainActivity : FlutterActivity() {
                         applyWindowTheme(mode, pureBlack)
                         result.success(true)
                     }
+                    "shareText" -> shareText(call, result)
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
                     "openNativeBrowser" -> openNativeBrowser(call, result)
@@ -605,10 +606,8 @@ class MainActivity : FlutterActivity() {
             when {
                 intent.getBooleanExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", false) ->
                     overridePendingTransition(0, 0)
-                intent.getBooleanExtra("com.looply.browser.app.orbit.FADE_ENTER_ANIMATION", false) ->
-                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
                 else ->
-                    overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
             }
         } catch (error: Exception) {
             pendingOrbitBrowserResult = null
@@ -792,6 +791,27 @@ class MainActivity : FlutterActivity() {
 
     private fun dpToPx(value: Int): Int =
         (value * resources.displayMetrics.density).roundToInt()
+
+    private fun shareText(call: MethodCall, result: MethodChannel.Result) {
+        val text = call.argument<String>("text")?.trim().orEmpty()
+        if (text.isEmpty()) {
+            result.error("empty_share_text", "Não existe conteúdo para partilhar.", null)
+            return
+        }
+        val subject = call.argument<String>("subject")?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: text
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                putExtra(Intent.EXTRA_SUBJECT, subject)
+            }
+            startActivity(Intent.createChooser(sendIntent, "Partilhar"))
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("share_failed", error.message ?: "Não foi possível partilhar.", null)
+        }
+    }
 
     private fun showNativePopup(call: MethodCall, result: MethodChannel.Result) {
         val items = call.argument<List<Map<String, Any?>>>("items")
@@ -982,7 +1002,7 @@ class MainActivity : FlutterActivity() {
                 this,
                 "search",
                 iconTint,
-                dpToPx(20),
+                dpToPx(24),
             )
         )
         toggle.isChecked = readAiSearchEnabled()
