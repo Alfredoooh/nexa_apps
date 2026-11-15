@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 import 'package:http/http.dart' as http;
 
@@ -18,6 +17,7 @@ import '../widgets/material_symbols.dart';
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isIncognito = false});
   final bool isIncognito;
+
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
@@ -30,7 +30,6 @@ class _SearchScreenState extends State<SearchScreen> {
   final Map<String, String?> _entityPhotoCache = <String, String?>{};
   final Map<String, Future<String?>> _entityPhotoRequests = <String, Future<String?>>{};
   int _requestSequence = 0;
-  bool _isFocused = false;
 
   @override
   void initState() {
@@ -38,7 +37,6 @@ class _SearchScreenState extends State<SearchScreen> {
     _controller = TextEditingController();
     _focusNode = FocusNode();
     _controller.addListener(_onQueryChanged);
-    _focusNode.addListener(_onFocusChanged);
     aiSearchModeEnabled.addListener(_onAiModeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusNode.requestFocus();
@@ -49,15 +47,10 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _debounce?.cancel();
     _controller.removeListener(_onQueryChanged);
-    _focusNode.removeListener(_onFocusChanged);
     aiSearchModeEnabled.removeListener(_onAiModeChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _onFocusChanged() {
-    if (mounted) setState(() => _isFocused = _focusNode.hasFocus);
   }
 
   void _onAiModeChanged() {
@@ -120,10 +113,10 @@ class _SearchScreenState extends State<SearchScreen> {
     return (value.startsWith('http://') || value.startsWith('https://')) ? value : 'https://$value';
   }
 
-  void _fillSuggestion(String suggestion) {
+  void _fillText(String value) {
     _controller.value = TextEditingValue(
-      text: suggestion,
-      selection: TextSelection.collapsed(offset: suggestion.length),
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
     );
     _focusNode.requestFocus();
   }
@@ -134,14 +127,20 @@ class _SearchScreenState extends State<SearchScreen> {
     FocusScope.of(context).unfocus();
     final isUrl = _looksLikeUrl(value);
     if (!widget.isIncognito && !isUrl) searchHistoryController.add(value);
+
     if (!isUrl && aiSearchModeEnabled.value) {
       final aiUrl = 'looply://ai-search?q=${Uri.encodeComponent(value)}';
-      final tab = tabsController.createBrowserTab(aiUrl, isIncognito: widget.isIncognito);
+      final tab = tabsController.createBrowserTab(
+        aiUrl,
+        title: 'AI Search',
+        isIncognito: widget.isIncognito,
+      );
       tabsController.activate(tab.id);
       Navigator.of(context).popUntil((route) => route.isFirst);
       ShellTabRequest.instance.requestBrowser(tab.id);
       return;
     }
+
     final url = isUrl ? _normalizeUrl(value) : activeSearchEngine.value.buildUrl(value);
     if (widget.isIncognito) {
       final tab = tabsController.createBrowserTab(url, title: value, isIncognito: true);
@@ -154,67 +153,138 @@ class _SearchScreenState extends State<SearchScreen> {
     openOrbitTab(context, url, title: value);
   }
 
-  void _showSearchHistory() {
-    if (widget.isIncognito) return;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      showDragHandle: false,
-      useSafeArea: true,
-      builder: (sheetContext) => Material(
-        color: panelColor(sheetContext),
-        surfaceTintColor: Colors.transparent,
-        clipBehavior: Clip.antiAlias,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: searchHistoryController,
-            builder: (context, _) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedText(context).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-                  child: Align(alignment: Alignment.centerLeft, child: Text(appText('recent_searches'), style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w800))),
+  Future<void> _copyCurrentPage(BrowserTab tab) async {
+    await Clipboard.setData(ClipboardData(text: tab.url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(appText('copied'))),
+    );
+  }
+
+  void _editCurrentPage(BrowserTab tab) {
+    _fillText(tab.url);
+  }
+
+  bool _isWebTab(BrowserTab? tab) {
+    if (tab == null || tab.kind == TabKind.appScreen) return false;
+    return tab.url.startsWith('https://') || tab.url.startsWith('http://');
+  }
+
+  Widget _currentPageCard(BrowserTab tab, Color text, Color muted) {
+    final host = Uri.tryParse(tab.url)?.host.replaceFirst(RegExp(r'^www\.'), '') ?? tab.url;
+    final title = (tab.title?.trim().isNotEmpty ?? false) ? tab.title!.trim() : host;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(2, 2, 2, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: settingsCardColor(context),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppMaterialIcon(AppIcons.globe, color: muted, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w600),
                 ),
-                if (searchHistoryController.queries.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
-                    child: Text(appText('no_saved_searches'), style: TextStyle(color: mutedText(context))),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .55),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: searchHistoryController.queries.length,
-                      itemBuilder: (context, index) {
-                        final query = searchHistoryController.queries[index];
-                        return ListTile(
-                          leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: mutedText(context)),
-                          title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: mainText(context))),
-                          trailing: AppMaterialIcon(AppIcons.arrowUpLeft, size: 18, color: mutedText(context)),
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            _submitSearch(query);
-                          },
-                        );
-                      },
-                    ),
-                  ),
-              ],
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 34, top: 3),
+            child: Text(
+              tab.url,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: accentColor(context), fontSize: 12.5),
             ),
           ),
-        ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const SizedBox(width: 30),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: () => _copyCurrentPage(tab),
+                  icon: AppMaterialIcon(AppIcons.copy, size: 18, color: muted),
+                  label: Text(
+                    appText('copy_address'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 12.5),
+                  ),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextButton.icon(
+                  onPressed: () => _editCurrentPage(tab),
+                  icon: AppMaterialIcon(AppIcons.pencilSimple, size: 18, color: muted),
+                  label: Text(
+                    appText('edit_link'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 12.5),
+                  ),
+                  style: TextButton.styleFrom(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  // Só aceita a imagem se a entidade for "ser humano" (P31=Q5) E o label
-  // devolvido pelo Wikidata for IGUAL (normalizado) ao texto da sugestão.
-  // Sem correspondência exata + humano confirmado, não mostra imagem.
+  Widget _searchEngineButton(Color muted) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: aiSearchModeEnabled,
+      builder: (context, aiEnabled, _) => IconButton(
+        tooltip: appText('search_engine'),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+        onPressed: () => showSearchEnginePicker(context),
+        icon: aiEnabled
+            ? AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context))
+            : ValueListenableBuilder<SearchEngine>(
+                valueListenable: activeSearchEngine,
+                builder: (context, engine, _) => ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.network(
+                    engine.faviconUrl,
+                    width: 21,
+                    height: 21,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => AppMaterialIcon(
+                      AppIcons.globe,
+                      color: muted,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  // Só aceita a imagem se a entidade for "ser humano" (P31=Q5) e o label
+  // devolvido pelo Wikidata corresponder exactamente ao texto da sugestão.
   void _resolveSuggestionPhotos(List<String> suggestions) {
     final candidates = suggestions.where((value) {
       final trimmed = value.trim();
@@ -234,8 +304,11 @@ class _SearchScreenState extends State<SearchScreen> {
 
   static const Set<String> _humanInstanceIds = <String>{'Q5'};
 
-  String _normalizeLabel(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '').replaceAll(RegExp(r'\s+'), ' ');
+  String _normalizeLabel(String value) => value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '')
+      .replaceAll(RegExp(r'\s+'), ' ');
 
   Future<String?> _lookupWikidataEntityPhoto(String name) async {
     try {
@@ -250,11 +323,10 @@ class _SearchScreenState extends State<SearchScreen> {
       final searchResponse = await http.get(searchUri, headers: _apiHeaders).timeout(const Duration(seconds: 4));
       if (searchResponse.statusCode != 200) return null;
       final searchJson = jsonDecode(utf8.decode(searchResponse.bodyBytes));
-      final results = (searchJson is Map ? searchJson['search'] : null);
+      final results = searchJson is Map ? searchJson['search'] : null;
       if (results is! List || results.isEmpty) return null;
 
       final normalizedQuery = _normalizeLabel(name);
-
       final exactMatches = results.whereType<Map>().where((item) {
         final label = item['label']?.toString();
         if (label != null && _normalizeLabel(label) == normalizedQuery) return true;
@@ -266,7 +338,6 @@ class _SearchScreenState extends State<SearchScreen> {
         }
         return false;
       }).toList(growable: false);
-
       if (exactMatches.isEmpty) return null;
 
       final ids = exactMatches
@@ -294,18 +365,15 @@ class _SearchScreenState extends State<SearchScreen> {
         if (entity is! Map) continue;
         final claims = entity['claims'];
         if (claims is! Map) continue;
-
         final instanceClaims = claims['P31'];
-        final isHuman = instanceClaims is List &&
-            instanceClaims.any((claim) {
-              final mainsnak = claim is Map ? claim['mainsnak'] : null;
-              final data = mainsnak is Map ? mainsnak['datavalue'] : null;
-              final value = data is Map ? data['value'] : null;
-              final entityId = value is Map ? value['id']?.toString() : null;
-              return entityId != null && _humanInstanceIds.contains(entityId);
-            });
+        final isHuman = instanceClaims is List && instanceClaims.any((claim) {
+          final mainsnak = claim is Map ? claim['mainsnak'] : null;
+          final data = mainsnak is Map ? mainsnak['datavalue'] : null;
+          final value = data is Map ? data['value'] : null;
+          final entityId = value is Map ? value['id']?.toString() : null;
+          return entityId != null && _humanInstanceIds.contains(entityId);
+        });
         if (!isHuman) continue;
-
         final imageClaims = claims['P18'];
         if (imageClaims is List && imageClaims.isNotEmpty) {
           final first = imageClaims.first;
@@ -376,42 +444,6 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _actionPill({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool active = false,
-  }) {
-    final foreground = active ? Colors.white : mutedText(context);
-    final background = active ? accentColor(context) : pillColor(context);
-    return M3EButton(
-      onPressed: onTap,
-      style: active ? M3EButtonStyle.filled : M3EButtonStyle.tonal,
-      size: M3EButtonSize.sm,
-      shape: M3EButtonShape.round,
-      decoration: M3EButtonDecoration.styleFrom(
-        backgroundColor: background,
-        foregroundColor: foreground,
-        minimumSize: const Size(0, 42),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        borderRadius: 22,
-        pressedRadius: 16,
-        motion: M3EMotion.expressiveSpatialDefault,
-        haptic: M3EHapticFeedback.light,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppMaterialIcon(icon, size: 17, color: foreground),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: foreground)),
-        ],
-      ),
-    );
-  }
-
-  // Botão circular preenchido para limpar o campo — bola cinza sólida com
-  // "x" branco/contrastante dentro, como no padrão de apps como o Chrome.
   Widget _clearButton(Color muted) {
     return GestureDetector(
       onTap: () {
@@ -431,6 +463,66 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Widget _recentSearches(List<String> queries, Color text, Color muted) {
+    if (queries.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 2, 6, 8),
+          child: Text(
+            appText('recent_searches'),
+            style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        M3ESegmentedColumn(
+          color: settingsCardColor(context),
+          outerRadius: 22,
+          innerRadius: 8,
+          gap: 2,
+          padding: EdgeInsets.zero,
+          onTap: (index) => _submitSearch(queries[index]),
+          children: [
+            for (final query in queries)
+              M3EListItem(
+                leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
+                headline: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
+                trailing: IconButton(
+                  tooltip: appText('fill_search'),
+                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                  onPressed: () => _fillText(query),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _suggestionList(Color text, Color muted) {
+    if (_suggestions.isEmpty) return const SizedBox.shrink();
+    return M3ESegmentedColumn(
+      color: settingsCardColor(context),
+      outerRadius: 22,
+      innerRadius: 8,
+      gap: 2,
+      padding: EdgeInsets.zero,
+      onTap: (index) => _submitSearch(_suggestions[index]),
+      children: [
+        for (final suggestion in _suggestions)
+          M3EListItem(
+            leading: _suggestionLeading(suggestion, muted),
+            headline: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
+            trailing: _suggestionTrailingPhoto(suggestion) ?? IconButton(
+              tooltip: appText('fill_search'),
+              icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+              onPressed: () => _fillText(suggestion),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -447,177 +539,90 @@ class _SearchScreenState extends State<SearchScreen> {
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () => FocusScope.of(context).unfocus(),
-            child: Column(children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: pillColor(context),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 2),
-                      IconButton(
-                        tooltip: _isFocused ? appText('search') : appText('back'),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-                        icon: AppMaterialIcon(
-                          _isFocused ? AppIcons.magnifyingGlass : AppIcons.arrowLeft,
-                          color: muted,
-                          size: 19,
-                        ),
-                        onPressed: () {
-                          if (_isFocused) {
-                            _submitSearch(_controller.text);
-                          } else {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          textInputAction: TextInputAction.search,
-                          textAlignVertical: TextAlignVertical.center,
-                          style: TextStyle(color: text, fontSize: 15),
-                          cursorColor: accentColor(context),
-                          onSubmitted: _submitSearch,
-                          decoration: InputDecoration(
-                            hintText: appText('search_hint'),
-                            hintStyle: TextStyle(color: muted, fontSize: 14),
-                            contentPadding: EdgeInsets.zero,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            isDense: true,
-                            isCollapsed: true,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 12),
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: pillColor(context),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 2),
+                        _searchEngineButton(muted),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            focusNode: _focusNode,
+                            textInputAction: TextInputAction.search,
+                            textAlignVertical: TextAlignVertical.center,
+                            style: TextStyle(color: text, fontSize: 15),
+                            cursorColor: accentColor(context),
+                            onSubmitted: _submitSearch,
+                            decoration: InputDecoration(
+                              hintText: appText('search_hint'),
+                              hintStyle: TextStyle(color: muted, fontSize: 14),
+                              contentPadding: EdgeInsets.zero,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              isDense: true,
+                              isCollapsed: true,
+                            ),
                           ),
                         ),
-                      ),
-                      if (_controller.text.isNotEmpty) _clearButton(muted),
-                      const SizedBox(width: 4),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: aiSearchModeEnabled,
-                        builder: (context, aiEnabled, _) => _actionPill(
-                          icon: AppIcons.sparkles,
-                          label: appText('ai_mode'),
-                          active: aiEnabled,
-                          onTap: () => aiSearchModeEnabled.value = !aiEnabled,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _actionPill(
-                        icon: AppIcons.microphone,
-                        label: appText('voice_search'),
-                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(appText('voice_unavailable')))),
-                      ),
-                      if (!widget.isIncognito) ...[
-                        const SizedBox(width: 8),
-                        _actionPill(
-                          icon: AppIcons.clockCounterClockwise,
-                          label: appText('search_history'),
-                          onTap: _showSearchHistory,
-                        ),
+                        if (_controller.text.isNotEmpty) _clearButton(muted),
+                        const SizedBox(width: 5),
                       ],
-                      const SizedBox(width: 8),
-                      _actionPill(
-                        icon: AppIcons.compass,
-                        label: appText('search_engine'),
-                        onTap: () => showSearchEnginePicker(context),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: _controller.text.trim().isEmpty
-                    ? (widget.isIncognito ? const SizedBox.shrink() : AnimatedBuilder(
-                        animation: searchHistoryController,
-                        builder: (context, _) {
-                          final queries = searchHistoryController.queries;
-                          if (queries.isEmpty) return const SizedBox.shrink();
-                          return ListView(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 20),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(6, 2, 6, 8),
-                                child: Text(appText('recent_searches'), style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700)),
-                              ),
-                              M3ESegmentedColumn(
+                Expanded(
+                  child: AnimatedBuilder(
+                    animation: Listenable.merge([tabsController, searchHistoryController]),
+                    builder: (context, _) {
+                      final activeTab = tabsController.activeTab;
+                      final showPageCard = _isWebTab(activeTab);
+                      final isEmpty = _controller.text.trim().isEmpty;
+                      final queries = widget.isIncognito ? const <String>[] : searchHistoryController.queries;
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        children: [
+                          if (showPageCard) _currentPageCard(activeTab!, text, muted),
+                          if (isEmpty) _recentSearches(queries, text, muted),
+                          if (!isEmpty && aiSearchModeEnabled.value)
+                            Container(
+                              margin: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
                                 color: settingsCardColor(context),
-                                outerRadius: 22,
-                                innerRadius: 8,
-                                gap: 2,
-                                padding: EdgeInsets.zero,
-                                onTap: (index) => _submitSearch(queries[index]),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
                                 children: [
-                                  for (final query in queries)
-                                    M3EListItem(
-                                      leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: muted, size: 20),
-                                      headline: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
-                                      trailing: IconButton(
-                                        tooltip: appText('fill_search'),
-                                        icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
-                                        onPressed: () => _fillSuggestion(query),
-                                      ),
+                                  AppMaterialIcon(AppIcons.sparkles, color: accentColor(context), size: 21),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'A pesquisa será aberta na tela AI Search.',
+                                      style: TextStyle(color: muted, fontSize: 13),
                                     ),
+                                  ),
                                 ],
                               ),
-                            ],
-                          );
-                        },
-                      ))
-                    // Lista de sugestões com animação suave e rápida: cada
-                    // item entra com fade + leve deslocamento vertical.
-                    : _suggestions.isEmpty
-                        ? const SizedBox.shrink()
-                        : M3ESegmentedList.builder(
-                            itemCount: _suggestions.length,
-                            listPadding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
-                            color: settingsCardColor(context),
-                            outerRadius: 22,
-                            innerRadius: 8,
-                            gap: 2,
-                            onTap: (index) => _submitSearch(_suggestions[index]),
-                            itemBuilder: (context, index) {
-                              final suggestion = _suggestions[index];
-                              final photo = _suggestionTrailingPhoto(suggestion);
-                              return TweenAnimationBuilder<double>(
-                                key: ValueKey(suggestion),
-                                tween: Tween(begin: 0, end: 1),
-                                duration: Duration(milliseconds: 180 + (index * 25).clamp(0, 150)),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, value, child) => Opacity(
-                                  opacity: value,
-                                  child: Transform.translate(offset: Offset(0, (1 - value) * 7), child: child),
-                                ),
-                                child: M3EListItem(
-                                  leading: _suggestionLeading(suggestion, muted),
-                                  headline: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
-                                  trailing: photo ?? IconButton(
-                                    tooltip: appText('fill_search'),
-                                    icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
-                                    onPressed: () => _fillSuggestion(suggestion),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-              ),
-            ]),
+                            ),
+                          if (!isEmpty && !aiSearchModeEnabled.value) _suggestionList(text, muted),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -36,7 +36,7 @@ const Map<String, String> frScreenTranslations = <String, String>{
     'open_private_tab': 'Ouvrir un onglet privé', 'select_tabs': 'Sélectionner les onglets', 'close_all_tabs': 'Fermer tous les onglets',
     'finish_selection': 'Terminer la sélection', 'no_tabs': 'Aucun onglet ouvert', 'close_tab': 'Fermer l’onglet',
     'go_back': 'Retour', 'go_forward': 'Avancer', 'find_in_page': 'Rechercher dans la page', 'add_bookmark': 'Ajouter aux favoris',
-    'reload_page': 'Actualiser la page', 'copy_address': 'Copier l’adresse', 'home_page': 'Page d’accueil', 'copied': 'Adresse copiée.',
+    'reload_page': 'Actualiser la page', 'copy_address': 'Copier l’adresse', 'edit_link': 'Modifier le lien', 'home_page': 'Page d’accueil', 'copied': 'Adresse copiée.',
     'bookmark_saved': 'Favori enregistré.', 'already_bookmarked': 'Cette page est déjà dans vos favoris.',
     'force_dark_subtitle': 'Applique un thème sombre même aux sites sans thème sombre',
     'adaptive_toolbar_subtitle': 'Adapte la barre à la couleur dominante de la page', 'deep_dark': 'Très sombre',

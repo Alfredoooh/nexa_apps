@@ -35,7 +35,7 @@ const Map<String, String> arScreenTranslations = <String, String>{
     'open_private_tab': 'فتح علامة تبويب خاصة', 'select_tabs': 'تحديد علامات التبويب', 'close_all_tabs': 'إغلاق جميع علامات التبويب',
     'finish_selection': 'إنهاء التحديد', 'no_tabs': 'لا توجد علامات تبويب مفتوحة', 'close_tab': 'إغلاق علامة التبويب',
     'go_back': 'رجوع', 'go_forward': 'تقدم', 'find_in_page': 'بحث في الصفحة', 'add_bookmark': 'إضافة إشارة مرجعية',
-    'reload_page': 'إعادة تحميل الصفحة', 'copy_address': 'نسخ العنوان', 'home_page': 'الصفحة الرئيسية', 'copied': 'تم نسخ العنوان.',
+    'reload_page': 'إعادة تحميل الصفحة', 'copy_address': 'نسخ العنوان', 'edit_link': 'تعديل الرابط', 'home_page': 'الصفحة الرئيسية', 'copied': 'تم نسخ العنوان.',
     'bookmark_saved': 'تم حفظ الإشارة المرجعية.', 'already_bookmarked': 'هذه الصفحة محفوظة بالفعل.',
     'force_dark_subtitle': 'يفرض طبقة داكنة حتى على المواقع التي لا تدعم المظهر الداكن',
     'adaptive_toolbar_subtitle': 'يضبط شريط الأدوات على اللون السائد للصفحة', 'deep_dark': 'داكن عميق',

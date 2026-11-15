@@ -30,6 +30,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.transition.Fade
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.LinearInterpolator
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -64,6 +65,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.slider.Slider
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.net.URLConnection
@@ -193,6 +195,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var toolbar: LinearLayout
     private lateinit var appBarContainer: LinearLayout
     private lateinit var titlePill: LinearLayout
+    private lateinit var swipeRefreshLayout: SwipeRefreshLayout
     private lateinit var moreButton: View
     private lateinit var faviconView: ImageView
     private lateinit var titleView: TextView
@@ -485,7 +488,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
             null,
             android.R.attr.progressBarStyleHorizontal
         ).apply {
-            max = 100
+            // Mais passos internos evitam o movimento aos saltos quando o
+            // WebView actualiza o progresso em rajadas curtas.
+            max = 1000
             progress = 0
             progressTintList =
                 android.content.res.ColorStateList.valueOf(accent)
@@ -589,7 +594,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
             overScrollMode = View.OVER_SCROLL_NEVER
         }
 
-        root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
+        swipeRefreshLayout = SwipeRefreshLayout(this).apply {
+            setColorSchemeColors(accent)
+            setProgressBackgroundColorSchemeColor(toolbarPillColor())
+            setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 }
+            isEnabled = !previewOnly
+            setOnRefreshListener {
+                if (::webView.isInitialized) webView.reload()
+                else isRefreshing = false
+            }
+            addView(webView, ViewGroup.LayoutParams(-1, -1))
+        }
+        root.addView(swipeRefreshLayout, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         applySystemBars()
 
@@ -677,7 +693,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
      */
     private fun setProgressSmooth(target: Int, immediate: Boolean = false) {
         if (!::progress.isInitialized) return
-        progressTarget = target.coerceIn(0, 100)
+        progressTarget = target.coerceIn(0, 100) * 10
 
         if (immediate) {
             progressAnimator?.cancel()
@@ -694,27 +710,48 @@ class OrbitBrowserActivity : AppCompatActivity() {
         if (startValue == progressTarget) return
         val initialDistance = kotlin.math.abs(progressTarget - startValue)
         val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = (220L + initialDistance * 2L).coerceIn(240L, 420L)
-            interpolator = DecelerateInterpolator(1.15f)
+            duration = (360L + initialDistance / 2L).coerceIn(380L, 680L)
+            interpolator = LinearInterpolator()
         }
         animator.addUpdateListener { update ->
             if (::progress.isInitialized && !isFinishing) {
                 val targetNow = progressTarget
                 val fraction = update.animatedFraction
                 progress.progress = (startValue + (targetNow - startValue) * fraction)
-                    .toInt().coerceIn(0, 100)
+                    .toInt().coerceIn(0, 1000)
             }
         }
         animator.addListener(object : android.animation.AnimatorListenerAdapter() {
             override fun onAnimationEnd(animation: android.animation.Animator) {
                 if (progressAnimator === animator) progressAnimator = null
                 if (!isFinishing && progress.progress != progressTarget) {
-                    setProgressSmooth(progressTarget)
+                    setProgressSmooth((progressTarget / 10).coerceIn(0, 100))
+                } else if (!isFinishing && progressTarget >= 1000 && progress.progress >= 1000) {
+                    hideProgressIfComplete()
                 }
             }
         })
         progressAnimator = animator
         animator.start()
+    }
+
+    private fun hideProgressIfComplete() {
+        if (!::progress.isInitialized || isFinishing ||
+            progressTarget < 1000 || progress.progress < 1000 ||
+            progress.visibility != View.VISIBLE
+        ) return
+
+        progress.animate().cancel()
+        progress.animate()
+            .alpha(0f)
+            .setDuration(160L)
+            .withEndAction {
+                if (!isFinishing && progressTarget >= 1000 && progress.progress >= 1000) {
+                    progress.visibility = View.GONE
+                }
+                progress.alpha = 1f
+            }
+            .start()
     }
 
     override fun onResume() {
@@ -878,6 +915,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 favicon: Bitmap?
             ) {
                 currentUrl = url
+                currentTitle = ""
                 pageToolbarColor = null
                 lastScrollDirection = 0
                 accumulatedScrollDelta = 0
@@ -886,6 +924,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 hideToolbar(false)
                 setProgressSmooth(0, immediate = true)
                 progress.visibility = View.VISIBLE
+                progress.alpha = 1f
                 refreshTitle()
                 updateToolbarColors()
             }
@@ -894,12 +933,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 currentUrl = url
                 currentTitle = view.title?.takeIf { it.isNotBlank() } ?: hostOf(url)
 
+                if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
                 setProgressSmooth(100)
-                progress.postDelayed({
-                    if (!isFinishing && progress.progress == 100) {
-                        progress.visibility = View.GONE
-                    }
-                }, 460)
+                progress.postDelayed({ hideProgressIfComplete() }, 520L)
 
                 refreshTitle()
                 updateToolbarColors()
@@ -926,6 +962,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 error: WebResourceError
             ) {
                 if (request.isForMainFrame) {
+                    if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
                     showBrowserSnackbar(
                         error.description?.toString()
                             ?: menuText("loadingError", "Could not load this page.")
@@ -940,11 +977,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 setProgressSmooth(newProgress)
                 progress.visibility = View.VISIBLE
                 if (newProgress >= 100) {
-                    progress.postDelayed({
-                        if (!isFinishing && progress.progress >= 100) {
-                            progress.visibility = View.GONE
-                        }
-                    }, 460L)
+                    progress.postDelayed({ hideProgressIfComplete() }, 460L)
                 }
             }
 
@@ -971,7 +1004,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 customView = view
                 customViewCallback = callback
 
-                root.removeView(webView)
+                swipeRefreshLayout.removeView(webView)
+                root.removeView(swipeRefreshLayout)
                 root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
 
                 appBarContainer.visibility = View.GONE
@@ -1185,7 +1219,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
         val popupWidth = minOf(dp(360), screenWidth - dp(24)).coerceAtLeast(dp(260))
-        val maxPopupHeight = (screenHeight * .56f).toInt().coerceAtLeast(dp(280))
+        val maxPopupHeight = (screenHeight * .46f).toInt().coerceAtLeast(dp(260))
         val surface = when {
             !dark -> Color.WHITE
             pureBlack -> Color.rgb(16, 16, 16)
@@ -1394,7 +1428,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         menuRow(menuText("share", "Share page"), "share") { shareAddress() }
         menuRow(menuText("settings", "Browser settings"), "settings") { finishToFlutter("settings") }
 
-        val menuHeight = minOf(dp(430), maxPopupHeight - dp(66)).coerceAtLeast(dp(130))
+        val menuHeight = minOf(dp(300), maxPopupHeight - dp(66)).coerceAtLeast(dp(120))
         content.addView(menuScroll, LinearLayout.LayoutParams(-1, menuHeight))
         val popupHeight = (menuHeight + dp(76)).coerceAtMost(maxPopupHeight)
 
@@ -1416,18 +1450,22 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         val anchorLocation = IntArray(2)
         anchor.getLocationOnScreen(anchorLocation)
-        val availableAbove = anchorLocation[1] - statusBarInsetPx()
-        val showAbove = availableAbove >= popupHeight + dp(16)
         val popupX = (anchorLocation[0] + anchor.width - popupWidth)
             .coerceIn(dp(12), (screenWidth - popupWidth - dp(12)).coerceAtLeast(dp(12)))
-        val popupY = if (showAbove) {
-            (anchorLocation[1] - popupHeight - dp(8))
-                .coerceAtLeast(statusBarInsetPx() + dp(8))
-        } else {
-            (anchorLocation[1] + anchor.height + dp(8))
-                .coerceAtMost((screenHeight - popupHeight - navigationBarInsetPx() - dp(8)).coerceAtLeast(dp(8)))
-        }
+        // A janela fica presa à zona superior, logo abaixo do botão de menu;
+        // não é posicionada no centro do ecrã nem cresce até ocupar quase tudo.
+        val desiredTop = anchorLocation[1] + anchor.height + dp(5)
+        val maxTop = (screenHeight - popupHeight - navigationBarInsetPx() - dp(8)).coerceAtLeast(statusBarInsetPx() + dp(8))
+        val popupY = desiredTop.coerceIn(statusBarInsetPx() + dp(8), maxTop)
+        content.alpha = 0f
+        content.translationY = -dp(10).toFloat()
         popup.showAtLocation(root, Gravity.TOP or Gravity.LEFT, popupX, popupY)
+        content.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(250L)
+            .setInterpolator(DecelerateInterpolator(1.45f))
+            .start()
         quickRow.post {
             for (index in 0 until quickRow.childCount) {
                 val child = quickRow.getChildAt(index)
@@ -1927,14 +1965,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private fun refreshTitle() {
         if (!::titleView.isInitialized) return
 
-        val address = runCatching {
+        val fallback = runCatching {
             val uri = Uri.parse(currentUrl)
             uri.host?.removePrefix("www.")?.ifBlank { currentUrl } ?: currentUrl
         }.getOrDefault(currentUrl)
 
-        titleView.text = address.ifBlank {
-            currentTitle.ifBlank { "BrowseIt" }
-        }
+        titleView.text = currentTitle.trim().ifBlank { fallback.ifBlank { "BrowseIt" } }
     }
 
     private fun updateToolbarColors() {
@@ -2025,8 +2061,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun toolbarPillColor(): Int {
         val base = toolbarBg
-        val neutral = if (isLight(base)) Color.WHITE else Color.BLACK
-        val fraction = if (isLight(base)) .10f else .16f
+        // Sobre barras claras, escurece ligeiramente o pill (branco -> cinza
+        // muito claro). Sobre barras escuras, clareia-o para criar separação.
+        val neutral = if (isLight(base)) Color.BLACK else Color.WHITE
+        val fraction = if (isLight(base)) .055f else .12f
         return blendColor(base, neutral, fraction)
     }
 
@@ -2145,10 +2183,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
             height = dp(58)
         }
 
-        root.addView(
-            webView,
-            LinearLayout.LayoutParams(-1, 0, 1f)
-        )
+        if (webView.parent == null) {
+            swipeRefreshLayout.addView(webView, ViewGroup.LayoutParams(-1, -1))
+        }
+        if (swipeRefreshLayout.parent == null) {
+            root.addView(swipeRefreshLayout, LinearLayout.LayoutParams(-1, 0, 1f))
+        }
 
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         applySystemBars()

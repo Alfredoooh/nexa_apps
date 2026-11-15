@@ -37,7 +37,7 @@ const Map<String, String> ptScreenTranslations = <String, String>{
     'new_tab': 'Abrir novo separador', 'open_private_tab': 'Abrir separador anónimo', 'select_tabs': 'Selecionar separadores',
     'close_all_tabs': 'Eliminar todos os separadores', 'finish_selection': 'Concluir seleção', 'no_tabs': 'Nenhum separador aberto',
     'close_tab': 'Fechar aba', 'go_back': 'Retroceder', 'go_forward': 'Avançar', 'find_in_page': 'Pesquisar na página',
-    'add_bookmark': 'Adicionar marcador', 'reload_page': 'Atualizar página', 'copy_address': 'Copiar endereço',
+    'add_bookmark': 'Adicionar marcador', 'reload_page': 'Atualizar página', 'copy_address': 'Copiar endereço', 'edit_link': 'Editar link',
     'home_page': 'Página inicial', 'copied': 'Endereço copiado.', 'bookmark_saved': 'Marcador guardado.',
     'already_bookmarked': 'Esta página já está nos marcadores.', 'force_dark_subtitle': 'Aplica uma camada escura mesmo em sites sem tema escuro',
     'adaptive_toolbar_subtitle': 'Adapta a barra à cor dominante da página', 'deep_dark': 'Escuro profundo',

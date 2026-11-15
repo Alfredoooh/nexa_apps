@@ -58,6 +58,12 @@ internal object MaterialSymbolsRounded {
         "settings" to 0xE8B8,
         "open_in_new" to 0xE89E,
         "image" to 0xE3F4,
+        "audio_file" to 0xEB82,
+        "description" to 0xE873,
+        "chevron_left" to 0xE5CB,
+        "chevron_right" to 0xE5CC,
+        "play_arrow" to 0xE037,
+        "pause" to 0xE034,
         "star" to 0xF09A,
         "domino_mask" to 0xF5E4,
     )

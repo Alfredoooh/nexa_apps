@@ -32,7 +32,7 @@ const Map<String, String> jaScreenTranslations = <String, String>{
     'open_private_tab': 'プライベートタブを開く', 'select_tabs': 'タブを選択', 'close_all_tabs': 'すべてのタブを閉じる',
     'finish_selection': '選択を完了', 'no_tabs': '開いているタブはありません', 'close_tab': 'タブを閉じる',
     'go_back': '戻る', 'go_forward': '進む', 'find_in_page': 'ページ内検索', 'add_bookmark': 'ブックマークに追加',
-    'reload_page': 'ページを再読み込み', 'copy_address': 'アドレスをコピー', 'home_page': 'ホームページ', 'copied': 'アドレスをコピーしました。',
+    'reload_page': 'ページを再読み込み', 'copy_address': 'アドレスをコピー', 'edit_link': 'リンクを編集', 'home_page': 'ホームページ', 'copied': 'アドレスをコピーしました。',
     'bookmark_saved': 'ブックマークを保存しました。', 'already_bookmarked': 'このページは既にブックマークされています。',
     'force_dark_subtitle': 'ダークテーマに対応していないサイトにも暗い表示を適用します',
     'adaptive_toolbar_subtitle': 'ページの主要な色に合わせてツールバーを調整します', 'deep_dark': 'ディープダーク',

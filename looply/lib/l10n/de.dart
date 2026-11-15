@@ -36,7 +36,7 @@ const Map<String, String> deScreenTranslations = <String, String>{
     'open_private_tab': 'Privaten Tab öffnen', 'select_tabs': 'Tabs auswählen', 'close_all_tabs': 'Alle Tabs schließen',
     'finish_selection': 'Auswahl beenden', 'no_tabs': 'Keine Tabs geöffnet', 'close_tab': 'Tab schließen',
     'go_back': 'Zurück', 'go_forward': 'Vorwärts', 'find_in_page': 'Auf Seite suchen', 'add_bookmark': 'Lesezeichen hinzufügen',
-    'reload_page': 'Seite neu laden', 'copy_address': 'Adresse kopieren', 'home_page': 'Startseite', 'copied': 'Adresse kopiert.',
+    'reload_page': 'Seite neu laden', 'copy_address': 'Adresse kopieren', 'edit_link': 'Link bearbeiten', 'home_page': 'Startseite', 'copied': 'Adresse kopiert.',
     'bookmark_saved': 'Lesezeichen gespeichert.', 'already_bookmarked': 'Diese Seite ist bereits gespeichert.',
     'force_dark_subtitle': 'Wendet auch auf Websites ohne dunkles Design einen dunklen Filter an',
     'adaptive_toolbar_subtitle': 'Passt die Symbolleiste an die dominante Seitenfarbe an', 'deep_dark': 'Tiefschwarz',

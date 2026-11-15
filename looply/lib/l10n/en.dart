@@ -36,7 +36,7 @@ const Map<String, String> enScreenTranslations = <String, String>{
     'open_private_tab': 'Open private tab', 'select_tabs': 'Select tabs', 'close_all_tabs': 'Close all tabs',
     'finish_selection': 'Done selecting', 'no_tabs': 'No tabs open', 'close_tab': 'Close tab', 'go_back': 'Go back',
     'go_forward': 'Go forward', 'find_in_page': 'Find in page', 'add_bookmark': 'Add bookmark',
-    'reload_page': 'Reload page', 'copy_address': 'Copy address', 'home_page': 'Home page', 'copied': 'Address copied.',
+    'reload_page': 'Reload page', 'copy_address': 'Copy address', 'edit_link': 'Edit link', 'home_page': 'Home page', 'copied': 'Address copied.',
     'bookmark_saved': 'Bookmark saved.', 'already_bookmarked': 'This page is already bookmarked.',
     'force_dark_subtitle': 'Applies a dark layer even to sites without a dark theme',
     'adaptive_toolbar_subtitle': 'Matches the toolbar to the page’s dominant color', 'deep_dark': 'Deep dark',

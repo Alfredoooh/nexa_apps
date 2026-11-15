@@ -36,7 +36,7 @@ const Map<String, String> esScreenTranslations = <String, String>{
     'open_private_tab': 'Abrir pestaña privada', 'select_tabs': 'Seleccionar pestañas', 'close_all_tabs': 'Cerrar todas las pestañas',
     'finish_selection': 'Finalizar selección', 'no_tabs': 'No hay pestañas abiertas', 'close_tab': 'Cerrar pestaña',
     'go_back': 'Atrás', 'go_forward': 'Adelante', 'find_in_page': 'Buscar en la página', 'add_bookmark': 'Añadir marcador',
-    'reload_page': 'Actualizar página', 'copy_address': 'Copiar dirección', 'home_page': 'Página de inicio', 'copied': 'Dirección copiada.',
+    'reload_page': 'Actualizar página', 'copy_address': 'Copiar dirección', 'edit_link': 'Editar enlace', 'home_page': 'Página de inicio', 'copied': 'Dirección copiada.',
     'bookmark_saved': 'Marcador guardado.', 'already_bookmarked': 'Esta página ya está en marcadores.',
     'force_dark_subtitle': 'Aplica una capa oscura incluso a sitios sin tema oscuro',
     'adaptive_toolbar_subtitle': 'Adapta la barra al color dominante de la página', 'deep_dark': 'Oscuro profundo',

@@ -34,7 +34,7 @@ const Map<String, String> ruScreenTranslations = <String, String>{
     'open_private_tab': 'Открыть приватную вкладку', 'select_tabs': 'Выбрать вкладки', 'close_all_tabs': 'Закрыть все вкладки',
     'finish_selection': 'Завершить выбор', 'no_tabs': 'Нет открытых вкладок', 'close_tab': 'Закрыть вкладку',
     'go_back': 'Назад', 'go_forward': 'Вперёд', 'find_in_page': 'Найти на странице', 'add_bookmark': 'Добавить закладку',
-    'reload_page': 'Обновить страницу', 'copy_address': 'Копировать адрес', 'home_page': 'Главная страница', 'copied': 'Адрес скопирован.',
+    'reload_page': 'Обновить страницу', 'copy_address': 'Копировать адрес', 'edit_link': 'Изменить ссылку', 'home_page': 'Главная страница', 'copied': 'Адрес скопирован.',
     'bookmark_saved': 'Закладка сохранена.', 'already_bookmarked': 'Эта страница уже в закладках.',
     'force_dark_subtitle': 'Затемняет даже сайты без собственной тёмной темы',
     'adaptive_toolbar_subtitle': 'Подстраивает панель под основной цвет страницы', 'deep_dark': 'Глубокий тёмный',

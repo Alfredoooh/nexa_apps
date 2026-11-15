@@ -31,7 +31,7 @@ const Map<String, String> zhScreenTranslations = <String, String>{
     'open_private_tab': '打开无痕标签页', 'select_tabs': '选择标签页', 'close_all_tabs': '关闭所有标签页',
     'finish_selection': '完成选择', 'no_tabs': '没有打开的标签页', 'close_tab': '关闭标签页', 'go_back': '后退',
     'go_forward': '前进', 'find_in_page': '在页面中查找', 'add_bookmark': '添加书签', 'reload_page': '刷新页面',
-    'copy_address': '复制地址', 'home_page': '主页', 'copied': '地址已复制。', 'bookmark_saved': '书签已保存。',
+    'copy_address': '复制地址', 'edit_link': '编辑链接', 'home_page': '主页', 'copied': '地址已复制。', 'bookmark_saved': '书签已保存。',
     'already_bookmarked': '此页面已添加书签。', 'force_dark_subtitle': '为没有深色主题的网站强制应用深色效果',
     'adaptive_toolbar_subtitle': '工具栏将匹配页面的主色调', 'deep_dark': '深黑',
     'add': '添加',

@@ -236,7 +236,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       reverseDuration: const Duration(milliseconds: 390),
     )..value = 1;
     _browserSlidePosition = Tween<Offset>(
-      begin: const Offset(0, 1),
+      begin: const Offset(1, 0),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _browserSlideController,
@@ -1268,8 +1268,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         extendBody: true,
         body: Stack(
           children: [
-            // Página de trás: ao entrar no Orbit é empurrada para baixo e
-            // ligeiramente reduzida. Ao fechar, regressa à posição original.
+            // Página anterior: desloca-se ligeiramente para a esquerda
+            // enquanto o browser entra pela direita.
             // Este é o conteúdo vivo da tela anterior, não uma screenshot.
             Positioned.fill(
               child: Offstage(
@@ -1289,19 +1289,16 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                     ),
                   ),
                   builder: (context, child) {
-                    // Usa exatamente o mesmo progresso curvo da página que
-                    // sobe, para que a tela anterior seja empurrada ao mesmo
-                    // ritmo e regresse sincronizada no fecho.
+                    // Usa o mesmo progresso curvo da página que entra
+                    // pela direita para manter as duas camadas sincronizadas.
                     final progress = _activeBrowserTabId == null
                         ? 0.0
-                        : (1 - _browserSlidePosition.value.dy).clamp(0.0, 1.0).toDouble();
+                        : (1 - _browserSlidePosition.value.dx).clamp(0.0, 1.0).toDouble();
                     return IgnorePointer(
                       ignoring: _activeBrowserTabId != null,
-                      // Movimento simples por composição: evita recalcular
-                      // clip arredondado e escala em todos os frames, mantendo
-                      // a sensação de a tela anterior ser empurrada para baixo.
+                      // O conteúdo anterior recua subtilmente para a esquerda.
                       child: Transform.translate(
-                        offset: Offset(0, 16 * progress),
+                        offset: Offset(-16 * progress, 0),
                         child: child,
                       ),
                     );

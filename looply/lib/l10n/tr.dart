@@ -32,7 +32,7 @@ const Map<String, String> trScreenTranslations = <String, String>{
     'open_private_tab': 'Gizli sekme aç', 'select_tabs': 'Sekmeleri seç', 'close_all_tabs': 'Tüm sekmeleri kapat',
     'finish_selection': 'Seçimi bitir', 'no_tabs': 'Açık sekme yok', 'close_tab': 'Sekmeyi kapat', 'go_back': 'Geri',
     'go_forward': 'İleri', 'find_in_page': 'Sayfada bul', 'add_bookmark': 'Yer imi ekle', 'reload_page': 'Sayfayı yenile',
-    'copy_address': 'Adresi kopyala', 'home_page': 'Ana sayfa', 'copied': 'Adres kopyalandı.', 'bookmark_saved': 'Yer imi kaydedildi.',
+    'copy_address': 'Adresi kopyala', 'edit_link': 'Bağlantıyı düzenle', 'home_page': 'Ana sayfa', 'copied': 'Adres kopyalandı.', 'bookmark_saved': 'Yer imi kaydedildi.',
     'already_bookmarked': 'Bu sayfa zaten yer imlerinde.', 'force_dark_subtitle': 'Koyu teması olmayan sitelere de koyu görünüm uygular',
     'adaptive_toolbar_subtitle': 'Araç çubuğunu sayfanın baskın rengine uyarlar', 'deep_dark': 'Derin koyu',
     'add': 'Ekle',

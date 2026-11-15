@@ -12,6 +12,7 @@ import '../shell/shell_tab_request.dart';
 import '../shell/fade_page_route.dart';
 import 'bookmarks_screen.dart';
 import 'downloads_screen.dart';
+import 'ai_search_screen.dart';
 import 'history_screen.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
@@ -115,18 +116,13 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     var safeStartUrl =
         startUrl.isEmpty ? 'https://www.google.com' : startUrl;
 
-    // A antiga página interna de pesquisa IA não fazia parte
-    // do motor Kotlin. Mantém-se a pesquisa através do Google.
+    // A pesquisa com IA é uma página Flutter interna, não uma navegação
+    // para um motor web nem um documento HTML servido pela WebView.
     if (safeStartUrl.startsWith('looply://ai-search')) {
-      final query =
-          Uri.tryParse(safeStartUrl)?.queryParameters['q'] ?? '';
-
-      safeStartUrl =
-          'https://www.google.com/search?q=${Uri.encodeQueryComponent(query)}';
-
-      if (!widget.previewOnly) {
-        tabsController.updateTab(widget.tabId, url: safeStartUrl);
-      }
+      _lastUrl = safeStartUrl;
+      _complete(widget.firstLoadCompleter);
+      _opening = false;
+      return;
     }
 
     _lastUrl = safeStartUrl;
@@ -387,6 +383,15 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeUrl = tabsController.getTab(widget.tabId)?.url ?? widget.initialUrl;
+    final internalUri = Uri.tryParse(activeUrl);
+    if (internalUri?.scheme == 'looply' && internalUri?.host == 'ai-search') {
+      return AiSearchScreen(
+        key: ValueKey<String>(activeUrl),
+        initialQuery: internalUri?.queryParameters['q'] ?? '',
+      );
+    }
+
     final isDark =
         Theme.of(context).brightness == Brightness.dark ||
             widget.isIncognito;

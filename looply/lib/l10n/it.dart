@@ -36,7 +36,7 @@ const Map<String, String> itScreenTranslations = <String, String>{
     'open_private_tab': 'Apri scheda privata', 'select_tabs': 'Seleziona schede', 'close_all_tabs': 'Chiudi tutte le schede',
     'finish_selection': 'Termina selezione', 'no_tabs': 'Nessuna scheda aperta', 'close_tab': 'Chiudi scheda',
     'go_back': 'Indietro', 'go_forward': 'Avanti', 'find_in_page': 'Cerca nella pagina', 'add_bookmark': 'Aggiungi segnalibro',
-    'reload_page': 'Ricarica pagina', 'copy_address': 'Copia indirizzo', 'home_page': 'Pagina iniziale', 'copied': 'Indirizzo copiato.',
+    'reload_page': 'Ricarica pagina', 'copy_address': 'Copia indirizzo', 'edit_link': 'Modifica link', 'home_page': 'Pagina iniziale', 'copied': 'Indirizzo copiato.',
     'bookmark_saved': 'Segnalibro salvato.', 'already_bookmarked': 'Questa pagina è già nei segnalibri.',
     'force_dark_subtitle': 'Applica un livello scuro anche ai siti senza tema scuro',
     'adaptive_toolbar_subtitle': 'Adatta la barra al colore dominante della pagina', 'deep_dark': 'Scuro profondo',

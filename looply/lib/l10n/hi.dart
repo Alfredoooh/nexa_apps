@@ -31,7 +31,7 @@ const Map<String, String> hiScreenTranslations = <String, String>{
     'open_private_tab': 'निजी टैब खोलें', 'select_tabs': 'टैब चुनें', 'close_all_tabs': 'सभी टैब बंद करें',
     'finish_selection': 'चयन पूरा करें', 'no_tabs': 'कोई टैब खुला नहीं है', 'close_tab': 'टैब बंद करें', 'go_back': 'पीछे जाएं',
     'go_forward': 'आगे जाएं', 'find_in_page': 'पेज में खोजें', 'add_bookmark': 'बुकमार्क जोड़ें', 'reload_page': 'पेज रीलोड करें',
-    'copy_address': 'पता कॉपी करें', 'home_page': 'होम पेज', 'copied': 'पता कॉपी हो गया।', 'bookmark_saved': 'बुकमार्क सहेजा गया।',
+    'copy_address': 'पता कॉपी करें', 'edit_link': 'लिंक संपादित करें', 'home_page': 'होम पेज', 'copied': 'पता कॉपी हो गया।', 'bookmark_saved': 'बुकमार्क सहेजा गया।',
     'already_bookmarked': 'यह पेज पहले से बुकमार्क है।', 'force_dark_subtitle': 'बिना डार्क थीम वाली साइटों पर भी डार्क परत लागू करें',
     'adaptive_toolbar_subtitle': 'टूलबार को पेज के प्रमुख रंग के अनुसार बदलें', 'deep_dark': 'गहरा काला',
     'add': 'जोड़ें',
