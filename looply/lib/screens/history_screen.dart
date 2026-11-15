@@ -245,6 +245,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 // lixeira) são ícones puros, sem nenhum container circular por trás.
 // Ao tocar em pesquisar, o campo de busca ocupa o título e já traz o botão
 // de voltar embutido dentro dele, que ao ser tocado fecha a busca.
+// AppBar M3 expressive padrão (ver nota em bookmarks_screen.dart).
 class _HistorySliverAppBar extends StatelessWidget {
   const _HistorySliverAppBar({
     required this.isSelecting,
@@ -287,8 +288,6 @@ class _HistorySliverAppBar extends StatelessWidget {
       elevation: 0,
       scrolledUnderElevation: 0,
       automaticallyImplyLeading: false,
-      // Quando a busca está ativa, o campo de busca (com o voltar embutido)
-      // toma conta de toda a largura do appbar, no lugar do leading+title.
       leading: searchActive
           ? null
           : _HistoryIconButton(
@@ -296,47 +295,69 @@ class _HistorySliverAppBar extends StatelessWidget {
               icon: isSelecting ? AppIcons.x : AppIcons.arrowLeft,
               onTap: onBack,
             ),
-      title: searchActive
-          ? _HistorySearchField(
-              controller: searchController,
-              focusNode: searchFocusNode,
-              onBack: onCloseSearch,
-            )
-          : Text(
-              isSelecting
-                  ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
-                  : appText('history'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w500),
-            ),
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axis: Axis.horizontal,
+            axisAlignment: -1,
+            child: child,
+          ),
+        ),
+        child: searchActive
+            ? _HistorySearchField(
+                key: const ValueKey<String>('search-field'),
+                controller: searchController,
+                focusNode: searchFocusNode,
+                onBack: onCloseSearch,
+              )
+            : Text(
+                isSelecting
+                    ? appText('selected_count').replaceAll('{count}', selectedCount.toString())
+                    : appText('history'),
+                key: const ValueKey<String>('title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w500),
+              ),
+      ),
       actions: searchActive
           ? const []
           : [
-              if (isSelecting)
-                _HistoryIconButton(
-                  tooltip: '${appText('delete')} ($selectedCount)',
-                  icon: AppIcons.trash,
-                  foreground: const Color(0xFFFF453A),
-                  onTap: onDelete,
-                )
-              else
-                _HistoryIconButton(
-                  tooltip: appText('search_history'),
-                  icon: AppIcons.magnifyingGlass,
-                  onTap: onOpenSearch,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
                 ),
+                child: isSelecting
+                    ? _HistoryIconButton(
+                        key: const ValueKey<String>('delete'),
+                        tooltip: '${appText('delete')} ($selectedCount)',
+                        icon: AppIcons.trash,
+                        foreground: const Color(0xFFFF453A),
+                        onTap: onDelete,
+                      )
+                    : _HistoryIconButton(
+                        key: const ValueKey<String>('search'),
+                        tooltip: appText('search_history'),
+                        icon: AppIcons.magnifyingGlass,
+                        onTap: onOpenSearch,
+                      ),
+              ),
               const SizedBox(width: 4),
             ],
     );
   }
 }
 
-// Campo de busca com o botão de voltar embutido dentro dele (ícone puro,
-// sem container circular): seta à esquerda dentro do próprio input, texto
-// ao lado, botão de limpar (x) quando há texto digitado.
+// Campo de busca em formato de pílula comprida e fina, com o botão de
+// voltar embutido DENTRO da própria pílula.
 class _HistorySearchField extends StatelessWidget {
   const _HistorySearchField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.onBack,
@@ -351,53 +372,63 @@ class _HistorySearchField extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
 
-    return Row(
-      children: [
-        _HistoryIconButton(
-          tooltip: appText('close_search'),
-          icon: AppIcons.arrowLeft,
-          onTap: onBack,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            textAlignVertical: TextAlignVertical.center,
-            style: TextStyle(color: text, fontSize: 18),
-            cursorColor: accentColor(context),
-            decoration: InputDecoration(
-              hintText: appText('search_history'),
-              hintStyle: TextStyle(color: muted, fontSize: 18),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: controller,
-                builder: (context, value, _) {
-                  if (value.text.isEmpty) return const SizedBox.shrink();
-                  return _HistoryIconButton(
-                    tooltip: appText('close'),
-                    icon: AppIcons.x,
-                    size: 20,
-                    onTap: controller.clear,
-                  );
-                },
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: 2, right: 12),
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          _HistoryIconButton(
+            tooltip: appText('close_search'),
+            icon: AppIcons.arrowLeft,
+            size: 20,
+            onTap: onBack,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              textAlignVertical: TextAlignVertical.center,
+              style: TextStyle(color: text, fontSize: 14),
+              cursorColor: accentColor(context),
+              decoration: InputDecoration(
+                hintText: appText('search_history'),
+                hintStyle: TextStyle(color: muted, fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-        ),
-      ],
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: controller.clear,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-// Botão de ícone puro do appbar: sem container, sem círculo, sem fundo —
-// apenas o ícone com feedback tátil e splash padrão de InkResponse.
+// Botão de ícone puro do appbar (fora da pílula de busca).
 class _HistoryIconButton extends StatelessWidget {
   const _HistoryIconButton({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.onTap,

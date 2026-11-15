@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:material_ui/material_ui.dart';
-import 'package:m3e_segmented_list/m3e_segmented_list.dart';
+import 'package:flutter/material.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -25,12 +24,14 @@ class ActivityScreen extends StatefulWidget {
 class _ActivityScreenState extends State<ActivityScreen> {
   _ChartRange _range = _ChartRange.day;
   final ScrollController _scrollController = ScrollController();
+  double _scrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
     activityController.addListener(_onChanged);
     AdBlockStats.instance.addListener(_onChanged);
+    _scrollController.addListener(_onScroll);
     for (final entry in activityController.entries) {
       if (entry.kind == ActivityKind.site) {
         unawaited(browserFaviconCache.fetchForUrl(entry.url));
@@ -43,8 +44,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void dispose() {
     activityController.removeListener(_onChanged);
     AdBlockStats.instance.removeListener(_onChanged);
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Janela de scroll ampliada de 24px para 100px: dá uma trilha de
+  // transição bem mais longa e perceptível para o fade do appbar, em vez
+  // de um salto quase instantâneo nos primeiros toques de deslize.
+  void _onScroll() {
+    if (!mounted) return;
+    final offset = _scrollController.hasClients ? _scrollController.offset.clamp(0.0, 100.0) : 0.0;
+    if ((offset - _scrollOffset).abs() > 0.5) {
+      setState(() => _scrollOffset = offset.toDouble());
+    }
   }
 
   void _onChanged() {
@@ -52,6 +65,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     _prefetchVisitedSiteFavicons();
   }
 
+  // Garante que os favicons dos hosts mostrados na pilha de "sites
+  // visitados" já estão em cache antes de o card desenhar — sem isto, o
+  // card nasce sempre com o fallback genérico mesmo quando o favicon já
+  // foi visto noutra parte da app.
   void _prefetchVisitedSiteFavicons() {
     final seen = <String>{};
     for (final entry in activityController.entries) {
@@ -84,96 +101,102 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final bg = pageBg(context);
     final entries = activityController.entries;
     final recent = entries.take(5).toList();
+    final topInset = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: bg,
-      body: CustomScrollView(
-        controller: _scrollController,
-        slivers: [
-          _ActivitySliverAppBar(),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
+        children: [
+          ListView(
+            controller: _scrollController,
+            padding: EdgeInsets.fromLTRB(14, topInset + 60, 14, 24),
+            children: [
+              _RangeSelector(
+                value: _range,
+                onChanged: (value) => setState(() => _range = value),
+              ),
+              const SizedBox(height: 14),
+              _AdBlockBarChart(data: _chartData, range: _range),
+              const SizedBox(height: 16),
+              const _DayStreakCard(),
+              const SizedBox(height: 20),
+              const _VisitedSitesCard(),
+              const SizedBox(height: 20),
+              Row(
                 children: [
-                  _RangeSelector(
-                    value: _range,
-                    onChanged: (value) => setState(() => _range = value),
+                  Expanded(
+                    child: Text(
+                      appText('recent'),
+                      style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  _AdBlockBarChart(data: _chartData, range: _range),
-                  const SizedBox(height: 16),
-                  const _DayStreakCard(),
-                  const SizedBox(height: 20),
-                  const _VisitedSitesCard(),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          appText('recent'),
-                          style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800),
-                        ),
+                  if (entries.isNotEmpty)
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const HistoryScreen()),
                       ),
-                      if (entries.isNotEmpty)
-                        TextButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                          ),
-                          child: Text(appText('view_all')),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  if (recent.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 30),
-                      child: Column(
-                        children: [
-                          AppMaterialIcon(AppIcons.clockCounterClockwise, size: 38, color: muted),
-                          const SizedBox(height: 9),
-                          Text(
-                            appText('no_recent_activity'),
-                            style: TextStyle(color: muted, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    M3ESegmentedColumn(
-                      color: settingsCardColor(context),
-                      outerRadius: 26,
-                      innerRadius: 10,
-                      gap: 3,
-                      padding: EdgeInsets.zero,
-                      onTap: (index) {
-                        final entry = recent[index];
-                        openOrbitTab(context, entry.url, title: entry.title);
-                      },
-                      children: [
-                        for (final entry in recent)
-                          M3EListItem(
-                            leading: SiteFaviconAvatar(url: entry.url, size: 40),
-                            headline: Text(
-                              entry.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600),
-                            ),
-                            supportingText: Text(
-                              formatActivityTime(entry.timestamp),
-                              style: TextStyle(color: muted, fontSize: 11),
-                            ),
-                            trailing: AppMaterialIcon(AppIcons.caretRight, color: muted, size: 19),
-                            minHeight: 72,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          ),
-                      ],
+                      child: Text(appText('view_all')),
                     ),
                 ],
               ),
-            ),
+              const SizedBox(height: 4),
+              if (recent.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  child: Column(
+                    children: [
+                      AppMaterialIcon(AppIcons.clockCounterClockwise, size: 38, color: muted),
+                      const SizedBox(height: 9),
+                      Text(
+                        appText('no_recent_activity'),
+                        style: TextStyle(color: muted, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...List.generate(recent.length, (index) {
+                  final isFirst = index == 0;
+                  final isLast = index == recent.length - 1;
+                  final top = isFirst ? 22.0 : 8.0;
+                  final bottom = isLast ? 22.0 : 8.0;
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0, end: 1),
+                    duration: Duration(milliseconds: 320 + index * 45),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) => Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, (1 - value) * 14),
+                        child: child,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
+                      child: ActivityTile(
+                        entry: recent[index],
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(top),
+                          bottom: Radius.circular(bottom),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+            ],
+          ),
+          // Appbar flutuante com o mesmo gradiente de esmaecimento usado em
+          // HomeScreen/HistoryScreen: opaca no topo, transparente na base,
+          // e com uma opacidade extra ligada ao scroll (fica mais sólida
+          // assim que a lista começa a deslizar por baixo dela). A janela
+          // de 100px (ver _onScroll) e a curva easeOut aplicada dentro de
+          // _ActivityAppBar tornam essa transição bem mais longa e suave
+          // do que o salto quase instantâneo de antes.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _ActivityAppBar(scrollProgress: _scrollOffset / 100.0),
           ),
         ],
       ),
@@ -181,34 +204,58 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 }
 
-/// Barra superior sólida, alinhada ao AppBar definido no tema Looply.
-class _ActivitySliverAppBar extends StatelessWidget {
-  const _ActivitySliverAppBar();
+/// Appbar com título alinhado à esquerda, no mesmo estilo de peso/tamanho
+/// da HomeScreen, com gradiente de esmaecimento por trás.
+class _ActivityAppBar extends StatelessWidget {
+  const _ActivityAppBar({required this.scrollProgress});
+
+  final double scrollProgress;
 
   @override
   Widget build(BuildContext context) {
     final bg = pageBg(context);
     final text = mainText(context);
+    final topInset = MediaQuery.of(context).padding.top;
+    // Easing aplicado sobre o progresso linear de scroll: a transição do
+    // gradiente fica curva (acelera e desacelera) em vez de andar em
+    // linha reta com o dedo, o que lê como bem mais suave.
+    final solidness = Curves.easeOut.transform(scrollProgress.clamp(0.0, 1.0));
 
-    return SliverAppBar(
-      pinned: true,
-      floating: false,
-      snap: false,
-      primary: true,
-      toolbarHeight: 64,
-      automaticallyImplyLeading: false,
-      titleSpacing: 16,
-      backgroundColor: bg,
-      foregroundColor: text,
-      surfaceTintColor: bg,
-      shadowColor: Colors.transparent,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      title: Text(
-        appText('activity'),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -.2),
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          // Corrigido: antes havia um .withOpacity() encadeado em cima de
+          // outro, e o segundo sempre substituía o primeiro em vez de
+          // combiná-los — isso fazia a base do gradiente saltar entre
+          // dois valores fixos em vez de variar continuamente com o
+          // scroll. Agora a opacidade final é proporcional a solidness.
+          colors: [bg, bg, bg.withOpacity(bg.opacity * solidness)],
+          stops: const [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  appText('activity'),
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -.2,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -243,74 +290,161 @@ class _RangeSelector extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
     final index = _ChartRange.values.indexOf(value);
-    return M3ESegmentedRow(
-      equalWidth: true,
-      outerRadius: 999,
-      innerRadius: 9,
-      gap: 3,
-      color: settingsCardColor(context),
-      selectedColor: pillColor(context),
-      selectedRadius: 999,
-      selectedIndices: <int>{index},
-      selectionMode: M3ESelectionMode.single,
-      selectionTrigger: M3ESelectionTrigger.tap,
-      onSelectionChanged: (selection) {
-        if (selection.isNotEmpty) onChanged(_ChartRange.values[selection.first]);
-      },
-      children: [
-        for (final range in _ChartRange.values)
-          M3EListItem(
-            headline: Center(
-              child: Text(
-                _label(range),
-                maxLines: 1,
-                style: TextStyle(
-                  color: range == value ? text : muted,
-                  fontSize: 12.5,
-                  fontWeight: range == value ? FontWeight.w800 : FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: settingsCardColor(context),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final segmentWidth = constraints.maxWidth / _ChartRange.values.length;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeOutQuint,
+                left: segmentWidth * index,
+                top: 0,
+                bottom: 0,
+                width: segmentWidth,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: pageBg(context),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
               ),
-            ),
-            minHeight: 42,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-          ),
-      ],
+              Row(
+                children: _ChartRange.values.map((range) {
+                  final selected = range == value;
+                  return Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onChanged(range),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        child: Center(
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutQuint,
+                            style: TextStyle(
+                              color: selected ? text : muted,
+                              fontSize: 13,
+                              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                            ),
+                            child: Text(_label(range)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
 
-/// Gráfico de barras com anúncios bloqueados por período. Cabeçalho com
-/// ícone/título/badge removido — o card vai direto ao número grande e ao
-/// gráfico. Barras muito mais gordas (92% da largura de cada coluna, com
-/// só 2px de respiro entre elas) para bater a proporção de referência:
-/// quase um bloco contínuo, não barras finas cercadas de vazio. Usa
-/// apenas accent e tertiary do próprio ColorScheme do app — nenhuma cor
-/// fixa nova foi introduzida.
-class _AdBlockBarChart extends StatelessWidget {
+/// Gráfico de barras com anúncios bloqueados por período, com bordas
+/// totalmente arredondadas (estilo cápsula) em cada barra. A troca de
+/// período agora anima a altura E a cor de cada barra ao reconstruir
+/// (chave por range para disparar uma nova animação do zero). Curva
+/// trocada para easeOutQuint e durações alongadas para um motion mais
+/// suave na subida das barras.
+///
+/// Ao tocar numa barra, um card flutua ancorado logo acima dela mostrando
+/// o valor exato daquele período, usando CompositedTransformTarget (na
+/// barra) + CompositedTransformFollower (no card, dentro de um
+/// OverlayEntry) — a mesma técnica por trás de todo Tooltip/
+/// PopupMenuButton nativo do próprio Flutter. O card fecha ao tocar em
+/// qualquer lugar fora dele, ao tocar noutra barra, ou ao sair da tela.
+class _AdBlockBarChart extends StatefulWidget {
   const _AdBlockBarChart({required this.data, required this.range});
-
   final List<MapEntry<String, int>> data;
   final _ChartRange range;
 
-  String _formatCount(int value) {
-    final separator = appLanguageController.value.code == 'en' ? ',' : '.';
-    return value.toString().replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => separator,
-    );
+  @override
+  State<_AdBlockBarChart> createState() => _AdBlockBarChartState();
+}
+
+class _AdBlockBarChartState extends State<_AdBlockBarChart> {
+  final LayerLink _layerLink = LayerLink();
+  OverlayEntry? _overlayEntry;
+  int? _selectedIndex;
+  Size _barSize = Size.zero;
+  Offset _barOffset = Offset.zero;
+
+  @override
+  void didUpdateWidget(covariant _AdBlockBarChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Período mudou (ou os dados mudaram) enquanto o card estava aberto:
+    // fecha, para não mostrar um valor de uma barra que já não existe
+    // naquela posição.
+    if (oldWidget.range != widget.range) {
+      _closeCallout();
+    }
   }
 
-  String _averageLabel() {
-    switch (range) {
-      case _ChartRange.day:
-        return appText('average_per_day');
-      case _ChartRange.week:
-        return appText('average_per_week');
-      case _ChartRange.month:
-        return appText('average_per_month');
-      case _ChartRange.year:
-        return appText('average_per_year');
-    }
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _closeCallout() {
+    if (_selectedIndex == null) return;
+    _removeOverlay();
+    setState(() => _selectedIndex = null);
+  }
+
+  void _openCallout(int index, Offset barTopCenter, Size barSize) {
+    _removeOverlay();
+    setState(() {
+      _selectedIndex = index;
+      _barOffset = barTopCenter;
+      _barSize = barSize;
+    });
+
+    final overlay = Overlay.of(context);
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // Captura qualquer toque fora do card para fechá-lo, sem
+            // bloquear visualmente o resto da tela (totalmente
+            // transparente).
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _closeCallout,
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.topCenter,
+              followerAnchor: Alignment.bottomCenter,
+              offset: const Offset(0, -10),
+              child: _BarCalloutCard(
+                label: widget.data[index].key,
+                value: widget.data[index].value,
+                barWidth: _barSize.width,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    overlay.insert(_overlayEntry!);
   }
 
   @override
@@ -318,277 +452,169 @@ class _AdBlockBarChart extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
     final accent = accentColor(context);
-    final tertiary = Theme.of(context).colorScheme.tertiary;
-    final total = data.fold<int>(0, (sum, entry) => sum + entry.value);
-    final average = data.isEmpty ? 0 : (total / data.length).round();
-    final maxValue = data.fold<int>(0, (current, entry) => current > entry.value ? current : entry.value);
-    final scaleMax = maxValue == 0 ? 1 : maxValue + (maxValue * .18).ceil();
-    final averageFraction = average / scaleMax;
+    final maxValue = widget.data.map((entry) => entry.value).fold<int>(0, (a, b) => a > b ? a : b);
+    final highestIndex = () {
+      var best = 0;
+      for (var i = 1; i < widget.data.length; i++) {
+        if (widget.data[i].value > widget.data[best].value) best = i;
+      }
+      return best;
+    }();
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutQuint,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(22),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: average.toDouble()),
-                    duration: const Duration(milliseconds: 700),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, _) => Text(
-                      _formatCount(value.round()),
-                      style: TextStyle(
-                        color: text,
-                        fontSize: 38,
-                        height: 1,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.2,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    _averageLabel(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            '${_formatCount(total)} ${appText('blocked_ads_period')}',
-            style: TextStyle(color: muted, fontSize: 12, height: 1.35),
-          ),
-          const SizedBox(height: 22),
-          // Linha de topo com a escala máxima e a linha de média, ambas
-          // acima do plot — simples, sem eixo lateral consumindo largura.
-          if (average > 0)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Container(width: 7, height: 7, decoration: BoxDecoration(color: tertiary, shape: BoxShape.circle)),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${appText('average_short')} ${_formatCount(average)}',
-                    style: TextStyle(color: tertiary, fontSize: 10.5, fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
-            ),
-          SizedBox(
-            height: 196,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final plotHeight = constraints.maxHeight - 26;
-                return Stack(
-                  fit: StackFit.expand,
+      child: SizedBox(
+        height: 180,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: List.generate(widget.data.length, (index) {
+            final entry = widget.data[index];
+            final isHighlighted = index == highestIndex && maxValue > 0;
+            final isSelected = index == _selectedIndex;
+            final fraction = maxValue == 0 ? 0.0 : entry.value / maxValue;
+            final barHeight = 18.0 + (122.0 * fraction);
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      height: plotHeight,
-                      child: CustomPaint(
-                        painter: _ActivityChartGuidesPainter(
-                          guideColor: lineColor(context).withOpacity(.55),
-                          averageColor: tertiary,
-                          averageFraction: averageFraction,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (_selectedIndex == index) {
+                          _closeCallout();
+                          return;
+                        }
+                        final renderBox = context.findRenderObject() as RenderBox;
+                        final barRenderBox = _barKeys[index]?.currentContext?.findRenderObject() as RenderBox?;
+                        if (barRenderBox == null) return;
+                        final topLeft = barRenderBox.localToGlobal(Offset.zero, ancestor: renderBox);
+                        final barTopCenter = Offset(topLeft.dx + barRenderBox.size.width / 2, topLeft.dy);
+                        _openCallout(index, barTopCenter, barRenderBox.size);
+                      },
+                      child: CompositedTransformTarget(
+                        link: index == _selectedIndex ? _layerLink : LayerLink(),
+                        child: TweenAnimationBuilder<double>(
+                          key: ValueKey('${widget.range}-$index-$barHeight'),
+                          tween: Tween<double>(begin: 0, end: barHeight),
+                          duration: Duration(milliseconds: 680 + index * 45),
+                          curve: Curves.easeOutQuint,
+                          builder: (context, value, _) => AnimatedContainer(
+                            key: _barKeys.putIfAbsent(index, () => GlobalKey()),
+                            duration: const Duration(milliseconds: 420),
+                            curve: Curves.easeOutQuint,
+                            height: value,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? accent
+                                  : (isHighlighted ? accent : muted.withOpacity(.22)),
+                              borderRadius: BorderRadius.circular(999),
+                              border: isSelected
+                                  ? Border.all(color: text.withOpacity(.25), width: 2)
+                                  : null,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      height: plotHeight,
-                      // Espaçamento horizontal entre colunas reduzido de
-                      // 4 para 1.5px — é o principal responsável pelo
-                      // efeito "quase um bloco contínuo" da referência.
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          for (var index = 0; index < data.length; index++)
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: TweenAnimationBuilder<double>(
-                                    key: ValueKey('${range.name}-$index-${data[index].value}'),
-                                    tween: Tween<double>(
-                                      begin: 0,
-                                      end: maxValue == 0
-                                          ? 4.0
-                                          : (plotHeight * .92 * data[index].value / scaleMax)
-                                              .clamp(4.0, plotHeight * .92)
-                                              .toDouble(),
-                                    ),
-                                    duration: Duration(milliseconds: 560 + index * 60),
-                                    curve: Curves.easeOutBack,
-                                    builder: (context, height, _) {
-                                      final aboveAverage = average > 0 && data[index].value >= average;
-                                      final topColor = aboveAverage ? tertiary : accent;
-                                      final bottomColor = aboveAverage
-                                          ? tertiary.withOpacity(.70)
-                                          : accent.withOpacity(.55);
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        alignment: Alignment.topCenter,
-                                        children: [
-                                          // widthFactor subiu de .85 para
-                                          // .92 — barra bem mais gorda,
-                                          // ocupando quase toda a coluna,
-                                          // igual à referência.
-                                          FractionallySizedBox(
-                                            widthFactor: .92,
-                                            child: Container(
-                                              height: height,
-                                              decoration: BoxDecoration(
-                                                gradient: LinearGradient(
-                                                  begin: Alignment.topCenter,
-                                                  end: Alignment.bottomCenter,
-                                                  colors: [topColor, bottomColor],
-                                                ),
-                                                borderRadius: BorderRadius.circular(999),
-                                                boxShadow: aboveAverage
-                                                    ? [
-                                                        BoxShadow(
-                                                          color: tertiary.withOpacity(.32),
-                                                          blurRadius: 9,
-                                                          offset: const Offset(0, 3),
-                                                        ),
-                                                      ]
-                                                    : null,
-                                              ),
-                                            ),
-                                          ),
-                                          if (aboveAverage)
-                                            Positioned(
-                                              top: -5,
-                                              child: TweenAnimationBuilder<double>(
-                                                tween: Tween<double>(begin: 0, end: 1),
-                                                duration: const Duration(milliseconds: 420),
-                                                curve: Curves.elasticOut,
-                                                builder: (context, value, child) => Transform.scale(
-                                                  scale: value.clamp(0.0, 1.2),
-                                                  child: child,
-                                                ),
-                                                child: Container(
-                                                  width: 10,
-                                                  height: 10,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    color: tertiary,
-                                                    border: Border.all(
-                                                      color: settingsCardColor(context),
-                                                      width: 2,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                    const SizedBox(height: 9),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutQuint,
+                      style: TextStyle(
+                        color: (isHighlighted || isSelected) ? text : muted,
+                        fontSize: 11.5,
+                        fontWeight: (isHighlighted || isSelected) ? FontWeight.w800 : FontWeight.w600,
                       ),
+                      child: Text(entry.key),
                     ),
                   ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              for (final entry in data)
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      entry.key,
-                      maxLines: 1,
-                      overflow: TextOverflow.clip,
-                      style: TextStyle(color: muted, fontSize: 10.5, fontWeight: FontWeight.w600),
-                    ),
-                  ),
                 ),
-            ],
-          ),
-        ],
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
+
+  // Um GlobalKey por barra, para medir sua posição/tamanho exatos no
+  // momento do tap (necessário porque a altura da barra é animada e o
+  // RenderBox só existe depois de construído).
+  final Map<int, GlobalKey> _barKeys = <int, GlobalKey>{};
 }
 
-class _ActivityChartGuidesPainter extends CustomPainter {
-  const _ActivityChartGuidesPainter({
-    required this.guideColor,
-    required this.averageColor,
-    required this.averageFraction,
-  });
+/// Card ancorado mostrado ao tocar numa barra: fundo sólido, cantos
+/// arredondados, sombra leve, mostrando o rótulo do período e o valor
+/// exato. Largura mínima de 72 para não ficar espremido em barras finas.
+class _BarCalloutCard extends StatelessWidget {
+  const _BarCalloutCard({required this.label, required this.value, required this.barWidth});
 
-  final Color guideColor;
-  final Color averageColor;
-  final double averageFraction;
+  final String label;
+  final int value;
+  final double barWidth;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final guidePaint = Paint()
-      ..color = guideColor
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    for (final fraction in const [0.0, 0.5, 1.0]) {
-      final y = size.height * (1 - fraction);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), guidePaint);
-    }
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
 
-    if (averageFraction > 0) {
-      final averagePaint = Paint()
-        ..color = averageColor
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke;
-      final dashWidth = 5.0;
-      final dashSpace = 4.0;
-      final clampedFraction = averageFraction.clamp(0.0, 1.0).toDouble();
-      final y = size.height * (1.0 - clampedFraction);
-      var startX = 0.0;
-      while (startX < size.width) {
-        canvas.drawLine(Offset(startX, y), Offset((startX + dashWidth).clamp(0, size.width), y), averagePaint);
-        startX += dashWidth + dashSpace;
-      }
-    }
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutBack,
+      builder: (context, scale, child) => Opacity(
+        opacity: scale.clamp(0.0, 1.0),
+        child: Transform.scale(
+          scale: scale.clamp(0.0, 1.0),
+          alignment: Alignment.bottomCenter,
+          child: child,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(minWidth: barWidth.clamp(72, 140)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: settingsCardColor(context),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.18),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value.toString(),
+                style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant _ActivityChartGuidesPainter oldDelegate) =>
-      oldDelegate.guideColor != guideColor ||
-      oldDelegate.averageColor != averageColor ||
-      oldDelegate.averageFraction != averageFraction;
 }
 
 /// Sequência de dias de uso da semana atual, com check animado nos dias em
@@ -748,6 +774,10 @@ class _VisitedSitesCard extends StatelessWidget {
     final accent = accentColor(context);
     final hosts = _recentUniqueHosts(context);
 
+    // Overlap bem mais apertado que antes: cada avatar seguinte avança só
+    // 8px sobre um diâmetro de 34px — deixa cerca de 25% de cada círculo
+    // visível, bem mais próximo de um grupo compacto do que a versão
+    // anterior (15px de avanço, ~56% visível).
     const avatarSize = 34.0;
     const overlapStep = 8.0;
 
