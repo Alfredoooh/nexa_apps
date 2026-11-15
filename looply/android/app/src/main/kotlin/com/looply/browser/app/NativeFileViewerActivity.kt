@@ -178,7 +178,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
             setPadding(dp(8), dp(4), dp(10), dp(4))
             setBackgroundColor(surfaceColor)
         }
-        toolbar.addView(iconButton("arrow_back", "Voltar", ::closeViewer), LinearLayout.LayoutParams(dp(44), dp(48)))
+        toolbar.addView(iconButton("arrow_back", "Voltar", ::closeViewer), LinearLayout.LayoutParams(dp(48), dp(48)))
         toolbar.addView(TextView(this).apply {
             text = fileName
             setTextColor(textColor)
@@ -189,7 +189,6 @@ class NativeFileViewerActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), 0, dp(8), 0)
         }, LinearLayout.LayoutParams(0, -1, 1f))
-        toolbar.addView(iconButton("close", "Fechar", ::closeViewer), LinearLayout.LayoutParams(dp(42), dp(48)))
         rootContainer.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
 
         contentHost = FrameLayout(this).apply {
@@ -341,7 +340,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
             max = 1000
         }
         audioSeekBar = seek
-        container.addView(seek, LinearLayout.LayoutParams(-1, dp(42)).apply {
+        container.addView(seek, LinearLayout.LayoutParams(-1, dp(48)).apply {
             topMargin = dp(24)
             bottomMargin = dp(2)
         })
@@ -365,7 +364,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
         }
         audioPlayLabel = playButton.getChildAt(0) as? TextView
         playButton.setOnClickListener { toggleAudioPlayback() }
-        container.addView(playButton, LinearLayout.LayoutParams(dp(64), dp(64)).apply { topMargin = dp(22) })
+        container.addView(playButton, LinearLayout.LayoutParams(dp(72), dp(72)).apply { topMargin = dp(22) })
         contentHost.addView(container, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
 
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -480,16 +479,16 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val next = iconButton("chevron_right", "Página seguinte") {
             showPdfPage((pdfPageIndex + 1).coerceAtMost(renderer.pageCount - 1))
         }
-        pageControls.addView(previous, LinearLayout.LayoutParams(dp(44), dp(46)))
+        pageControls.addView(previous, LinearLayout.LayoutParams(dp(48), dp(48)))
         pdfPageLabel = TextView(this).apply {
             setTextColor(mutedColor)
             textSize = 13f
             gravity = Gravity.CENTER
         }
         pageControls.addView(pdfPageLabel, LinearLayout.LayoutParams(0, -1, 1f))
-        pageControls.addView(next, LinearLayout.LayoutParams(dp(44), dp(46)))
+        pageControls.addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
         // O rodapé é nativo e fica abaixo da área de visualização.
-        rootContainer.addView(pageControls, LinearLayout.LayoutParams(-1, dp(52)))
+        rootContainer.addView(pageControls, LinearLayout.LayoutParams(-1, dp(56)))
         pageFrame.post { showPdfPage(0) }
     }
 

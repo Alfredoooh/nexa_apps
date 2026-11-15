@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../theme.dart';
+import '../localization.dart';
 import 'material_symbols.dart';
 
 class LooplyDialogAction<T> {
@@ -25,62 +26,80 @@ Future<T?> showLooplyDialog<T>({
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: barrierDismissible,
-    barrierLabel: 'Fechar diálogo',
+    barrierLabel: appText('close'),
     barrierColor: Colors.black.withOpacity(.42),
     transitionDuration: const Duration(milliseconds: 310),
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final scheme = Theme.of(dialogContext).colorScheme;
       final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
       final surface = isDark ? settingsCardColor(dialogContext) : Colors.white;
-      final screenHeight = MediaQuery.sizeOf(dialogContext).height;
+      final media = MediaQuery.of(dialogContext);
+      final availableHeight = (media.size.height - media.viewInsets.bottom - 32)
+          .clamp(240.0, media.size.height)
+          .toDouble();
       return SafeArea(
-        child: Center(
-          child: Material(
-            color: Colors.transparent,
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + media.viewInsets.bottom),
+          child: Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: 560,
-                maxHeight: screenHeight * .86,
+                maxHeight: availableHeight,
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: SizedBox(
+                width: double.infinity,
                 child: Material(
                   color: surface,
                   surfaceTintColor: Colors.transparent,
                   elevation: 3,
                   clipBehavior: Clip.antiAlias,
                   borderRadius: BorderRadius.circular(24),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: TextStyle(
-                              color: mainText(dialogContext),
-                              fontSize: 20,
-                              height: 1.2,
-                              letterSpacing: -.2,
-                              fontWeight: FontWeight.w600,
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            if (icon != null) ...[
+                              AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: Text(
+                                title,
+                                textAlign: TextAlign.start,
+                                softWrap: true,
+                                style: TextStyle(
+                                  color: mainText(dialogContext),
+                                  fontSize: 20,
+                                  height: 1.25,
+                                  letterSpacing: -.2,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        DefaultTextStyle.merge(
+                          style: TextStyle(
+                            color: mutedText(dialogContext),
+                            fontSize: 14,
+                            height: 1.5,
                           ),
-                          const SizedBox(height: 16),
-                          DefaultTextStyle.merge(
-                            style: TextStyle(
-                              color: mutedText(dialogContext),
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                            child: content,
-                          ),
-                          const SizedBox(height: 24),
+                          child: content,
+                        ),
+                        if (actions.isNotEmpty) ...[
+                          const SizedBox(height: 22),
                           LayoutBuilder(
                             builder: (context, constraints) => Align(
-                              alignment: Alignment.centerRight,
+                              alignment: AlignmentDirectional.centerEnd,
                               child: Wrap(
                                 alignment: WrapAlignment.end,
                                 spacing: 8,
@@ -89,9 +108,7 @@ Future<T?> showLooplyDialog<T>({
                                   for (final action in actions)
                                     ConstrainedBox(
                                       constraints: BoxConstraints(
-                                        maxWidth: constraints.maxWidth
-                                            .clamp(120.0, 240.0)
-                                            .toDouble(),
+                                        maxWidth: constraints.maxWidth.clamp(112.0, 240.0).toDouble(),
                                       ),
                                       child: _DialogActionButton<T>(
                                         action: action,
@@ -103,7 +120,7 @@ Future<T?> showLooplyDialog<T>({
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ),

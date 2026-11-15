@@ -227,10 +227,20 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: pill,
-      hintStyle: TextStyle(color: muted),
+      isDense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      hintStyle: TextStyle(color: muted, height: 1.25),
+      labelStyle: TextStyle(color: muted, height: 1.2),
+      floatingLabelStyle: TextStyle(color: accent, height: 1.2, fontWeight: FontWeight.w600),
+      helperMaxLines: 3,
+      errorMaxLines: 3,
+      prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+      suffixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 48),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
     ),
   );
 }

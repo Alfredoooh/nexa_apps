@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:material_3_expressive/material_3_expressive.dart' show M3ERadio, M3ERadioGroup;
-import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
 
 import '../localization.dart';
@@ -18,25 +17,10 @@ class LanguageScreen extends StatelessWidget {
       backgroundColor: pageBg(context),
       appBar: AppBar(
         leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: M3EButton(
+          padding: const EdgeInsets.only(left: 4),
+          child: AppBackButton(
             tooltip: appText('back'),
-            onPressed: () => Navigator.of(context).maybePop(),
-            style: M3EButtonStyle.tonal,
-            size: M3EButtonSize.sm,
-            shape: M3EButtonShape.round,
-            decoration: M3EButtonDecoration.styleFrom(
-              backgroundColor: pillColor(context),
-              foregroundColor: text,
-              minimumSize: const Size(42, 42),
-              fixedSize: const Size(42, 42),
-              padding: EdgeInsets.zero,
-              borderRadius: 21,
-              pressedRadius: 21,
-              motion: M3EMotion.expressiveSpatialDefault,
-              haptic: M3EHapticFeedback.light,
-            ),
-            child: AppMaterialIcon(AppIcons.arrowLeft, color: text, size: 20),
+            color: text,
           ),
         ),
         title: Text(appText('select_language')),

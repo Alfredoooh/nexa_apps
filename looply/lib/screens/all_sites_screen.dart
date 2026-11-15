@@ -121,15 +121,9 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
       appBar: AppBar(
         toolbarHeight: 64,
         automaticallyImplyLeading: false,
-        leading: IconButton(
+        leading: AppBackButton(
           tooltip: appText('back'),
-          style: IconButton.styleFrom(
-            foregroundColor: text,
-            fixedSize: const Size(42, 42),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-            backgroundColor: Colors.transparent,
-          ),
-          icon: const AppMaterialIcon(AppIcons.arrowLeft),
+          color: text,
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         title: Text(appText('all_sites')),
@@ -392,18 +386,19 @@ class _AddCustomSiteSheetState extends State<_AddCustomSiteSheet> {
               decoration: BoxDecoration(color: muted.withOpacity(.45), borderRadius: BorderRadius.circular(99)),
             ),
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: Text(appText('add_site'), style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             const SizedBox(height: 12),
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
               TextField(
                 controller: _urlController,
+                textDirection: TextDirection.ltr,
                 keyboardType: TextInputType.url,
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(

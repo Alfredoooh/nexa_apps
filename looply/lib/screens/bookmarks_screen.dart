@@ -430,7 +430,7 @@ class _BookmarksSearchField extends StatelessWidget {
           _BookmarksIconButton(
             tooltip: appText('close_search'),
             icon: AppIcons.arrowLeft,
-            size: 24, weight: 400, opticalSize: 24,
+            size: 24,
             onTap: onBack,
           ),
           const SizedBox(width: 4),

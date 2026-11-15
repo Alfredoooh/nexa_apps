@@ -356,7 +356,7 @@ class _SiteUsageSearchField extends StatelessWidget {
                   return _SiteUsageIconButton(
                     tooltip: appText('close'),
                     icon: AppIcons.x,
-                    size: 24, weight: 400, opticalSize: 24,
+                    size: 24,
                     onTap: controller.clear,
                   );
                 },
@@ -476,7 +476,7 @@ class _SiteUsageItemContent extends StatelessWidget {
               size: M3EButtonSize.xs,
               shape: M3EButtonShape.round,
               tooltip: appText('open'),
-              child: Icon(Symbols.open_in_new_rounded, size: 24, weight: 400, opticalSize: 24, color: muted),
+              child: Icon(Symbols.open_in_new_rounded, size: 24, color: muted),
             ),
           ],
         ),

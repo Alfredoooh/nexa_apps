@@ -168,8 +168,8 @@ class AppBackButton extends StatelessWidget {
     required this.tooltip,
     this.onPressed,
     this.color,
-    this.size = 20,
-    this.buttonSize = 44,
+    this.size = 24,
+    this.buttonSize = 48,
   });
 
   final String tooltip;

@@ -384,7 +384,7 @@ class _HistorySearchField extends StatelessWidget {
           _HistoryIconButton(
             tooltip: appText('close_search'),
             icon: AppIcons.arrowLeft,
-            size: 24, weight: 400, opticalSize: 24,
+            size: 24,
             onTap: onBack,
           ),
           const SizedBox(width: 4),
@@ -556,7 +556,7 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Symbols.open_in_new_rounded, size: 24, weight: 400, opticalSize: 24, color: muted),
+              Icon(Symbols.open_in_new_rounded, size: 24, color: muted),
             ],
           ),
         ),

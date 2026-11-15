@@ -542,7 +542,7 @@ class _DownloadsSearchField extends StatelessWidget {
           _DownloadsIconButton(
             tooltip: appText('close_search'),
             icon: AppIcons.arrowLeft,
-            size: 24, weight: 400, opticalSize: 24,
+            size: 24,
             onTap: onBack,
           ),
           const SizedBox(width: 4),
@@ -867,7 +867,7 @@ class _DownloadCard extends StatelessWidget {
                             child: AppMaterialIcon(
                               isFailed ? AppIcons.warningCircle : entry.icon,
                               color: isFailed ? const Color(0xFFFF453A) : accent,
-                              size: 24, weight: 400, opticalSize: 24,
+                              size: 24,
                             ),
                           ),
                         ),
