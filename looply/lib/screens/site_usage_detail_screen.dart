@@ -476,7 +476,7 @@ class _SiteUsageItemContent extends StatelessWidget {
               size: M3EButtonSize.xs,
               shape: M3EButtonShape.round,
               tooltip: appText('open'),
-              child: Icon(Symbols.open_in_new_rounded, size: 17, color: muted),
+              child: Icon(Symbols.open_in_new_rounded, size: 20, color: muted),
             ),
           ],
         ),

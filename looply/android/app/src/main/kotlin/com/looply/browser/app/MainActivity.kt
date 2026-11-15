@@ -597,14 +597,18 @@ class MainActivity : FlutterActivity() {
             val labels = call.argument<Map<String, String>>("menuLabels") ?: emptyMap()
             putExtra(OrbitBrowserActivity.EXTRA_MENU_LABELS_JSON, JSONObject(labels).toString())
             putExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", call.argument<Boolean>("skipNativeEnterAnimation") ?: false)
+            putExtra("com.looply.browser.app.orbit.FADE_ENTER_ANIMATION", call.argument<Boolean>("fadeNativeEnterTransition") ?: false)
         }
         pendingOrbitBrowserResult = result
         try {
             startActivityForResult(intent, ORBIT_BROWSER_REQUEST_CODE)
-            if (intent.getBooleanExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", false)) {
-                overridePendingTransition(0, 0)
-            } else {
-                overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
+            when {
+                intent.getBooleanExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", false) ->
+                    overridePendingTransition(0, 0)
+                intent.getBooleanExtra("com.looply.browser.app.orbit.FADE_ENTER_ANIMATION", false) ->
+                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+                else ->
+                    overridePendingTransition(R.anim.browser_slide_up, R.anim.browser_stay)
             }
         } catch (error: Exception) {
             pendingOrbitBrowserResult = null

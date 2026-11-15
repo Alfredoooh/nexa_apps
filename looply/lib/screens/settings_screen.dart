@@ -418,15 +418,18 @@ class _SettingsSection extends StatelessWidget {
             ),
           ),
         ),
-        SizedBox(
-          width: double.infinity,
-          child: M3ESegmentedColumn(
-            children: children,
-            color: settingsCardColor(context),
-            outerRadius: 22,
-            innerRadius: 8,
-            gap: 2,
-            padding: EdgeInsets.zero,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: double.infinity,
+            child: M3ESegmentedColumn(
+              children: children,
+              color: settingsCardColor(context),
+              outerRadius: 20,
+              innerRadius: 16,
+              gap: 4,
+              padding: EdgeInsets.zero,
+            ),
           ),
         ),
       ],
@@ -486,15 +489,15 @@ class _SettingsTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: subtitle == null ? 58 : 68),
+          constraints: BoxConstraints(minHeight: subtitle == null ? 52 : 64),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: iconBadge,
@@ -502,7 +505,7 @@ class _SettingsTile extends StatelessWidget {
                   alignment: Alignment.center,
                   child: AppMaterialIcon(icon, color: iconColor, size: 19),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

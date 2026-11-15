@@ -717,7 +717,7 @@ class _DayStreakCardState extends State<_DayStreakCard> {
                               child: FadeTransition(opacity: animation, child: child),
                             ),
                             child: used
-                                ? const Icon(Symbols.check_rounded, key: ValueKey('check'), color: Colors.white, size: 18)
+                                ? const Icon(Symbols.check_rounded, key: ValueKey('check'), color: Colors.white, size: 20)
                                 : const SizedBox.shrink(key: ValueKey('empty')),
                           ),
                         ),
@@ -808,13 +808,13 @@ class _VisitedSitesCard extends StatelessWidget {
                             width: avatarSize,
                             height: avatarSize,
                             decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                            child: Icon(Symbols.public_rounded, color: muted, size: 16),
+                            child: Icon(Symbols.public_rounded, color: muted, size: 20),
                           )
                         : Stack(
                             children: List.generate(hosts.length, (index) {
                               final host = hosts[index];
                               final encoded = browserFaviconCache.forUrl('https://$host');
-                              Widget icon = Icon(Symbols.public_rounded, color: accent, size: 14);
+                              Widget icon = Icon(Symbols.public_rounded, color: accent, size: 20);
                               if (encoded != null) {
                                 try {
                                   icon = ClipOval(
@@ -823,7 +823,7 @@ class _VisitedSitesCard extends StatelessWidget {
                                       width: 18,
                                       height: 18,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: accent, size: 14),
+                                      errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: accent, size: 20),
                                     ),
                                   );
                                 } catch (_) {}

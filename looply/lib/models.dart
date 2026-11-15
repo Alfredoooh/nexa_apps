@@ -349,7 +349,7 @@ class SearchEngine {
   final String urlTemplate;
   final String? assetPath;
   String buildUrl(String query) => urlTemplate.replaceAll('{q}', Uri.encodeQueryComponent(query));
-  String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+  String get faviconUrl => 'https://www.google.com/s2/favicons?domain=$domain&sz=128';
 }
 
 const List<SearchEngine> searchEngines = [

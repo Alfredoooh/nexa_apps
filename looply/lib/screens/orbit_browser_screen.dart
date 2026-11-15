@@ -103,7 +103,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     }
   }
 
-  Future<void> _openNativeBrowser() async {
+  Future<void> _openNativeBrowser({bool fadeTransition = false}) async {
     if (_opening || _disposed || !mounted) return;
 
     _opening = true;
@@ -138,6 +138,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           'tabCount': tabsController.count,
           'previewOnly': widget.previewOnly,
           'skipNativeEnterAnimation': widget.skipNativeEnterAnimation,
+          'fadeNativeEnterTransition': fadeTransition,
           'menuLabels': <String, String>{
             'bookmark': appText('add_bookmark'),
             'bookmarks': appText('bookmarks'),
@@ -344,7 +345,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     if (!mounted) return;
 
     final routeTabId = widget.tabId;
-    final route = page is SearchScreen
+    final isSearchPage = page is SearchScreen;
+    final route = isSearchPage
         ? FadePageRoute<void>(builder: (_) => page)
         : MaterialPageRoute<void>(builder: (_) => page);
     await Navigator.of(context).push<void>(route);
@@ -355,11 +357,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         widget.isActive &&
         tabsController.activeTabId == routeTabId &&
         tabsController.getTab(routeTabId) != null) {
-      await _reopen();
+      await _reopen(fadeTransition: isSearchPage);
     }
   }
 
-  Future<void> _reopen() async {
+  Future<void> _reopen({bool fadeTransition = false}) async {
     _opening = false;
 
     if (!mounted || _disposed) return;
@@ -369,7 +371,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     );
 
     if (mounted) {
-      await _openNativeBrowser();
+      await _openNativeBrowser(fadeTransition: fadeTransition);
     }
   }
 

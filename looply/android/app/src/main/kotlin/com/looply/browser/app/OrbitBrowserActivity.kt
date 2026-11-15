@@ -431,14 +431,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     "search",
                     secondaryText,
-                    dp(18),
+                    dp(20),
                 )
             )
         }
 
         titlePill.addView(
             faviconView,
-            LinearLayout.LayoutParams(dp(18), dp(18))
+            LinearLayout.LayoutParams(dp(20), dp(20))
         )
 
         titleView = TextView(this).apply {
@@ -1060,9 +1060,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     symbol,
                     toolbarText(),
-                    24f,
+                    20f,
                 ),
-                android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER),
+                android.widget.FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER),
             )
             setOnClickListener { onClick() }
         }
@@ -1218,8 +1218,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
-        val popupWidth = minOf(dp(360), screenWidth - dp(24)).coerceAtLeast(dp(260))
-        val maxPopupHeight = (screenHeight * .46f).toInt().coerceAtLeast(dp(260))
+        val popupWidth = minOf(dp(284), screenWidth - dp(24)).coerceAtLeast(dp(260))
+        val maxPopupHeight = (screenHeight * .76f).toInt().coerceAtLeast(dp(300))
         val surface = when {
             !dark -> Color.WHITE
             pureBlack -> Color.rgb(16, 16, 16)
@@ -1272,7 +1272,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         this@OrbitBrowserActivity,
                         glyph,
                         primaryText,
-                        dp(24),
+                        dp(20),
                     )
                 )
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -1283,7 +1283,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 isFocusable = enabled
                 alpha = if (enabled) 1f else .38f
                 background = rounded(quickSurface, 999)
-                addView(icon, android.widget.FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+                addView(icon, android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
                 setOnClickListener {
                     if (enabled) {
                         popupWindowRef?.dismiss()
@@ -1293,9 +1293,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
             quickRow.addView(
                 frame,
-                LinearLayout.LayoutParams(dp(54), dp(48)).apply {
-                    marginStart = dp(3)
-                    marginEnd = dp(3)
+                LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                    // Mantém o trilho realmente deslocável: os cinco atalhos
+                    // excedem ligeiramente a largura visível do popup estreito.
+                    marginStart = dp(5)
+                    marginEnd = dp(5)
                 },
             )
         }
@@ -1358,14 +1360,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
                                 this@OrbitBrowserActivity,
                                 glyph,
                                 secondaryText,
-                                dp(24),
+                                dp(20),
                             )
                         )
                         scaleType = ImageView.ScaleType.FIT_CENTER
                     },
-                    LinearLayout.LayoutParams(dp(26), dp(26)),
+                    LinearLayout.LayoutParams(dp(22), dp(22)),
                 )
-                addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(13), 1))
+                addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(12), 1))
                 addView(
                     TextView(this@OrbitBrowserActivity).apply {
                         text = label
@@ -1428,7 +1430,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         menuRow(menuText("share", "Share page"), "share") { shareAddress() }
         menuRow(menuText("settings", "Browser settings"), "settings") { finishToFlutter("settings") }
 
-        val menuHeight = minOf(dp(300), maxPopupHeight - dp(66)).coerceAtLeast(dp(120))
+        val menuHeight = minOf(dp(570), maxPopupHeight - dp(66)).coerceAtLeast(dp(180))
         content.addView(menuScroll, LinearLayout.LayoutParams(-1, menuHeight))
         val popupHeight = (menuHeight + dp(76)).coerceAtMost(maxPopupHeight)
 
@@ -1509,9 +1511,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     this@OrbitBrowserActivity,
                     icon,
                     secondaryText,
-                    24f,
+                    20f,
                 ),
-                android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER)
+                android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER)
             )
         }
         row.addView(iconCell, LinearLayout.LayoutParams(dp(44), dp(56)))
@@ -1678,10 +1680,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 this,
                 if (pageScale) "zoom_in" else "text_fields",
                 primaryText,
-                24f,
+                20f,
                 title
             ),
-            LinearLayout.LayoutParams(dp(30), dp(30)).apply {
+            LinearLayout.LayoutParams(dp(24), dp(24)).apply {
                 marginEnd = dp(12)
             }
         )
@@ -2233,10 +2235,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         setResult(Activity.RESULT_OK, output)
         finish()
-        if (action == "tabs") {
-            overridePendingTransition(0, 0)
-        } else {
-            overridePendingTransition(0, R.anim.browser_slide_down)
+        when (action) {
+            "tabs" -> overridePendingTransition(0, 0)
+            "search" -> overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            else -> overridePendingTransition(0, R.anim.browser_slide_down)
         }
     }
 

@@ -4,6 +4,7 @@ import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
 import 'material_symbols.dart';
+import 'search_engine_pngs.dart';
 
 void showSearchEnginePicker(BuildContext context) {
   showModalBottomSheet<void>(
@@ -100,14 +101,15 @@ void showSearchEnginePicker(BuildContext context) {
                       shape: BoxShape.circle,
                       color: pillForMode(context, mode),
                     ),
-                    child: Image.network(
-                      engine.faviconUrl,
+                    child: Image.memory(
+                      searchEnginePng(engine.name) ?? searchEnginePng('Google')!,
+                      width: 20,
+                      height: 20,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => AppMaterialIcon(
-                        AppIcons.globe,
-                        color: mutedForMode(context, mode),
-                        size: 18,
-                      ),
+                      filterQuality: FilterQuality.high,
+                      gaplessPlayback: true,
+                      cacheWidth: 80,
+                      cacheHeight: 80,
                     ),
                   ),
                   title: Text(

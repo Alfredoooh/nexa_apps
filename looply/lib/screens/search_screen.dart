@@ -13,6 +13,7 @@ import '../shell/shell_tab_request.dart';
 import '../widgets/search_engine_picker.dart';
 import '../localization.dart';
 import '../widgets/material_symbols.dart';
+import '../widgets/search_engine_pngs.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, this.isIncognito = false});
@@ -185,7 +186,7 @@ class _SearchScreenState extends State<SearchScreen> {
         children: [
           Row(
             children: [
-              AppMaterialIcon(AppIcons.globe, color: muted, size: 22),
+              AppMaterialIcon(AppIcons.globe, color: muted, size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -213,7 +214,7 @@ class _SearchScreenState extends State<SearchScreen> {
               Expanded(
                 child: TextButton.icon(
                   onPressed: () => _copyCurrentPage(tab),
-                  icon: AppMaterialIcon(AppIcons.copy, size: 18, color: muted),
+                  icon: AppMaterialIcon(AppIcons.copy, size: 20, color: muted),
                   label: Text(
                     appText('copy_address'),
                     maxLines: 1,
@@ -231,7 +232,7 @@ class _SearchScreenState extends State<SearchScreen> {
               Expanded(
                 child: TextButton.icon(
                   onPressed: () => _editCurrentPage(tab),
-                  icon: AppMaterialIcon(AppIcons.pencilSimple, size: 18, color: muted),
+                  icon: AppMaterialIcon(AppIcons.pencilSimple, size: 20, color: muted),
                   label: Text(
                     appText('edit_link'),
                     maxLines: 1,
@@ -264,20 +265,21 @@ class _SearchScreenState extends State<SearchScreen> {
             ? AppMaterialIcon(AppIcons.sparkles, size: 20, color: accentColor(context))
             : ValueListenableBuilder<SearchEngine>(
                 valueListenable: activeSearchEngine,
-                builder: (context, engine, _) => ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.network(
-                    engine.faviconUrl,
-                    width: 21,
-                    height: 21,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => AppMaterialIcon(
-                      AppIcons.globe,
-                      color: muted,
-                      size: 20,
-                    ),
-                  ),
-                ),
+                builder: (context, engine, _) {
+                  final png = searchEnginePng(engine.name);
+                  return png == null
+                      ? const SizedBox(width: 20, height: 20)
+                      : Image.memory(
+                          png,
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          gaplessPlayback: true,
+                          cacheWidth: 80,
+                          cacheHeight: 80,
+                        );
+                },
               ),
       ),
     );
@@ -424,7 +426,7 @@ class _SearchScreenState extends State<SearchScreen> {
         return _FaviconIcon(url: favicon, fallback: AppIcons.globe, muted: muted);
       }
     }
-    return AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 18);
+    return AppMaterialIcon(AppIcons.magnifyingGlass, color: muted, size: 20);
   }
 
   Widget? _suggestionTrailingPhoto(String suggestion) {
@@ -458,7 +460,7 @@ class _SearchScreenState extends State<SearchScreen> {
           shape: BoxShape.circle,
           color: muted.withOpacity(.35),
         ),
-        child: Icon(Icons.close, size: 14, color: Theme.of(context).scaffoldBackgroundColor),
+        child: AppMaterialIcon(AppIcons.x, size: 20, color: Theme.of(context).scaffoldBackgroundColor),
       ),
     );
   }
@@ -477,9 +479,9 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
         M3ESegmentedColumn(
           color: settingsCardColor(context),
-          outerRadius: 22,
-          innerRadius: 8,
-          gap: 2,
+          outerRadius: 20,
+          innerRadius: 16,
+          gap: 4,
           padding: EdgeInsets.zero,
           onTap: (index) => _submitSearch(queries[index]),
           children: [
@@ -489,7 +491,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 headline: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
                 trailing: IconButton(
                   tooltip: appText('fill_search'),
-                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 20),
                   onPressed: () => _fillText(query),
                 ),
               ),
@@ -503,9 +505,9 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_suggestions.isEmpty) return const SizedBox.shrink();
     return M3ESegmentedColumn(
       color: settingsCardColor(context),
-      outerRadius: 22,
-      innerRadius: 8,
-      gap: 2,
+      outerRadius: 20,
+      innerRadius: 16,
+      gap: 4,
       padding: EdgeInsets.zero,
       onTap: (index) => _submitSearch(_suggestions[index]),
       children: [
@@ -515,7 +517,7 @@ class _SearchScreenState extends State<SearchScreen> {
             headline: Text(suggestion, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14)),
             trailing: _suggestionTrailingPhoto(suggestion) ?? IconButton(
               tooltip: appText('fill_search'),
-              icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 19),
+              icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 20),
               onPressed: () => _fillText(suggestion),
             ),
           ),

@@ -156,6 +156,7 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
   return ThemeData(
     useMaterial3: true,
     brightness: brightness,
+    iconTheme: const IconThemeData(size: 20, weight: 300, opticalSize: 20),
     colorScheme: scheme,
     scaffoldBackgroundColor: bg,
     canvasColor: panel,
@@ -206,7 +207,12 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
         final selected = states.contains(WidgetState.selected);
         return TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w600 : FontWeight.w400, color: selected ? text : muted);
       }),
-      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(color: states.contains(WidgetState.selected) ? text : muted)),
+      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+        color: states.contains(WidgetState.selected) ? text : muted,
+        size: 20,
+        weight: 300,
+        opticalSize: 20,
+      )),
     ),
     textTheme: TextTheme(
       headlineSmall: TextStyle(color: text, fontWeight: FontWeight.w800),

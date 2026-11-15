@@ -556,7 +556,7 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Symbols.open_in_new_rounded, size: 18, color: muted),
+              Icon(Symbols.open_in_new_rounded, size: 20, color: muted),
             ],
           ),
         ),

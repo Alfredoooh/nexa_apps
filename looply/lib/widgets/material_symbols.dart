@@ -143,12 +143,14 @@ class AppMaterialIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Icon(
       icon,
-      size: size == null ? 26 : (size! * 1.20).clamp(18, 48).toDouble(),
+      // Standardiza os ícones normais em 20dp e mantém apenas os glifos
+      // deliberadamente grandes (estados vazios/ilustrações) no tamanho pedido.
+      size: size == null ? 20 : (size! <= 24 ? 20 : size!),
       color: color,
       fill: fill,
-      weight: weight,
+      weight: weight ?? 300,
       grade: grade,
-      opticalSize: opticalSize,
+      opticalSize: opticalSize ?? 20,
       shadows: shadows,
       semanticLabel: semanticLabel,
       textDirection: textDirection,
@@ -166,7 +168,7 @@ class AppBackButton extends StatelessWidget {
     required this.tooltip,
     this.onPressed,
     this.color,
-    this.size = 22,
+    this.size = 20,
     this.buttonSize = 44,
   });
 

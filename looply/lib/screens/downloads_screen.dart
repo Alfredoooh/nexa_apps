@@ -783,7 +783,7 @@ class _MediaTileState extends State<_MediaTile> {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
-                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 16),
+                    child: const Icon(Symbols.check_rounded, color: Colors.white, size: 20),
                   ),
                 ),
               ),
@@ -913,7 +913,7 @@ class _DownloadCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   if (entry.canOpenLocally)
-                    Icon(Symbols.open_in_new_rounded, color: muted, size: 18)
+                    Icon(Symbols.open_in_new_rounded, color: muted, size: 20)
                   else if (isDownloading)
                     SizedBox(
                       width: 18,
