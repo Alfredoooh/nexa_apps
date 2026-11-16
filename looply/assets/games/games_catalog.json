@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "catalog": {
+    "id": "browseit-games",
+    "name": "BrowseIt Games",
+    "language": "pt",
+    "updatedAt": "2026-11-16",
+    "description": "Catálogo remoto de jogos do BrowseIt. Edite este ficheiro no seu repositório para adicionar, remover ou atualizar jogos."
+  },
+  "repository": {
+    "provider": "github",
+    "catalogUrl": "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/assets/games/games_catalog.json",
+    "assetsBaseUrl": "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/assets/games/",
+    "gamesBaseUrl": "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/assets/games/",
+    "replaceMe": "Substitua SEU_USUARIO/SEU_REPOSITORIO pelo proprietário e nome do repositório. Preserve o caminho assets/games/ ou atualize estes três campos."
+  },
+  "launchTypes": {
+    "url": "Abre uma página de jogo já hospedada (por exemplo, um site HTTPS com o jogo pronto).",
+    "source_url": "Descarrega HTML de uma URL HTTPS e entrega-o à WebView como text/html. Adequado para ficheiros .html servidos como text/plain pelo GitHub Raw.",
+    "html": "Renderiza o código HTML guardado no campo launch.html. Pode indicar launch.baseUrl para resolver recursos relativos."
+  },
+  "categories": [
+    { "id": "puzzle", "name": "Puzzle", "description": "Lógica, combinações e desafios visuais." },
+    { "id": "word", "name": "Palavras", "description": "Letras, vocabulário e desafios de palavras." },
+    { "id": "arcade", "name": "Arcade", "description": "Jogos rápidos de habilidade e reflexos." },
+    { "id": "sports", "name": "Desporto", "description": "Competições e jogos desportivos." },
+    { "id": "strategy", "name": "Estratégia", "description": "Planeamento e estratégia." }
+  ],
+  "games": [
+    {
+      "id": "2048",
+      "name": "2048",
+      "description": "Junta peças com o mesmo valor e tenta alcançar 2048.",
+      "category": "puzzle",
+      "tags": ["números", "lógica", "offline"],
+      "icon": "covers/2048.png",
+      "cover": "covers/2048.png",
+      "fallbackAsset": "assets/games/covers/2048.png",
+      "featured": true,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/2048.html" }
+    },
+    {
+      "id": "wordle-unlimited",
+      "name": "Wordle Unlimited",
+      "description": "Descobre a palavra escondida através de tentativas e pistas.",
+      "category": "word",
+      "tags": ["palavras", "vocabulário"],
+      "icon": "covers/wordle.png",
+      "cover": "covers/wordle.png",
+      "fallbackAsset": "assets/games/covers/wordle.png",
+      "featured": true,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/wordle-unlimited.html" }
+    },
+    {
+      "id": "doodle-jump",
+      "name": "Doodle Jump",
+      "description": "Salta de plataforma em plataforma e sobe o mais alto possível.",
+      "category": "arcade",
+      "tags": ["plataformas", "reflexos"],
+      "icon": "covers/doodle-jump.png",
+      "cover": "covers/doodle-jump.png",
+      "fallbackAsset": "assets/games/covers/doodle-jump.png",
+      "featured": false,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/doodle-jump.html" }
+    },
+    {
+      "id": "stack",
+      "name": "Stack",
+      "description": "Empilha blocos com precisão e constrói a torre mais alta.",
+      "category": "arcade",
+      "tags": ["precisão", "arcade"],
+      "icon": "covers/stack.png",
+      "cover": "covers/stack.png",
+      "fallbackAsset": "assets/games/covers/stack.png",
+      "featured": false,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/stack.html" }
+    },
+    {
+      "id": "candy-crush",
+      "name": "Candy Crush",
+      "description": "Combina doces da mesma cor e completa cada objetivo.",
+      "category": "puzzle",
+      "tags": ["combinação", "cores"],
+      "icon": "covers/candy-crush.png",
+      "cover": "covers/candy-crush.png",
+      "fallbackAsset": "assets/games/covers/candy-crush.png",
+      "featured": true,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/candy-crush.html" }
+    },
+    {
+      "id": "idle-breakout",
+      "name": "Idle Breakout",
+      "description": "Parte os blocos e evolui para ultrapassar novos níveis.",
+      "category": "arcade",
+      "tags": ["blocos", "progressão"],
+      "icon": "covers/idle-breakout.png",
+      "cover": "covers/idle-breakout.png",
+      "fallbackAsset": "assets/games/covers/idle-breakout.png",
+      "featured": false,
+      "orientation": "portrait",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/idle-breakout.html" }
+    },
+    {
+      "id": "google-baseball",
+      "name": "Google Baseball",
+      "description": "Entra em campo e tenta conseguir a melhor pontuação.",
+      "category": "sports",
+      "tags": ["basebol", "desporto"],
+      "icon": "covers/baseball.png",
+      "cover": "covers/baseball.png",
+      "fallbackAsset": "assets/games/covers/baseball.png",
+      "featured": false,
+      "orientation": "landscape",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/google-baseball.html" }
+    },
+    {
+      "id": "chess",
+      "name": "Chess",
+      "description": "Joga xadrez e planeia os teus movimentos com antecedência.",
+      "category": "strategy",
+      "tags": ["xadrez", "estratégia"],
+      "icon": "covers/chess.png",
+      "cover": "covers/chess.png",
+      "fallbackAsset": "assets/games/covers/chess.png",
+      "featured": false,
+      "orientation": "landscape",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/chess.html" }
+    },
+    {
+      "id": "table-tennis-world-tour",
+      "name": "Table Tennis World Tour",
+      "description": "Compete em partidas de ténis de mesa e vence torneios.",
+      "category": "sports",
+      "tags": ["ténis de mesa", "torneio"],
+      "icon": "covers/table-tennis.png",
+      "cover": "covers/table-tennis.png",
+      "fallbackAsset": "assets/games/covers/table-tennis.png",
+      "featured": true,
+      "orientation": "landscape",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/table-tennis-world-tour.html" }
+    },
+    {
+      "id": "pac-man",
+      "name": "Pac-Man",
+      "description": "Percorre o labirinto, recolhe pontos e evita os fantasmas.",
+      "category": "arcade",
+      "tags": ["labirinto", "clássico"],
+      "icon": "covers/pac-man.png",
+      "cover": "covers/pac-man.png",
+      "fallbackAsset": "assets/games/covers/pac-man.png",
+      "featured": true,
+      "orientation": "landscape",
+      "launch": { "type": "source_url", "url": "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/pac-man.html" }
+    }
+  ]
+}

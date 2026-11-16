@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:material_ui/material_ui.dart';
 
 import '../localization.dart';
@@ -25,24 +23,14 @@ void showSearchEnginePicker(BuildContext context) {
         final text = textForMode(context, mode);
         final muted = mutedForMode(context, mode);
         final accent = accentForMode(context, mode);
-        final aiLogo = searchEnginePng('AI Search') ?? searchEnginePng('Google');
-        final googleLogo = searchEnginePng('Google');
-
-        Widget engineLogo(Uint8List? bytes) {
-          if (bytes == null) {
-            return AppMaterialIcon(AppIcons.compass, color: muted, size: 24);
-          }
-          return Image.memory(
-            bytes,
-            width: 24,
-            height: 24,
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            gaplessPlayback: true,
-            cacheWidth: 80,
-            cacheHeight: 80,
-          );
-        }
+        Widget engineLogo(String name) => Image.asset(
+              searchEngineAsset(name),
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.compass, color: muted, size: 24),
+            );
 
         return Material(
           color: surface,
@@ -97,7 +85,7 @@ void showSearchEnginePicker(BuildContext context) {
                             shape: BoxShape.circle,
                             color: pillForMode(context, mode),
                           ),
-                          child: Center(child: engineLogo(aiLogo)),
+                          child: Center(child: engineLogo('AI Search')),
                         ),
                         title: Text(
                           appText('ai_mode'),
@@ -129,7 +117,7 @@ void showSearchEnginePicker(BuildContext context) {
                             color: pillForMode(context, mode),
                           ),
                           child: Center(
-                            child: engineLogo(searchEnginePng(engine.name) ?? googleLogo),
+                            child: engineLogo(engine.name),
                           ),
                         ),
                         title: Text(

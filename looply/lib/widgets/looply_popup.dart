@@ -73,7 +73,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         m3e_menu.M3ECheckboxMenuButton(
           value: _aiValue,
           closeOnActivate: false,
-          leadingIcon: Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
+          leadingIcon: Image.asset(searchEngineAsset('AI Search'), width: 24, height: 24, fit: BoxFit.contain),
           itemStyle: itemStyle,
           onChanged: (value) {
             final next = value ?? false;

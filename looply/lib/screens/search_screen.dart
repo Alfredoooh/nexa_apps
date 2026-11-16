@@ -21,9 +21,13 @@ class SearchScreen extends StatefulWidget {
     super.key,
     this.isIncognito = false,
     this.showCurrentPageCard = false,
+    this.controller,
+    this.autoFocusDelay = Duration.zero,
   });
   final bool isIncognito;
   final bool showCurrentPageCard;
+  final TextEditingController? controller;
+  final Duration autoFocusDelay;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -31,6 +35,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
   late final TextEditingController _controller;
+  late final bool _ownsController;
   late final FocusNode _focusNode;
   Timer? _debounce;
   List<String> _suggestions = <String>[];
@@ -45,7 +50,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController();
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? TextEditingController();
     _focusNode = FocusNode();
     _searchEntranceController = AnimationController(
       vsync: this,
@@ -59,10 +65,13 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     _searchEntranceFade = Tween<double>(begin: 0, end: 1).animate(entranceCurve);
     _controller.addListener(_onQueryChanged);
     aiSearchModeEnabled.addListener(_onAiModeChanged);
+    if (!_ownsController) _searchEntranceController.value = 1;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _searchEntranceController.forward();
-      _focusNode.requestFocus();
+      if (_ownsController) _searchEntranceController.forward();
+      Future<void>.delayed(widget.autoFocusDelay, () {
+        if (mounted) _focusNode.requestFocus();
+      });
     });
   }
 
@@ -71,7 +80,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     _debounce?.cancel();
     _controller.removeListener(_onQueryChanged);
     aiSearchModeEnabled.removeListener(_onAiModeChanged);
-    _controller.dispose();
+    if (_ownsController) _controller.dispose();
     _focusNode.dispose();
     _searchEntranceController.dispose();
     super.dispose();
@@ -330,33 +339,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 40, height: 40),
         onPressed: () => showSearchEnginePicker(context),
-        icon: aiEnabled
-            ? Image.memory(
-                searchEnginePng('AI Search')!,
-                width: 24,
-                height: 24,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
-                gaplessPlayback: true,
-              )
-            : ValueListenableBuilder<SearchEngine>(
-                valueListenable: activeSearchEngine,
-                builder: (context, engine, _) {
-                  final png = searchEnginePng(engine.name);
-                  return png == null
-                      ? const SizedBox(width: 24, height: 24)
-                      : Image.memory(
-                          png,
-                          width: 24,
-                          height: 24,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          gaplessPlayback: true,
-                          cacheWidth: 80,
-                          cacheHeight: 80,
-                        );
-                },
-              ),
+        icon: ValueListenableBuilder<SearchEngine>(
+          valueListenable: activeSearchEngine,
+          builder: (context, engine, _) => Image.asset(
+            searchEngineAsset(aiEnabled ? 'AI Search' : engine.name),
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.magnifyingGlass, color: muted),
+          ),
+        ),
       ),
     );
   }
@@ -684,7 +677,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 10, 12),
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
                   child: FadeTransition(
                     opacity: _searchEntranceFade,
                     child: ScaleTransition(

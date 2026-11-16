@@ -3,7 +3,7 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
-def browseItWebClientId = (project.findProperty("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: System.getenv("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: "").toString()
+def browseItWebClientId = (project.findProperty("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: System.getenv("BROWSEIT_GOOGLE_WEB_CLIENT_ID") ?: "391370248709-t7rbdm2e6lpe1pujf2u9tb7g8n19cgs1.apps.googleusercontent.com").toString()
 def browseItStoreFile = (project.findProperty("BROWSEIT_KEYSTORE_PATH") ?: System.getenv("BROWSEIT_KEYSTORE_PATH") ?: "").toString()
 def browseItStorePassword = (project.findProperty("BROWSEIT_STORE_PASSWORD") ?: System.getenv("BROWSEIT_STORE_PASSWORD") ?: "").toString()
 def browseItKeyPassword = (project.findProperty("BROWSEIT_KEY_PASSWORD") ?: System.getenv("BROWSEIT_KEY_PASSWORD") ?: "").toString()

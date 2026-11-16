@@ -7,25 +7,67 @@ import 'material_symbols.dart';
 
 /// Mantém os ícones da barra de estado legíveis e aplica o mesmo escurecimento
 /// ao abrir qualquer modal (diálogo ou bottom sheet) do BrowseIt.
-class LooplyModalSystemBar extends StatelessWidget {
+class LooplyModalSystemBar extends StatefulWidget {
   const LooplyModalSystemBar({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  State<LooplyModalSystemBar> createState() => _LooplyModalSystemBarState();
+}
+
+class _LooplyModalSystemBarState extends State<LooplyModalSystemBar> {
+  static int _openOverlays = 0;
+  static SystemUiOverlayStyle? _restoreStyle;
+  bool _registered = false;
+  late SystemUiOverlayStyle _modalStyle;
+
+  SystemUiOverlayStyle _baseStyle(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dimmedStatusBar = Color.alphaBlend(
-      Colors.black.withOpacity(.30),
-      pageBg(context),
-    );
-    final overlayStyle = (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
-      statusBarColor: dimmedStatusBar,
+    final bg = pageBg(context);
+    return (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
+      statusBarColor: bg,
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: bg,
+      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
     );
-    return AnnotatedRegion<SystemUiOverlayStyle>(value: overlayStyle, child: child);
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final base = _baseStyle(context);
+    final dimmedStatusBar = Color.alphaBlend(Colors.black.withOpacity(.30), pageBg(context));
+    _modalStyle = base.copyWith(statusBarColor: dimmedStatusBar);
+    if (!_registered) {
+      _registered = true;
+      if (_openOverlays == 0) _restoreStyle = base;
+      _openOverlays++;
+    }
+    // AnnotatedRegion alone misses modal routes whose SafeArea starts below
+    // the status bar. Set the native overlay explicitly as well.
+    SystemChrome.setSystemUIOverlayStyle(_modalStyle);
+  }
+
+  @override
+  void dispose() {
+    if (_registered) {
+      _openOverlays = (_openOverlays - 1).clamp(0, 1000).toInt();
+      if (_openOverlays == 0) {
+        final restore = _restoreStyle;
+        if (restore != null) SystemChrome.setSystemUIOverlayStyle(restore);
+        _restoreStyle = null;
+      }
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: _modalStyle,
+        child: widget.child,
+      );
 }
 
 class LooplyDialogAction<T> {

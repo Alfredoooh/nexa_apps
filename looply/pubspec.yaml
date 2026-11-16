@@ -38,17 +38,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/apps/ai_search/index.html
-    - assets/images/logo.svg
-    - assets/apps/ai_search/
-    - assets/icons/svg/
-    - assets/icons/svg/fill/
-    - assets/icons/svg/regular/
-    - assets/images/avatar.png
-    - assets/images/looply_original_icon.png
-    - assets/images/looply_icon.png
-    - assets/images/looply_mark.png
-    - assets/images/logo_text.svg
-    - assets/images/share/whatsapp.png
-    - assets/images/share/telegram.png
     - assets/search_engines/
+    - assets/games/
+    - assets/games/covers/
+    - assets/icons/svg/regular/menu-options.svg
+    - assets/icons/svg/regular/tabs-counter.svg
+    - assets/images/looply_icon.png
+    - images/avatar.png

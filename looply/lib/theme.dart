@@ -156,7 +156,21 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
   final text = isDark ? looplyTextDark : looplyTextLight;
   final muted = isDark ? looplyMutedDark : looplyMutedLight;
   final accent = isDark ? looplyBlueDark : looplyPrimary;
-  final scheme = ColorScheme.fromSeed(seedColor: looplyPrimary, brightness: brightness, surface: panel).copyWith(primary: accent);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: looplyPrimary,
+    brightness: brightness,
+    surface: panel,
+  ).copyWith(
+    primary: accent,
+    onPrimary: isDark ? const Color(0xFF071A31) : Colors.white,
+    secondary: accent,
+    onSecondary: isDark ? const Color(0xFF071A31) : Colors.white,
+    tertiary: accent,
+    onTertiary: isDark ? const Color(0xFF071A31) : Colors.white,
+    primaryContainer: accent.withOpacity(isDark ? .24 : .12),
+    secondaryContainer: accent.withOpacity(isDark ? .24 : .12),
+    tertiaryContainer: accent.withOpacity(isDark ? .24 : .12),
+  );
 
   return ThemeData(
     useMaterial3: true,

@@ -281,25 +281,42 @@ class _SiteUsageSliverAppBar extends StatelessWidget {
               icon: AppIcons.arrowLeft,
               onTap: onBack,
             ),
-      title: searchActive
-          ? _SiteUsageSearchField(
-              controller: searchController,
-              focusNode: searchFocusNode,
-              onBack: onBack,
-            )
-          : Text(
-              appText('visited_sites'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w500),
-            ),
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(sizeFactor: animation, axis: Axis.horizontal, axisAlignment: -1, child: child),
+        ),
+        child: searchActive
+            ? _SiteUsageSearchField(
+                key: const ValueKey<String>('site-usage-search-field'),
+                controller: searchController,
+                focusNode: searchFocusNode,
+                onBack: onBack,
+              )
+            : Text(
+                appText('visited_sites'),
+                key: const ValueKey<String>('site-usage-title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w500),
+              ),
+      ),
       actions: searchActive
           ? const []
           : [
-              _SiteUsageIconButton(
-                tooltip: appText('search_history'),
-                icon: AppIcons.magnifyingGlass,
-                onTap: onOpenSearch,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: _SiteUsageIconButton(
+                  key: const ValueKey<String>('site-usage-search-action'),
+                  tooltip: appText('search_history'),
+                  icon: AppIcons.magnifyingGlass,
+                  onTap: onOpenSearch,
+                ),
               ),
               const SizedBox(width: 4),
             ],
@@ -326,45 +343,51 @@ class _SiteUsageSearchField extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
 
-    return Row(
-      children: [
-        _SiteUsageIconButton(
-          tooltip: appText('close'),
-          icon: AppIcons.arrowLeft,
-          onTap: onBack,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            autofocus: true,
-            textInputAction: TextInputAction.search,
-            textAlignVertical: TextAlignVertical.center,
-            style: TextStyle(color: text, fontSize: 18),
-            cursorColor: accentColor(context),
-            decoration: InputDecoration(
-              hintText: appText('search_history'),
-              hintStyle: TextStyle(color: muted, fontSize: 18),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: controller,
-                builder: (context, value, _) {
-                  if (value.text.isEmpty) return const SizedBox.shrink();
-                  return _SiteUsageIconButton(
-                    tooltip: appText('close'),
-                    icon: AppIcons.x,
-                    size: 24,
-                    onTap: controller.clear,
-                  );
-                },
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: 2, right: 12),
+      decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        children: [
+          _SiteUsageIconButton(
+            tooltip: appText('close_search'),
+            icon: AppIcons.arrowLeft,
+            size: 24,
+            onTap: onBack,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              textAlignVertical: TextAlignVertical.center,
+              style: TextStyle(color: text, fontSize: 14),
+              cursorColor: accentColor(context),
+              decoration: InputDecoration(
+                hintText: appText('search_history'),
+                hintStyle: TextStyle(color: muted, fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-        ),
-      ],
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, _) => value.text.isEmpty
+                ? const SizedBox.shrink()
+                : GestureDetector(
+                    onTap: controller.clear,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: AppMaterialIcon(AppIcons.x, color: muted, size: 15),
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -481,16 +504,13 @@ class _SiteUsageItemContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        SizedBox(
-          height: 10,
-          child: M3EProgressIndicator.linearWavy(
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
             value: fraction.clamp(0.0, 1.0),
+            minHeight: 4,
             color: accent,
-            trackColor: pillColor(context),
-            strokeWidth: 3,
-            trackStrokeWidth: 3,
-            wavelength: 18,
-            waveSpeed: 8,
+            backgroundColor: pillColor(context),
           ),
         ),
         const SizedBox(height: 8),

@@ -17,7 +17,6 @@ import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/games_screen.dart';
-import 'shell/fade_page_route.dart';
 import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
@@ -176,9 +175,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
   // As páginas principais são Início e Atividade.
-  final List<String> _screenKeys = const ['home_screen', 'activity_screen'];
-  List<String> get _screenLabels => <String>[appText('home'), appText('activity')];
-  final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise];
+  final List<String> _screenKeys = const ['home_screen', 'activity_screen', 'games_screen'];
+  List<String> get _screenLabels => <String>[appText('home'), appText('activity'), appText('games')];
+  final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise, AppIcons.sportsEsports];
   late final AnimationController _morphController;
   late final AnimationController _browserFadeController;
   late final AnimationController _drawerController;
@@ -1224,15 +1223,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     unawaited(_closeTabsGrid(openTab: homeTab));
   }
 
-  // Jogos substitui o antigo atalho de Pesquisa na bottom bar. A pesquisa
-  // continua acessível pelo input da Home; o catálogo abre numa rota própria.
-  void _openGamesFromBottomBar() {
-    Navigator.of(context).push<void>(
-      FadePageRoute<void>(builder: (_) => const GamesScreen()),
-    );
-  }
-
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1258,6 +1248,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     final shellPages = <Widget>[
       HomeScreen(onOpenDrawer: _openShellDrawer),
       const ActivityScreen(),
+      const GamesScreen(),
     ];
     final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
         ? null
@@ -1389,16 +1380,15 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         bottomNavigationBar: Offstage(
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: _LooplyBottomBar(
-            // Início e Atividade mapeiam 1:1 para _selectedTab (0 e 1).
-            // Abas e Jogos são ações de rota e não alteram o índice da shell.
-            selectedIndex: switch (_selectedTab) { 1 => 1, _ => 0 },
+            // A shell mantém Início, Atividade e Jogos; Abas é uma ação.
+            selectedIndex: switch (_selectedTab) { 1 => 1, 2 => 3, _ => 0 },
             tabCount: tabsController.count,
             onSelect: (index) {
               switch (index) {
                 case 2:
                   _openTabsGrid();
                 case 3:
-                  _openGamesFromBottomBar();
+                  unawaited(_navigateToShellScreen(2));
                 default:
                   unawaited(_navigateToShellScreen(index));
               }
@@ -1530,12 +1520,12 @@ class _LooplyBottomBar extends StatefulWidget {
 class _LooplyBottomBarState extends State<_LooplyBottomBar>
     with SingleTickerProviderStateMixin {
   static const int _itemCount = 4;
-  // Apenas os índices 0 e 1 (Início/Atividade) são "selecionáveis": têm
-  // conteúdo próprio na shell e podem receber o indicador em repouso.
-  static const Set<int> _selectableIndices = {0, 1};
+  // Abas (2) abre a grelha e não é uma página persistente. Os restantes
+  // índices representam páginas reais da shell e recebem o indicador.
+  static const Set<int> _selectableIndices = {0, 1, 3};
 
   late final AnimationController _dragController;
-  double _indicatorPosition = 0; // 0..1, fração do índice selecionável atual
+  double _indicatorPosition = 0; // Índice contínuo do item selecionado da barra
   bool _isDragging = false;
   double? _dragLocalX;
   double _barWidth = 0;
@@ -1543,7 +1533,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
   @override
   void initState() {
     super.initState();
-    _indicatorPosition = widget.selectedIndex.clamp(0, 1).toDouble();
+    _indicatorPosition = widget.selectedIndex.clamp(0, 3).toDouble();
     _dragController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1),
@@ -1554,7 +1544,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
   void didUpdateWidget(covariant _LooplyBottomBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_isDragging && oldWidget.selectedIndex != widget.selectedIndex) {
-      _animateIndicatorTo(widget.selectedIndex.clamp(0, 1).toDouble());
+      _animateIndicatorTo(widget.selectedIndex.clamp(0, 3).toDouble());
     }
   }
 
@@ -1599,13 +1589,11 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
     if (_barWidth <= 0) return;
     _dragLocalX = details.localPosition.dx;
     final slotWidth = _barWidth / _itemCount;
-    // Posição contínua do indicador seguindo o dedo, restrita à faixa dos
-    // slots selecionáveis (0..1) — ao arrastar para Abas/Pesquisa o
-    // indicador simplesmente para na borda, sem invadir esses slots, já
-    // que eles não têm estado "selecionado" próprio.
+    // O indicador acompanha o dedo por toda a barra; ao terminar sobre
+    // Abas regressa ao item selecionado, pois Abas é apenas uma ação.
     final continuousIndex = (details.localPosition.dx / slotWidth) - .5;
     setState(() {
-      _indicatorPosition = continuousIndex.clamp(0.0, 1.0);
+      _indicatorPosition = continuousIndex.clamp(0.0, 3.0);
     });
   }
 
@@ -1619,9 +1607,8 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
       _animateIndicatorTo(slot.toDouble());
       widget.onSelect(slot);
     } else {
-      // Abas ou Jogos: dispara a ação, mas o indicador volta a repousar
-      // sobre o item realmente selecionado da shell.
-      _animateIndicatorTo(widget.selectedIndex.clamp(0, 1).toDouble());
+      // Abas: dispara a ação e mantém o indicador na página atual.
+      _animateIndicatorTo(widget.selectedIndex.clamp(0, 3).toDouble());
       widget.onSelect(slot);
     }
   }
@@ -1734,7 +1721,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
                           _FloatingBarItem(
                             icon: AppIcons.sportsEsports,
                             label: appText('games'),
-                            selected: false,
+                            selected: widget.selectedIndex == 3,
                             selectedColor: selected,
                             unselectedColor: foreground,
                             onTapUp: () => _onTapUpItem(3),

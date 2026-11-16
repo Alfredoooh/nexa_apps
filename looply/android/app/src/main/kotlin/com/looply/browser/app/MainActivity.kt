@@ -358,6 +358,9 @@ class MainActivity : FlutterActivity() {
                     result.success(
                         mapOf(
                             "idToken" to googleCredential.idToken,
+                            "email" to googleCredential.email,
+                            "displayName" to (googleCredential.displayName ?: ""),
+                            "photoUrl" to (googleCredential.profilePictureUri?.toString() ?: ""),
                             "nonce" to nonce,
                         ),
                     )
@@ -644,35 +647,58 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun openGame(call: MethodCall, result: MethodChannel.Result) {
-        val fileName = call.argument<String>("fileName")?.trim().orEmpty()
-        val title = call.argument<String>("title")?.trim().orEmpty().take(80)
-        // A tela só aceita os dez ficheiros explicitamente listados no catálogo.
-        // O conteúdo permanece hospedado no repositório indicado pelo utilizador.
-        val allowedGames = setOf(
-            "2048.html",
-            "wordle-unlimited.html",
-            "doodle-jump.html",
-            "stack.html",
-            "candy-crush.html",
-            "idle-breakout.html",
-            "google-baseball.html",
-            "chess.html",
-            "table-tennis-world-tour.html",
-            "pac-man.html",
-        )
-        if (fileName !in allowedGames) {
-            result.error("invalid_game", "Este jogo não está disponível no catálogo.", null)
+        val launchType = call.argument<String>("launchType")?.trim().orEmpty()
+        val url = call.argument<String>("url")?.trim().orEmpty()
+        val html = call.argument<String>("html").orEmpty()
+        val baseUrl = call.argument<String>("baseUrl")?.trim().orEmpty()
+        val title = call.argument<String>("title")?.trim().orEmpty().take(100)
+        val orientation = call.argument<String>("orientation")?.trim().orEmpty().ifBlank { "auto" }
+        if (launchType !in setOf("url", "source_url", "html")) {
+            result.error("invalid_game", "O tipo de lançamento deste jogo não é válido.", null)
             return
         }
+        if (launchType == "html") {
+            if (html.isBlank() || html.toByteArray(Charsets.UTF_8).size > 24 * 1024 * 1024) {
+                result.error("invalid_game_html", "O código HTML está vazio ou excede o limite de 24 MB.", null)
+                return
+            }
+            if (baseUrl.isNotBlank()) {
+                val parsedBase = runCatching { Uri.parse(baseUrl) }.getOrNull()
+                if (parsedBase?.scheme != "https" || parsedBase.host.isNullOrBlank()) {
+                    result.error("invalid_game_base_url", "A origem dos recursos deve ser HTTPS.", null)
+                    return
+                }
+            }
+        } else {
+            val parsedUrl = runCatching { Uri.parse(url) }.getOrNull()
+            if (parsedUrl?.scheme != "https" || parsedUrl.host.isNullOrBlank() || parsedUrl.userInfo != null) {
+                result.error("invalid_game_url", "O jogo precisa de um link HTTPS válido.", null)
+                return
+            }
+        }
+        var htmlCacheFile: File? = null
         try {
+            // Não transportar dezenas de MB num Intent extra: o Binder tem um
+            // limite de transação baixo. O HTML fica temporariamente no cache
+            // privado e a Activity nativa recebe apenas o caminho interno.
+            if (launchType == "html") {
+                htmlCacheFile = File.createTempFile("browseit-game-", ".html", cacheDir).apply {
+                    writeText(html, Charsets.UTF_8)
+                }
+            }
             val gameIntent = Intent(this, GamesWebViewActivity::class.java).apply {
-                putExtra(GamesWebViewActivity.EXTRA_FILE_NAME, fileName)
-                putExtra(GamesWebViewActivity.EXTRA_TITLE, title.ifBlank { fileName.substringBeforeLast('.') })
+                putExtra(GamesWebViewActivity.EXTRA_LAUNCH_TYPE, launchType)
+                putExtra(GamesWebViewActivity.EXTRA_URL, url)
+                putExtra(GamesWebViewActivity.EXTRA_HTML_FILE, htmlCacheFile?.absolutePath)
+                putExtra(GamesWebViewActivity.EXTRA_BASE_URL, baseUrl)
+                putExtra(GamesWebViewActivity.EXTRA_TITLE, title.ifBlank { "Jogo" })
+                putExtra(GamesWebViewActivity.EXTRA_ORIENTATION, orientation)
             }
             startActivity(gameIntent)
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
             result.success(true)
         } catch (error: Exception) {
+            htmlCacheFile?.delete()
             result.error("game_open_failed", error.message ?: "Não foi possível abrir o jogo.", null)
         }
     }
@@ -815,11 +841,29 @@ class MainActivity : FlutterActivity() {
             })
         }
 
-        dialog.setOnDismissListener { finish(null) }
+        dialog.setOnDismissListener {
+            finish(null)
+            window.decorView.post { applyWindowTheme(readSavedThemeMode(), readSavedPureBlack()) }
+        }
         dialog.setOnCancelListener { finish(null) }
         try {
             dialog.show()
             dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            dialog.window?.let { dialogWindow ->
+                val dimmedBar = if (dark) Color.rgb(18, 19, 21) else Color.rgb(205, 207, 211)
+                dialogWindow.statusBarColor = dimmedBar
+                dialogWindow.navigationBarColor = dimmedBar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    dialogWindow.insetsController?.setSystemBarsAppearance(
+                        if (dark) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    dialogWindow.decorView.systemUiVisibility = if (dark) 0 else
+                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                }
+            }
             dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             dialog.window?.let { dialogWindow ->
                 val attributes = dialogWindow.attributes

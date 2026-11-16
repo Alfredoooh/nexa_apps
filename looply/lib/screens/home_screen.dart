@@ -94,14 +94,81 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
-// Barra de pesquisa no topo da Home. A abertura usa fade (sem deslocamento).
-class _HomeSearchInput extends StatelessWidget {
+// A mesma instância do controlador acompanha o campo durante o Container Transform.
+class _HomeSearchInput extends StatefulWidget {
   const _HomeSearchInput();
 
   @override
+  State<_HomeSearchInput> createState() => _HomeSearchInputState();
+}
+
+class _HomeSearchInputState extends State<_HomeSearchInput> {
+  late final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Widget _engineLogo(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: aiSearchModeEnabled,
+      builder: (context, aiEnabled, _) => ValueListenableBuilder<SearchEngine>(
+        valueListenable: activeSearchEngine,
+        builder: (context, engine, __) => Image.asset(
+          searchEngineAsset(aiEnabled ? 'AI Search' : engine.name),
+          width: 23,
+          height: 23,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => AppMaterialIcon(
+            AppIcons.magnifyingGlass,
+            size: 23,
+            color: mutedText(context),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _field(BuildContext context, {required bool readOnly}) {
+    return SizedBox(
+      height: 48,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            _engineLogo(context),
+            const SizedBox(width: 9),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                readOnly: readOnly,
+                showCursor: !readOnly,
+                textInputAction: TextInputAction.search,
+                style: TextStyle(color: mainText(context), fontSize: 15),
+                cursorColor: accentColor(context),
+                decoration: InputDecoration(
+                  hintText: appText('search_hint'),
+                  hintStyle: TextStyle(color: mutedText(context), fontSize: 15),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Container Transform: o próprio pill da Home cresce e sobe até ocupar
-    // a Search Screen, em vez de desaparecer e abrir uma página independente.
     return OpenContainer<void>(
       transitionType: ContainerTransitionType.fade,
       transitionDuration: const Duration(milliseconds: 480),
@@ -113,7 +180,10 @@ class _HomeSearchInput extends StatelessWidget {
       openShape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       clipBehavior: Clip.antiAlias,
       tappable: false,
-      openBuilder: (context, closeContainer) => const SearchScreen(),
+      openBuilder: (context, closeContainer) => SearchScreen(
+        controller: _controller,
+        autoFocusDelay: const Duration(milliseconds: 480),
+      ),
       closedBuilder: (context, openContainer) => Material(
         color: pillColor(context),
         borderRadius: BorderRadius.circular(999),
@@ -121,43 +191,7 @@ class _HomeSearchInput extends StatelessWidget {
         child: InkWell(
           onTap: openContainer,
           borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 54,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              child: Row(
-                children: [
-                  ValueListenableBuilder<bool>(
-                    valueListenable: aiSearchModeEnabled,
-                    builder: (context, aiEnabled, _) {
-                      if (aiEnabled) {
-                        return Image.memory(searchEnginePng('AI Search')!, width: 23, height: 23, fit: BoxFit.contain);
-                      }
-                      return ValueListenableBuilder<SearchEngine>(
-                        valueListenable: activeSearchEngine,
-                        builder: (context, engine, _) {
-                          final png = searchEnginePng(engine.name);
-                          return png == null
-                              ? AppMaterialIcon(AppIcons.magnifyingGlass, size: 23, color: mutedText(context))
-                              : Image.memory(png, width: 23, height: 23, fit: BoxFit.contain);
-                        },
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Text(
-                      appText('search_hint'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: mutedText(context), fontSize: 15),
-                    ),
-                  ),
-                  AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
-                ],
-              ),
-            ),
-          ),
+          child: _field(context, readOnly: true),
         ),
       ),
     );

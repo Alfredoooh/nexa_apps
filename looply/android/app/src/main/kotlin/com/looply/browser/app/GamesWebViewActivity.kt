@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.webkit.WebChromeClient
@@ -16,89 +17,121 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Locale
 
-/**
- * Reproduz o ficheiro HTML do jogo numa WebView real (não numa pré-visualização
- * de código). O HTML é servido pelo repositório original e a resposta é
- * apresentada como text/html porque o raw.githubusercontent.com usa text/plain
- * para ficheiros HTML. O código do jogo não é incluído nem redistribuído no APK.
- */
+/** Native game renderer. It accepts a hosted page, a remote HTML source, or
+ * HTML supplied by the games catalogue; the WebView is never replaced by a
+ * Flutter/HTML preview screen. */
 class GamesWebViewActivity : Activity() {
     companion object {
-        const val EXTRA_FILE_NAME = "looply.game.FILE_NAME"
+        const val EXTRA_LAUNCH_TYPE = "looply.game.LAUNCH_TYPE"
+        const val EXTRA_URL = "looply.game.URL"
+        const val EXTRA_HTML_FILE = "looply.game.HTML_FILE"
+        const val EXTRA_BASE_URL = "looply.game.BASE_URL"
         const val EXTRA_TITLE = "looply.game.TITLE"
-        private const val RAW_PREFIX =
-            "https://raw.githubusercontent.com/CoolDude2349/Offline-HTML-Games-Pack/master/offline/"
+        const val EXTRA_ORIENTATION = "looply.game.ORIENTATION"
         private const val MAX_GAME_BYTES = 24L * 1024L * 1024L
+        private const val ACCENT_BLUE = 0xFF1A73E8.toInt()
     }
 
     private lateinit var webView: WebView
     private lateinit var progress: ProgressBar
     private lateinit var loadingLabel: TextView
+    private lateinit var statusBarScrim: View
     private var orientationDetected = false
     private var pageFailed = false
-    private var gameFileName = ""
+    private var launchType = ""
+    private var gameUrl = ""
+    private var gameHtml = ""
+    private var baseUrl = ""
+    private var gameTitle = ""
+    private var requestedGameOrientation = "auto"
+    private var sourceHost = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        gameFileName = intent.getStringExtra(EXTRA_FILE_NAME).orEmpty()
-        val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
-        if (!isAllowedFileName(gameFileName)) {
+        launchType = intent.getStringExtra(EXTRA_LAUNCH_TYPE).orEmpty()
+        gameUrl = intent.getStringExtra(EXTRA_URL).orEmpty()
+        baseUrl = intent.getStringExtra(EXTRA_BASE_URL).orEmpty()
+        if (launchType == "html" && !readHtmlFromCache()) {
+            finish()
+            return
+        }
+        gameTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().take(100)
+        requestedGameOrientation = intent.getStringExtra(EXTRA_ORIENTATION).orEmpty().ifBlank { "auto" }
+
+        if (!isValidLaunch()) {
             finish()
             return
         }
 
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        sourceHost = when (launchType) {
+            "html" -> android.net.Uri.parse(baseUrl.ifBlank { "https://games.local/" }).host.orEmpty()
+            else -> android.net.Uri.parse(gameUrl).host.orEmpty()
+        }
+        requestedOrientation = when (requestedGameOrientation) {
+            "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        applySystemBarColors()
-        buildGameContent(title)
+        applyBlackSystemBars()
+        buildGameContent()
         loadGame()
     }
 
-    private fun isAllowedFileName(value: String): Boolean {
-        return value in setOf(
-            "2048.html",
-            "wordle-unlimited.html",
-            "doodle-jump.html",
-            "stack.html",
-            "candy-crush.html",
-            "idle-breakout.html",
-            "google-baseball.html",
-            "chess.html",
-            "table-tennis-world-tour.html",
-            "pac-man.html",
-        )
-    }
-
-    private fun applySystemBarColors() {
-        val dark = (resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-            android.content.res.Configuration.UI_MODE_NIGHT_YES
-        val surface = if (dark) Color.rgb(20, 21, 23) else Color.WHITE
-        window.statusBarColor = surface
-        window.navigationBarColor = surface
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            var flags = window.decorView.systemUiVisibility
-            flags = if (dark) {
-                flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() and
-                    View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+    private fun readHtmlFromCache(): Boolean {
+        val suppliedPath = intent.getStringExtra(EXTRA_HTML_FILE).orEmpty()
+        if (suppliedPath.isBlank()) return false
+        return try {
+            val cacheRoot = cacheDir.canonicalPath + File.separator
+            val htmlFile = File(suppliedPath).canonicalFile
+            if (!htmlFile.path.startsWith(cacheRoot) || !htmlFile.isFile ||
+                htmlFile.length() <= 0L || htmlFile.length() > MAX_GAME_BYTES) {
+                false
             } else {
-                flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or
-                    View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                gameHtml = htmlFile.readText(Charsets.UTF_8)
+                htmlFile.delete()
+                gameHtml.isNotBlank()
             }
-            window.decorView.systemUiVisibility = flags
+        } catch (_: Exception) {
+            false
         }
     }
 
-    private fun buildGameContent(title: String) {
-        val root = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-            fitsSystemWindows = false
+    private fun isValidLaunch(): Boolean {
+        if (launchType !in setOf("url", "source_url", "html")) return false
+        if (launchType == "html") {
+            if (gameHtml.isBlank() || gameHtml.toByteArray(Charsets.UTF_8).size > MAX_GAME_BYTES) return false
+            if (baseUrl.isNotBlank()) {
+                val uri = runCatching { android.net.Uri.parse(baseUrl) }.getOrNull() ?: return false
+                if (uri.scheme != "https" || uri.host.isNullOrBlank()) return false
+            }
+            return true
         }
+        val uri = runCatching { android.net.Uri.parse(gameUrl) }.getOrNull() ?: return false
+        return uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null
+    }
+
+    /** Keep a solid black status bar and white icons in every app theme. */
+    private fun applyBlackSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.BLACK
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
+    }
+
+    private fun buildGameContent() {
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
 
         webView = WebView(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -115,19 +148,18 @@ class GamesWebViewActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
+            settings.allowFileAccessFromFileURLs = false
+            settings.allowUniversalAccessFromFileURLs = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.safeBrowsingEnabled = true
+
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    // O receiver implícito de WebView.apply() não é o Activity.
-                    // Qualificamos os campos da Activity para evitar a resolução
-                    // incorreta do símbolo `progress` pelo compilador Kotlin.
                     this@GamesWebViewActivity.progress.progress = newProgress
                     this@GamesWebViewActivity.progress.visibility =
                         if (newProgress >= 100) View.GONE else View.VISIBLE
-                    if (newProgress >= 100) {
-                        this@GamesWebViewActivity.loadingLabel.visibility = View.GONE
-                    }
+                    if (newProgress >= 100 && !pageFailed) loadingLabel.visibility = View.GONE
                 }
             }
             webViewClient = object : WebViewClient() {
@@ -135,24 +167,29 @@ class GamesWebViewActivity : Activity() {
                     view: WebView?,
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
-                    val uri = request.url
-                    if (uri.scheme != "https" || uri.host != "raw.githubusercontent.com") return null
-                    val expectedPath = "/CoolDude2349/Offline-HTML-Games-Pack/master/offline/$gameFileName"
-                    if (uri.path != expectedPath) return null
-                    return fetchHtmlAsDocument(uri.toString())
+                    if (launchType != "source_url" || request.method != "GET") return null
+                    val requested = request.url.buildUpon().fragment(null).build().toString()
+                    val source = android.net.Uri.parse(gameUrl).buildUpon().fragment(null).build().toString()
+                    if (requested == source) return fetchHtmlAsDocument(gameUrl)
+                    return null
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
+                    if (!request.isForMainFrame) return false
                     val uri = request.url
-                    // Mantém a navegação dentro da página do jogo e bloqueia a
-                    // abertura inadvertida de domínios externos a partir do HTML.
-                    return uri.scheme !in setOf("https", "http") ||
-                        (uri.host != "raw.githubusercontent.com" && uri.host != "github.com")
+                    // Permite a navegação interna do jogo no mesmo host e bloqueia
+                    // esquemas perigosos ou saltos inesperados para outros sites.
+                    return uri.scheme != "https" || uri.host.isNullOrBlank() || uri.host != sourceHost
+                }
+
+                override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                    val uri = runCatching { android.net.Uri.parse(url.orEmpty()) }.getOrNull() ?: return true
+                    return uri.scheme != "https" || uri.host.isNullOrBlank() || uri.host != sourceHost
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    scheduleOrientationDetection()
+                    if (requestedGameOrientation == "auto") scheduleOrientationDetection()
                 }
 
                 override fun onReceivedError(
@@ -163,50 +200,63 @@ class GamesWebViewActivity : Activity() {
                     super.onReceivedError(view, request, error)
                     if (request?.isForMainFrame == true) showLoadError()
                 }
+
+                override fun onReceivedHttpError(
+                    view: WebView?,
+                    request: WebResourceRequest?,
+                    errorResponse: WebResourceResponse?,
+                ) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 200) >= 400) showLoadError()
+                }
             }
         }
 
         root.addView(
             webView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
         )
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             progress = 0
-            progressTintList = android.content.res.ColorStateList.valueOf(Color.rgb(80, 130, 230))
+            progressTintList = android.content.res.ColorStateList.valueOf(ACCENT_BLUE)
             progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT)
         }
         root.addView(
             progress,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                dp(3),
-            ).apply { gravity = android.view.Gravity.TOP },
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(2), Gravity.TOP),
         )
 
         loadingLabel = TextView(this).apply {
-            text = if (title.isBlank()) "A carregar jogo…" else "A carregar $title…"
+            text = if (gameTitle.isBlank()) "A carregar jogo…" else "A carregar $gameTitle…"
             setTextColor(Color.WHITE)
             textSize = 14f
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            gravity = android.view.Gravity.CENTER
+            gravity = Gravity.CENTER
             setPadding(dp(20), dp(12), dp(20), dp(12))
             setBackgroundColor(0xAA141517.toInt())
         }
         root.addView(
             loadingLabel,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                android.view.Gravity.CENTER,
-            ),
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER),
         )
 
+        statusBarScrim = View(this).apply { setBackgroundColor(Color.BLACK) }
+        root.addView(statusBarScrim, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, Gravity.TOP))
+
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val topInset = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            statusBarScrim.layoutParams = (statusBarScrim.layoutParams as FrameLayout.LayoutParams).apply {
+                height = topInset
+            }
+            progress.layoutParams = (progress.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = topInset
+            }
+            insets
+        }
         setContentView(root)
+        ViewCompat.requestApplyInsets(root)
     }
 
     private fun loadGame() {
@@ -215,11 +265,16 @@ class GamesWebViewActivity : Activity() {
         progress.progress = 0
         progress.visibility = View.VISIBLE
         loadingLabel.visibility = View.VISIBLE
-        val url = RAW_PREFIX + gameFileName
-        webView.loadUrl(url)
+        when (launchType) {
+            "html" -> {
+                val origin = baseUrl.ifBlank { "https://games.local/" }
+                webView.loadDataWithBaseURL(origin, gameHtml, "text/html", "UTF-8", null)
+            }
+            "source_url", "url" -> webView.loadUrl(gameUrl)
+        }
     }
 
-    /** Fetches the selected single-file game and overrides only its MIME type. */
+    /** Fetches a raw HTML source and changes its MIME type before WebView parses it. */
     private fun fetchHtmlAsDocument(url: String): WebResourceResponse {
         return try {
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -237,7 +292,7 @@ class GamesWebViewActivity : Activity() {
                 return htmlErrorResponse("Não foi possível carregar este jogo. Verifica a ligação à Internet e tenta novamente.")
             }
             val bytes = connection.inputStream.use { input ->
-                val output = java.io.ByteArrayOutputStream()
+                val output = ByteArrayOutputStream()
                 val buffer = ByteArray(16 * 1024)
                 var total = 0L
                 while (true) {
@@ -253,6 +308,9 @@ class GamesWebViewActivity : Activity() {
             WebResourceResponse(
                 "text/html",
                 "UTF-8",
+                status,
+                "OK",
+                mapOf("Cache-Control" to "no-store"),
                 ByteArrayInputStream(bytes),
             )
         } catch (_: Exception) {
@@ -262,7 +320,7 @@ class GamesWebViewActivity : Activity() {
 
     private fun htmlErrorResponse(message: String): WebResourceResponse {
         val safe = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        val html = """<!doctype html><html lang="pt"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#141517;color:#f3f3f3;font:16px sans-serif;text-align:center}main{padding:28px;max-width:340px}button{margin-top:14px;padding:12px 18px;border:0;border-radius:24px;background:#8ab4f8;color:#101114;font-weight:600}</style><main><p>$safe</p><button onclick="location.reload()">Tentar novamente</button></main></html>"""
+        val html = """<!doctype html><html lang="pt"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#141517;color:#f3f3f3;font:16px sans-serif;text-align:center}main{padding:28px;max-width:340px}button{margin-top:14px;padding:12px 18px;border:0;border-radius:24px;background:#1A73E8;color:white;font-weight:600}</style><main><p>$safe</p><button onclick="location.reload()">Tentar novamente</button></main></html>"""
         return WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)))
     }
 
@@ -275,8 +333,7 @@ class GamesWebViewActivity : Activity() {
     }
 
     private fun scheduleOrientationDetection() {
-        if (orientationDetected) return
-        // Alguns jogos só criam o canvas após inicializarem os scripts.
+        if (orientationDetected || isFinishing) return
         webView.postDelayed({ detectGameOrientation() }, 900)
         webView.postDelayed({ detectGameOrientation() }, 2_300)
         webView.postDelayed({ detectGameOrientation() }, 4_800)
@@ -311,12 +368,12 @@ class GamesWebViewActivity : Activity() {
                 orientationDetected = true
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             }
-            // Relações quase quadradas permanecem em rotação automática.
         }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (::webView.isInitialized && webView.canGoBack()) {
             webView.goBack()
@@ -324,6 +381,17 @@ class GamesWebViewActivity : Activity() {
             finish()
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
+    }
+
+    override fun onPause() {
+        if (::webView.isInitialized) webView.onPause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) webView.onResume()
+        applyBlackSystemBars()
     }
 
     override fun onDestroy() {
