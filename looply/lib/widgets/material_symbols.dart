@@ -44,6 +44,7 @@ class AppIcons {
   static const IconData lockSimple = Symbols.lock_rounded;
   static const IconData magnifyingGlass = Symbols.search_rounded;
   static const IconData mapPin = Symbols.location_on_rounded;
+  static const IconData menu = Symbols.menu_rounded;
   static const IconData microphone = Symbols.mic_rounded;
   static const IconData moon = Symbols.dark_mode_rounded;
   static const IconData palette = Symbols.palette_rounded;

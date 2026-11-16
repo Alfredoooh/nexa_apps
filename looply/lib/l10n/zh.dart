@@ -35,6 +35,7 @@ const Map<String, String> zhScreenTranslations = <String, String>{
     'already_bookmarked': '此页面已添加书签。', 'force_dark_subtitle': '为没有深色主题的网站强制应用深色效果',
     'adaptive_toolbar_subtitle': '工具栏将匹配页面的主色调', 'deep_dark': '深黑',
     'add': '添加',
+    'images': '图片', 'files': '文件',
     'site_url': '网站链接',
     'site_name': '网站名称',
     'gallery_open_failed': '无法打开图库。',

@@ -42,6 +42,7 @@ const Map<String, String> ptScreenTranslations = <String, String>{
     'already_bookmarked': 'Esta página já está nos marcadores.', 'force_dark_subtitle': 'Aplica uma camada escura mesmo em sites sem tema escuro',
     'adaptive_toolbar_subtitle': 'Adapta a barra à cor dominante da página', 'deep_dark': 'Escuro profundo',
     'add': 'Adicionar',
+    'images': 'Imagens', 'files': 'Ficheiros',
     'site_url': 'Link do site',
     'site_name': 'Nome do site',
     'gallery_open_failed': 'Não foi possível abrir a galeria.',

@@ -1424,8 +1424,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
             isClippingEnabled = true
             inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                enterTransition = Fade().apply { duration = 165 }
-                exitTransition = Fade().apply { duration = 115 }
+                enterTransition = Fade().apply { duration = 245; interpolator = DecelerateInterpolator(1.5f) }
+                exitTransition = Fade().apply { duration = 190; interpolator = DecelerateInterpolator(1.2f) }
             }
         }
         popupWindowRef = popup

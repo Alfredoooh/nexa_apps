@@ -13,12 +13,26 @@ class AppInfoScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final topInset = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: pageBg(context),
-      body: Stack(
-        children: [
+      appBar: AppBar(
+        toolbarHeight: 64,
+        automaticallyImplyLeading: false,
+        backgroundColor: pageBg(context),
+        foregroundColor: text,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: AppBackButton(
+          tooltip: appText('back'),
+          color: text,
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        title: Text(appText('app_info'), style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
+      ),
+      body:
           FutureBuilder<PackageInfo>(
             future: PackageInfo.fromPlatform(),
             builder: (context, snapshot) {
@@ -27,16 +41,21 @@ class AppInfoScreen extends StatelessWidget {
                   ? '…'
                   : '${info.version} (${info.buildNumber})';
               return ListView(
-                padding: EdgeInsets.fromLTRB(18, topInset + 76, 18, 30),
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 30),
                 children: [
                   Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Image.asset(
-                        'assets/images/looply_icon.png',
-                        width: 78,
-                        height: 78,
-                        fit: BoxFit.cover,
+                    child: Container(
+                      width: 78,
+                      height: 78,
+                      decoration: BoxDecoration(
+                        color: accentColor(context).withOpacity(.12),
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      alignment: Alignment.center,
+                      child: AppMaterialIcon(
+                        AppIcons.browser,
+                        color: accentColor(context),
+                        size: 40,
                       ),
                     ),
                   ),
@@ -137,22 +156,6 @@ class AppInfoScreen extends StatelessWidget {
               );
             },
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _FadeAppBar(
-              topInset: topInset,
-              leading: AppBackButton(
-                tooltip: appText('back'),
-                color: text,
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              title: appText('app_info'),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -256,47 +259,3 @@ class _AboutActionRow extends StatelessWidget {
       );
 }
 
-class _FadeAppBar extends StatelessWidget {
-  const _FadeAppBar({required this.topInset, required this.leading, this.title});
-  final double topInset;
-  final Widget leading;
-  final String? title;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = pageBg(context);
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0)],
-          stops: const [0, .55, 1],
-        ),
-      ),
-      child: SizedBox(
-        height: 56,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            children: [
-              leading,
-              if (title != null) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

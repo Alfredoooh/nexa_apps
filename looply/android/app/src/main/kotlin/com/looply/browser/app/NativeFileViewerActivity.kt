@@ -189,7 +189,17 @@ class NativeFileViewerActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), 0, dp(8), 0)
         }, LinearLayout.LayoutParams(0, -1, 1f))
-        rootContainer.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
+        val extensionLabel = sourceFile.extension.uppercase(Locale.ROOT).ifBlank { "FILE" }
+        toolbar.addView(TextView(this).apply {
+            text = extensionLabel
+            setTextColor(accentColor)
+            textSize = 10.5f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            background = roundedDrawable(secondarySurface, dp(9).toFloat())
+            setPadding(dp(9), dp(6), dp(9), dp(6))
+        }, LinearLayout.LayoutParams(-2, dp(30)).apply { marginStart = dp(6) })
+        rootContainer.addView(toolbar, LinearLayout.LayoutParams(-1, dp(60)))
 
         contentHost = FrameLayout(this).apply {
             setBackgroundColor(surfaceColor)
@@ -243,13 +253,20 @@ class NativeFileViewerActivity : AppCompatActivity() {
     }
 
     private fun showImage() {
-        contentHost.setPadding(dp(8), dp(8), dp(8), dp(8))
+        contentHost.setPadding(dp(14), dp(14), dp(14), dp(14))
+        val imageFrame = FrameLayout(this).apply {
+            background = roundedDrawable(secondarySurface, dp(24).toFloat())
+            clipToOutline = true
+        }
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
             contentDescription = fileName
         }
-        contentHost.addView(image, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+        imageFrame.addView(image, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER).apply {
+            setMargins(dp(6), dp(6), dp(6), dp(6))
+        })
+        contentHost.addView(imageFrame, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
         image.post {
             if (isFinishing || isDestroyed) return@post
             val bitmap = if (sourceFile.extension.equals("svg", ignoreCase = true)) {
@@ -296,8 +313,14 @@ class NativeFileViewerActivity : AppCompatActivity() {
         }
         player.setOnPreparedListener { media ->
             media.isLooping = false
-            player.start()
-            mediaController?.show(2500)
+            mediaController?.show(3500)
+        }
+        player.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                if (player.isPlaying) player.pause() else player.start()
+                mediaController?.show(3500)
+            }
+            true
         }
         player.setOnErrorListener { _, _, _ ->
             showMessage("Não foi possível reproduzir este vídeo neste dispositivo.")
@@ -309,20 +332,21 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(28), dp(24), dp(28), dp(28))
+            setPadding(dp(22), dp(28), dp(22), dp(28))
         }
         val artwork = FrameLayout(this).apply {
-            background = roundedDrawable(secondarySurface, dp(28).toFloat())
+            background = roundedDrawable(secondarySurface, dp(34).toFloat())
             addView(
                 MaterialSymbolsRounded.textView(this@NativeFileViewerActivity, "audio_file", accentColor, 42f),
-                FrameLayout.LayoutParams(dp(72), dp(72), Gravity.CENTER),
+                FrameLayout.LayoutParams(dp(88), dp(88), Gravity.CENTER),
             )
         }
-        container.addView(artwork, LinearLayout.LayoutParams(dp(116), dp(116)).apply { bottomMargin = dp(22) })
+        container.addView(artwork, LinearLayout.LayoutParams(dp(148), dp(148)).apply { bottomMargin = dp(26) })
         container.addView(TextView(this).apply {
             text = fileName
             setTextColor(textColor)
-            textSize = 17f
+            textSize = 18f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -364,7 +388,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
         }
         audioPlayLabel = playButton.getChildAt(0) as? TextView
         playButton.setOnClickListener { toggleAudioPlayback() }
-        container.addView(playButton, LinearLayout.LayoutParams(dp(72), dp(72)).apply { topMargin = dp(22) })
+        container.addView(playButton, LinearLayout.LayoutParams(dp(76), dp(76)).apply { topMargin = dp(24) })
         contentHost.addView(container, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
 
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -470,7 +494,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val pageControls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(4), dp(14), dp(4))
+            setPadding(dp(16), dp(6), dp(16), dp(6))
             setBackgroundColor(surfaceColor)
         }
         val previous = iconButton("chevron_left", "Página anterior") {
@@ -488,7 +512,7 @@ class NativeFileViewerActivity : AppCompatActivity() {
         pageControls.addView(pdfPageLabel, LinearLayout.LayoutParams(0, -1, 1f))
         pageControls.addView(next, LinearLayout.LayoutParams(dp(48), dp(48)))
         // O rodapé é nativo e fica abaixo da área de visualização.
-        rootContainer.addView(pageControls, LinearLayout.LayoutParams(-1, dp(56)))
+        rootContainer.addView(pageControls, LinearLayout.LayoutParams(-1, dp(64)))
         pageFrame.post { showPdfPage(0) }
     }
 
@@ -523,7 +547,9 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val content = readTextDocument()
         val scroll = ScrollView(this).apply {
             isFillViewport = true
-            setBackgroundColor(surfaceColor)
+            setBackgroundColor(secondarySurface)
+            clipToPadding = false
+            setPadding(dp(12), dp(12), dp(12), dp(16))
         }
         val text = TextView(this).apply {
             text = content
@@ -531,8 +557,9 @@ class NativeFileViewerActivity : AppCompatActivity() {
             textSize = 15f
             setLineSpacing(dp(3).toFloat(), 1f)
             setTextIsSelectable(true)
-            setPadding(dp(20), dp(18), dp(20), dp(30))
+            setPadding(dp(22), dp(24), dp(22), dp(34))
             typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+            background = roundedDrawable(surfaceColor, dp(18).toFloat())
         }
         scroll.addView(text, ViewGroup.LayoutParams(-1, -2))
         contentHost.addView(scroll, FrameLayout.LayoutParams(-1, -1))
@@ -609,11 +636,12 @@ class NativeFileViewerActivity : AppCompatActivity() {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(30), dp(24), dp(30), dp(24))
+            setPadding(dp(30), dp(28), dp(30), dp(28))
+            background = roundedDrawable(secondarySurface, dp(28).toFloat())
         }
         container.addView(
-            MaterialSymbolsRounded.textView(this, "description", mutedColor, 46f),
-            LinearLayout.LayoutParams(dp(58), dp(58)).apply { bottomMargin = dp(16) },
+            MaterialSymbolsRounded.textView(this, "description", mutedColor, 54f),
+            LinearLayout.LayoutParams(dp(68), dp(68)).apply { bottomMargin = dp(18) },
         )
         container.addView(TextView(this).apply {
             text = "Pré-visualização não disponível"

@@ -1256,8 +1256,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
@@ -1274,9 +1274,27 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                     child: SizedBox.expand(
                       child: RepaintBoundary(
                         key: _repaintKey,
-                        child: IndexedStack(
-                          index: _selectedTab,
-                          children: shellPages,
+                        child: ClipRect(
+                          child: Stack(
+                            children: [
+                              for (var pageIndex = 0; pageIndex < shellPages.length; pageIndex++)
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    ignoring: _selectedTab != pageIndex,
+                                    child: AnimatedSlide(
+                                      offset: _selectedTab == pageIndex
+                                          ? Offset.zero
+                                          : (_selectedTab > pageIndex
+                                              ? const Offset(-1, 0)
+                                              : const Offset(1, 0)),
+                                      duration: const Duration(milliseconds: 340),
+                                      curve: Curves.easeInOutCubic,
+                                      child: shellPages[pageIndex],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

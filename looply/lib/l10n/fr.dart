@@ -41,6 +41,7 @@ const Map<String, String> frScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Applique un thème sombre même aux sites sans thème sombre',
     'adaptive_toolbar_subtitle': 'Adapte la barre à la couleur dominante de la page', 'deep_dark': 'Très sombre',
     'add': 'Ajouter',
+    'images': 'Images', 'files': 'Fichiers',
     'site_url': 'Adresse du site',
     'site_name': 'Nom du site',
     'gallery_open_failed': 'Impossible d’ouvrir la galerie.',

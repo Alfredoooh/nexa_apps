@@ -41,6 +41,7 @@ const Map<String, String> deScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Wendet auch auf Websites ohne dunkles Design einen dunklen Filter an',
     'adaptive_toolbar_subtitle': 'Passt die Symbolleiste an die dominante Seitenfarbe an', 'deep_dark': 'Tiefschwarz',
     'add': 'Hinzufügen',
+    'images': 'Bilder', 'files': 'Dateien',
     'site_url': 'Website-Adresse',
     'site_name': 'Website-Name',
     'gallery_open_failed': 'Galerie konnte nicht geöffnet werden.',

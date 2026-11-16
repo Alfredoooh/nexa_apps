@@ -41,6 +41,7 @@ const Map<String, String> esScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Aplica una capa oscura incluso a sitios sin tema oscuro',
     'adaptive_toolbar_subtitle': 'Adapta la barra al color dominante de la página', 'deep_dark': 'Oscuro profundo',
     'add': 'Añadir',
+    'images': 'Imágenes', 'files': 'Archivos',
     'site_url': 'Enlace del sitio',
     'site_name': 'Nombre del sitio',
     'gallery_open_failed': 'No se pudo abrir la galería.',

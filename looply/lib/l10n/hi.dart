@@ -35,6 +35,7 @@ const Map<String, String> hiScreenTranslations = <String, String>{
     'already_bookmarked': 'यह पेज पहले से बुकमार्क है।', 'force_dark_subtitle': 'बिना डार्क थीम वाली साइटों पर भी डार्क परत लागू करें',
     'adaptive_toolbar_subtitle': 'टूलबार को पेज के प्रमुख रंग के अनुसार बदलें', 'deep_dark': 'गहरा काला',
     'add': 'जोड़ें',
+    'images': 'छवियां', 'files': 'फ़ाइलें',
     'site_url': 'वेबसाइट लिंक',
     'site_name': 'वेबसाइट का नाम',
     'gallery_open_failed': 'गैलरी नहीं खुल सकी।',

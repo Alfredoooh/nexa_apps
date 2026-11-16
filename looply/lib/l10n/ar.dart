@@ -40,6 +40,7 @@ const Map<String, String> arScreenTranslations = <String, String>{
     'force_dark_subtitle': 'يفرض طبقة داكنة حتى على المواقع التي لا تدعم المظهر الداكن',
     'adaptive_toolbar_subtitle': 'يضبط شريط الأدوات على اللون السائد للصفحة', 'deep_dark': 'داكن عميق',
     'add': 'إضافة',
+    'images': 'الصور', 'files': 'الملفات',
     'site_url': 'رابط الموقع',
     'site_name': 'اسم الموقع',
     'gallery_open_failed': 'تعذر فتح المعرض.',

@@ -15,7 +15,6 @@ import '../widgets/search_engine_picker.dart';
 import '../localization.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
-import 'home_screen.dart' show SiteFaviconForHome;
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({
@@ -293,12 +292,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           ),
           const SizedBox(width: 5),
           _pageAction(
-            tooltip: appText('share_page'),
-            icon: AppIcons.share,
-            onPressed: () => _shareCurrentPage(tab),
-            color: muted,
-          ),
-          _pageAction(
             tooltip: appText('copy_address'),
             icon: AppIcons.copy,
             onPressed: () => _copyCurrentPage(tab),
@@ -325,8 +318,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         onPressed: onPressed,
         padding: EdgeInsets.zero,
         visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints.tightFor(width: 34, height: 36),
-        icon: AppMaterialIcon(icon, color: color),
+        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+        icon: AppMaterialIcon(icon, size: 21, color: color),
       );
 
   Widget _searchEngineButton(Color muted) {
@@ -556,62 +549,59 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
       if (host.isEmpty || !hosts.add(host)) continue;
       recent.add(entry);
-      if (recent.length >= 10) break;
+      if (recent.length >= 8) break;
     }
     if (recent.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SizedBox(
-        height: 112,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          itemCount: recent.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 9),
-          itemBuilder: (context, index) {
-            final entry = recent[index];
-            unawaited(browserFaviconCache.fetchForUrl(entry.url));
-            final host = Uri.tryParse(entry.url)?.host ?? entry.url;
-            final label = entry.title.trim().isNotEmpty
-                ? entry.title.trim()
-                : host.replaceFirst(RegExp(r'^www\.'), '');
-            return SizedBox(
-              width: 76,
-              child: Semantics(
-                button: true,
-                label: label,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () => openOrbitTab(context, entry.url, title: entry.title),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SiteFaviconForHome(url: entry.url),
-                        const SizedBox(height: 5),
-                        Text(
-                          label,
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: text,
-                            fontSize: 12.5,
-                            height: 1.16,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
+    final muted = mutedText(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
+          child: Text(
+            appText('visited_sites'),
+            style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+        M3ESegmentedColumn(
+          color: settingsCardColor(context),
+          outerRadius: 20,
+          innerRadius: 16,
+          gap: 4,
+          padding: EdgeInsets.zero,
+          onTap: (index) => openOrbitTab(context, recent[index].url, title: recent[index].title),
+          children: [
+            for (final entry in recent)
+              M3EListItem(
+                leading: _pageFavicon(entry.url, muted),
+                headline: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      entry.title.trim().isNotEmpty ? entry.title : (Uri.tryParse(entry.url)?.host ?? entry.url),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: text, fontSize: 14),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      Uri.tryParse(entry.url)?.host ?? entry.url,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: muted, fontSize: 11.5),
+                    ),
+                  ],
+                ),
+                trailing: IconButton(
+                  tooltip: appText('open'),
+                  onPressed: () => openOrbitTab(context, entry.url, title: entry.title),
+                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 20),
                 ),
               ),
-            );
-          },
+          ],
         ),
-      ),
+      ],
     );
   }
 
@@ -683,8 +673,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     final muted = mutedText(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg),
       child: Scaffold(
         backgroundColor: bg,
         body: SafeArea(

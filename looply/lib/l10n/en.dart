@@ -41,6 +41,7 @@ const Map<String, String> enScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Applies a dark layer even to sites without a dark theme',
     'adaptive_toolbar_subtitle': 'Matches the toolbar to the page’s dominant color', 'deep_dark': 'Deep dark',
     'add': 'Add',
+    'images': 'Images', 'files': 'Files',
     'site_url': 'Website URL',
     'site_name': 'Website name',
     'gallery_open_failed': 'Could not open the gallery.',

@@ -39,6 +39,7 @@ const Map<String, String> ruScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Затемняет даже сайты без собственной тёмной темы',
     'adaptive_toolbar_subtitle': 'Подстраивает панель под основной цвет страницы', 'deep_dark': 'Глубокий тёмный',
     'add': 'Добавить',
+    'images': 'Изображения', 'files': 'Файлы',
     'site_url': 'Ссылка на сайт',
     'site_name': 'Название сайта',
     'gallery_open_failed': 'Не удалось открыть галерею.',

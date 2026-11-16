@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -23,15 +24,12 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   _ChartRange _range = _ChartRange.day;
-  final ScrollController _scrollController = ScrollController();
-  double _scrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
     activityController.addListener(_onChanged);
     AdBlockStats.instance.addListener(_onChanged);
-    _scrollController.addListener(_onScroll);
     for (final entry in activityController.entries) {
       if (entry.kind == ActivityKind.site) {
         unawaited(browserFaviconCache.fetchForUrl(entry.url));
@@ -44,20 +42,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void dispose() {
     activityController.removeListener(_onChanged);
     AdBlockStats.instance.removeListener(_onChanged);
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
     super.dispose();
-  }
-
-  // Janela de scroll ampliada de 24px para 100px: dá uma trilha de
-  // transição bem mais longa e perceptível para o fade do appbar, em vez
-  // de um salto quase instantâneo nos primeiros toques de deslize.
-  void _onScroll() {
-    if (!mounted) return;
-    final offset = _scrollController.hasClients ? _scrollController.offset.clamp(0.0, 100.0) : 0.0;
-    if ((offset - _scrollOffset).abs() > 0.5) {
-      setState(() => _scrollOffset = offset.toDouble());
-    }
   }
 
   void _onChanged() {
@@ -65,18 +50,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
     _prefetchVisitedSiteFavicons();
   }
 
-  // Garante que os favicons dos hosts mostrados na pilha de "sites
-  // visitados" já estão em cache antes de o card desenhar — sem isto, o
-  // card nasce sempre com o fallback genérico mesmo quando o favicon já
-  // foi visto noutra parte da app.
+  // Prioriza os favicons dos domínios com mais visitas, e não apenas os
+  // quatro primeiros registos cronológicos.
   void _prefetchVisitedSiteFavicons() {
-    final seen = <String>{};
+    final counts = <String, int>{};
     for (final entry in activityController.entries) {
       if (entry.kind != ActivityKind.site) continue;
       final host = Uri.tryParse(entry.url)?.host.toLowerCase();
-      if (host == null || host.isEmpty || !seen.add(host)) continue;
-      unawaited(browserFaviconCache.fetchForUrl('https://$host'));
-      if (seen.length >= 4) break;
+      if (host == null || host.isEmpty) continue;
+      counts.update(host, (count) => count + 1, ifAbsent: () => 1);
+    }
+    final ranked = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    for (final host in ranked.take(6)) {
+      unawaited(browserFaviconCache.fetchForUrl('https://${host.key}'));
     }
   }
 
@@ -101,165 +87,90 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final bg = pageBg(context);
     final entries = activityController.entries;
     final recent = entries.take(5).toList();
-    final topInset = MediaQuery.of(context).padding.top;
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: Stack(
-        children: [
-          ListView(
-            controller: _scrollController,
-            padding: EdgeInsets.fromLTRB(14, topInset + 60, 14, 24),
-            children: [
-              _RangeSelector(
-                value: _range,
-                onChanged: (value) => setState(() => _range = value),
-              ),
-              const SizedBox(height: 14),
-              _AdBlockBarChart(data: _chartData, range: _range),
-              const SizedBox(height: 16),
-              const _DayStreakCard(),
-              const SizedBox(height: 20),
-              const _VisitedSitesCard(),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      appText('recent'),
-                      style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  if (entries.isNotEmpty)
-                    TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const HistoryScreen()),
-                      ),
-                      child: Text(appText('view_all')),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              if (recent.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 30),
-                  child: Column(
-                    children: [
-                      AppMaterialIcon(AppIcons.clockCounterClockwise, size: 38, color: muted),
-                      const SizedBox(height: 9),
-                      Text(
-                        appText('no_recent_activity'),
-                        style: TextStyle(color: muted, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ...List.generate(recent.length, (index) {
-                  final isFirst = index == 0;
-                  final isLast = index == recent.length - 1;
-                  final top = isFirst ? 22.0 : 8.0;
-                  final bottom = isLast ? 22.0 : 8.0;
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: Duration(milliseconds: 320 + index * 45),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) => Opacity(
-                      opacity: value,
-                      child: Transform.translate(
-                        offset: Offset(0, (1 - value) * 14),
-                        child: child,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: isLast ? 0 : 2),
-                      child: ActivityTile(
-                        entry: recent[index],
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(top),
-                          bottom: Radius.circular(bottom),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-            ],
-          ),
-          // Appbar flutuante com o mesmo gradiente de esmaecimento usado em
-          // HomeScreen/HistoryScreen: opaca no topo, transparente na base,
-          // e com uma opacidade extra ligada ao scroll (fica mais sólida
-          // assim que a lista começa a deslizar por baixo dela). A janela
-          // de 100px (ver _onScroll) e a curva easeOut aplicada dentro de
-          // _ActivityAppBar tornam essa transição bem mais longa e suave
-          // do que o salto quase instantâneo de antes.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _ActivityAppBar(scrollProgress: _scrollOffset / 100.0),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Appbar com título alinhado à esquerda, no mesmo estilo de peso/tamanho
-/// da HomeScreen, com gradiente de esmaecimento por trás.
-class _ActivityAppBar extends StatelessWidget {
-  const _ActivityAppBar({required this.scrollProgress});
-
-  final double scrollProgress;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = pageBg(context);
-    final text = mainText(context);
-    final topInset = MediaQuery.of(context).padding.top;
-    // Easing aplicado sobre o progresso linear de scroll: a transição do
-    // gradiente fica curva (acelera e desacelera) em vez de andar em
-    // linha reta com o dedo, o que lê como bem mais suave.
-    final solidness = Curves.easeOut.transform(scrollProgress.clamp(0.0, 1.0));
-
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          // Corrigido: antes havia um .withOpacity() encadeado em cima de
-          // outro, e o segundo sempre substituía o primeiro em vez de
-          // combiná-los — isso fazia a base do gradiente saltar entre
-          // dois valores fixos em vez de variar continuamente com o
-          // scroll. Agora a opacidade final é proporcional a solidness.
-          colors: [bg, bg, bg.withOpacity(bg.opacity * solidness)],
-          stops: const [0.0, 0.55, 1.0],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: dark
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          toolbarHeight: 64,
+          automaticallyImplyLeading: false,
+          backgroundColor: bg,
+          foregroundColor: text,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          titleSpacing: 18,
+          title: Text(appText('activity'),
+              style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
         ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  appText('activity'),
-                  style: TextStyle(
-                    color: text,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: -.2,
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
+          children: [
+            _RangeSelector(value: _range, onChanged: (value) => setState(() => _range = value)),
+            const SizedBox(height: 14),
+            _AdBlockBarChart(data: _chartData, range: _range),
+            const SizedBox(height: 16),
+            const _DayStreakCard(),
+            const SizedBox(height: 20),
+            const _VisitedSitesCard(),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(child: Text(appText('recent'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
+                if (entries.isNotEmpty)
+                  TextButton(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                    child: Text(appText('view_all')),
                   ),
-                ),
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            if (recent.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 30),
+                child: Column(children: [
+                  AppMaterialIcon(AppIcons.clockCounterClockwise, size: 38, color: muted),
+                  const SizedBox(height: 9),
+                  Text(appText('no_recent_activity'), style: TextStyle(color: muted, fontWeight: FontWeight.w600)),
+                ]),
+              )
+            else
+              ...List.generate(recent.length, (index) {
+                final isFirst = index == 0;
+                final isLast = index == recent.length - 1;
+                return TweenAnimationBuilder<double>(
+                  key: ValueKey('${recent[index].url}-${recent[index].timestamp.microsecondsSinceEpoch}'),
+                  tween: Tween<double>(begin: 0, end: 1),
+                  duration: Duration(milliseconds: 260 + index * 35),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) => Opacity(
+                    opacity: value,
+                    child: Transform.translate(offset: Offset(0, (1 - value) * 8), child: child),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 3),
+                    child: ActivityTile(
+                      entry: recent[index],
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(isFirst ? 22 : 8),
+                        bottom: Radius.circular(isLast ? 22 : 8),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+          ],
         ),
       ),
     );
   }
 }
+
 
 /// Seletor de período (Day / Week / Month / Year), em cápsula arredondada.
 /// O indicador deslizante usa AnimatedPositioned sobre os rótulos fixos,
@@ -755,16 +666,15 @@ class _VisitedSitesCard extends StatelessWidget {
   const _VisitedSitesCard();
 
   List<String> _recentUniqueHosts(BuildContext context) {
-    final seen = <String>{};
-    final hosts = <String>[];
+    final counts = <String, int>{};
     for (final entry in activityController.entries) {
       if (entry.kind != ActivityKind.site) continue;
       final host = Uri.tryParse(entry.url)?.host.toLowerCase();
-      if (host == null || host.isEmpty || !seen.add(host)) continue;
-      hosts.add(host);
-      if (hosts.length >= 4) break;
+      if (host == null || host.isEmpty) continue;
+      counts.update(host, (count) => count + 1, ifAbsent: () => 1);
     }
-    return hosts;
+    final ranked = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return ranked.take(4).map((entry) => entry.key).toList(growable: false);
   }
 
   @override

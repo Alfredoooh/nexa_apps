@@ -10,7 +10,6 @@ import 'history_screen.dart';
 import '../theme.dart';
 import '../localization.dart';
 import 'language_screen.dart';
-import '../widgets/looply_popup.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../widgets/m3_switch.dart';
@@ -29,179 +28,213 @@ class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.of(context).padding.top;
+    final bg = pageBg(context);
+    final text = mainText(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Theme.of(context).brightness == Brightness.dark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark),
+      value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
+        statusBarColor: bg,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: bg,
+      ),
       child: Scaffold(
-        backgroundColor: pageBg(context),
-        extendBodyBehindAppBar: true,
-        body: Stack(
+        backgroundColor: bg,
+        appBar: AppBar(
+          toolbarHeight: 64,
+          automaticallyImplyLeading: false,
+          leadingWidth: 56,
+          backgroundColor: bg,
+          foregroundColor: text,
+          surfaceTintColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          leading: AppBackButton(
+            tooltip: appText('back'),
+            color: text,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          title: Text(
+            appText('settings'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(16, topInset + 72, 16, 24),
+            ValueListenableBuilder<LooplyUser?>(
+              valueListenable: authController,
+              builder: (context, user, _) => _AccountSummaryCard(user: user),
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: appText('general'),
               children: [
-                ValueListenableBuilder<LooplyUser?>(
-                  valueListenable: authController,
-                  builder: (context, user, _) => _AccountSummaryCard(user: user),
+                _SettingsTile(
+                  icon: AppIcons.moon,
+                  label: appText('theme'),
+                  trailing: ValueListenableBuilder<ThemeMode>(
+                    valueListenable: themeController,
+                    builder: (_, mode, __) => ValueListenableBuilder<bool>(
+                      valueListenable: themeController.pureDark,
+                      builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
+                    ),
+                  ),
+                  onTap: () => drawer_menu.showThemeSheet(context),
                 ),
-                const SizedBox(height: 20),
-                _SettingsSection(
-                  title: appText('general'),
-                  children: [
-                    _SettingsTile(
-                      icon: AppIcons.moon,
-                      label: appText('theme'),
-                      trailing: ValueListenableBuilder<ThemeMode>(
-                        valueListenable: themeController,
-                        builder: (_, mode, __) => ValueListenableBuilder<bool>(
-                          valueListenable: themeController.pureDark,
-                          builder: (_, pureBlack, __) => _SettingsValue(_themeLabel(mode, pureBlack)),
-                        ),
-                      ),
-                      onTap: () => drawer_menu.showThemeSheet(context),
-                    ),
-                    ValueListenableBuilder<SearchEngine>(
-                      valueListenable: activeSearchEngine,
-                      builder: (context, engine, _) => _SettingsTile(
-                        icon: AppIcons.compass,
-                        label: appText('search_engine'),
-                        trailing: _SettingsValue(engine.name),
-                        onTap: () => showSearchEnginePicker(context),
-                      ),
-                    ),
-                    _SettingsTile(
-                      icon: AppIcons.globe,
-                      label: appText('language'),
-                      trailing: ValueListenableBuilder<AppLanguage>(valueListenable: appLanguageController, builder: (_, language, __) => _SettingsValue(language.nativeName)),
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LanguageScreen())),
-                    ),
-                    const _DefaultBrowserSettingsTile(),
-                  ],
+                ValueListenableBuilder<SearchEngine>(
+                  valueListenable: activeSearchEngine,
+                  builder: (context, engine, _) => _SettingsTile(
+                    icon: AppIcons.compass,
+                    label: appText('search_engine'),
+                    trailing: _SettingsValue(engine.name),
+                    onTap: () => showSearchEnginePicker(context),
+                  ),
                 ),
-                const SizedBox(height: 20),
-                _SettingsSection(
-                  title: appText('navigation_security'),
-                  children: [
-                    ValueListenableBuilder<bool>(
-                      valueListenable: adBlockEnabled,
-                      builder: (context, enabled, _) => _SettingsTile(
-                        icon: AppIcons.shield,
-                        label: appText('ad_blocker'),
-                        subtitle: enabled ? appText('enabled') : appText('disabled'),
-                        trailing: M3ExpressiveSwitch(
-                          value: enabled,
-                          onChanged: (value) => adBlockEnabled.value = value,
-                        ),
-                        showChevron: false,
-                        onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: navigationAcceleratorEnabled,
-                      builder: (context, enabled, _) => _SettingsTile(
-                        icon: AppIcons.gauge,
-                        label: appText('navigation_accelerator'),
-                        subtitle: enabled
-                            ? appText('acceleration_on')
-                            : appText('acceleration_off'),
-                        trailing: M3ExpressiveSwitch(
-                          value: enabled,
-                          onChanged: (value) => navigationAcceleratorEnabled.value = value,
-                        ),
-                        showChevron: false,
-                        onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: forceDarkWebsitesEnabled,
-                      builder: (context, enabled, _) => _SettingsTile(
-                        icon: AppIcons.moon,
-                        label: appText('force_dark'),
-                        subtitle: appText('force_dark_subtitle'),
-                        trailing: M3ExpressiveSwitch(
-                          value: enabled,
-                          onChanged: (value) => forceDarkWebsitesEnabled.value = value,
-                        ),
-                        showChevron: false,
-                        onTap: () => forceDarkWebsitesEnabled.value = !forceDarkWebsitesEnabled.value,
-                      ),
-                    ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: adaptiveToolbarColorEnabled,
-                      builder: (context, enabled, _) => _SettingsTile(
-                        icon: AppIcons.palette,
-                        label: appText('adaptive_toolbar'),
-                        subtitle: appText('adaptive_toolbar_subtitle'),
-                        trailing: M3ExpressiveSwitch(
-                          value: enabled,
-                          onChanged: (value) => adaptiveToolbarColorEnabled.value = value,
-                        ),
-                        showChevron: false,
-                        onTap: () => adaptiveToolbarColorEnabled.value = !adaptiveToolbarColorEnabled.value,
-                      ),
-                    ),
-                  ],
+                _SettingsTile(
+                  icon: AppIcons.globe,
+                  label: appText('language'),
+                  trailing: ValueListenableBuilder<AppLanguage>(
+                    valueListenable: appLanguageController,
+                    builder: (_, language, __) => _SettingsValue(language.nativeName),
+                  ),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const LanguageScreen()),
+                  ),
                 ),
-                const SizedBox(height: 20),
-                _SettingsSection(
-                  title: appText('library'),
-                  children: [
-                    AnimatedBuilder(
-                      animation: activityController,
-                      builder: (context, _) => _SettingsTile(
-                        icon: AppIcons.clockCounterClockwise,
-                        label: appText('history'),
-                        subtitle: appText('history_entries_count').replaceAll('{count}', activityController.entries.length.toString()),
-                        onTap: () => _openLibraryPage(context, const HistoryScreen()),
-                      ),
+                const _DefaultBrowserSettingsTile(),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: appText('navigation_security'),
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: adBlockEnabled,
+                  builder: (context, enabled, _) => _SettingsTile(
+                    icon: AppIcons.shield,
+                    label: appText('ad_blocker'),
+                    subtitle: enabled ? appText('enabled') : appText('disabled'),
+                    trailing: M3ExpressiveSwitch(
+                      value: enabled,
+                      onChanged: (value) => adBlockEnabled.value = value,
                     ),
-                    AnimatedBuilder(
-                      animation: downloadsController,
-                      builder: (context, _) => _SettingsTile(
-                        icon: AppIcons.downloadSimple,
-                        label: appText('downloads'),
-                        subtitle: appText('downloads_count').replaceAll('{count}', downloadsController.entries.length.toString()),
-                        onTap: () => _openLibraryPage(context, const DownloadsScreen()),
-                      ),
-                    ),
-                    AnimatedBuilder(
-                      animation: bookmarksController,
-                      builder: (context, _) => _SettingsTile(
-                        icon: AppIcons.bookmarksSimple,
-                        label: appText('bookmarks'),
-                        subtitle: appText('bookmarks_count').replaceAll('{count}', bookmarksController.entries.length.toString()),
-                        onTap: () => _openLibraryPage(context, const BookmarksScreen()),
-                      ),
-                    ),
-                  ],
+                    showChevron: false,
+                    onTap: () => adBlockEnabled.value = !adBlockEnabled.value,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                _SettingsSection(
-                  title: appText('data'),
-                  children: [
-                    _SettingsTile(
-                      icon: AppIcons.uploadSimple,
-                      label: appText('export_data'),
-                      subtitle: appText('export_description'),
-                      onTap: () => _exportData(context),
+                ValueListenableBuilder<bool>(
+                  valueListenable: navigationAcceleratorEnabled,
+                  builder: (context, enabled, _) => _SettingsTile(
+                    icon: AppIcons.gauge,
+                    label: appText('navigation_accelerator'),
+                    subtitle: enabled ? appText('acceleration_on') : appText('acceleration_off'),
+                    trailing: M3ExpressiveSwitch(
+                      value: enabled,
+                      onChanged: (value) => navigationAcceleratorEnabled.value = value,
                     ),
-                    _SettingsTile(
-                      icon: AppIcons.downloadSimple,
-                      label: appText('import_data'),
-                      subtitle: appText('import_description'),
-                      onTap: () => _importData(context),
+                    showChevron: false,
+                    onTap: () => navigationAcceleratorEnabled.value = !navigationAcceleratorEnabled.value,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: forceDarkWebsitesEnabled,
+                  builder: (context, enabled, _) => _SettingsTile(
+                    icon: AppIcons.moon,
+                    label: appText('force_dark'),
+                    subtitle: appText('force_dark_subtitle'),
+                    trailing: M3ExpressiveSwitch(
+                      value: enabled,
+                      onChanged: (value) => forceDarkWebsitesEnabled.value = value,
                     ),
-                  ],
+                    showChevron: false,
+                    onTap: () => forceDarkWebsitesEnabled.value = !forceDarkWebsitesEnabled.value,
+                  ),
+                ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: adaptiveToolbarColorEnabled,
+                  builder: (context, enabled, _) => _SettingsTile(
+                    icon: AppIcons.palette,
+                    label: appText('adaptive_toolbar'),
+                    subtitle: appText('adaptive_toolbar_subtitle'),
+                    trailing: M3ExpressiveSwitch(
+                      value: enabled,
+                      onChanged: (value) => adaptiveToolbarColorEnabled.value = value,
+                    ),
+                    showChevron: false,
+                    onTap: () => adaptiveToolbarColorEnabled.value = !adaptiveToolbarColorEnabled.value,
+                  ),
                 ),
               ],
             ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _SettingsFadeAppBar(topInset: topInset),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: appText('library'),
+              children: [
+                AnimatedBuilder(
+                  animation: activityController,
+                  builder: (context, _) => _SettingsTile(
+                    icon: AppIcons.clockCounterClockwise,
+                    label: appText('history'),
+                    subtitle: appText('history_entries_count').replaceAll('{count}', activityController.entries.length.toString()),
+                    onTap: () => _openLibraryPage(context, const HistoryScreen()),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: downloadsController,
+                  builder: (context, _) => _SettingsTile(
+                    icon: AppIcons.downloadSimple,
+                    label: appText('downloads'),
+                    subtitle: appText('downloads_count').replaceAll('{count}', downloadsController.entries.length.toString()),
+                    onTap: () => _openLibraryPage(context, const DownloadsScreen()),
+                  ),
+                ),
+                AnimatedBuilder(
+                  animation: bookmarksController,
+                  builder: (context, _) => _SettingsTile(
+                    icon: AppIcons.bookmarksSimple,
+                    label: appText('bookmarks'),
+                    subtitle: appText('bookmarks_count').replaceAll('{count}', bookmarksController.entries.length.toString()),
+                    onTap: () => _openLibraryPage(context, const BookmarksScreen()),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: appText('data'),
+              children: [
+                _SettingsTile(
+                  icon: AppIcons.uploadSimple,
+                  label: appText('export_data'),
+                  subtitle: appText('export_description'),
+                  onTap: () => _exportData(context),
+                ),
+                _SettingsTile(
+                  icon: AppIcons.downloadSimple,
+                  label: appText('import_data'),
+                  subtitle: appText('import_description'),
+                  onTap: () => _importData(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
+              title: appText('app_info'),
+              children: [
+                _SettingsTile(
+                  icon: AppIcons.info,
+                  label: appText('app_info'),
+                  subtitle: 'BrowseIt',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const AppInfoScreen()),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -315,78 +348,6 @@ class _AccountSummaryCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               AppMaterialIcon(AppIcons.caretRight, color: muted, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Appbar flutuante da Settings: dois botões circulares (voltar e
-// informações), título central, e o mesmo gradiente sólido-no-topo /
-// transparente-na-base usado nas outras telas internas.
-class _SettingsFadeAppBar extends StatelessWidget {
-  const _SettingsFadeAppBar({required this.topInset});
-  final double topInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = pageBg(context);
-    final text = mainText(context);
-    final muted = mutedText(context);
-    return Container(
-      padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0.0)],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-      ),
-      child: SizedBox(
-        height: 64,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Row(
-            children: [
-              AppBackButton(
-                tooltip: appText('back'),
-                color: muted,
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  appText('settings'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-              ),
-              const SizedBox(width: 4),
-              ValueListenableBuilder<bool>(
-                valueListenable: aiSearchModeEnabled,
-                builder: (context, aiEnabled, _) => LooplyPopupMenuButton<String>(
-                  tooltip: appText('more_options'),
-                  icon: AppIcons.dotsThreeVertical,
-                  iconColor: muted,
-                  menuWidth: 270,
-                  includeAiToggle: true,
-                  aiToggleLabel: appText('ai_mode'),
-                  aiToggleValue: aiEnabled,
-                  onAiToggleChanged: (value) => aiSearchModeEnabled.value = value,
-                  actions: <LooplyPopupAction<String>>[
-                    LooplyPopupAction<String>(value: 'app_info', label: appText('app_info'), icon: AppIcons.info),
-                  ],
-                  onSelected: (value) {
-                    if (value == 'app_info') {
-                      Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const AppInfoScreen()));
-                    }
-                  },
-                ),
-              ),
             ],
           ),
         ),

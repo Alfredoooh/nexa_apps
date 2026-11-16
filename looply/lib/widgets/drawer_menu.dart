@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../session_store.dart';
 import '../auth_service.dart';
 import '../localization.dart';
+import '../shell/shell_tab_request.dart';
 import 'material_symbols.dart';
 
 /// Ponte entre os botões da interface e o drawer push/drag do shell.
@@ -18,6 +19,7 @@ import 'material_symbols.dart';
 class LooplyDrawerBridge {
   static VoidCallback? open;
   static VoidCallback? close;
+  static final ValueNotifier<bool> showHomeAction = ValueNotifier<bool>(false);
 }
 
 void showLooplyDrawer(BuildContext context) {
@@ -55,9 +57,25 @@ class LooplyDrawer extends StatelessWidget {
                   const _DrawerHeader(),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: LooplyDrawerBridge.showHomeAction,
+                      builder: (context, showHome, _) => ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: [
+                          if (showHome) ...[
+                            _DrawerOption(
+                              icon: AppIcons.house,
+                              label: appText('home'),
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
+                              onTap: () {
+                                onClose();
+                                Future<void>.delayed(const Duration(milliseconds: 520), () {
+                                  ShellTabRequest.instance.request(0);
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 2),
+                          ],
                         _DrawerOption(
                           icon: AppIcons.moon,
                           label: appText('change_theme'),
@@ -109,7 +127,8 @@ class LooplyDrawer extends StatelessWidget {
                             onTap: () => _openDrawerPage(context, const BookmarksScreen()),
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   Padding(

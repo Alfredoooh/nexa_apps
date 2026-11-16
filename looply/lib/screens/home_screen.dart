@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
@@ -14,6 +15,10 @@ import '../shell/shell_tab_request.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'auth_screen.dart';
 import '../widgets/material_symbols.dart';
+import '../widgets/search_engine_pngs.dart';
+import '../shell/fade_page_route.dart';
+import 'search_screen.dart';
+import 'site_usage_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -34,8 +39,16 @@ class HomeScreen extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(12, topInset > 0 ? 68 : 72, 12, 28),
               children: [
                 const SizedBox(height: 12),
-                const QuickSiteGridCard(),
+                const _HomeSearchInput(),
                 const SizedBox(height: 12),
+                const Row(
+                  children: [
+                    Expanded(child: QuickSiteGridCard()),
+                    SizedBox(width: 10),
+                    Expanded(child: _AiSearchHomeCard()),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 const RecentTabPreviewsCard(),
               ],
             ),
@@ -68,14 +81,7 @@ class LooplyHomeAppBar extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0.0)],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-      ),
+      decoration: BoxDecoration(color: bg),
       child: SizedBox(
         height: 64,
         child: Padding(
@@ -125,15 +131,70 @@ class _DrawerMenuButton extends StatelessWidget {
   }
 }
 
-// Sites usados recentemente: até dez entradas, em faixa horizontal, sem título.
-// O favicon fica inteiro dentro de um quadrado branco sobre um círculo maior,
-// evitando o recorte que existia na versão anterior.
+// Barra de pesquisa no topo da Home. A abertura usa fade (sem deslocamento).
+class _HomeSearchInput extends StatelessWidget {
+  const _HomeSearchInput();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: pillColor(context),
+      borderRadius: BorderRadius.circular(999),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push<void>(
+          FadePageRoute<void>(builder: (_) => const SearchScreen()),
+        ),
+        borderRadius: BorderRadius.circular(999),
+        child: SizedBox(
+          height: 54,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            child: Row(
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: aiSearchModeEnabled,
+                  builder: (context, aiEnabled, _) {
+                    if (aiEnabled) {
+                      return Image.memory(searchEnginePng('AI Search')!, width: 23, height: 23, fit: BoxFit.contain);
+                    }
+                    return ValueListenableBuilder<SearchEngine>(
+                      valueListenable: activeSearchEngine,
+                      builder: (context, engine, _) {
+                        final png = searchEnginePng(engine.name);
+                        return png == null
+                            ? AppMaterialIcon(AppIcons.magnifyingGlass, size: 23, color: mutedText(context))
+                            : Image.memory(png, width: 23, height: 23, fit: BoxFit.contain);
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Text(
+                    appText('search_hint'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: mutedText(context), fontSize: 15),
+                  ),
+                ),
+                AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Recent sites e AI Search ocupam a mesma linha e a mesma altura.
 class QuickSiteGridCard extends StatelessWidget {
   const QuickSiteGridCard({super.key});
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: activityController,
+        animation: Listenable.merge([activityController, browserFaviconCache]),
         builder: (context, _) {
           final recent = <ActivityEntry>[];
           final hosts = <String>{};
@@ -142,84 +203,136 @@ class QuickSiteGridCard extends StatelessWidget {
             final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
             if (host.isEmpty || !hosts.add(host)) continue;
             recent.add(entry);
-            if (recent.length >= 10) break;
+            if (recent.length >= 3) break;
           }
-
-          return Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
-            decoration: BoxDecoration(
-              color: settingsCardColor(context),
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: recent.isEmpty
-                ? SizedBox(
-                    height: 68,
-                    child: Center(
-                      child: Text(
-                        appText('no_recent_activity'),
-                        style: TextStyle(color: mutedText(context), fontSize: 13),
+          return Material(
+            color: settingsCardColor(context),
+            borderRadius: BorderRadius.circular(999),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: recent.isEmpty
+                  ? null
+                  : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
                       ),
-                    ),
-                  )
-                : SizedBox(
-                    height: 100,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: recent.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 9),
-                      itemBuilder: (context, index) => SizedBox(
-                        width: 76,
-                        child: _RecentSiteTile(entry: recent[index]),
+              borderRadius: BorderRadius.circular(999),
+              child: SizedBox(
+                height: 76,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 56,
+                        height: 40,
+                        child: recent.isEmpty
+                            ? CircleAvatar(
+                                backgroundColor: pillColor(context),
+                                child: AppMaterialIcon(AppIcons.globe, size: 22, color: mutedText(context)),
+                              )
+                            : Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  for (var i = 0; i < recent.length; i++)
+                                    Positioned(
+                                      left: i * 11,
+                                      top: 3,
+                                      child: Container(
+                                        width: 34,
+                                        height: 34,
+                                        decoration: BoxDecoration(
+                                          color: pillColor(context),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: settingsCardColor(context), width: 2),
+                                        ),
+                                        child: ClipOval(
+                                          child: _MiniSiteFavicon(url: recent[i].url),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                       ),
-                    ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          appText('recent'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: mainText(context), fontSize: 12.5, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+              ),
+            ),
           );
         },
       );
 }
 
-class _RecentSiteTile extends StatelessWidget {
-  const _RecentSiteTile({required this.entry});
-  final ActivityEntry entry;
+class _MiniSiteFavicon extends StatelessWidget {
+  const _MiniSiteFavicon({required this.url});
+  final String url;
 
   @override
   Widget build(BuildContext context) {
-    final host = Uri.tryParse(entry.url)?.host ?? entry.url;
-    final label = entry.title.trim().isNotEmpty
-        ? entry.title.trim()
-        : host.replaceFirst(RegExp(r'^www\.'), '');
-    return Semantics(
-      button: true,
-      label: label,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => openNewTab(context, entry.url, title: entry.title),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SiteFaviconForHome(url: entry.url),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: mainText(context),
-                  fontSize: 12.5,
-                  height: 1.16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final encoded = browserFaviconCache.forUrl(url);
+    if (encoded != null) {
+      try {
+        return Image.memory(base64Decode(encoded), fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _fallback(context));
+      } catch (_) {}
+    }
+    unawaited(browserFaviconCache.fetchForUrl(url));
+    return Image.network(
+      'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=64',
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => _fallback(context),
     );
   }
+
+  Widget _fallback(BuildContext context) => Center(
+        child: AppMaterialIcon(AppIcons.globe, size: 19, color: mutedText(context)),
+      );
+}
+
+class _AiSearchHomeCard extends StatelessWidget {
+  const _AiSearchHomeCard();
+
+  void _open(BuildContext context) {
+    final tab = tabsController.createBrowserTab('looply://ai-search', title: 'AI Search');
+    tabsController.activate(tab.id);
+    ShellTabRequest.instance.requestBrowser(tab.id);
+  }
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: settingsCardColor(context),
+        borderRadius: BorderRadius.circular(999),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _open(context),
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 76,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Image.memory(searchEnginePng('AI Search')!, width: 28, height: 28, fit: BoxFit.contain),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('AI Search', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: mainText(context), fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class SiteFaviconForHome extends StatelessWidget {
@@ -231,37 +344,18 @@ class SiteFaviconForHome extends StatelessWidget {
     final muted = mutedText(context);
     final cached = browserFaviconCache.forUrl(url);
     final Widget favicon = cached != null
-        ? Image.memory(
-            base64Decode(cached),
-            width: 35,
-            height: 35,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => AppMaterialIcon(
-              AppIcons.globe,
-              size: 24,
-              color: muted,
-            ),
-          )
+        ? Image.memory(base64Decode(cached), width: 35, height: 35, fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 24, color: muted))
         : Image.network(
             'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=128',
-            width: 35,
-            height: 35,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => AppMaterialIcon(
-              AppIcons.globe,
-              size: 24,
-              color: muted,
-            ),
+            width: 35, height: 35, fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 24, color: muted),
           );
-
     return Container(
       width: 62,
       height: 62,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: pillColor(context),
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: pillColor(context), shape: BoxShape.circle),
       child: ClipOval(child: favicon),
     );
   }

@@ -41,6 +41,7 @@ const Map<String, String> itScreenTranslations = <String, String>{
     'force_dark_subtitle': 'Applica un livello scuro anche ai siti senza tema scuro',
     'adaptive_toolbar_subtitle': 'Adatta la barra al colore dominante della pagina', 'deep_dark': 'Scuro profondo',
     'add': 'Aggiungi',
+    'images': 'Immagini', 'files': 'File',
     'site_url': 'Indirizzo del sito',
     'site_name': 'Nome del sito',
     'gallery_open_failed': 'Impossibile aprire la galleria.',

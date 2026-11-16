@@ -210,14 +210,7 @@ class _ProfileFadeAppBar extends StatelessWidget {
     final muted = mutedText(context);
     return Container(
       padding: EdgeInsets.only(top: topInset),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg, bg, bg.withOpacity(0.0)],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-      ),
+      decoration: BoxDecoration(color: bg),
       child: SizedBox(
         height: 64,
         child: Padding(
@@ -259,14 +252,7 @@ class _ProfileFadeBottomBar extends StatelessWidget {
     final bottomInset = MediaQuery.of(context).padding.bottom;
     return Container(
       padding: EdgeInsets.fromLTRB(20, 24, 20, bottomInset + 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [bg.withOpacity(0.0), bg, bg],
-          stops: const [0.0, 0.45, 1.0],
-        ),
-      ),
+      decoration: BoxDecoration(color: bg),
       child: SizedBox(
         width: double.infinity,
         child: FilledButton.icon(

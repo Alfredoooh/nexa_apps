@@ -36,6 +36,7 @@ const Map<String, String> trScreenTranslations = <String, String>{
     'already_bookmarked': 'Bu sayfa zaten yer imlerinde.', 'force_dark_subtitle': 'Koyu teması olmayan sitelere de koyu görünüm uygular',
     'adaptive_toolbar_subtitle': 'Araç çubuğunu sayfanın baskın rengine uyarlar', 'deep_dark': 'Derin koyu',
     'add': 'Ekle',
+    'images': 'Görseller', 'files': 'Dosyalar',
     'site_url': 'Site bağlantısı',
     'site_name': 'Site adı',
     'gallery_open_failed': 'Galeri açılamadı.',

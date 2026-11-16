@@ -37,6 +37,7 @@ const Map<String, String> jaScreenTranslations = <String, String>{
     'force_dark_subtitle': 'ダークテーマに対応していないサイトにも暗い表示を適用します',
     'adaptive_toolbar_subtitle': 'ページの主要な色に合わせてツールバーを調整します', 'deep_dark': 'ディープダーク',
     'add': '追加',
+    'images': '画像', 'files': 'ファイル',
     'site_url': 'サイトのリンク',
     'site_name': 'サイト名',
     'gallery_open_failed': 'ギャラリーを開けませんでした。',
