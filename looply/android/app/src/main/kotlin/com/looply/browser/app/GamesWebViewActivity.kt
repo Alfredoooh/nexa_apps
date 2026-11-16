@@ -119,9 +119,15 @@ class GamesWebViewActivity : Activity() {
             settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    progress.progress = newProgress
-                    progress.visibility = if (newProgress >= 100) View.GONE else View.VISIBLE
-                    if (newProgress >= 100) loadingLabel.visibility = View.GONE
+                    // O receiver implícito de WebView.apply() não é o Activity.
+                    // Qualificamos os campos da Activity para evitar a resolução
+                    // incorreta do símbolo `progress` pelo compilador Kotlin.
+                    this@GamesWebViewActivity.progress.progress = newProgress
+                    this@GamesWebViewActivity.progress.visibility =
+                        if (newProgress >= 100) View.GONE else View.VISIBLE
+                    if (newProgress >= 100) {
+                        this@GamesWebViewActivity.loadingLabel.visibility = View.GONE
+                    }
                 }
             }
             webViewClient = object : WebViewClient() {
