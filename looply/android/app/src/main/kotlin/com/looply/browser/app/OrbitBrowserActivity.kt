@@ -28,12 +28,12 @@ import android.view.PixelCopy
 import android.widget.PopupWindow
 import android.widget.HorizontalScrollView
 import android.widget.ScrollView
-import android.transition.Fade
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
@@ -1102,6 +1102,27 @@ class OrbitBrowserActivity : AppCompatActivity() {
         icon.setTextColor(color)
     }
 
+    /** O mesmo fundo, raio e cor de acento dos diálogos Flutter do BrowseIt. */
+    private fun looplyMaterialDialogBuilder(): MaterialAlertDialogBuilder {
+        val overlay = if (dark) R.style.LooplyBrowserDialog_Dark else R.style.LooplyBrowserDialog_Light
+        val dialogSurface = when {
+            !dark -> Color.WHITE
+            pureBlack -> Color.rgb(25, 25, 25)
+            else -> Color.rgb(43, 45, 48)
+        }
+        return MaterialAlertDialogBuilder(this, overlay)
+            .setBackground(rounded(dialogSurface, 24))
+    }
+
+    private fun applyLooplyDialogDim(dialog: android.app.Dialog) {
+        dialog.window?.let { dialogWindow ->
+            dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            val attributes = dialogWindow.attributes
+            attributes.dimAmount = .34f
+            dialogWindow.attributes = attributes
+        }
+    }
+
     private fun showAddressDialog() {
         val input = EditText(this).apply {
             setSingleLine(true)
@@ -1122,7 +1143,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             addView(input, LinearLayout.LayoutParams(-1, dp(52)))
         }
 
-        val dialog = MaterialAlertDialogBuilder(this)
+        val dialog = looplyMaterialDialogBuilder()
             .setTitle(menuText("searchHint", "Search or open address"))
             .setView(container)
             .setNegativeButton(menuText("cancel", "Cancel"), null)
@@ -1158,6 +1179,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         dialog.show()
+        applyLooplyDialogDim(dialog)
     }
 
     private fun loadAddress(raw: String) {
@@ -1420,13 +1442,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val popup = PopupWindow(content, popupWidth, popupHeight, true).apply {
             setBackgroundDrawable(rounded(surface, 26))
             setElevation(dp(20).toFloat())
+            // A animação de janela do Android é a mesma utilizada por menus
+            // popup nativos: escala + fade a partir da âncora, com saída curta.
+            setAnimationStyle(R.style.LooplyNativePopupWindowAnimation)
             isOutsideTouchable = true
             isClippingEnabled = true
             inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                enterTransition = Fade().apply { duration = 245; interpolator = DecelerateInterpolator(1.5f) }
-                exitTransition = Fade().apply { duration = 190; interpolator = DecelerateInterpolator(1.2f) }
-            }
         }
         popupWindowRef = popup
         popup.setOnDismissListener {
@@ -1795,11 +1816,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun showSiteInfo() {
         val host = hostOf(currentUrl)
-        MaterialAlertDialogBuilder(this)
+        val dialog = looplyMaterialDialogBuilder()
             .setTitle(menuText("siteInfo", "Site information"))
             .setMessage("${currentTitle.ifBlank { host }}\n\n$currentUrl")
             .setPositiveButton(menuText("close", "Close"), null)
-            .show()
+            .create()
+        dialog.show()
+        applyLooplyDialogDim(dialog)
     }
 
     private fun copyAddress() {

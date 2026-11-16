@@ -11,6 +11,7 @@ import '../models.dart';
 import '../theme.dart';
 import 'home_screen.dart';
 import '../widgets/material_symbols.dart';
+import '../widgets/looply_dialog.dart';
 
 class AllSitesScreen extends StatefulWidget {
   const AllSitesScreen({super.key});
@@ -103,11 +104,13 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
       showDragHandle: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (sheetContext) => AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
-        child: const _AddCustomSiteSheet(),
+      builder: (sheetContext) => LooplyModalSystemBar(
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: const _AddCustomSiteSheet(),
+        ),
       ),
     );
   }

@@ -1,4 +1,9 @@
 const Map<String, String> trCoreTranslations = <String, String>{
+    'games': 'Oyunlar',
+    'games_intro': 'Dahili oynatıcıda açmak için bir oyun seçin.',
+    'games_source_note': 'Oyunlar kaynak depodan yüklenir ve internet bağlantısı gerektirir.',
+    'game_open_failed': 'Bu oyun açılamadı.',
+    'tap_to_play': 'Oynamak için dokunun',
     'settings': 'Ayarlar', 'general': 'Genel', 'theme': 'Tema', 'light': 'Açık', 'dark': 'Koyu',
     'automatic': 'Otomatik', 'search_engine': 'Arama motoru', 'language': 'Dil', 'navigation_security': 'Gezinme ve güvenlik',
     'ad_blocker': 'Reklam engelleyici', 'navigation_accelerator': 'Gezinme hızlandırıcı', 'library': 'Kitaplık',

@@ -1,4 +1,9 @@
 const Map<String, String> itCoreTranslations = <String, String>{
+    'games': 'Giochi',
+    'games_intro': 'Scegli un gioco da aprire nel lettore integrato.',
+    'games_source_note': 'I giochi vengono caricati dal repository originale e richiedono una connessione Internet.',
+    'game_open_failed': 'Impossibile aprire questo gioco.',
+    'tap_to_play': 'Tocca per giocare',
     'settings': 'Impostazioni', 'general': 'Generali', 'theme': 'Tema', 'light': 'Chiaro',
     'dark': 'Scuro', 'automatic': 'Automatico', 'search_engine': 'Motore di ricerca',
     'language': 'Lingua', 'navigation_security': 'Navigazione e sicurezza',

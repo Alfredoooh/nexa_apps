@@ -1,4 +1,9 @@
 const Map<String, String> frCoreTranslations = <String, String>{
+    'games': 'Jeux',
+    'games_intro': 'Choisissez un jeu à ouvrir dans le lecteur intégré.',
+    'games_source_note': 'Les jeux sont chargés depuis le dépôt d’origine et nécessitent une connexion Internet.',
+    'game_open_failed': 'Impossible d’ouvrir ce jeu.',
+    'tap_to_play': 'Touchez pour jouer',
     'settings': 'Paramètres', 'general': 'Général', 'theme': 'Thème', 'light': 'Clair',
     'dark': 'Sombre', 'automatic': 'Automatique', 'search_engine': 'Moteur de recherche',
     'language': 'Langue', 'navigation_security': 'Navigation et sécurité',

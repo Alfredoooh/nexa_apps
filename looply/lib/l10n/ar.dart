@@ -1,4 +1,9 @@
 const Map<String, String> arCoreTranslations = <String, String>{
+    'games': 'الألعاب',
+    'games_intro': 'اختر لعبة لفتحها في المشغّل المدمج.',
+    'games_source_note': 'يتم تحميل الألعاب من المستودع الأصلي وتتطلب اتصالاً بالإنترنت.',
+    'game_open_failed': 'تعذّر فتح هذه اللعبة.',
+    'tap_to_play': 'اضغط للعب',
     'settings': 'الإعدادات', 'general': 'عام', 'theme': 'المظهر', 'light': 'فاتح',
     'dark': 'داكن', 'automatic': 'تلقائي', 'search_engine': 'محرك البحث', 'language': 'اللغة',
     'navigation_security': 'التصفح والأمان', 'ad_blocker': 'حظر الإعلانات',

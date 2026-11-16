@@ -1,4 +1,9 @@
 const Map<String, String> zhCoreTranslations = <String, String>{
+    'games': '游戏',
+    'games_intro': '选择要在内置播放器中打开的游戏。',
+    'games_source_note': '游戏从原始代码仓库加载，需要连接互联网。',
+    'game_open_failed': '无法打开此游戏。',
+    'tap_to_play': '点击开始游戏',
     'settings': '设置', 'general': '通用', 'theme': '主题', 'light': '浅色', 'dark': '深色',
     'automatic': '自动', 'search_engine': '搜索引擎', 'language': '语言', 'navigation_security': '浏览与安全',
     'ad_blocker': '广告拦截', 'navigation_accelerator': '浏览加速', 'library': '资料库', 'history': '历史记录',

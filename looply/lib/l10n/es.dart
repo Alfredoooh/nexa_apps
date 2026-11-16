@@ -1,4 +1,9 @@
 const Map<String, String> esCoreTranslations = <String, String>{
+    'games': 'Juegos',
+    'games_intro': 'Elige un juego para abrirlo en el reproductor integrado.',
+    'games_source_note': 'Los juegos se cargan desde el repositorio original y requieren conexión a Internet.',
+    'game_open_failed': 'No se pudo abrir este juego.',
+    'tap_to_play': 'Toca para jugar',
     'settings': 'Configuración', 'general': 'General', 'theme': 'Tema', 'light': 'Claro',
     'dark': 'Oscuro', 'automatic': 'Automático', 'search_engine': 'Motor de búsqueda',
     'language': 'Idioma', 'navigation_security': 'Navegación y seguridad',

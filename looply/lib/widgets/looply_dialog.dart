@@ -1,8 +1,32 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 
 import '../theme.dart';
 import '../localization.dart';
 import 'material_symbols.dart';
+
+/// Mantém os ícones da barra de estado legíveis e aplica o mesmo escurecimento
+/// ao abrir qualquer modal (diálogo ou bottom sheet) do BrowseIt.
+class LooplyModalSystemBar extends StatelessWidget {
+  const LooplyModalSystemBar({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dimmedStatusBar = Color.alphaBlend(
+      Colors.black.withOpacity(.30),
+      pageBg(context),
+    );
+    final overlayStyle = (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
+      statusBarColor: dimmedStatusBar,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+    );
+    return AnnotatedRegion<SystemUiOverlayStyle>(value: overlayStyle, child: child);
+  }
+}
 
 class LooplyDialogAction<T> {
   const LooplyDialogAction({required this.label, required this.value, this.isPrimary = false, this.isDestructive = false});
@@ -36,91 +60,93 @@ Future<T?> showLooplyDialog<T>({
       final availableHeight = (media.size.height - media.viewInsets.bottom - 32)
           .clamp(240.0, media.size.height)
           .toDouble();
-      return SafeArea(
-        child: AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + media.viewInsets.bottom),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 560,
-                maxHeight: availableHeight,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: Material(
-                  color: surface,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 3,
-                  clipBehavior: Clip.antiAlias,
-                  borderRadius: BorderRadius.circular(24),
-                  child: SingleChildScrollView(
-                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (icon != null) ...[
-                              AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
-                              const SizedBox(width: 12),
+      return LooplyModalSystemBar(
+        child: SafeArea(
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + media.viewInsets.bottom),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 560,
+                  maxHeight: availableHeight,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Material(
+                    color: surface,
+                    surfaceTintColor: Colors.transparent,
+                    elevation: 3,
+                    clipBehavior: Clip.antiAlias,
+                    borderRadius: BorderRadius.circular(24),
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (icon != null) ...[
+                                AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
+                                const SizedBox(width: 12),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  textAlign: TextAlign.start,
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    color: mainText(dialogContext),
+                                    fontSize: 20,
+                                    height: 1.25,
+                                    letterSpacing: -.2,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
                             ],
-                            Expanded(
-                              child: Text(
-                                title,
-                                textAlign: TextAlign.start,
-                                softWrap: true,
-                                style: TextStyle(
-                                  color: mainText(dialogContext),
-                                  fontSize: 20,
-                                  height: 1.25,
-                                  letterSpacing: -.2,
-                                  fontWeight: FontWeight.w600,
+                          ),
+                          const SizedBox(height: 16),
+                          DefaultTextStyle.merge(
+                            style: TextStyle(
+                              color: mutedText(dialogContext),
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
+                            child: content,
+                          ),
+                          if (actions.isNotEmpty) ...[
+                            const SizedBox(height: 22),
+                            LayoutBuilder(
+                              builder: (context, constraints) => Align(
+                                alignment: AlignmentDirectional.centerEnd,
+                                child: Wrap(
+                                  alignment: WrapAlignment.end,
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    for (final action in actions)
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: constraints.maxWidth.clamp(112.0, 240.0).toDouble(),
+                                        ),
+                                        child: _DialogActionButton<T>(
+                                          action: action,
+                                          onPressed: () => Navigator.of(dialogContext).pop(action.value),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 16),
-                        DefaultTextStyle.merge(
-                          style: TextStyle(
-                            color: mutedText(dialogContext),
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                          child: content,
-                        ),
-                        if (actions.isNotEmpty) ...[
-                          const SizedBox(height: 22),
-                          LayoutBuilder(
-                            builder: (context, constraints) => Align(
-                              alignment: AlignmentDirectional.centerEnd,
-                              child: Wrap(
-                                alignment: WrapAlignment.end,
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (final action in actions)
-                                    ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: constraints.maxWidth.clamp(112.0, 240.0).toDouble(),
-                                      ),
-                                      child: _DialogActionButton<T>(
-                                        action: action,
-                                        onPressed: () => Navigator.of(dialogContext).pop(action.value),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),

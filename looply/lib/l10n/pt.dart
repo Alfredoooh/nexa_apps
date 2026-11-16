@@ -1,4 +1,9 @@
 const Map<String, String> ptCoreTranslations = <String, String>{
+    'games': 'Jogos',
+    'games_intro': 'Escolhe um jogo para abrir no leitor integrado.',
+    'games_source_note': 'Os jogos são carregados do repositório original e precisam de ligação à Internet.',
+    'game_open_failed': 'Não foi possível abrir este jogo.',
+    'tap_to_play': 'Toca para jogar',
     'settings': 'Configurações', 'general': 'Geral', 'theme': 'Tema', 'light': 'Claro',
     'dark': 'Escuro', 'automatic': 'Automático', 'search_engine': 'Motor de pesquisa',
     'language': 'Idioma', 'navigation_security': 'Navegação e segurança',

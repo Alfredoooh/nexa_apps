@@ -7,6 +7,7 @@ import '../models.dart';
 import '../theme.dart';
 import 'material_symbols.dart';
 import 'search_engine_pngs.dart';
+import 'looply_dialog.dart';
 
 void showSearchEnginePicker(BuildContext context) {
   showModalBottomSheet<void>(
@@ -16,8 +17,9 @@ void showSearchEnginePicker(BuildContext context) {
     showDragHandle: false,
     useSafeArea: true,
     isScrollControlled: true,
-    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeController,
+    builder: (sheetContext) => LooplyModalSystemBar(
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeController,
       builder: (context, mode, _) {
         final surface = panelForMode(context, mode);
         final text = textForMode(context, mode);
@@ -157,6 +159,7 @@ void showSearchEnginePicker(BuildContext context) {
           ),
         );
       },
+      ),
     ),
   );
 }

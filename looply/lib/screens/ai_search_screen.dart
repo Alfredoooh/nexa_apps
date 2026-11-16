@@ -6,6 +6,7 @@ import '../theme.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
 import '../widgets/drawer_menu_button.dart';
+import '../widgets/looply_dialog.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 
 /// Ecrã inicial da pesquisa com IA. A apresentação é nativa em Flutter e
@@ -68,8 +69,9 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       context: context,
       backgroundColor: pageBg(context),
       showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
+      builder: (context) => LooplyModalSystemBar(
+        child: SafeArea(
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -88,6 +90,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -100,17 +103,21 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            SizedBox(
-              height: 58,
-              child: Row(
-                children: [
-                  LooplyDrawerMenuButton(
-                    onPressed: () => drawer_menu.showLooplyDrawer(context),
-                  ),
-                  Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
-                  const SizedBox(width: 10),
-                  Text('AI Search', style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w700)),
-                ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                height: 64,
+                child: Row(
+                  children: [
+                    LooplyDrawerMenuButton(
+                      onPressed: () => drawer_menu.showLooplyDrawer(context),
+                    ),
+                    const SizedBox(width: 4),
+                    Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
+                    const SizedBox(width: 10),
+                    Text('AI Search', style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w700)),
+                  ],
+                ),
               ),
             ),
             Expanded(

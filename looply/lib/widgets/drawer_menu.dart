@@ -13,6 +13,7 @@ import '../auth_service.dart';
 import '../localization.dart';
 import '../shell/shell_tab_request.dart';
 import 'material_symbols.dart';
+import 'looply_dialog.dart';
 
 /// Ponte entre os botões da interface e o drawer push/drag do shell.
 /// O progresso do gesto é controlado pelo AnimationController do LooplyShell.
@@ -415,8 +416,9 @@ void showThemeSheet(BuildContext context) {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     ),
-    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeController,
+    builder: (sheetContext) => LooplyModalSystemBar(
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeController,
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
         valueListenable: themeController.pureDark,
         builder: (context, pureBlack, __) {
@@ -468,6 +470,7 @@ void showThemeSheet(BuildContext context) {
             ),
           );
         },
+      ),
       ),
     ),
   );

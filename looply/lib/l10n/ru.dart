@@ -1,4 +1,9 @@
 const Map<String, String> ruCoreTranslations = <String, String>{
+    'games': 'Игры',
+    'games_intro': 'Выберите игру для встроенного проигрывателя.',
+    'games_source_note': 'Игры загружаются из исходного репозитория и требуют подключения к интернету.',
+    'game_open_failed': 'Не удалось открыть эту игру.',
+    'tap_to_play': 'Нажмите, чтобы играть',
     'settings': 'Настройки', 'general': 'Общие', 'theme': 'Тема', 'light': 'Светлая', 'dark': 'Тёмная',
     'automatic': 'Автоматически', 'search_engine': 'Поисковая система', 'language': 'Язык',
     'navigation_security': 'Просмотр и безопасность', 'ad_blocker': 'Блокировка рекламы',

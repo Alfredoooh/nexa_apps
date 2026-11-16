@@ -1,4 +1,9 @@
 const Map<String, String> enCoreTranslations = <String, String>{
+    'games': 'Games',
+    'games_intro': 'Choose a game to open in the built-in player.',
+    'games_source_note': 'Games are loaded from the original repository and require an Internet connection.',
+    'game_open_failed': 'Could not open this game.',
+    'tap_to_play': 'Tap to play',
     'settings': 'Settings', 'general': 'General', 'theme': 'Theme', 'light': 'Light',
     'dark': 'Dark', 'automatic': 'Automatic', 'search_engine': 'Search engine',
     'language': 'Language', 'navigation_security': 'Navigation and security',

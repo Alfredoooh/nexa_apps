@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:animations/animations.dart';
 import 'dart:ui' show Rect;
 
 import '../localization.dart';
@@ -12,7 +13,6 @@ import 'auth_screen.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
 import '../widgets/drawer_menu_button.dart';
-import '../shell/fade_page_route.dart';
 import 'search_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -100,49 +100,62 @@ class _HomeSearchInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: pillColor(context),
-      borderRadius: BorderRadius.circular(999),
+    // Container Transform: o próprio pill da Home cresce e sobe até ocupar
+    // a Search Screen, em vez de desaparecer e abrir uma página independente.
+    return OpenContainer<void>(
+      transitionType: ContainerTransitionType.fade,
+      transitionDuration: const Duration(milliseconds: 480),
+      closedElevation: 0,
+      openElevation: 0,
+      closedColor: pillColor(context),
+      openColor: pageBg(context),
+      closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      openShape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(context).push<void>(
-          FadePageRoute<void>(builder: (_) => const SearchScreen()),
-        ),
+      tappable: false,
+      openBuilder: (context, closeContainer) => const SearchScreen(),
+      closedBuilder: (context, openContainer) => Material(
+        color: pillColor(context),
         borderRadius: BorderRadius.circular(999),
-        child: SizedBox(
-          height: 54,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: Row(
-              children: [
-                ValueListenableBuilder<bool>(
-                  valueListenable: aiSearchModeEnabled,
-                  builder: (context, aiEnabled, _) {
-                    if (aiEnabled) {
-                      return Image.memory(searchEnginePng('AI Search')!, width: 23, height: 23, fit: BoxFit.contain);
-                    }
-                    return ValueListenableBuilder<SearchEngine>(
-                      valueListenable: activeSearchEngine,
-                      builder: (context, engine, _) {
-                        final png = searchEnginePng(engine.name);
-                        return png == null
-                            ? AppMaterialIcon(AppIcons.magnifyingGlass, size: 23, color: mutedText(context))
-                            : Image.memory(png, width: 23, height: 23, fit: BoxFit.contain);
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Text(
-                    appText('search_hint'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: mutedText(context), fontSize: 15),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openContainer,
+          borderRadius: BorderRadius.circular(999),
+          child: SizedBox(
+            height: 54,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              child: Row(
+                children: [
+                  ValueListenableBuilder<bool>(
+                    valueListenable: aiSearchModeEnabled,
+                    builder: (context, aiEnabled, _) {
+                      if (aiEnabled) {
+                        return Image.memory(searchEnginePng('AI Search')!, width: 23, height: 23, fit: BoxFit.contain);
+                      }
+                      return ValueListenableBuilder<SearchEngine>(
+                        valueListenable: activeSearchEngine,
+                        builder: (context, engine, _) {
+                          final png = searchEnginePng(engine.name);
+                          return png == null
+                              ? AppMaterialIcon(AppIcons.magnifyingGlass, size: 23, color: mutedText(context))
+                              : Image.memory(png, width: 23, height: 23, fit: BoxFit.contain);
+                        },
+                      );
+                    },
                   ),
-                ),
-                AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
-              ],
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Text(
+                      appText('search_hint'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: mutedText(context), fontSize: 15),
+                    ),
+                  ),
+                  AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
+                ],
+              ),
             ),
           ),
         ),

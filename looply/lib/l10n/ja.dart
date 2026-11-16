@@ -1,4 +1,9 @@
 const Map<String, String> jaCoreTranslations = <String, String>{
+    'games': 'ゲーム',
+    'games_intro': '内蔵プレーヤーで開くゲームを選択してください。',
+    'games_source_note': 'ゲームは元のリポジトリから読み込まれるため、インターネット接続が必要です。',
+    'game_open_failed': 'このゲームを開けませんでした。',
+    'tap_to_play': 'タップしてプレイ',
     'settings': '設定', 'general': '一般', 'theme': 'テーマ', 'light': 'ライト', 'dark': 'ダーク',
     'automatic': '自動', 'search_engine': '検索エンジン', 'language': '言語', 'navigation_security': '閲覧とセキュリティ',
     'ad_blocker': '広告ブロッカー', 'navigation_accelerator': '閲覧の高速化', 'library': 'ライブラリ', 'history': '履歴',

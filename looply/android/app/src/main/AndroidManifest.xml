@@ -74,6 +74,16 @@
             android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity
+            android:name=".GamesWebViewActivity"
+            android:exported="false"
+            android:launchMode="standard"
+            android:theme="@style/FileViewerTheme"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|uiMode"
+            android:screenOrientation="unspecified"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustNothing" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

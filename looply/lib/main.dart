@@ -16,6 +16,7 @@ import 'screens/activity_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/games_screen.dart';
 import 'shell/fade_page_route.dart';
 import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
@@ -1223,12 +1224,11 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     unawaited(_closeTabsGrid(openTab: homeTab));
   }
 
-  // Botão de Pesquisa na bottom bar: empilha a SearchScreen como página,
-  // exatamente como o antigo botão de lupa da home fazia. Não muda
-  // _selectedTab nem marca nenhum item da bottom bar como selecionado.
-  void _openSearchFromBottomBar() {
+  // Jogos substitui o antigo atalho de Pesquisa na bottom bar. A pesquisa
+  // continua acessível pelo input da Home; o catálogo abre numa rota própria.
+  void _openGamesFromBottomBar() {
     Navigator.of(context).push<void>(
-      FadePageRoute<void>(builder: (_) => const SearchScreen()),
+      FadePageRoute<void>(builder: (_) => const GamesScreen()),
     );
   }
 
@@ -1390,8 +1390,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           offstage: _showingTabsGrid || _activeBrowserTabId != null,
           child: _LooplyBottomBar(
             // Início e Atividade mapeiam 1:1 para _selectedTab (0 e 1).
-            // Abas e Pesquisa são posições na UI que não correspondem a
-            // nenhum _selectedTab — tratadas à parte no onSelect abaixo.
+            // Abas e Jogos são ações de rota e não alteram o índice da shell.
             selectedIndex: switch (_selectedTab) { 1 => 1, _ => 0 },
             tabCount: tabsController.count,
             onSelect: (index) {
@@ -1399,7 +1398,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 case 2:
                   _openTabsGrid();
                 case 3:
-                  _openSearchFromBottomBar();
+                  _openGamesFromBottomBar();
                 default:
                   unawaited(_navigateToShellScreen(index));
               }
@@ -1620,7 +1619,7 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
       _animateIndicatorTo(slot.toDouble());
       widget.onSelect(slot);
     } else {
-      // Abas ou Pesquisa: dispara a ação, mas o indicador volta a repousar
+      // Abas ou Jogos: dispara a ação, mas o indicador volta a repousar
       // sobre o item realmente selecionado da shell.
       _animateIndicatorTo(widget.selectedIndex.clamp(0, 1).toDouble());
       widget.onSelect(slot);
@@ -1733,8 +1732,8 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
                             onTapUp: () => _onTapUpItem(2),
                           ),
                           _FloatingBarItem(
-                            icon: AppIcons.magnifyingGlass,
-                            label: appText('search'),
+                            icon: AppIcons.sportsEsports,
+                            label: appText('games'),
                             selected: false,
                             selectedColor: selected,
                             unselectedColor: foreground,

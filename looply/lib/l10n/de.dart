@@ -1,4 +1,9 @@
 const Map<String, String> deCoreTranslations = <String, String>{
+    'games': 'Spiele',
+    'games_intro': 'Wähle ein Spiel für den integrierten Player aus.',
+    'games_source_note': 'Die Spiele werden aus dem ursprünglichen Repository geladen und benötigen eine Internetverbindung.',
+    'game_open_failed': 'Dieses Spiel konnte nicht geöffnet werden.',
+    'tap_to_play': 'Zum Spielen tippen',
     'settings': 'Einstellungen', 'general': 'Allgemein', 'theme': 'Design', 'light': 'Hell',
     'dark': 'Dunkel', 'automatic': 'Automatisch', 'search_engine': 'Suchmaschine',
     'language': 'Sprache', 'navigation_security': 'Navigation und Sicherheit',

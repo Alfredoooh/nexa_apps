@@ -1,4 +1,9 @@
 const Map<String, String> hiCoreTranslations = <String, String>{
+    'games': 'गेम',
+    'games_intro': 'बिल्ट-इन प्लेयर में खोलने के लिए गेम चुनें।',
+    'games_source_note': 'गेम मूल रिपॉज़िटरी से लोड होते हैं और इनके लिए इंटरनेट कनेक्शन आवश्यक है।',
+    'game_open_failed': 'यह गेम नहीं खुल सका।',
+    'tap_to_play': 'खेलने के लिए टैप करें',
     'settings': 'सेटिंग्स', 'general': 'सामान्य', 'theme': 'थीम', 'light': 'लाइट', 'dark': 'डार्क',
     'automatic': 'स्वचालित', 'search_engine': 'सर्च इंजन', 'language': 'भाषा', 'navigation_security': 'ब्राउज़िंग और सुरक्षा',
     'ad_blocker': 'विज्ञापन अवरोधक', 'navigation_accelerator': 'ब्राउज़िंग तेज़ करें', 'library': 'लाइब्रेरी',

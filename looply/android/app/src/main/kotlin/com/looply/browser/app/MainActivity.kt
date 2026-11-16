@@ -168,6 +168,7 @@ class MainActivity : FlutterActivity() {
                     "showNativeDialog" -> showNativeDialog(call, result)
                     "openNativeBrowser" -> openNativeBrowser(call, result)
                     "openNativeFileViewer" -> openNativeFileViewer(call, result)
+                    "openGame" -> openGame(call, result)
                     "exportOrbitSessions" -> exportOrbitSessions(result)
                     "importOrbitSessions" -> importOrbitSessions(call, result)
                     "showNativeDrawer" -> showNativeDrawer(call, result)
@@ -642,6 +643,40 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun openGame(call: MethodCall, result: MethodChannel.Result) {
+        val fileName = call.argument<String>("fileName")?.trim().orEmpty()
+        val title = call.argument<String>("title")?.trim().orEmpty().take(80)
+        // A tela só aceita os dez ficheiros explicitamente listados no catálogo.
+        // O conteúdo permanece hospedado no repositório indicado pelo utilizador.
+        val allowedGames = setOf(
+            "2048.html",
+            "wordle-unlimited.html",
+            "doodle-jump.html",
+            "stack.html",
+            "candy-crush.html",
+            "idle-breakout.html",
+            "google-baseball.html",
+            "chess.html",
+            "table-tennis-world-tour.html",
+            "pac-man.html",
+        )
+        if (fileName !in allowedGames) {
+            result.error("invalid_game", "Este jogo não está disponível no catálogo.", null)
+            return
+        }
+        try {
+            val gameIntent = Intent(this, GamesWebViewActivity::class.java).apply {
+                putExtra(GamesWebViewActivity.EXTRA_FILE_NAME, fileName)
+                putExtra(GamesWebViewActivity.EXTRA_TITLE, title.ifBlank { fileName.substringBeforeLast('.') })
+            }
+            startActivity(gameIntent)
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("game_open_failed", error.message ?: "Não foi possível abrir o jogo.", null)
+        }
+    }
+
     private fun exportOrbitSessions(result: MethodChannel.Result) {
         val sessions = getSharedPreferences(ORBIT_TAB_STATE_PREFS, Context.MODE_PRIVATE)
             .all
@@ -682,7 +717,11 @@ class MainActivity : FlutterActivity() {
         val secondaryMessage = call.argument<String>("secondaryMessage")
         val barrierDismissible = call.argument<Boolean>("barrierDismissible") ?: true
         val dark = isAppDarkTheme()
-        val backgroundColor = if (dark) Color.rgb(33, 35, 37) else Color.WHITE
+        val backgroundColor = when {
+            !dark -> Color.WHITE
+            isAppPureBlackTheme() -> Color.rgb(25, 25, 25)
+            else -> Color.rgb(43, 45, 48)
+        }
         val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
         val mutedColor = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
         val accentColor = if (dark) Color.rgb(138, 180, 248) else Color.rgb(26, 115, 232)
@@ -715,7 +754,7 @@ class MainActivity : FlutterActivity() {
 
         dialogView.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dpToPx(20).toFloat()
+            cornerRadius = dpToPx(24).toFloat()
             setColor(backgroundColor)
         }
 
@@ -743,7 +782,7 @@ class MainActivity : FlutterActivity() {
                 minWidth = 0
                 minimumWidth = dpToPx(52)
                 minHeight = 0
-                minimumHeight = dpToPx(40)
+                minimumHeight = dpToPx(44)
                 setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
                 when {
                     isPrimary -> {
@@ -781,6 +820,12 @@ class MainActivity : FlutterActivity() {
         try {
             dialog.show()
             dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            dialog.window?.let { dialogWindow ->
+                val attributes = dialogWindow.attributes
+                attributes.dimAmount = .34f
+                dialogWindow.attributes = attributes
+            }
             val maxWidth = dpToPx(560)
             val screenWidth = resources.displayMetrics.widthPixels - dpToPx(40)
             dialog.window?.setLayout(minOf(maxWidth, screenWidth), ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -835,6 +880,8 @@ class MainActivity : FlutterActivity() {
         val anchorBottom = flutterLocation[1] + dp(anchor["bottom"] as? Number ?: 0)
         val anchorWidth = (anchorRight - anchorLeft).coerceAtLeast(dp(24))
         val anchorHeight = (anchorBottom - anchorTop).coerceAtLeast(dp(24))
+        val contentLocation = IntArray(2)
+        content.getLocationOnScreen(contentLocation)
 
         val dark = isAppDarkTheme()
         val themeRes = when {
@@ -848,7 +895,12 @@ class MainActivity : FlutterActivity() {
         // pedido, para que o PopupMenu nativo abra encostado ao mesmo sítio
         // onde o LooplyPopupMenuButton do Flutter estava.
         val anchorView = View(themedContext)
-        val anchorParams = FrameLayoutParamsAt(anchorLeft - flutterLocation[0], anchorTop - flutterLocation[1], anchorWidth, anchorHeight)
+        val anchorParams = FrameLayoutParamsAt(
+            anchorLeft - contentLocation[0],
+            anchorTop - contentLocation[1],
+            anchorWidth,
+            anchorHeight,
+        )
         content.addView(anchorView, anchorParams)
 
         val popupMenu = PopupMenu(themedContext, anchorView, Gravity.END)

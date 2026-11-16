@@ -37,6 +37,7 @@ class AppIcons {
   static const IconData house = Symbols.home_rounded;
   static const IconData image = Symbols.image_rounded;
   static const IconData playCircle = Symbols.play_circle_rounded;
+  static const IconData sportsEsports = Symbols.sports_esports_rounded;
   static const IconData info = Symbols.info_rounded;
   static const IconData link = Symbols.link_rounded;
   static const IconData list = Symbols.list_rounded;
