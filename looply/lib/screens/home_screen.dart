@@ -1,24 +1,19 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:material_ui/material_ui.dart';
 import 'dart:ui' show Rect;
 
 import '../localization.dart';
 import '../models.dart';
-import '../browser_library.dart';
 import '../shell/browser_navigation.dart';
 import '../theme.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../auth_service.dart';
 import '../shell/shell_tab_request.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'auth_screen.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
+import '../widgets/drawer_menu_button.dart';
 import '../shell/fade_page_route.dart';
 import 'search_screen.dart';
-import 'site_usage_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, this.onOpenDrawer});
@@ -41,14 +36,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 const _HomeSearchInput(),
                 const SizedBox(height: 12),
-                const Row(
-                  children: [
-                    Expanded(child: QuickSiteGridCard()),
-                    SizedBox(width: 10),
-                    Expanded(child: _AiSearchHomeCard()),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 4),
                 const RecentTabPreviewsCard(),
               ],
             ),
@@ -88,8 +76,8 @@ class LooplyHomeAppBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              _DrawerMenuButton(
-                onTap: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
+              LooplyDrawerMenuButton(
+                onPressed: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
               const Spacer(),
               ValueListenableBuilder<LooplyUser?>(
@@ -100,31 +88,6 @@ class LooplyHomeAppBar extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// Botão do drawer usa o SVG oficial do conjunto regular.
-class _DrawerMenuButton extends StatelessWidget {
-  const _DrawerMenuButton({required this.onTap});
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final color = mainText(context);
-    return Semantics(
-      button: true, label: appText('open_menu'),
-      child: Material(
-        color: Colors.transparent, shape: const CircleBorder(), clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(width: 40, height: 40, child: Center(
-            child: SvgPicture.asset(
-              'assets/icons/svg/regular/menu-options.svg', width: 23, height: 23,
-              colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-            ),
-          )),
         ),
       ),
     );
@@ -184,179 +147,6 @@ class _HomeSearchInput extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-// Recent sites e AI Search ocupam a mesma linha e a mesma altura.
-class QuickSiteGridCard extends StatelessWidget {
-  const QuickSiteGridCard({super.key});
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: Listenable.merge([activityController, browserFaviconCache]),
-        builder: (context, _) {
-          final recent = <ActivityEntry>[];
-          final hosts = <String>{};
-          for (final entry in activityController.entries) {
-            if (entry.kind != ActivityKind.site) continue;
-            final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
-            if (host.isEmpty || !hosts.add(host)) continue;
-            recent.add(entry);
-            if (recent.length >= 3) break;
-          }
-          return Material(
-            color: settingsCardColor(context),
-            borderRadius: BorderRadius.circular(999),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: recent.isEmpty
-                  ? null
-                  : () => Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
-                      ),
-              borderRadius: BorderRadius.circular(999),
-              child: SizedBox(
-                height: 76,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 56,
-                        height: 40,
-                        child: recent.isEmpty
-                            ? CircleAvatar(
-                                backgroundColor: pillColor(context),
-                                child: AppMaterialIcon(AppIcons.globe, size: 22, color: mutedText(context)),
-                              )
-                            : Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  for (var i = 0; i < recent.length; i++)
-                                    Positioned(
-                                      left: i * 11,
-                                      top: 3,
-                                      child: Container(
-                                        width: 34,
-                                        height: 34,
-                                        decoration: BoxDecoration(
-                                          color: pillColor(context),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: settingsCardColor(context), width: 2),
-                                        ),
-                                        child: ClipOval(
-                                          child: _MiniSiteFavicon(url: recent[i].url),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          appText('recent'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: mainText(context), fontSize: 12.5, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
-}
-
-class _MiniSiteFavicon extends StatelessWidget {
-  const _MiniSiteFavicon({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    final encoded = browserFaviconCache.forUrl(url);
-    if (encoded != null) {
-      try {
-        return Image.memory(base64Decode(encoded), fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _fallback(context));
-      } catch (_) {}
-    }
-    unawaited(browserFaviconCache.fetchForUrl(url));
-    return Image.network(
-      'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=64',
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => _fallback(context),
-    );
-  }
-
-  Widget _fallback(BuildContext context) => Center(
-        child: AppMaterialIcon(AppIcons.globe, size: 19, color: mutedText(context)),
-      );
-}
-
-class _AiSearchHomeCard extends StatelessWidget {
-  const _AiSearchHomeCard();
-
-  void _open(BuildContext context) {
-    final tab = tabsController.createBrowserTab('looply://ai-search', title: 'AI Search');
-    tabsController.activate(tab.id);
-    ShellTabRequest.instance.requestBrowser(tab.id);
-  }
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(999),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => _open(context),
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 76,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Image.memory(searchEnginePng('AI Search')!, width: 28, height: 28, fit: BoxFit.contain),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('AI Search', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: mainText(context), fontSize: 12.5, fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
-class SiteFaviconForHome extends StatelessWidget {
-  const SiteFaviconForHome({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = mutedText(context);
-    final cached = browserFaviconCache.forUrl(url);
-    final Widget favicon = cached != null
-        ? Image.memory(base64Decode(cached), width: 35, height: 35, fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 24, color: muted))
-        : Image.network(
-            'https://www.google.com/s2/favicons?domain_url=${Uri.encodeComponent(url)}&sz=128',
-            width: 35, height: 35, fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.globe, size: 24, color: muted),
-          );
-    return Container(
-      width: 62,
-      height: 62,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: pillColor(context), shape: BoxShape.circle),
-      child: ClipOval(child: favicon),
     );
   }
 }

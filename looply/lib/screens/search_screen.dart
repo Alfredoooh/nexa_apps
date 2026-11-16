@@ -263,7 +263,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
       decoration: BoxDecoration(
         color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Row(
         children: [
@@ -565,9 +565,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         ),
         M3ESegmentedColumn(
           color: settingsCardColor(context),
-          outerRadius: 20,
-          innerRadius: 16,
-          gap: 4,
+          outerRadius: 22,
+          innerRadius: 8,
+          gap: 2,
           padding: EdgeInsets.zero,
           onTap: (index) => openOrbitTab(context, recent[index].url, title: recent[index].title),
           children: [
@@ -619,9 +619,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         ),
         M3ESegmentedColumn(
           color: settingsCardColor(context),
-          outerRadius: 20,
-          innerRadius: 16,
-          gap: 4,
+          outerRadius: 22,
+          innerRadius: 8,
+          gap: 2,
           padding: EdgeInsets.zero,
           onTap: (index) => _submitSearch(queries[index]),
           children: [
@@ -645,9 +645,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     if (_suggestions.isEmpty) return const SizedBox.shrink();
     return M3ESegmentedColumn(
       color: settingsCardColor(context),
-      outerRadius: 20,
-      innerRadius: 16,
-      gap: 4,
+      outerRadius: 22,
+      innerRadius: 8,
+      gap: 2,
       padding: EdgeInsets.zero,
       onTap: (index) => _submitSearch(_suggestions[index]),
       children: [

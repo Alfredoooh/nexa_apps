@@ -380,7 +380,7 @@ class _SettingsSection extends StatelessWidget {
           ),
         ),
         ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           child: SizedBox(
             width: double.infinity,
             // Os itens continuam a ser os cards segmentados M3 Expressive.
@@ -390,9 +390,9 @@ class _SettingsSection extends StatelessWidget {
               child: M3ESegmentedColumn(
                 children: children,
                 color: settingsCardColor(context),
-                outerRadius: 20,
-                innerRadius: 16,
-                gap: 4,
+                outerRadius: 22,
+                innerRadius: 8,
+                gap: 2,
                 padding: EdgeInsets.zero,
               ),
             ),

@@ -38,6 +38,11 @@ const Color looplySettingsCardLight = Color(0xFFF0F1F3);
 bool isPureBlackTheme(BuildContext context) => Theme.of(context).brightness == Brightness.dark && Theme.of(context).scaffoldBackgroundColor == looplyBgAmoled;
 Color pageBg(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyBgAmoled : looplyBgDark) : looplyBgLight;
 Color panelColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanelAmoled : looplyPanelDark) : looplyPanelLight;
+// Popup surface is intentionally identical to Orbit Browser's native menu:
+// white in light mode, charcoal in dark mode and AMOLED black in pure-black.
+Color popupSurfaceColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark
+    ? (isPureBlackTheme(context) ? looplyPanelAmoled : looplyPanel2Dark)
+    : Colors.white;
 Color pillColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplyPanel2Amoled : looplyPanel2Dark) : looplyPanel2Light;
 Color softColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? (isPureBlackTheme(context) ? looplySoftAmoled : looplySoftDark) : looplySoftLight;
 Color mainText(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? looplyTextDark : looplyTextLight;
@@ -173,6 +178,11 @@ ThemeData buildLooplyTheme(Brightness brightness, {bool pureBlack = false}) {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       titleTextStyle: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w600),
       contentTextStyle: TextStyle(color: text, fontSize: 14, height: 1.4),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: isDark ? (pureBlack ? looplyPanelAmoled : looplyPanel2Dark) : Colors.white,
+      elevation: 20,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,

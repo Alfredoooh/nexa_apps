@@ -837,7 +837,11 @@ class MainActivity : FlutterActivity() {
         val anchorHeight = (anchorBottom - anchorTop).coerceAtLeast(dp(24))
 
         val dark = isAppDarkTheme()
-        val themeRes = if (dark) R.style.LooplyPopupMenu_Dark else R.style.LooplyPopupMenu_Light
+        val themeRes = when {
+            !dark -> R.style.LooplyPopupMenu_Light
+            isAppPureBlackTheme() -> R.style.LooplyPopupMenu_Amoled
+            else -> R.style.LooplyPopupMenu_Dark
+        }
         val themedContext = ContextThemeWrapper(this, themeRes)
 
         // Âncora invisível posicionada exatamente sobre o botão que originou o

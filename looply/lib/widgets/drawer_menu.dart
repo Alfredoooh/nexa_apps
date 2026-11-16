@@ -54,28 +54,25 @@ class LooplyDrawer extends StatelessWidget {
               padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
               child: Column(
                 children: [
-                  const _DrawerHeader(),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: LooplyDrawerBridge.showHomeAction,
+                    builder: (context, showHome, _) => _DrawerHeader(
+                      showHome: showHome,
+                      onHomeTap: showHome
+                          ? () {
+                              onClose();
+                              Future<void>.delayed(const Duration(milliseconds: 520), () {
+                                ShellTabRequest.instance.request(0);
+                              });
+                            }
+                          : null,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: LooplyDrawerBridge.showHomeAction,
-                      builder: (context, showHome, _) => ListView(
+                    child: ListView(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         children: [
-                          if (showHome) ...[
-                            _DrawerOption(
-                              icon: AppIcons.house,
-                              label: appText('home'),
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(24), bottom: Radius.circular(8)),
-                              onTap: () {
-                                onClose();
-                                Future<void>.delayed(const Duration(milliseconds: 520), () {
-                                  ShellTabRequest.instance.request(0);
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 2),
-                          ],
                         _DrawerOption(
                           icon: AppIcons.moon,
                           label: appText('change_theme'),
@@ -128,7 +125,6 @@ class LooplyDrawer extends StatelessWidget {
                           ),
                         ),
                         ],
-                      ),
                     ),
                   ),
                   Padding(
@@ -216,31 +212,52 @@ Future<void> restoreDrawerPageActivity(
 // Cabeçalho do drawer: título "Menu" com M maiúsculo, alinhado à esquerda
 // e verticalmente centrado dentro da área do cabeçalho.
 class _DrawerHeader extends StatelessWidget {
-  const _DrawerHeader();
+  const _DrawerHeader({this.showHome = false, this.onHomeTap});
+
+  final bool showHome;
+  final VoidCallback? onHomeTap;
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final raw = appText('menu');
-    // Garante inicial maiúscula ("menu" → "Menu").
     final label = raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
 
     return SizedBox(
       height: 56,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: text,
-              fontSize: 26,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -.2,
-              height: 1.15,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: text,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: -.2,
+                  height: 1.15,
+                ),
+              ),
             ),
-          ),
+            if (showHome)
+              Semantics(
+                button: true,
+                label: appText('home'),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onHomeTap,
+                  child: SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Center(
+                      child: AppMaterialIcon(AppIcons.house, color: text, size: 23),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

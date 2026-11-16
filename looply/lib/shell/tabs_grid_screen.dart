@@ -25,6 +25,7 @@ class TabsGridScreen extends StatefulWidget {
     required this.cardKeys,
     this.initialIncognitoMode = false,
     this.initialActiveTabId,
+    this.onInitialPositionReady,
   });
 
   final ValueChanged<BrowserTab> onSelectTab;
@@ -37,6 +38,7 @@ class TabsGridScreen extends StatefulWidget {
   final Map<String, GlobalKey> cardKeys;
   final bool initialIncognitoMode;
   final String? initialActiveTabId;
+  final VoidCallback? onInitialPositionReady;
 
   @override
   State<TabsGridScreen> createState() => _TabsGridScreenState();
@@ -47,6 +49,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
   bool _showIncognitoTabs = false;
   bool _initialScrollScheduled = false;
   bool _gridPositionReady = false;
+  bool _positionReadyNotified = false;
   final ScrollController _gridScrollController = ScrollController();
   final Set<String> _selectedIds = <String>{};
   int _visibleTabsHash = 0;
@@ -168,6 +171,10 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
     final tabs = tabsController.tabs
         .where((tab) => tab.isIncognito == _showIncognitoTabs)
         .toList(growable: false);
+    if (tabs.isEmpty && !_initialScrollScheduled) {
+      _initialScrollScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _markGridPositionReady());
+    }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -229,6 +236,7 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
                           _showIncognitoTabs = !_showIncognitoTabs;
                           _initialScrollScheduled = false;
                           _gridPositionReady = false;
+                          _positionReadyNotified = false;
                           _visibleTabsHash = 0;
                           _visibleTabsCount = -1;
                           if (_gridScrollController.hasClients) {
@@ -377,6 +385,17 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
     );
   }
 
+  void _markGridPositionReady() {
+    if (!mounted) return;
+    if (!_gridPositionReady) {
+      setState(() => _gridPositionReady = true);
+    }
+    if (!_positionReadyNotified) {
+      _positionReadyNotified = true;
+      widget.onInitialPositionReady?.call();
+    }
+  }
+
   void _scheduleInitialGridScroll({
     required List<BrowserTab> tabs,
     required int columns,
@@ -390,28 +409,43 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
     if (preferredId != null) {
       targetIndex = tabs.indexWhere((tab) => tab.id == preferredId);
     }
-    // Ao alternar entre conjuntos de separadores, preserva a posição da
-    // seleção mais recente daquele conjunto se a seleção anterior não existir.
+    // Se a aba selecionada não pertence ao conjunto visível, revela a última
+    // aba desse conjunto em vez de deixar a grelha presa no início.
     if (targetIndex < 0 && preferredId != null && tabs.isNotEmpty) {
       targetIndex = tabs.length - 1;
     }
+
     if (targetIndex < 0) {
-      _gridPositionReady = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await WidgetsBinding.instance.endOfFrame;
+        _markGridPositionReady();
+      });
       return;
     }
 
     final targetOffset = (targetIndex ~/ columns) * itemExtent;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await WidgetsBinding.instance.endOfFrame;
+      // Aguarda a GridView obter dimensões. Em aparelhos lentos, o primeiro
+      // frame ainda pode não ter anexado o ScrollController.
+      for (var attempt = 0; attempt < 8; attempt++) {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return;
+        if (_gridScrollController.hasClients) break;
+      }
       if (!mounted) return;
       if (_gridScrollController.hasClients) {
-        final max = _gridScrollController.position.maxScrollExtent;
-        final offset = targetOffset.clamp(0.0, max).toDouble();
+        final position = _gridScrollController.position;
+        final offset = targetOffset
+            .clamp(0.0, position.maxScrollExtent)
+            .toDouble();
         if ((_gridScrollController.offset - offset).abs() > 1) {
           _gridScrollController.jumpTo(offset);
         }
       }
-      if (mounted) setState(() => _gridPositionReady = true);
+      // O frame seguinte monta os cartões que agora estão no viewport/cache;
+      // só depois a Shell pode medir o destino do Container Transform.
+      await WidgetsBinding.instance.endOfFrame;
+      _markGridPositionReady();
     });
   }
 

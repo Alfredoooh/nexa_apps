@@ -5,6 +5,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
+import '../widgets/drawer_menu_button.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 
 /// Ecrã inicial da pesquisa com IA. A apresentação é nativa em Flutter e
@@ -103,10 +104,8 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               height: 58,
               child: Row(
                 children: [
-                  IconButton(
-                    tooltip: appText('open_menu'),
+                  LooplyDrawerMenuButton(
                     onPressed: () => drawer_menu.showLooplyDrawer(context),
-                    icon: AppMaterialIcon(AppIcons.menu, color: text, size: 24),
                   ),
                   Image.memory(searchEnginePng('AI Search')!, width: 24, height: 24, fit: BoxFit.contain),
                   const SizedBox(width: 10),

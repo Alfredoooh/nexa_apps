@@ -1433,19 +1433,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (popupWindowRef === popup) popupWindowRef = null
         }
 
-        val anchorLocation = IntArray(2)
-        anchor.getLocationOnScreen(anchorLocation)
-        val popupX = (anchorLocation[0] + anchor.width - popupWidth)
-            .coerceIn(dp(12), (screenWidth - popupWidth - dp(12)).coerceAtLeast(dp(12)))
-        // A janela fica presa à zona superior, logo abaixo do botão de menu;
-        // não é posicionada no centro do ecrã nem cresce até ocupar quase tudo.
-        val desiredTop = anchorLocation[1] + anchor.height + dp(5)
-        val maxTop = (screenHeight - popupHeight - navigationBarInsetPx() - dp(8)).coerceAtLeast(statusBarInsetPx() + dp(8))
-        val popupY = desiredTop.coerceIn(statusBarInsetPx() + dp(8), maxTop)
-        // A entrada e a saída são tratadas pela própria PopupWindow através
-        // dos Fade transitions nativos do Android. Não aplicar animações
-        // manuais por componente evita atrasos e movimentos desencontrados.
-        popup.showAtLocation(root, Gravity.TOP or Gravity.LEFT, popupX, popupY)
+        // Ancoragem real ao botão de menu (alinhada pela extremidade direita).
+        // O próprio Android decide se a janela abre abaixo ou acima quando
+        // necessário e mantém a relação com o anchor durante deslocamentos.
+        // A entrada/saída continua a usar os Fade transitions nativos.
+        popup.showAsDropDown(anchor, -dp(8), dp(5), Gravity.END)
     }
 
     private var popupWindowRef: PopupWindow? = null

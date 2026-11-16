@@ -657,15 +657,12 @@ class _DayStreakCardState extends State<_DayStreakCard> {
   }
 }
 
-/// Favicons dos últimos sites visitados, em pilha bem próxima (overlap de
-/// ~75%, só ~25% de cada avatar fica visível atrás do seguinte — estilo
-/// "grupo de avatares" bem compacto), com bordas 100% circulares em todos
-/// os elementos: o avatar individual, a moldura entre eles e o próprio
-/// card (que usa borderRadius 999, ou seja, pílula/circular nas pontas).
+/// Sites visitados: os favicons aparecem lado a lado, sem sobreposição.
+/// O resumo pertence à tela Activity; não é um atalho da Home.
 class _VisitedSitesCard extends StatelessWidget {
   const _VisitedSitesCard();
 
-  List<String> _recentUniqueHosts(BuildContext context) {
+  List<String> _recentUniqueHosts() {
     final counts = <String, int>{};
     for (final entry in activityController.entries) {
       if (entry.kind != ActivityKind.site) continue;
@@ -673,23 +670,16 @@ class _VisitedSitesCard extends StatelessWidget {
       if (host == null || host.isEmpty) continue;
       counts.update(host, (count) => count + 1, ifAbsent: () => 1);
     }
-    final ranked = counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return ranked.take(4).map((entry) => entry.key).toList(growable: false);
+    final ranked = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return ranked.take(3).map((entry) => entry.key).toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final accent = accentColor(context);
-    final hosts = _recentUniqueHosts(context);
-
-    // Overlap bem mais apertado que antes: cada avatar seguinte avança só
-    // 8px sobre um diâmetro de 34px — deixa cerca de 25% de cada círculo
-    // visível, bem mais próximo de um grupo compacto do que a versão
-    // anterior (15px de avanço, ~56% visível).
-    const avatarSize = 34.0;
-    const overlapStep = 8.0;
+    final hosts = _recentUniqueHosts();
 
     return Material(
       color: settingsCardColor(context),
@@ -701,69 +691,25 @@ class _VisitedSitesCard extends StatelessWidget {
             : () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const SiteUsageDetailScreen()),
                 ),
+        borderRadius: BorderRadius.circular(999),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               AnimatedBuilder(
                 animation: browserFaviconCache,
-                builder: (context, _) {
-                  return SizedBox(
-                    width: hosts.isEmpty
-                        ? avatarSize
-                        : avatarSize + (hosts.length - 1) * overlapStep,
-                    height: avatarSize,
-                    child: hosts.isEmpty
-                        ? Container(
-                            width: avatarSize,
-                            height: avatarSize,
-                            decoration: BoxDecoration(shape: BoxShape.circle, color: pillColor(context)),
-                            child: Icon(Symbols.public_rounded, color: muted, size: 24, weight: 400, opticalSize: 24),
-                          )
-                        : Stack(
-                            children: List.generate(hosts.length, (index) {
-                              final host = hosts[index];
-                              final encoded = browserFaviconCache.forUrl('https://$host');
-                              Widget icon = Icon(Symbols.public_rounded, color: accent, size: 24, weight: 400, opticalSize: 24);
-                              if (encoded != null) {
-                                try {
-                                  icon = ClipOval(
-                                    child: Image.memory(
-                                      base64Decode(encoded),
-                                      width: 18,
-                                      height: 18,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: accent, size: 24, weight: 400, opticalSize: 24),
-                                    ),
-                                  );
-                                } catch (_) {}
-                              }
-                              return Positioned(
-                                left: index * overlapStep,
-                                child: TweenAnimationBuilder<double>(
-                                  tween: Tween<double>(begin: 0, end: 1),
-                                  duration: Duration(milliseconds: 320 + index * 70),
-                                  curve: Curves.easeOutBack,
-                                  builder: (context, value, child) => Transform.scale(
-                                    scale: value.clamp(0.0, 1.0),
-                                    child: child,
-                                  ),
-                                  child: Container(
-                                    width: avatarSize,
-                                    height: avatarSize,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: pillColor(context),
-                                      border: Border.all(color: settingsCardColor(context), width: 2),
-                                    ),
-                                    child: Center(child: icon),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                  );
-                },
+                builder: (context, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hosts.isEmpty)
+                      _VisitedSiteFavicon(fallbackColor: muted)
+                    else
+                      for (var index = 0; index < hosts.length; index++) ...[
+                        if (index > 0) const SizedBox(width: 7),
+                        _VisitedSiteFavicon(host: hosts[index], fallbackColor: muted),
+                      ],
+                  ],
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -787,6 +733,41 @@ class _VisitedSitesCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _VisitedSiteFavicon extends StatelessWidget {
+  const _VisitedSiteFavicon({this.host, required this.fallbackColor});
+
+  final String? host;
+  final Color fallbackColor;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image = Icon(Symbols.public_rounded, color: fallbackColor, size: 22, weight: 400, opticalSize: 24);
+    final encoded = host == null ? null : browserFaviconCache.forUrl('https://$host');
+    if (encoded != null) {
+      try {
+        image = Image.memory(
+          base64Decode(encoded),
+          width: 27,
+          height: 27,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: fallbackColor, size: 22, weight: 400, opticalSize: 24),
+        );
+      } catch (_) {}
+    }
+
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: pillColor(context),
+        shape: BoxShape.circle,
+      ),
+      child: ClipOval(child: image),
     );
   }
 }

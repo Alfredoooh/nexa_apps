@@ -56,7 +56,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final surface = panelColor(context);
+    final surface = popupSurfaceColor(context);
     final text = mainText(context);
     final muted = mutedText(context);
     final width = widget.menuWidth.clamp(210.0, 320.0).toDouble();
@@ -106,7 +106,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         shadowColor: Colors.black.withOpacity(.20),
         elevation: 13,
         padding: const EdgeInsets.symmetric(vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         minWidth: width,
         maxWidth: width,
         position: m3e_menu.M3EMenuPosition.under,

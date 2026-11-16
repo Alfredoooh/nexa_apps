@@ -162,6 +162,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   int _selectedTab = 0;
   bool _showingTabsGrid = false;
   bool _morphing = false;
+  Completer<void>? _tabsGridPositionCompleter;
   bool _skipNextNativeEnterAnimation = false;
   String? _activeBrowserTabId;
   final Map<String, GlobalKey> _browserViewportKeys = {};
@@ -788,6 +789,27 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
   }
 
+  void _beginTabsGridPositionWait() {
+    _tabsGridPositionCompleter = Completer<void>();
+  }
+
+  void _completeTabsGridPositionReady() {
+    final completer = _tabsGridPositionCompleter;
+    if (completer != null && !completer.isCompleted) completer.complete();
+  }
+
+  Future<void> _waitForTabsGridPositionReady() async {
+    final completer = _tabsGridPositionCompleter;
+    if (completer != null && !completer.isCompleted) {
+      try {
+        await completer.future.timeout(const Duration(milliseconds: 1600));
+      } on TimeoutException {
+        // A grelha permanece utilizável mesmo que um cartão não seja medido.
+      }
+    }
+    await WidgetsBinding.instance.endOfFrame;
+  }
+
   Future<void> _openTabsGrid() async {
     if (_showingTabsGrid || _morphing) return;
     _morphing = true;
@@ -815,6 +837,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
       _cardKeys.putIfAbsent(appTab.id, GlobalKey.new);
       _preferredReturnTabId = appTab.id;
+      _beginTabsGridPositionWait();
       setState(() {
         _showingTabsGrid = true;
         _morphing = false;
@@ -840,6 +863,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _preferredReturnTabId = appTab.id;
 
     if (imageProvider == null) {
+      _beginTabsGridPositionWait();
       setState(() {
         _showingTabsGrid = true;
         _morphing = false;
@@ -860,9 +884,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
+    _beginTabsGridPositionWait();
     setState(() => _showingTabsGrid = true);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
+    await _waitForTabsGridPositionReady();
     if (!mounted) {
       _removeSnapshotOverlay();
       return;
@@ -927,9 +951,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     // A grelha passa a apresentar as miniaturas locais. A WebView ativa sai
     // da árvore enquanto nenhum separador está em utilização direta.
+    _beginTabsGridPositionWait();
     setState(() => _showingTabsGrid = true);
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
+    await _waitForTabsGridPositionReady();
 
     if (!mounted) {
       _removeSnapshotOverlay();
@@ -1274,27 +1298,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                     child: SizedBox.expand(
                       child: RepaintBoundary(
                         key: _repaintKey,
-                        child: ClipRect(
-                          child: Stack(
-                            children: [
-                              for (var pageIndex = 0; pageIndex < shellPages.length; pageIndex++)
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    ignoring: _selectedTab != pageIndex,
-                                    child: AnimatedSlide(
-                                      offset: _selectedTab == pageIndex
-                                          ? Offset.zero
-                                          : (_selectedTab > pageIndex
-                                              ? const Offset(-1, 0)
-                                              : const Offset(1, 0)),
-                                      duration: const Duration(milliseconds: 340),
-                                      curve: Curves.easeInOutCubic,
-                                      child: shellPages[pageIndex],
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                        child: IndexedStack(
+                          index: _selectedTab,
+                          children: shellPages,
                         ),
                       ),
                     ),
@@ -1338,6 +1344,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                         .getTab(_preferredReturnTabId ?? _activeBrowserTabId ?? '')
                         ?.isIncognito ?? false,
                     initialActiveTabId: _preferredReturnTabId ?? _activeBrowserTabId,
+                    onInitialPositionReady: _completeTabsGridPositionReady,
                     onSelectTab: (tab) => _closeTabsGrid(openTab: tab),
                     onClose: () => _closeTabsGrid(),
                     onHome: _returnHomeFromTabs,
