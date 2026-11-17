@@ -329,6 +329,7 @@ class _SiteUsageSliverAppBar extends StatelessWidget {
 // ao lado, botão de limpar (x) quando há texto digitado.
 class _SiteUsageSearchField extends StatelessWidget {
   const _SiteUsageSearchField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.onBack,
@@ -396,6 +397,7 @@ class _SiteUsageSearchField extends StatelessWidget {
 // apenas o ícone com feedback tátil e splash padrão de InkResponse.
 class _SiteUsageIconButton extends StatelessWidget {
   const _SiteUsageIconButton({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.onTap,
