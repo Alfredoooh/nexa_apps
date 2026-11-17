@@ -158,20 +158,27 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 58),
-                  padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
-                  decoration: BoxDecoration(
-                    color: pillColor(context),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 304),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 56),
+                      padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
+                      decoration: BoxDecoration(
+                        color: pillColor(context),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: lineColor(context), width: .7),
+                      ),
+                      child: Row(
                     children: [
                       IconButton(
                         tooltip: appText('add'),
                         onPressed: _showAttachmentOptions,
-                        icon: AppMaterialIcon(AppIcons.plus, color: muted, size: 24),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints.tightFor(width: 40, height: 44),
+                        icon: AppMaterialIcon(AppIcons.plus, color: muted, size: 22),
                       ),
                       Expanded(
                         child: TextField(
@@ -194,20 +201,22 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                       ),
                       const SizedBox(width: 5),
                       Material(
-                        color: muted.withOpacity(.17),
+                        color: accentColor(context),
                         shape: const CircleBorder(),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           onTap: () => _submit(_controller.text),
                           customBorder: const CircleBorder(),
                           child: SizedBox(
-                            width: 44,
-                            height: 44,
-                            child: Center(child: AppMaterialIcon(AppIcons.arrowUp, color: text, size: 23)),
+                            width: 42,
+                            height: 42,
+                            child: Center(child: AppMaterialIcon(AppIcons.arrowUp, color: Colors.white, size: 22)),
                           ),
                         ),
                       ),
                     ],
+                      ),
+                    ),
                   ),
                 ),
               ),

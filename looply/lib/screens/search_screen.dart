@@ -69,9 +69,14 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_ownsController) _searchEntranceController.forward();
-      Future<void>.delayed(widget.autoFocusDelay, () {
-        if (mounted) _focusNode.requestFocus();
-      });
+      if (widget.autoFocusDelay == Duration.zero) {
+        // Não acrescentar outro ciclo de Timer ao toque vindo da Home.
+        _focusNode.requestFocus();
+      } else {
+        Future<void>.delayed(widget.autoFocusDelay, () {
+          if (mounted) _focusNode.requestFocus();
+        });
+      }
     });
   }
 
@@ -347,7 +352,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             height: 24,
             fit: BoxFit.contain,
             filterQuality: FilterQuality.high,
-            errorBuilder: (_, __, ___) => AppMaterialIcon(AppIcons.magnifyingGlass, color: muted),
+            errorBuilder: (_, __, ___) => const SizedBox(width: 24, height: 24),
           ),
         ),
       ),
@@ -542,59 +547,78 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       final host = Uri.tryParse(entry.url)?.host.toLowerCase() ?? '';
       if (host.isEmpty || !hosts.add(host)) continue;
       recent.add(entry);
-      if (recent.length >= 8) break;
+      if (recent.length >= 10) break;
     }
     if (recent.isEmpty) return const SizedBox.shrink();
+
     final muted = mutedText(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 8),
-          child: Text(
-            appText('visited_sites'),
-            style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 5, 6, 11),
+            child: Text(
+              appText('visited_sites'),
+              style: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
           ),
-        ),
-        M3ESegmentedColumn(
-          color: settingsCardColor(context),
-          outerRadius: 22,
-          innerRadius: 8,
-          gap: 2,
-          padding: EdgeInsets.zero,
-          onTap: (index) => openOrbitTab(context, recent[index].url, title: recent[index].title),
-          children: [
-            for (final entry in recent)
-              M3EListItem(
-                leading: _pageFavicon(entry.url, muted),
-                headline: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      entry.title.trim().isNotEmpty ? entry.title : (Uri.tryParse(entry.url)?.host ?? entry.url),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: text, fontSize: 14),
+          SizedBox(
+            height: 84,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              itemCount: recent.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final entry = recent[index];
+                final host = (Uri.tryParse(entry.url)?.host ?? entry.url)
+                    .replaceFirst(RegExp(r'^www\.'), '');
+                final label = host.isNotEmpty ? host : entry.title;
+                return SizedBox(
+                  width: 62,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => openOrbitTab(context, entry.url, title: entry.title),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 54,
+                          height: 54,
+                          decoration: BoxDecoration(
+                            color: settingsCardColor(context),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: lineColor(context), width: .8),
+                          ),
+                          alignment: Alignment.center,
+                          child: ClipOval(
+                            child: SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: Center(child: _pageFavicon(entry.url, muted)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: text, fontSize: 10.5, fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      Uri.tryParse(entry.url)?.host ?? entry.url,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: muted, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-                trailing: IconButton(
-                  tooltip: appText('open'),
-                  onPressed: () => openOrbitTab(context, entry.url, title: entry.title),
-                  icon: AppMaterialIcon(AppIcons.arrowUpLeft, color: muted, size: 20),
-                ),
-              ),
-          ],
-        ),
-      ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -666,8 +690,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     final muted = mutedText(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg),
       child: Scaffold(
         backgroundColor: bg,
         body: SafeArea(

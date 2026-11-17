@@ -123,11 +123,9 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
           height: 23,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
-          errorBuilder: (_, __, ___) => AppMaterialIcon(
-            AppIcons.magnifyingGlass,
-            size: 23,
-            color: mutedText(context),
-          ),
+          // O motor já é identificado pelo seu PNG; não mostrar uma lupa
+          // genérica por cima nem substituí-la por outro glifo.
+          errorBuilder: (_, __, ___) => const SizedBox(width: 23, height: 23),
         ),
       ),
     );
@@ -161,7 +159,6 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
                 ),
               ),
             ),
-            AppMaterialIcon(AppIcons.magnifyingGlass, size: 21, color: mutedText(context)),
           ],
         ),
       ),
@@ -190,7 +187,7 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
             MaterialPageRoute<void>(
               builder: (_) => SearchScreen(
                 controller: _controller,
-                autoFocusDelay: const Duration(milliseconds: 300),
+                autoFocusDelay: Duration.zero,
               ),
             ),
           ),
