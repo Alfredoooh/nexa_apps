@@ -19,6 +19,8 @@ import '../auth_service.dart';
 import 'app_info_screen.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
+import 'security_screen.dart';
+import '../shell/slide_page_route.dart';
 import '../widgets/material_symbols.dart';
 
 // Cards de Settings usam o tom do inputbar no tema escuro e um
@@ -173,6 +175,20 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _SettingsSection(
+              title: 'Segurança',
+              children: [
+                _SettingsTile(
+                  icon: AppIcons.shieldCheck,
+                  label: 'Segurança e privacidade',
+                  subtitle: 'Sites bloqueados, PIN e palavras-passe',
+                  onTap: () => Navigator.of(context).push(
+                    SlidePageRoute<void>(builder: (_) => const SecurityScreen()),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
               title: appText('library'),
               children: [
                 AnimatedBuilder(
@@ -279,7 +295,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _openLibraryPage(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    Navigator.of(context).push(SlidePageRoute<void>(builder: (_) => page));
   }
 
   String _themeLabel(ThemeMode mode, bool pureBlack) => switch (mode) { ThemeMode.light => appText('light'), ThemeMode.dark => pureBlack ? appText('deep_dark') : appText('dark'), _ => appText('automatic') };

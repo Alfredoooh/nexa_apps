@@ -109,7 +109,7 @@ class _LooplyPopupMenuButtonState<T> extends State<LooplyPopupMenuButton<T>> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         minWidth: width,
         maxWidth: width,
-        position: m3e_menu.M3EMenuPosition.under,
+        position: m3e_menu.M3EMenuPosition.over,
         animationStyle: m3e_menu.M3EMenuAnimationStyle.popup,
         spatialMotion: m3e_menu.M3EMotion.expressiveSpatialDefault,
         effectsMotion: m3e_menu.M3EMotion.expressiveEffectsDefault,

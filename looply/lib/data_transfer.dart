@@ -14,7 +14,7 @@ import 'theme.dart';
 class LooplyDataTransfer {
   LooplyDataTransfer._();
 
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 4;
   static const String _authPrefix = 'looply_auth_';
   static const int _maxEmbeddedDownloadBytes = 128 * 1024 * 1024;
   static const MethodChannel _nativeUiChannel = MethodChannel('looply/native_ui');
@@ -32,21 +32,67 @@ class LooplyDataTransfer {
 
     final prefs = await SharedPreferences.getInstance();
     final appPreferences = <String, Object?>{};
+    final saveHistory = prefs.getBool('looply_profile_save_history') ?? false;
+    final syncBookmarks = prefs.getBool('looply_profile_sync_bookmarks') ?? true;
+    final saveAddresses = prefs.getBool('looply_profile_save_addresses') ?? false;
+    final syncAppSettings = prefs.getBool('looply_profile_sync_settings') ?? false;
+
+    const accountDataKeys = <String>{
+      'looply_browsing_history_v1',
+      'looply_search_history_v1',
+      'looply_bookmarks_v1',
+      'looply_custom_sites_v1',
+      'looply_saved_addresses_v1',
+    };
+    const profileOptionKeys = <String>{
+      'looply_profile_save_history',
+      'looply_profile_sync_bookmarks',
+      'looply_profile_save_addresses',
+      'looply_profile_sync_settings',
+    };
 
     for (final key in prefs.getKeys()) {
-      if (!key.startsWith('looply_') || key.startsWith(_authPrefix)) {
+      if (!key.startsWith('looply_') || key.startsWith(_authPrefix) || accountDataKeys.contains(key)) {
         continue;
       }
+      // The category switches are always backed up; all other preferences
+      // are uploaded only when the account-settings switch is enabled.
+      if (!syncAppSettings && !profileOptionKeys.contains(key)) continue;
+      if (key == 'looply_save_passwords_enabled') continue;
 
       final value = prefs.get(key);
-
-      if (value is String ||
-          value is bool ||
-          value is int ||
-          value is double ||
-          value is List<String>) {
+      if (value is String || value is bool || value is int || value is double || value is List<String>) {
         appPreferences[key] = value;
       }
+    }
+
+    Object? decodeStoredJson(String key) {
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return null;
+      try {
+        return jsonDecode(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final accountData = <String, Object?>{};
+    if (saveHistory) {
+      accountData['history'] = <String, Object?>{
+        'visitedPages': decodeStoredJson('looply_browsing_history_v1') ?? <Object?>[],
+        'searches': decodeStoredJson('looply_search_history_v1') ?? <Object?>[],
+      };
+    }
+    if (syncBookmarks) {
+      accountData['bookmarks'] = decodeStoredJson('looply_bookmarks_v1') ?? <Object?>[];
+    }
+    if (saveAddresses) {
+      // Os endereços têm uma chave própria. Não reutilizar a lista de sites
+      // personalizados, que é uma categoria de configuração diferente.
+      accountData['addresses'] = decodeStoredJson('looply_saved_addresses_v1') ?? <Object?>[];
+    }
+    if (syncAppSettings) {
+      accountData['customSites'] = decodeStoredJson('looply_custom_sites_v1') ?? <Object?>[];
     }
 
     final snapshots = <String, String>{};
@@ -111,6 +157,7 @@ class LooplyDataTransfer {
         'lastSyncedAt': null,
       },
       'preferences': appPreferences,
+      'accountData': accountData,
       'tabSnapshots': snapshots,
       'favicons': browserFaviconCache.exportCache(),
       'downloadFiles': downloadFiles,
@@ -227,6 +274,35 @@ class LooplyDataTransfer {
           key,
           value.cast<String>(),
         );
+      }
+    }
+
+    // Selected account categories are kept in a separate object so disabled
+    // categories never leave the device. Restore only the categories present.
+    final accountData = decoded['accountData'];
+    if (accountData is Map) {
+      final history = accountData['history'];
+      if (history is Map) {
+        final visitedPages = history['visitedPages'];
+        final searches = history['searches'];
+        if (visitedPages is List) {
+          await prefs.setString('looply_browsing_history_v1', jsonEncode(visitedPages));
+        }
+        if (searches is List) {
+          await prefs.setString('looply_search_history_v1', jsonEncode(searches));
+        }
+      }
+      final bookmarks = accountData['bookmarks'];
+      if (bookmarks is List) {
+        await prefs.setString('looply_bookmarks_v1', jsonEncode(bookmarks));
+      }
+      final addresses = accountData['addresses'];
+      if (addresses is List) {
+        await prefs.setString('looply_saved_addresses_v1', jsonEncode(addresses));
+      }
+      final customSites = accountData['customSites'];
+      if (customSites is List) {
+        await prefs.setString('looply_custom_sites_v1', jsonEncode(customSites));
       }
     }
 

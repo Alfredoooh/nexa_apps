@@ -1,5 +1,4 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:animations/animations.dart';
 import 'dart:ui' show Rect;
 
 import '../localization.dart';
@@ -10,6 +9,8 @@ import '../widgets/drawer_menu.dart' as drawer_menu;
 import '../auth_service.dart';
 import '../shell/shell_tab_request.dart';
 import 'auth_screen.dart';
+import 'profile_screen.dart';
+import '../shell/slide_page_route.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
 import '../widgets/drawer_menu_button.dart';
@@ -55,8 +56,8 @@ class HomeScreen extends StatelessWidget {
 
 // Barra superior: à esquerda, o botão do drawer (ícone de hambúrguer
 // customizado, duas linhas só — a de cima mais longa que a de baixo).
-// À direita, onde antes ficava o avatar de perfil, agora fica o botão
-// de Entrar (compacto, sem ícone) — só aparece sem sessão ativa.
+// À direita, mostra o acesso à conta: Entrar sem sessão ou o avatar
+// da conta autenticada, que abre diretamente o Perfil.
 class LooplyHomeAppBar extends StatelessWidget {
   const LooplyHomeAppBar({super.key, this.onOpenDrawer});
 
@@ -84,7 +85,7 @@ class LooplyHomeAppBar extends StatelessWidget {
                 valueListenable: authController,
                 builder: (context, user, _) => user == null
                     ? const _CompactSignInButton()
-                    : const SizedBox.shrink(),
+                    : _SignedInAvatar(user: user),
               ),
             ],
           ),
@@ -94,7 +95,8 @@ class LooplyHomeAppBar extends StatelessWidget {
   }
 }
 
-// A mesma instância do controlador acompanha o campo durante o Container Transform.
+// O campo mantém a mesma geometria durante o Hero e sobe para a barra
+// superior da página de pesquisa; não expande para preencher o ecrã.
 class _HomeSearchInput extends StatefulWidget {
   const _HomeSearchInput();
 
@@ -169,29 +171,73 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
 
   @override
   Widget build(BuildContext context) {
-    return OpenContainer<void>(
-      transitionType: ContainerTransitionType.fade,
-      transitionDuration: const Duration(milliseconds: 480),
-      closedElevation: 0,
-      openElevation: 0,
-      closedColor: pillColor(context),
-      openColor: pageBg(context),
-      closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      openShape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      clipBehavior: Clip.antiAlias,
-      tappable: false,
-      openBuilder: (context, closeContainer) => SearchScreen(
-        controller: _controller,
-        autoFocusDelay: const Duration(milliseconds: 480),
-      ),
-      closedBuilder: (context, openContainer) => Material(
+    return Hero(
+      tag: 'browseit-home-search-field',
+      flightShuttleBuilder: (flightContext, animation, direction, fromContext, toContext) {
+        final hero = (direction == HeroFlightDirection.push ? toContext.widget : fromContext.widget) as Hero;
+        return Material(
+          color: pillColor(flightContext),
+          borderRadius: BorderRadius.circular(999),
+          clipBehavior: Clip.antiAlias,
+          child: hero.child,
+        );
+      },
+      child: Material(
         color: pillColor(context),
         borderRadius: BorderRadius.circular(999),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: openContainer,
+          onTap: () => Navigator.of(context).push<void>(
+            SlidePageRoute<void>(
+              builder: (_) => SearchScreen(
+                controller: _controller,
+                autoFocusDelay: const Duration(milliseconds: 300),
+              ),
+            ),
+          ),
           borderRadius: BorderRadius.circular(999),
           child: _field(context, readOnly: true),
+        ),
+      ),
+    );
+  }
+}
+
+class _SignedInAvatar extends StatelessWidget {
+  const _SignedInAvatar({required this.user});
+
+  final LooplyUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = pillColor(context);
+    return Tooltip(
+      message: appText('profile'),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () => Navigator.of(context).push<void>(
+            SlidePageRoute<void>(builder: (_) => const ProfileScreen()),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: background,
+              child: ClipOval(
+                child: user.photoUrl != null && user.photoUrl!.isNotEmpty
+                    ? Image.network(
+                        user.photoUrl!,
+                        width: 40,
+                        height: 40,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                      )
+                    : Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+              ),
+            ),
+          ),
         ),
       ),
     );

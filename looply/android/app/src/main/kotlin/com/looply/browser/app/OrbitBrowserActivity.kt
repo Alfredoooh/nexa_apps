@@ -109,6 +109,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
         private const val MAX_TAB_STATE_CHARS = 3_000_000
+        // Unlocks survive Activity recreation while the app process is alive;
+        // process death clears the set and therefore restores every block.
+        private val temporarilyUnlockedHosts = mutableSetOf<String>()
+        private var lastBlockedRulesSnapshot: String? = null
+
+        fun clearTemporarySiteUnlocks() {
+            temporarilyUnlockedHosts.clear()
+            lastBlockedRulesSnapshot = null
+        }
 
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -229,6 +238,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var toolbarScrollFreezeUntilMs = 0L
     private var menuLabels = JSONObject()
     private var isFinishingWithResult = false
+    private var isShowingBlockedPage = false
+    private var pendingBlockedUrl: String? = null
+    private var pendingBlockedHost: String? = null
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -349,7 +361,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     } else if (findBar.visibility == View.VISIBLE) {
                         closeFindBar()
                     } else if (webView.canGoBack()) {
-                        webView.goBack()
+                        goBackSafely()
                     } else {
                         finishToFlutter(
                             if (previewOnly) "previewClosed" else "home"
@@ -370,8 +382,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
             currentUrl = webView.url?.takeIf { it.isNotBlank() } ?: currentUrl
             currentTitle = webView.title?.takeIf { it.isNotBlank() } ?: currentTitle
             refreshTitle()
+            if (isUserBlockedUrl(currentUrl)) {
+                webView.stopLoading()
+                showBlockedPage(currentUrl)
+            }
         } else {
-            webView.loadUrl(currentUrl)
+            loadUrlUnlessBlocked(currentUrl)
         }
     }
 
@@ -381,10 +397,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
         outState.putString(STATE_TITLE, currentTitle)
         outState.putInt(STATE_SCROLL_X, webView.scrollX)
         outState.putInt(STATE_SCROLL_Y, webView.scrollY)
-        outState.putBundle(
-            STATE_WEBVIEW,
-            Bundle().also { webView.saveState(it) }
-        )
+        if (!isShowingBlockedPage) {
+            outState.putBundle(
+                STATE_WEBVIEW,
+                Bundle().also { webView.saveState(it) }
+            )
+        }
     }
 
     private fun createInterface() {
@@ -756,8 +774,23 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Revalida a URL quando a aplicação regressa do segundo plano. Se o
+        // bloqueio temporário foi revogado, substitui imediatamente a página.
+        if (!isShowingBlockedPage && ::webView.isInitialized && isUserBlockedUrl(currentUrl)) {
+            webView.stopLoading()
+            showBlockedPage(currentUrl)
+        }
+        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
         if (::webView.isInitialized) {
             applyWebsiteDarkMode(webView.settings)
+            applyAutofillPolicy()
             webView.settings.cacheMode = when {
                 incognito -> WebSettings.LOAD_NO_CACHE
                 navigationAcceleratorEnabled -> WebSettings.LOAD_CACHE_ELSE_NETWORK
@@ -767,6 +800,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 webView.settings.offscreenPreRaster = navigationAcceleratorEnabled
             }
             updateToolbarColors()
+        }
+    }
+
+    private fun applyAutofillPolicy() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !::webView.isInitialized) return
+        // O próprio fornecedor Autofill do Android decide se guarda passwords,
+        // endereços e outros campos; o BrowseIt apenas permite a integração
+        // quando pelo menos uma das categorias foi ativada pelo utilizador.
+        val passwordsEnabled = prefs.getBoolean("flutter.looply_save_passwords_enabled", false)
+        val addressesEnabled = prefs.getBoolean("flutter.looply_profile_save_addresses", false)
+        webView.importantForAutofill = if (passwordsEnabled || addressesEnabled) {
+            View.IMPORTANT_FOR_AUTOFILL_YES
+        } else {
+            View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         }
     }
 
@@ -852,6 +899,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccess = false
         settings.allowContentAccess = true
+        applyAutofillPolicy()
 
         if (Build.VERSION.SDK_INT >= 26) {
             settings.safeBrowsingEnabled = true
@@ -874,7 +922,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 val uri = request.url
                 val scheme = uri.scheme?.lowercase(Locale.ROOT).orEmpty()
 
-                if (scheme == "http" || scheme == "https") return false
+                if (scheme == "browseit-security") {
+                    requestSecurityUnlock()
+                    return true
+                }
+                if (scheme == "http" || scheme == "https") {
+                    if (isUserBlockedUrl(uri.toString())) {
+                        showBlockedPage(uri.toString())
+                        return true
+                    }
+                    return false
+                }
 
                 return openExternalUri(uri)
             }
@@ -885,11 +943,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 url: String
             ): Boolean {
                 val uri = Uri.parse(url)
-
+                if (uri.scheme == "browseit-security") {
+                    requestSecurityUnlock()
+                    return true
+                }
                 if (uri.scheme == "http" || uri.scheme == "https") {
+                    if (isUserBlockedUrl(uri.toString())) {
+                        showBlockedPage(uri.toString())
+                        return true
+                    }
                     return false
                 }
-
                 return openExternalUri(uri)
             }
 
@@ -914,7 +978,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 url: String,
                 favicon: Bitmap?
             ) {
+                if (isShowingBlockedPage) {
+                    currentTitle = "Página indisponível por segurança"
+                    refreshTitle()
+                    return
+                }
                 currentUrl = url
+                if (isTemporarilyUnlockedUrl(url)) {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                    )
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                }
                 currentTitle = ""
                 pageToolbarColor = null
                 lastScrollDirection = 0
@@ -930,6 +1007,16 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
+                if (isShowingBlockedPage) {
+                    currentTitle = "Página indisponível por segurança"
+                    refreshTitle()
+                    if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+                    progressAnimator?.cancel()
+                    progress.visibility = View.GONE
+                    progress.alpha = 1f
+                    progressTarget = 1000
+                    return
+                }
                 currentUrl = url
                 currentTitle = view.title?.takeIf { it.isNotBlank() } ?: hostOf(url)
 
@@ -1321,7 +1408,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         quickAction("arrow_forward", menuText("forward", "Forward"), webView.canGoForward()) {
-            webView.goForward()
+            goForwardSafely()
         }
         quickAction("star", menuText("bookmark", "Bookmark")) {
             finishToFlutter("bookmark")
@@ -1454,11 +1541,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (popupWindowRef === popup) popupWindowRef = null
         }
 
-        // Ancoragem real ao botão de menu (alinhada pela extremidade direita).
-        // O próprio Android decide se a janela abre abaixo ou acima quando
-        // necessário e mantém a relação com o anchor durante deslocamentos.
-        // A entrada/saída continua a usar os Fade transitions nativos.
-        popup.showAsDropDown(anchor, -dp(8), dp(5), Gravity.END)
+        // Posiciona o menu como camada sobreposta à âncora, em vez de o
+        // empurrar para baixo do botão que o abriu.
+        val anchorLocation = IntArray(2)
+        anchor.getLocationInWindow(anchorLocation)
+        val overlayTop = (anchorLocation[1] - dp(3)).coerceAtLeast(dp(4))
+        popup.showAtLocation(root, Gravity.TOP or Gravity.END, dp(8), overlayTop)
     }
 
     private var popupWindowRef: PopupWindow? = null
@@ -2178,6 +2266,19 @@ class OrbitBrowserActivity : AppCompatActivity() {
         isFinishingWithResult = true
         persistTabState()
 
+        // Nunca guardar uma miniatura da página protegida (nem da página
+        // temporariamente autorizada) na grelha de separadores.
+        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
+            val privatePreview = createBlackPreview()
+            completeFinishToFlutter(
+                action,
+                newUrl,
+                privatePreview,
+                if (action == "tabs") privatePreview else null,
+            )
+            return
+        }
+
         if (incognito || previewOnly || !::webView.isInitialized) {
             completeFinishToFlutter(action, newUrl, null, null)
             return
@@ -2347,6 +2448,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun persistTabState() {
         val key = tabStateKey() ?: return
+        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) return
 
         if (!::webView.isInitialized || webView.url.isNullOrBlank()) {
             return
@@ -2385,6 +2487,16 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
+            // Android's task snapshot is captured around this lifecycle edge.
+            // Keep the blocked content out of Recents even on OEM launchers.
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+            root.setBackgroundColor(Color.BLACK)
+            webView.setBackgroundColor(Color.BLACK)
+        }
         persistTabState()
         super.onPause()
     }
@@ -2445,6 +2557,165 @@ class OrbitBrowserActivity : AppCompatActivity() {
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun goBackSafely() {
+        val history = webView.copyBackForwardList()
+        val previousIndex = history.currentIndex - 1
+        val previousUrl = if (previousIndex >= 0) history.getItemAtIndex(previousIndex)?.url else null
+        if (!previousUrl.isNullOrBlank() && isUserBlockedUrl(previousUrl)) {
+            showBlockedPage(previousUrl)
+        } else {
+            webView.goBack()
+        }
+    }
+
+    private fun goForwardSafely() {
+        val history = webView.copyBackForwardList()
+        val nextIndex = history.currentIndex + 1
+        val nextUrl = if (nextIndex < history.size) history.getItemAtIndex(nextIndex)?.url else null
+        if (!nextUrl.isNullOrBlank() && isUserBlockedUrl(nextUrl)) {
+            showBlockedPage(nextUrl)
+        } else {
+            webView.goForward()
+        }
+    }
+
+    private fun loadUrlUnlessBlocked(url: String) {
+        if (isUserBlockedUrl(url)) {
+            showBlockedPage(url)
+        } else {
+            isShowingBlockedPage = false
+            pendingBlockedUrl = null
+            pendingBlockedHost = null
+            webView.loadUrl(url)
+        }
+    }
+
+    private fun isUserBlockedUrl(url: String): Boolean {
+        val host = normalizedHost(url) ?: return false
+        val configured = prefs.getString("flutter.looply_blocked_sites_v1", null).orEmpty()
+        if (lastBlockedRulesSnapshot != configured) {
+            temporarilyUnlockedHosts.clear()
+            lastBlockedRulesSnapshot = configured
+        }
+        if (temporarilyUnlockedHosts.any { host == it || host.endsWith(".$it") }) return false
+        if (configured.isBlank()) return false
+        val blocked = runCatching {
+            val array = org.json.JSONArray(configured)
+            (0 until array.length()).mapNotNull { index ->
+                array.optString(index)
+                    .trim()
+                    .lowercase(Locale.ROOT)
+                    .removePrefix("www.")
+                    .takeIf(String::isNotBlank)
+            }
+        }.getOrDefault(emptyList())
+        return blocked.any { host == it || host.endsWith(".$it") }
+    }
+
+    private fun normalizedHost(url: String): String? =
+        runCatching { Uri.parse(url).host?.lowercase(Locale.ROOT)?.removePrefix("www.") }
+            .getOrNull()
+            ?.takeIf(String::isNotBlank)
+
+    private fun isTemporarilyUnlockedUrl(url: String): Boolean {
+        val host = normalizedHost(url) ?: return false
+        return temporarilyUnlockedHosts.any { host == it || host.endsWith(".$it") }
+    }
+
+    private fun createBlackPreview(): ByteArray? {
+        return runCatching {
+            val bitmap = Bitmap.createBitmap(48, 80, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.BLACK)
+            ByteArrayOutputStream().use { stream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 45, stream)
+                bitmap.recycle()
+                stream.toByteArray()
+            }
+        }.getOrNull()
+    }
+
+    private fun showBlockedPage(url: String) {
+        val host = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
+            ?: "este site"
+        pendingBlockedUrl = url
+        pendingBlockedHost = host
+        isShowingBlockedPage = true
+        currentUrl = url
+        currentTitle = "Página indisponível por segurança"
+        pageToolbarColor = null
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        webView.stopLoading()
+        progressAnimator?.cancel()
+        progress.visibility = View.GONE
+        progress.alpha = 1f
+        if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+        val html = """
+            <!doctype html><html lang="pt"><head><meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="color-scheme" content="dark light"><title>Bloqueado</title>
+            <style>
+              *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;
+              padding:28px;background:#111;color:#f5f5f5;font:16px system-ui,-apple-system,sans-serif}
+              main{width:min(100%,420px);text-align:center} .icon{width:66px;height:66px;margin:0 auto 22px;
+              border-radius:22px;background:#252525;display:grid;place-items:center;font-size:30px}
+              h1{font-size:23px;line-height:1.2;margin:0 0 12px}p{color:#b7b7b7;line-height:1.5;margin:0 0 26px;overflow-wrap:anywhere}
+              a{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 25px;
+              border-radius:999px;background:#1a73e8;color:white;text-decoration:none;font-weight:700}
+            </style></head><body><main><div class="icon">⛨</div>
+            <h1>Página indisponível por segurança</h1><p>O domínio <b>${host}</b> está bloqueado neste navegador.</p>
+            <a href="browseit-security://unlock">Desbloquear temporariamente</a></main></body></html>
+        """.trimIndent()
+        webView.loadDataWithBaseURL("https://browseit.invalid/", html, "text/html", "UTF-8", null)
+        refreshTitle()
+        updateToolbarColors()
+    }
+
+    private fun requestSecurityUnlock() {
+        val host = pendingBlockedHost ?: return
+        if (!BrowserSecurityStore.hasCredential(this)) {
+            Toast.makeText(this, "Configura primeiro um PIN ou uma palavra-passe em Segurança.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val mode = BrowserSecurityStore.credentialMode(this)
+        val field = EditText(this).apply {
+            hint = if (mode == "pin") "PIN" else "Palavra-passe"
+            inputType = if (mode == "pin") InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                        else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            isSingleLine = true
+        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("Desbloquear site")
+            .setMessage("Introduz a tua ${if (mode == "pin") "PIN" else "palavra-passe"} para abrir $host nesta sessão.")
+            .setView(field)
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton("Desbloquear", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val candidate = field.text?.toString().orEmpty()
+                if (BrowserSecurityStore.verify(this, candidate)) {
+                    temporarilyUnlockedHosts.add(host.lowercase(Locale.ROOT))
+                    val target = pendingBlockedUrl
+                    isShowingBlockedPage = false
+                    pendingBlockedUrl = null
+                    pendingBlockedHost = null
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    root.setBackgroundColor(pageBg)
+                    webView.setBackgroundColor(pageBg)
+                    dialog.dismiss()
+                    if (!target.isNullOrBlank()) {
+                        currentUrl = target
+                        webView.loadUrl(target)
+                    }
+                } else {
+                    field.error = "PIN ou palavra-passe incorretos"
+                    field.text?.clear()
+                }
+            }
+        }
+        dialog.show()
+        field.requestFocus()
     }
 
     private fun hostOf(url: String): String {

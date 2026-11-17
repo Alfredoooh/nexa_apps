@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../localization.dart';
 import '../auth_service.dart';
+import '../cloud_sync.dart';
 import '../theme.dart';
 import '../widgets/m3_switch.dart';
 import '../widgets/looply_dialog.dart';
@@ -15,13 +17,40 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Cada toggle, quando ativo, passa a guardar o respetivo dado na conta
-  // da pessoa autenticada. Estado local por agora — troca por persistência
-  // real (backend/SharedPreferences) quando ligares a lógica de cada um.
   bool _saveHistory = false;
   bool _syncBookmarks = true;
   bool _saveAddresses = false;
   bool _syncAppSettings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreAccountOptions();
+  }
+
+  Future<void> _restoreAccountOptions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _saveHistory = prefs.getBool('looply_profile_save_history') ?? false;
+        _syncBookmarks = prefs.getBool('looply_profile_sync_bookmarks') ?? true;
+        _saveAddresses = prefs.getBool('looply_profile_save_addresses') ?? false;
+        _syncAppSettings = prefs.getBool('looply_profile_sync_settings') ?? false;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _setAccountOption(String key, bool value, VoidCallback update) async {
+    if (mounted) setState(update);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(key, value);
+      // The Cloudflare Worker is optional. When configured and authenticated,
+      // the selected data categories are uploaded by the debounced backup job.
+      BrowseItCloudSync.scheduleAppBackup();
+    } catch (_) {}
+  }
 
   // Confirmação desenhada em Flutter; não usa AlertDialog nativo.
   Future<void> _confirmSignOut(BuildContext context) async {
@@ -146,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? appText('save_history_account')
                               : appText('history_not_saved'),
                           value: _saveHistory,
-                          onChanged: (v) => setState(() => _saveHistory = v),
+                          onChanged: (v) => _setAccountOption('looply_profile_save_history', v, () => _saveHistory = v),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(22), bottom: Radius.circular(8)),
                         ),
                         const SizedBox(height: 2),
@@ -157,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? appText('synced_across_devices')
                               : appText('device_only'),
                           value: _syncBookmarks,
-                          onChanged: (v) => setState(() => _syncBookmarks = v),
+                          onChanged: (v) => _setAccountOption('looply_profile_sync_bookmarks', v, () => _syncBookmarks = v),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         const SizedBox(height: 2),
@@ -165,10 +194,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: AppIcons.mapPin,
                           title: appText('addresses'),
                           subtitle: _saveAddresses
-                              ? appText('addresses_saved')
-                              : appText('not_saved'),
+                              ? 'Permitir ao Android guardar e preencher endereços'
+                              : 'Autopreenchimento de endereços desativado',
                           value: _saveAddresses,
-                          onChanged: (v) => setState(() => _saveAddresses = v),
+                          onChanged: (v) => _setAccountOption('looply_profile_save_addresses', v, () => _saveAddresses = v),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         const SizedBox(height: 2),
@@ -179,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? appText('synced_across_devices')
                               : appText('device_only'),
                           value: _syncAppSettings,
-                          onChanged: (v) => setState(() => _syncAppSettings = v),
+                          onChanged: (v) => _setAccountOption('looply_profile_sync_settings', v, () => _syncAppSettings = v),
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(8), bottom: Radius.circular(22)),
                         ),
                       ],

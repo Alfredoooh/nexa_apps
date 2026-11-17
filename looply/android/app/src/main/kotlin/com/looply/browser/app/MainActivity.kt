@@ -175,6 +175,17 @@ class MainActivity : FlutterActivity() {
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
                     "getAiSearchEnabled" -> result.success(readAiSearchEnabled())
+                    "hasBrowserSecurityCredential" -> result.success(BrowserSecurityStore.hasCredential(this))
+                    "getBrowserSecurityCredentialMode" -> result.success(BrowserSecurityStore.credentialMode(this))
+                    "verifyBrowserSecurityCredential" -> {
+                        val secret = call.argument<String>("secret") ?: ""
+                        result.success(BrowserSecurityStore.verify(this, secret))
+                    }
+                    "setBrowserSecurityCredential" -> {
+                        val mode = call.argument<String>("mode") ?: ""
+                        val secret = call.argument<String>("secret") ?: ""
+                        result.success(BrowserSecurityStore.setCredential(this, mode, secret))
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -215,7 +226,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level == android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            // O bloqueio temporário só existe enquanto a aplicação está em primeiro plano.
+            OrbitBrowserActivity.clearTemporarySiteUnlocks()
+        }
+    }
+
     override fun onDestroy() {
+        if (isFinishing) OrbitBrowserActivity.clearTemporarySiteUnlocks()
         nativeStatsChannel = null
         nativeUiChannel = null
         nativeDownloadChannel = null

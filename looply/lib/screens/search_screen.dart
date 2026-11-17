@@ -682,40 +682,44 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                     opacity: _searchEntranceFade,
                     child: ScaleTransition(
                       scale: _searchEntranceScale,
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
+                      child: Hero(
+                        tag: 'browseit-home-search-field',
+                        child: Material(
                           color: pillColor(context),
                           borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 2),
-                            _searchEngineButton(muted),
-                            Expanded(
-                              child: TextField(
-                                controller: _controller,
-                                focusNode: _focusNode,
-                                textInputAction: TextInputAction.search,
-                                textAlignVertical: TextAlignVertical.center,
-                                style: TextStyle(color: text, fontSize: 15),
-                                cursorColor: accentColor(context),
-                                onSubmitted: _submitSearch,
-                                decoration: InputDecoration(
-                                  hintText: appText('search_hint'),
-                                  hintStyle: TextStyle(color: muted, fontSize: 14),
-                                  contentPadding: EdgeInsets.zero,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  isDense: true,
-                                  isCollapsed: true,
+                          clipBehavior: Clip.antiAlias,
+                          child: SizedBox(
+                            height: 48,
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 2),
+                                _searchEngineButton(muted),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _controller,
+                                    focusNode: _focusNode,
+                                    textInputAction: TextInputAction.search,
+                                    textAlignVertical: TextAlignVertical.center,
+                                    style: TextStyle(color: text, fontSize: 15),
+                                    cursorColor: accentColor(context),
+                                    onSubmitted: _submitSearch,
+                                    decoration: InputDecoration(
+                                      hintText: appText('search_hint'),
+                                      hintStyle: TextStyle(color: muted, fontSize: 14),
+                                      contentPadding: EdgeInsets.zero,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      isDense: true,
+                                      isCollapsed: true,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                if (_controller.text.isNotEmpty) _clearButton(muted),
+                                const SizedBox(width: 5),
+                              ],
                             ),
-                            if (_controller.text.isNotEmpty) _clearButton(muted),
-                            const SizedBox(width: 5),
-                          ],
+                          ),
                         ),
                       ),
                     ),

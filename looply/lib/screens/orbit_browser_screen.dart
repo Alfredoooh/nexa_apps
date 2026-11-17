@@ -9,7 +9,7 @@ import '../browser_library.dart';
 import '../localization.dart';
 import '../models.dart';
 import '../shell/shell_tab_request.dart';
-import '../shell/fade_page_route.dart';
+import '../shell/slide_page_route.dart';
 import 'bookmarks_screen.dart';
 import 'downloads_screen.dart';
 import 'ai_search_screen.dart';
@@ -347,7 +347,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final routeTabId = widget.tabId;
     final isSearchPage = page is SearchScreen;
     final route = isSearchPage
-        ? FadePageRoute<void>(builder: (_) => page)
+        ? SlidePageRoute<void>(builder: (_) => page)
         : MaterialPageRoute<void>(builder: (_) => page);
     await Navigator.of(context).push<void>(route);
 
