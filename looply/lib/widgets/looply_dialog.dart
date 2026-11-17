@@ -26,7 +26,7 @@ class _LooplyModalSystemBarState extends State<LooplyModalSystemBar> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = pageBg(context);
     return (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
-      statusBarColor: bg,
+      statusBarColor: Colors.transparent,
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: bg,
@@ -38,8 +38,10 @@ class _LooplyModalSystemBarState extends State<LooplyModalSystemBar> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final base = _baseStyle(context);
-    final dimmedStatusBar = Color.alphaBlend(Colors.black.withOpacity(.30), pageBg(context));
-    _modalStyle = base.copyWith(statusBarColor: dimmedStatusBar);
+    // The modal barrier dims Flutter content, but on several Android OEM
+    // builds the transparent status bar is not composited with that barrier.
+    // Apply the same black scrim explicitly to the system status-bar area.
+    _modalStyle = base.copyWith(statusBarColor: const Color(0x6B000000));
     if (!_registered) {
       _registered = true;
       if (_openOverlays == 0) _restoreStyle = base;

@@ -318,7 +318,7 @@ class MainActivity : FlutterActivity() {
             else -> Color.rgb(23, 24, 26)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
-        window.statusBarColor = background
+        window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = background
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")

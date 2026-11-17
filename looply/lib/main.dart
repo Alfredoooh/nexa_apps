@@ -29,23 +29,38 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // Restaurar preferências e dados locais antes de construir a primeira tela:
-  // evita mostrar temporariamente o tema padrão ou uma grelha sem separadores.
+  // Apenas os dados necessários para a primeira composição são aguardados.
+  // Histórico, favoritos, downloads e caches são restaurados após o primeiro
+  // frame para que nenhum armazenamento secundário prolongue o splash.
   await themeController.restore();
-  await appLanguageController.restore();
-  await tabsController.restore();
-  await activityController.restore();
-  await searchHistoryController.restore();
-  await authController.restore();
-  await customSitesController.restore();
-  await activeSearchEngine.restore();
-  await restoreRuntimeSettings();
-  await AdBlockStats.instance.restore();
-  await browserFaviconCache.restore();
-  await bookmarksController.restore();
-  await downloadsController.restore();
+  await Future.wait<void>(<Future<void>>[
+    appLanguageController.restore(),
+    tabsController.restore(),
+    authController.restore(),
+  ].map(_safeStartupRestore));
 
   runApp(const LooplyApp());
+
+  // Restaura os restantes dados em paralelo sem bloquear a apresentação.
+  unawaited(Future.wait<void>(<Future<void>>[
+    activityController.restore(),
+    searchHistoryController.restore(),
+    customSitesController.restore(),
+    activeSearchEngine.restore(),
+    restoreRuntimeSettings(),
+    AdBlockStats.instance.restore(),
+    browserFaviconCache.restore(),
+    bookmarksController.restore(),
+    downloadsController.restore(),
+  ].map(_safeStartupRestore)));
+}
+
+Future<void> _safeStartupRestore(Future<void> restore) async {
+  try {
+    await restore;
+  } catch (_) {
+    // Uma preferência danificada ou indisponível não deve bloquear o arranque.
+  }
 }
 
 
@@ -167,9 +182,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   String? _activeBrowserTabId;
   final Map<String, GlobalKey> _browserViewportKeys = {};
   final Map<String, Completer<void>> _browserFirstLoads = {};
-  // Sinaliza quando o widget InAppWebView está anexado à árvore. A entrada
-  // do browser só começa depois deste ponto, evitando iniciar a transição
-  // enquanto o plugin ainda prepara a primeira composição da página.
+  // Sinaliza quando a WebView nativa hospedada pelo Android está pronta.
+  // A entrada do browser só começa depois deste ponto, evitando iniciar a
+  // transição enquanto a Activity Kotlin prepara a primeira composição.
   final Map<String, Completer<void>> _browserPlatformReady = {};
   final GlobalKey _repaintKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
@@ -1271,8 +1286,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,

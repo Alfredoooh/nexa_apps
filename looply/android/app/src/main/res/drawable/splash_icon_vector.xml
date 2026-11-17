@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="432dp"
+    android:height="432dp"
+    android:viewportWidth="432"
+    android:viewportHeight="432">
+    <group
+        android:name="ring_rotation"
+        android:pivotX="216"
+        android:pivotY="216">
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M216,42 A174,174 0,1 1,215.9,42"
+            android:strokeColor="#55FFFFFF"
+            android:strokeWidth="23" />
+        <path
+            android:fillColor="@android:color/transparent"
+            android:pathData="M216,42 A174,174 0,1 1,83,329"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeWidth="34" />
+    </group>
+</vector>
