@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -977,16 +978,1035 @@ class RichAiText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = palette ?? BrowseRichTextPalette.fromContext(context);
+    final parsed = _parseRichAiVisualBlocks(text);
+    if (parsed.blocks.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: _RichTextBlockParser.parse(
+          text,
+          colors,
+          bodyTextStyle: bodyTextStyle,
+        ),
+      );
+    }
+
+    final children = <Widget>[];
+    final markerPattern = RegExp(r'\u0000RW(\d+)\u0000');
+    var last = 0;
+    for (final match in markerPattern.allMatches(parsed.textWithMarkers)) {
+      if (match.start > last) {
+        final segment = parsed.textWithMarkers.substring(last, match.start);
+        if (segment.trim().isNotEmpty) {
+          children.addAll(_RichTextBlockParser.parse(
+            segment,
+            colors,
+            bodyTextStyle: bodyTextStyle,
+          ));
+        }
+      }
+      final index = int.tryParse(match.group(1) ?? '') ?? -1;
+      if (index >= 0 && index < parsed.blocks.length) {
+        children.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: _buildRichAiVisualBlock(parsed.blocks[index], colors),
+        ));
+      }
+      last = match.end;
+    }
+    if (last < parsed.textWithMarkers.length) {
+      final segment = parsed.textWithMarkers.substring(last);
+      if (segment.trim().isNotEmpty) {
+        children.addAll(_RichTextBlockParser.parse(
+          segment,
+          colors,
+          bodyTextStyle: bodyTextStyle,
+        ));
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      children: _RichTextBlockParser.parse(
-        text,
-        colors,
-        bodyTextStyle: bodyTextStyle,
-      ),
+      children: children,
     );
   }
+}
+
+// Blocos visuais estruturados usados pelo RichText do projeto de referência.
+// O parser só transforma JSON válido em widgets; blocos inválidos permanecem
+// como código normal, evitando ocultar conteúdo que a IA tenha produzido.
+const Set<String> _supportedRichAiBlocks = <String>{
+  'widget_market',
+  'widget_calendar',
+  'widget_map',
+  'widget_chart',
+  'widget_metric',
+  'widget_steps',
+  'widget_table',
+  'widget_comparison',
+  'widget_progress',
+  'widget_checklist',
+  'widget_timeline',
+  'widget_alert',
+  'widget_faq',
+  'widget_sources',
+  'widget_weather',
+  'widget_news',
+  'widget_product',
+  'widget_rating',
+  'widget_key_values',
+  'widget_bar_chart',
+  'widget_image_gallery',
+};
+
+class _RichAiVisualBlock {
+  const _RichAiVisualBlock({required this.id, required this.json});
+  final String id;
+  final Map<String, dynamic> json;
+}
+
+class _RichAiVisualParseResult {
+  const _RichAiVisualParseResult({required this.textWithMarkers, required this.blocks});
+  final String textWithMarkers;
+  final List<_RichAiVisualBlock> blocks;
+}
+
+_RichAiVisualParseResult _parseRichAiVisualBlocks(String raw) {
+  final blocks = <_RichAiVisualBlock>[];
+  final pattern = RegExp(r'```(widget_[a-z0-9_]+)\s*\n([\s\S]*?)```', multiLine: true);
+  final replaced = raw.replaceAllMapped(pattern, (match) {
+    final id = match.group(1) ?? '';
+    if (!_supportedRichAiBlocks.contains(id)) return match.group(0)!;
+    try {
+      final decoded = jsonDecode(match.group(2)!.trim());
+      if (decoded is! Map) return match.group(0)!;
+      final index = blocks.length;
+      blocks.add(_RichAiVisualBlock(
+        id: id,
+        json: Map<String, dynamic>.from(decoded),
+      ));
+      return '\u0000RW$index\u0000';
+    } catch (_) {
+      return match.group(0)!;
+    }
+  });
+  return _RichAiVisualParseResult(textWithMarkers: replaced, blocks: blocks);
+}
+
+Widget _buildRichAiVisualBlock(
+  _RichAiVisualBlock block,
+  BrowseRichTextPalette colors,
+) {
+  switch (block.id) {
+    case 'widget_market':
+      return _RichAiMarketCard(json: block.json, colors: colors);
+    case 'widget_calendar':
+      return _RichAiCalendarCard(json: block.json, colors: colors);
+    case 'widget_map':
+      return _RichAiMapCard(json: block.json, colors: colors);
+    case 'widget_chart':
+      return _RichAiChartCard(json: block.json, colors: colors);
+    case 'widget_metric':
+      return _RichAiMetricCard(json: block.json, colors: colors);
+    case 'widget_steps':
+      return _RichAiStepsCard(json: block.json, colors: colors);
+    case 'widget_table':
+      return buildAiTableFromWidgetJson(block.json, colors);
+    case 'widget_comparison':
+      return _RichAiComparisonCard(json: block.json, colors: colors);
+    case 'widget_progress':
+      return _RichAiProgressCard(json: block.json, colors: colors);
+    case 'widget_checklist':
+      return _RichAiChecklistCard(json: block.json, colors: colors);
+    case 'widget_timeline':
+      return _RichAiTimelineCard(json: block.json, colors: colors);
+    case 'widget_alert':
+      return _RichAiAlertCard(json: block.json, colors: colors);
+    case 'widget_faq':
+      return _RichAiFaqCard(json: block.json, colors: colors);
+    case 'widget_sources':
+      return _RichAiSourcesCard(json: block.json, colors: colors);
+    case 'widget_weather':
+      return _RichAiWeatherCard(json: block.json, colors: colors);
+    case 'widget_news':
+      return _RichAiNewsCard(json: block.json, colors: colors);
+    case 'widget_product':
+      return _RichAiProductCard(json: block.json, colors: colors);
+    case 'widget_rating':
+      return _RichAiRatingCard(json: block.json, colors: colors);
+    case 'widget_key_values':
+      return _RichAiKeyValuesCard(json: block.json, colors: colors);
+    case 'widget_bar_chart':
+      return _RichAiBarChartCard(json: block.json, colors: colors);
+    case 'widget_image_gallery':
+      return _RichAiImageGalleryCard(json: block.json, colors: colors);
+    default:
+      return const SizedBox.shrink();
+  }
+}
+
+class _RichAiCard extends StatelessWidget {
+  const _RichAiCard({required this.colors, required this.child});
+  final BrowseRichTextPalette colors;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.hover,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.outline.withOpacity(.42), width: .7),
+        ),
+        child: child,
+      );
+}
+
+class _RichAiCardHeading extends StatelessWidget {
+  const _RichAiCardHeading({required this.icon, required this.title, required this.colors, this.subtitle});
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final BrowseRichTextPalette colors;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: colors.primary.withOpacity(.12),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: colors.primary, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.onSurface, fontSize: 14, fontWeight: FontWeight.w700)),
+                if (subtitle != null && subtitle!.trim().isNotEmpty)
+                  Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5)),
+              ],
+            ),
+          ),
+        ],
+      );
+}
+
+String _richValue(dynamic value, {String fallback = ''}) {
+  if (value == null) return fallback;
+  final text = value.toString().trim();
+  return text.isEmpty ? fallback : text;
+}
+
+double? _richNumber(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.replaceAll(',', '.').replaceAll('%', '').trim());
+  return null;
+}
+
+String _richDateLabel(dynamic raw) {
+  final parsed = DateTime.tryParse(raw?.toString() ?? '');
+  if (parsed == null) return _richValue(raw, fallback: 'Data não indicada');
+  final day = parsed.day.toString().padLeft(2, '0');
+  final month = parsed.month.toString().padLeft(2, '0');
+  return '$day/$month/${parsed.year}';
+}
+
+class _RichAiMarketCard extends StatelessWidget {
+  const _RichAiMarketCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _richValue(json['name'], fallback: _richValue(json['symbol'], fallback: 'Mercado'));
+    final symbol = _richValue(json['symbol']);
+    final price = json['price'] ?? json['currentPrice'] ?? json['current_price'];
+    final currency = _richValue(json['currency'], fallback: '');
+    final change = _richNumber(json['changePercent'] ?? json['change_percent'] ?? json['change']);
+    final seriesRaw = json['series'] ?? json['values'] ?? json['history'];
+    final series = seriesRaw is List
+        ? seriesRaw.map(_richNumber).whereType<double>().toList(growable: false)
+        : const <double>[];
+    final positive = (change ?? 0) >= 0;
+    final semantic = positive ? const Color(0xFF21885B) : const Color(0xFFC84B4B);
+    return _RichAiCard(
+      colors: colors,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _RichAiCardHeading(icon: Icons.show_chart_rounded, title: name, subtitle: symbol.isEmpty ? 'Mercado' : symbol, colors: colors),
+        const SizedBox(height: 14),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(
+            child: Text(
+              price == null ? 'Cotação não incluída' : '$currency${_richValue(price)}',
+              style: TextStyle(color: colors.onSurface, fontSize: price == null ? 15 : 24, fontWeight: FontWeight.w800),
+            ),
+          ),
+          if (change != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(color: semantic.withOpacity(.12), borderRadius: BorderRadius.circular(999)),
+              child: Text('${positive ? '+' : ''}${change.toStringAsFixed(2)}%',
+                  style: TextStyle(color: semantic, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+        ]),
+        if (series.length > 1) ...[
+          const SizedBox(height: 12),
+          SizedBox(height: 72, width: double.infinity, child: CustomPaint(painter: _RichAiLinePainter(values: series, color: colors.primary, gridColor: colors.outline.withOpacity(.2)))),
+        ],
+        const SizedBox(height: 8),
+        Wrap(spacing: 16, runSpacing: 8, children: [
+          if (json['high24h'] != null || json['high_24h'] != null)
+            _RichAiTinyValue(label: 'Máximo 24h', value: _richValue(json['high24h'] ?? json['high_24h']), colors: colors),
+          if (json['low24h'] != null || json['low_24h'] != null)
+            _RichAiTinyValue(label: 'Mínimo 24h', value: _richValue(json['low24h'] ?? json['low_24h']), colors: colors),
+          if (json['volume24h'] != null || json['volume_24h'] != null)
+            _RichAiTinyValue(label: 'Volume 24h', value: _richValue(json['volume24h'] ?? json['volume_24h']), colors: colors),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _RichAiTinyValue extends StatelessWidget {
+  const _RichAiTinyValue({required this.label, required this.value, required this.colors});
+  final String label;
+  final String value;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5)),
+    const SizedBox(height: 2),
+    Text(value, style: TextStyle(color: colors.onSurface, fontSize: 12, fontWeight: FontWeight.w600)),
+  ]);
+}
+
+class _RichAiCalendarCard extends StatelessWidget {
+  const _RichAiCalendarCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = json['isoDate'] ?? json['date'] ?? json['start'];
+    final eventsRaw = json['events'] ?? json['items'];
+    final events = eventsRaw is List ? eventsRaw.whereType<Map>().toList(growable: false) : const <Map>[];
+    final dateTime = DateTime.tryParse(date?.toString() ?? '');
+    return _RichAiCard(
+      colors: colors,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _RichAiCardHeading(icon: Icons.calendar_month_rounded, title: _richValue(json['title'], fallback: 'Calendário'), subtitle: _richValue(json['humanLabel']), colors: colors),
+        const SizedBox(height: 12),
+        Row(children: [
+          Container(
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(color: colors.primary.withOpacity(.12), borderRadius: BorderRadius.circular(13)),
+            child: Column(children: [
+              Text(dateTime == null ? '—' : dateTime.day.toString(), style: TextStyle(color: colors.primary, fontSize: 23, fontWeight: FontWeight.w800)),
+              Text(dateTime == null ? 'DATA' : dateTime.month.toString().padLeft(2, '0'), style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: .8)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_richDateLabel(date), style: TextStyle(color: colors.onSurface, fontSize: 15, fontWeight: FontWeight.w700))),
+        ]),
+        if (events.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          for (final event in events.take(8))
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(width: 6, height: 6, margin: const EdgeInsets.only(top: 6, right: 9), decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle)),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_richValue(event['title'] ?? event['name'], fallback: 'Evento'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  if (_richValue(event['time'] ?? event['description']).isNotEmpty)
+                    Text(_richValue(event['time'] ?? event['description']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5)),
+                ])),
+              ]),
+            ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _RichAiMapCard extends StatelessWidget {
+  const _RichAiMapCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final lat = _richNumber(json['lat'] ?? json['latitude']);
+    final lng = _richNumber(json['lng'] ?? json['lon'] ?? json['longitude']);
+    final title = _richValue(json['name'] ?? json['title'], fallback: 'Localização');
+    return _RichAiCard(
+      colors: colors,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _RichAiCardHeading(icon: Icons.location_on_rounded, title: title, subtitle: _richValue(json['address'] ?? json['formattedAddress']), colors: colors),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(13),
+          child: SizedBox(
+            height: 116,
+            width: double.infinity,
+            child: Stack(alignment: Alignment.center, children: [
+              Positioned.fill(child: CustomPaint(painter: _RichAiMapPatternPainter(line: colors.outline.withOpacity(.3), fill: colors.pageBackground))),
+              Container(width: 38, height: 38, decoration: BoxDecoration(color: colors.primary.withOpacity(.13), shape: BoxShape.circle)),
+              Icon(Icons.location_on_rounded, size: 32, color: colors.primary),
+            ]),
+          ),
+        ),
+        if (lat != null && lng != null) ...[
+          const SizedBox(height: 9),
+          Text('${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5)),
+        ],
+        if (_richValue(json['description']).isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(_richValue(json['description']), style: TextStyle(color: colors.onSurface, fontSize: 12.5, height: 1.4)),
+        ],
+      ]),
+    );
+  }
+}
+
+class _RichAiChartCard extends StatelessWidget {
+  const _RichAiChartCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final raw = json['values'] ?? json['series'] ?? json['data'];
+    final values = raw is List
+        ? raw.map((item) => item is Map ? _richNumber(item['value'] ?? item['y']) : _richNumber(item)).whereType<double>().toList(growable: false)
+        : const <double>[];
+    final labels = (json['labels'] is List) ? (json['labels'] as List).map((e) => e.toString()).toList(growable: false) : const <String>[];
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.analytics_rounded, title: _richValue(json['title'], fallback: 'Gráfico'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      if (values.length >= 2)
+        SizedBox(height: 140, width: double.infinity, child: CustomPaint(painter: _RichAiLinePainter(values: values, color: colors.primary, gridColor: colors.outline.withOpacity(.2)))),
+      if (values.length < 2)
+        Text('Não há pontos suficientes para desenhar o gráfico.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+      if (labels.isNotEmpty) ...[
+        const SizedBox(height: 5),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(labels.first, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+          Text(labels.last, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+        ]),
+      ],
+    ]));
+  }
+}
+
+class _RichAiMetricCard extends StatelessWidget {
+  const _RichAiMetricCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final raw = json['metrics'] ?? json['items'];
+    final metrics = raw is List ? raw.whereType<Map>().take(8).toList(growable: false) : const <Map>[];
+    final entries = metrics.isEmpty ? <Map>[json] : metrics;
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.dashboard_rounded, title: _richValue(json['title'], fallback: 'Indicadores'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      Wrap(spacing: 9, runSpacing: 9, children: entries.map((item) {
+        final label = _richValue(item['label'] ?? item['name'], fallback: 'Valor');
+        final value = _richValue(item['value'], fallback: '—');
+        final unit = _richValue(item['unit']);
+        return Container(
+          constraints: const BoxConstraints(minWidth: 108, maxWidth: 210),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+          decoration: BoxDecoration(color: colors.pageBackground, borderRadius: BorderRadius.circular(12)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5)),
+            const SizedBox(height: 4),
+            Text('$value${unit.isEmpty ? '' : ' $unit'}', style: TextStyle(color: colors.onSurface, fontSize: 16, fontWeight: FontWeight.w800)),
+          ]),
+        );
+      }).toList(growable: false)),
+    ]));
+  }
+}
+
+class _RichAiStepsCard extends StatelessWidget {
+  const _RichAiStepsCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final raw = json['steps'] ?? json['items'];
+    final steps = raw is List ? raw.whereType<Map>().take(12).toList(growable: false) : const <Map>[];
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.format_list_numbered_rounded, title: _richValue(json['title'], fallback: 'Etapas'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 10),
+      for (var i = 0; i < steps.length; i++)
+        Padding(padding: const EdgeInsets.only(top: 7), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(width: 25, height: 25, alignment: Alignment.center, decoration: BoxDecoration(color: colors.primary.withOpacity(.13), shape: BoxShape.circle), child: Text('${i + 1}', style: TextStyle(color: colors.primary, fontSize: 11, fontWeight: FontWeight.w800))),
+          const SizedBox(width: 9),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(steps[i]['title'] ?? steps[i]['name'], fallback: 'Etapa ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            if (_richValue(steps[i]['description'] ?? steps[i]['detail']).isNotEmpty)
+              Padding(padding: const EdgeInsets.only(top: 2), child: Text(_richValue(steps[i]['description'] ?? steps[i]['detail']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.4))),
+          ])),
+        ])),
+      if (steps.isEmpty) Text('Nenhuma etapa foi fornecida.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+
+
+List<Map<String, dynamic>> _richMapList(dynamic raw, {int limit = 16}) {
+  if (raw is! List) return const <Map<String, dynamic>>[];
+  return raw
+      .whereType<Map>()
+      .take(limit)
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList(growable: false);
+}
+
+List<String> _richStringList(dynamic raw, {int limit = 12}) {
+  if (raw is! List) return const <String>[];
+  return raw
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .take(limit)
+      .toList(growable: false);
+}
+
+bool _richBool(dynamic raw) {
+  if (raw is bool) return raw;
+  final value = raw?.toString().toLowerCase().trim();
+  return value == 'true' || value == '1' || value == 'yes' || value == 'done' || value == 'completed';
+}
+
+String _richSafeUrl(dynamic raw) {
+  final value = _richValue(raw);
+  final uri = Uri.tryParse(value);
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http') || uri.host.isEmpty) return '';
+  return uri.toString();
+}
+
+class _RichAiComparisonCard extends StatelessWidget {
+  const _RichAiComparisonCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['options'] ?? json['products'], limit: 6);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.compare_arrows_rounded, title: _richValue(json['title'], fallback: 'Comparação'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      if (items.isEmpty)
+        Text('Não foram fornecidos elementos suficientes para comparar.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12.5)),
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) Divider(height: 18, color: colors.outline.withOpacity(.25)),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(width: 28, height: 28, alignment: Alignment.center, decoration: BoxDecoration(color: colors.primary.withOpacity(.12), borderRadius: BorderRadius.circular(9)), child: Text('${i + 1}', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800, fontSize: 12))),
+          const SizedBox(width: 10),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(items[i]['name'] ?? items[i]['title'], fallback: 'Opção ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 14, fontWeight: FontWeight.w700)),
+            if (_richValue(items[i]['value'] ?? items[i]['summary'] ?? items[i]['description']).isNotEmpty)
+              Padding(padding: const EdgeInsets.only(top: 3), child: Text(_richValue(items[i]['value'] ?? items[i]['summary'] ?? items[i]['description']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.4))),
+            ..._richStringList(items[i]['pros'], limit: 4).map((value) => _RichAiComparisonPoint(text: value, positive: true, colors: colors)),
+            ..._richStringList(items[i]['cons'], limit: 4).map((value) => _RichAiComparisonPoint(text: value, positive: false, colors: colors)),
+            if (items[i]['attributes'] is Map)
+              ...Map<String, dynamic>.from(items[i]['attributes'] as Map).entries.take(8).map((entry) => Padding(padding: const EdgeInsets.only(top: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(child: Text(entry.key, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5))),
+                const SizedBox(width: 8),
+                Flexible(child: Text(entry.value?.toString() ?? '—', textAlign: TextAlign.end, style: TextStyle(color: colors.onSurface, fontSize: 11.5, fontWeight: FontWeight.w600))),
+              ]))),
+          ])),
+        ]),
+      ],
+      if (_richValue(json['verdict']).isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Container(width: double.infinity, padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: colors.primary.withOpacity(.08), borderRadius: BorderRadius.circular(12)), child: Text(_richValue(json['verdict']), style: TextStyle(color: colors.onSurface, fontSize: 12.5, height: 1.45, fontWeight: FontWeight.w600))),
+      ],
+    ]));
+  }
+}
+
+class _RichAiComparisonPoint extends StatelessWidget {
+  const _RichAiComparisonPoint({required this.text, required this.positive, required this.colors});
+  final String text;
+  final bool positive;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(top: 4), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Icon(positive ? Icons.check_circle_outline_rounded : Icons.remove_circle_outline_rounded, size: 14, color: positive ? const Color(0xFF21885B) : colors.onSurfaceVariant),
+    const SizedBox(width: 6),
+    Expanded(child: Text(text, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.35))),
+  ]));
+}
+
+class _RichAiProgressCard extends StatelessWidget {
+  const _RichAiProgressCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['metrics'], limit: 12);
+    final source = items.isEmpty ? <Map<String, dynamic>>[json] : items;
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.track_changes_rounded, title: _richValue(json['title'], fallback: 'Progresso'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 13),
+      for (var i = 0; i < source.length; i++) ...[
+        if (i > 0) const SizedBox(height: 13),
+        Builder(builder: (context) {
+          final item = source[i];
+          final rawValue = _richNumber(item['value'] ?? item['progress'] ?? item['percent']);
+          final fraction = rawValue == null ? null : (rawValue > 1 ? rawValue / 100 : rawValue).clamp(0.0, 1.0).toDouble();
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [Expanded(child: Text(_richValue(item['label'] ?? item['name'], fallback: 'Progresso'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w600))), if (rawValue != null) Text('${(rawValue <= 1 ? rawValue * 100 : rawValue).toStringAsFixed(rawValue % 1 == 0 ? 0 : 1)}%', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, fontWeight: FontWeight.w700))]),
+            if (fraction != null) ...[
+              const SizedBox(height: 7),
+              ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: fraction, minHeight: 7, backgroundColor: colors.outline.withOpacity(.16), valueColor: AlwaysStoppedAnimation<Color>(colors.primary))),
+            ],
+            if (_richValue(item['description'] ?? item['detail']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(_richValue(item['description'] ?? item['detail']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.35))),
+          ]);
+        }),
+      ],
+    ]));
+  }
+}
+
+class _RichAiChecklistCard extends StatelessWidget {
+  const _RichAiChecklistCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['tasks'], limit: 24);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.checklist_rounded, title: _richValue(json['title'], fallback: 'Lista de verificação'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 8),
+      for (final item in items)
+        Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(_richBool(item['done'] ?? item['completed'] ?? item['checked']) ? Icons.check_circle_rounded : Icons.circle_outlined, color: _richBool(item['done'] ?? item['completed'] ?? item['checked']) ? colors.primary : colors.onSurfaceVariant, size: 19),
+          const SizedBox(width: 9),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(item['title'] ?? item['label'] ?? item['task'], fallback: 'Item'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w600)),
+            if (_richValue(item['description'] ?? item['detail']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(_richValue(item['description'] ?? item['detail']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.35))),
+          ])),
+        ])),
+      if (items.isEmpty) Text('Nenhum item foi indicado.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiTimelineCard extends StatelessWidget {
+  const _RichAiTimelineCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['events'], limit: 18);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.timeline_rounded, title: _richValue(json['title'], fallback: 'Cronologia'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      for (var i = 0; i < items.length; i++)
+        Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(width: 23, child: Column(children: [Container(width: 10, height: 10, margin: const EdgeInsets.only(top: 4), decoration: BoxDecoration(color: colors.primary, shape: BoxShape.circle)), if (i < items.length - 1) Expanded(child: Container(width: 1.5, margin: const EdgeInsets.symmetric(vertical: 3), color: colors.outline.withOpacity(.45)))])),
+          const SizedBox(width: 7),
+          Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(items[i]['date'] ?? items[i]['time'] ?? items[i]['period']), style: TextStyle(color: colors.primary, fontSize: 10.5, fontWeight: FontWeight.w700)),
+            Text(_richValue(items[i]['title'] ?? items[i]['name'], fallback: 'Evento ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 13, fontWeight: FontWeight.w700)),
+            if (_richValue(items[i]['description'] ?? items[i]['detail']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(_richValue(items[i]['description'] ?? items[i]['detail']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.4))),
+          ]))),
+        ]),
+      if (items.isEmpty) Text('Não há eventos para apresentar.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiAlertCard extends StatelessWidget {
+  const _RichAiAlertCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final kind = _richValue(json['type'] ?? json['severity'], fallback: 'info').toLowerCase();
+    final semantic = kind.contains('error') || kind.contains('danger') || kind.contains('critical') ? const Color(0xFFC84B4B) : kind.contains('warn') ? const Color(0xFFD18A24) : kind.contains('success') ? const Color(0xFF21885B) : colors.primary;
+    final icon = kind.contains('error') || kind.contains('danger') || kind.contains('critical') ? Icons.error_outline_rounded : kind.contains('warn') ? Icons.warning_amber_rounded : kind.contains('success') ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded;
+    return Container(width: double.infinity, margin: const EdgeInsets.symmetric(vertical: 5), padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: semantic.withOpacity(.09), border: Border.all(color: semantic.withOpacity(.28)), borderRadius: BorderRadius.circular(16)), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, color: semantic, size: 21), const SizedBox(width: 10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(_richValue(json['title'], fallback: 'Informação importante'), style: TextStyle(color: colors.onSurface, fontSize: 13.5, fontWeight: FontWeight.w800)),
+        if (_richValue(json['message'] ?? json['description'] ?? json['text']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_richValue(json['message'] ?? json['description'] ?? json['text']), style: TextStyle(color: colors.onSurface, fontSize: 12.5, height: 1.45))),
+      ])),
+    ]));
+  }
+}
+
+class _RichAiFaqCard extends StatelessWidget {
+  const _RichAiFaqCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['questions'], limit: 16);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.help_outline_rounded, title: _richValue(json['title'], fallback: 'Perguntas frequentes'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 5),
+      for (var i = 0; i < items.length; i++)
+        Theme(data: Theme.of(context).copyWith(dividerColor: Colors.transparent), child: ExpansionTile(
+          key: ValueKey<String>('rich-faq-$i-${_richValue(items[i]['question'])}'),
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+          iconColor: colors.primary,
+          collapsedIconColor: colors.onSurfaceVariant,
+          title: Text(_richValue(items[i]['question'] ?? items[i]['title'], fallback: 'Pergunta'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          children: [Align(alignment: Alignment.centerLeft, child: Text(_richValue(items[i]['answer'] ?? items[i]['content'], fallback: 'Resposta não fornecida.'), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.45)))],
+        )),
+      if (items.isEmpty) Text('Não foram fornecidas perguntas.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiSourcesCard extends StatelessWidget {
+  const _RichAiSourcesCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['sources'] ?? json['references'], limit: 20);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.link_rounded, title: _richValue(json['title'], fallback: 'Fontes e referências'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 8),
+      for (var i = 0; i < items.length; i++)
+        Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(width: 23, height: 23, alignment: Alignment.center, decoration: BoxDecoration(color: colors.primary.withOpacity(.1), shape: BoxShape.circle), child: Text('${i + 1}', style: TextStyle(color: colors.primary, fontSize: 10, fontWeight: FontWeight.w800))),
+          const SizedBox(width: 9),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(items[i]['title'] ?? items[i]['name'], fallback: 'Fonte ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w700)),
+            if (_richValue(items[i]['publisher'] ?? items[i]['source']).isNotEmpty) Text(_richValue(items[i]['publisher'] ?? items[i]['source']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.8)),
+            if (_richValue(items[i]['date'] ?? items[i]['publishedAt']).isNotEmpty) Text(_richValue(items[i]['date'] ?? items[i]['publishedAt']), style: TextStyle(color: colors.onSurfaceVariant.withOpacity(.85), fontSize: 10)),
+            if (_richValue(items[i]['snippet'] ?? items[i]['description']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(_richValue(items[i]['snippet'] ?? items[i]['description']), style: TextStyle(color: colors.onSurface, fontSize: 11.5, height: 1.35))),
+            if (_richSafeUrl(items[i]['url'] ?? items[i]['link']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: SelectableText(_richSafeUrl(items[i]['url'] ?? items[i]['link']), style: TextStyle(color: colors.primary, fontSize: 10.5, decoration: TextDecoration.underline))),
+          ])),
+        ])),
+      if (items.isEmpty) Text('O servidor não forneceu referências verificáveis.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiWeatherCard extends StatelessWidget {
+  const _RichAiWeatherCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final temp = _richValue(json['temperature'] ?? json['temp'], fallback: '—');
+    final condition = _richValue(json['condition'] ?? json['description'], fallback: 'Condição não indicada');
+    final forecast = _richMapList(json['forecast'] ?? json['days'], limit: 7);
+    final lower = condition.toLowerCase();
+    final weatherIcon = lower.contains('rain') || lower.contains('chuva') ? Icons.water_drop_rounded : lower.contains('storm') || lower.contains('trovoada') ? Icons.thunderstorm : lower.contains('cloud') || lower.contains('nublado') ? Icons.cloud_rounded : lower.contains('snow') || lower.contains('neve') ? Icons.ac_unit_rounded : Icons.wb_sunny_rounded;
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.location_on_outlined, title: _richValue(json['city'] ?? json['location'], fallback: 'Meteorologia'), subtitle: _richValue(json['updatedAt'] ?? json['updated']), colors: colors),
+      const SizedBox(height: 12),
+      Row(children: [Icon(weatherIcon, color: colors.primary, size: 42), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(temp, style: TextStyle(color: colors.onSurface, fontSize: 27, fontWeight: FontWeight.w800)), Text(condition, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12))]))]),
+      const SizedBox(height: 12),
+      Wrap(spacing: 18, runSpacing: 7, children: [
+        if (json['high'] != null || json['highTemp'] != null) _RichAiTinyValue(label: 'Máxima', value: _richValue(json['high'] ?? json['highTemp']), colors: colors),
+        if (json['low'] != null || json['lowTemp'] != null) _RichAiTinyValue(label: 'Mínima', value: _richValue(json['low'] ?? json['lowTemp']), colors: colors),
+        if (json['humidity'] != null) _RichAiTinyValue(label: 'Humidade', value: _richValue(json['humidity']), colors: colors),
+        if (json['wind'] != null) _RichAiTinyValue(label: 'Vento', value: _richValue(json['wind']), colors: colors),
+      ]),
+      if (forecast.isNotEmpty) ...[
+        Divider(height: 20, color: colors.outline.withOpacity(.25)),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: forecast.map((day) {
+              return Container(
+                width: 78,
+                margin: const EdgeInsets.only(right: 7),
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: colors.pageBackground,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(children: [
+                  Text(
+                    _richValue(day['day'] ?? day['date'], fallback: '—'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10),
+                  ),
+                  const SizedBox(height: 5),
+                  Icon(Icons.wb_cloudy_outlined, color: colors.primary, size: 19),
+                  const SizedBox(height: 4),
+                  Text(
+                    _richValue(day['temperature'] ?? day['temp'], fallback: '—'),
+                    style: TextStyle(color: colors.onSurface, fontSize: 11.5, fontWeight: FontWeight.w700),
+                  ),
+                ]),
+              );
+            }).toList(growable: false),
+          ),
+        ),
+      ],
+    ]));
+  }
+}
+
+class _RichAiNewsCard extends StatelessWidget {
+  const _RichAiNewsCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['articles'], limit: 10);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.article_outlined, title: _richValue(json['title'], fallback: 'Notícias'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 6),
+      for (var i = 0; i < items.length; i++) ...[
+        if (i > 0) Divider(height: 18, color: colors.outline.withOpacity(.25)),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (_richSafeUrl(items[i]['image'] ?? items[i]['imageUrl']).isNotEmpty) ...[
+            ClipRRect(borderRadius: BorderRadius.circular(9), child: Image.network(_richSafeUrl(items[i]['image'] ?? items[i]['imageUrl']), width: 76, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 76, height: 70, color: colors.pageBackground, alignment: Alignment.center, child: Icon(Icons.image_not_supported_outlined, color: colors.onSurfaceVariant, size: 18)))),
+            const SizedBox(width: 10),
+          ],
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(items[i]['title'] ?? items[i]['headline'], fallback: 'Notícia ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.35)),
+            if (_richValue(items[i]['publisher'] ?? items[i]['source']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 3), child: Text(_richValue(items[i]['publisher'] ?? items[i]['source']), style: TextStyle(color: colors.primary, fontSize: 10.5, fontWeight: FontWeight.w600))),
+            if (_richValue(items[i]['date'] ?? items[i]['publishedAt']).isNotEmpty) Text(_richValue(items[i]['date'] ?? items[i]['publishedAt']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10)),
+            if (_richValue(items[i]['summary'] ?? items[i]['description']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_richValue(items[i]['summary'] ?? items[i]['description']), maxLines: 4, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.35))),
+          ])),
+        ]),
+      ],
+      if (items.isEmpty) Text('Não há notícias disponíveis para apresentar.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiProductCard extends StatelessWidget {
+  const _RichAiProductCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final products = _richMapList(json['items'] ?? json['products'], limit: 8);
+    final list = products.isEmpty ? <Map<String, dynamic>>[json] : products;
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.shopping_bag_outlined, title: _richValue(json['title'], fallback: 'Produtos'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 10),
+      for (var i = 0; i < list.length; i++) ...[
+        if (i > 0) Divider(height: 18, color: colors.outline.withOpacity(.25)),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (_richSafeUrl(list[i]['image'] ?? list[i]['imageUrl']).isNotEmpty) ...[
+            ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.network(_richSafeUrl(list[i]['image'] ?? list[i]['imageUrl']), width: 82, height: 82, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 82, height: 82, color: colors.pageBackground, alignment: Alignment.center, child: Icon(Icons.image_outlined, color: colors.onSurfaceVariant)))),
+            const SizedBox(width: 11),
+          ],
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_richValue(list[i]['name'] ?? list[i]['title'], fallback: 'Item ${i + 1}'), style: TextStyle(color: colors.onSurface, fontSize: 13.5, fontWeight: FontWeight.w700)),
+            if (_richValue(list[i]['brand']).isNotEmpty) Text(_richValue(list[i]['brand']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5)),
+            if (_richValue(list[i]['price']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_richValue(list[i]['price']), style: TextStyle(color: colors.primary, fontSize: 15, fontWeight: FontWeight.w800))),
+            if (_richValue(list[i]['description']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_richValue(list[i]['description']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11.5, height: 1.35))),
+            if (_richStringList(list[i]['features'], limit: 3).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(_richStringList(list[i]['features'], limit: 3).join(' • '), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5, height: 1.35))),
+          ])),
+        ]),
+      ],
+      if (_richValue(json['note']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 9), child: Text(_richValue(json['note']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5))),
+    ]));
+  }
+}
+
+class _RichAiRatingCard extends StatelessWidget {
+  const _RichAiRatingCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final score = _richNumber(json['score'] ?? json['rating']);
+    final maximum = _richNumber(json['maxScore'] ?? json['max_score']) ?? 5;
+    final ratio = score == null || maximum <= 0 ? null : (score / maximum).clamp(0.0, 1.0).toDouble();
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.star_outline_rounded, title: _richValue(json['title'], fallback: 'Avaliação'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        if (score != null) Text(score.toStringAsFixed(1), style: TextStyle(color: colors.onSurface, fontSize: 30, fontWeight: FontWeight.w800)),
+        const SizedBox(width: 9),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (ratio != null) Row(children: List.generate(5, (index) => Icon(index + 1 <= (ratio * 5).round() ? Icons.star_rounded : Icons.star_outline_rounded, size: 18, color: colors.primary))),
+          if (_richValue(json['reviewCount'] ?? json['reviews']).isNotEmpty) Text('${_richValue(json['reviewCount'] ?? json['reviews'])} avaliações', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10.5)),
+        ])),
+      ]),
+      if (_richValue(json['summary']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_richValue(json['summary']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.4))),
+    ]));
+  }
+}
+
+class _RichAiKeyValuesCard extends StatelessWidget {
+  const _RichAiKeyValuesCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['values'], limit: 24);
+    final entries = items.isEmpty && json['values'] is Map ? Map<String, dynamic>.from(json['values'] as Map).entries.map((e) => <String, dynamic>{'label': e.key, 'value': e.value}).toList() : items;
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.list_alt_rounded, title: _richValue(json['title'], fallback: 'Dados principais'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 9),
+      for (var i = 0; i < entries.length; i++) Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text(_richValue(entries[i]['label'] ?? entries[i]['name'], fallback: 'Campo'), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12))),
+        const SizedBox(width: 12),
+        Flexible(child: Text(_richValue(entries[i]['value'], fallback: '—'), textAlign: TextAlign.end, style: TextStyle(color: colors.onSurface, fontSize: 12, fontWeight: FontWeight.w700))),
+      ])),
+      if (entries.isEmpty) Text('Não foram fornecidos dados.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiBarChartCard extends StatelessWidget {
+  const _RichAiBarChartCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['data'], limit: 14);
+    final maxValue = items.map((item) => _richNumber(item['value']) ?? 0).fold<double>(0, (a, b) => a > b ? a : b);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.bar_chart_rounded, title: _richValue(json['title'], fallback: 'Gráfico de barras'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 12),
+      for (final item in items) Builder(builder: (context) {
+        final value = _richNumber(item['value']) ?? 0;
+        final fraction = maxValue <= 0 ? 0.0 : (value / maxValue).clamp(0.0, 1.0).toDouble();
+        return Padding(padding: const EdgeInsets.only(bottom: 11), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Expanded(child: Text(_richValue(item['label'] ?? item['name'], fallback: 'Item'), style: TextStyle(color: colors.onSurface, fontSize: 11.5, fontWeight: FontWeight.w600))), Text(_richValue(item['display'] ?? item['value']), style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11))]),
+          const SizedBox(height: 5),
+          ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: fraction, minHeight: 8, backgroundColor: colors.outline.withOpacity(.15), valueColor: AlwaysStoppedAnimation<Color>(colors.primary))),
+        ]));
+      }),
+      if (items.isEmpty) Text('Não há valores para representar.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiImageGalleryCard extends StatelessWidget {
+  const _RichAiImageGalleryCard({required this.json, required this.colors});
+  final Map<String, dynamic> json;
+  final BrowseRichTextPalette colors;
+  @override
+  Widget build(BuildContext context) {
+    final items = _richMapList(json['items'] ?? json['images'], limit: 12);
+    return _RichAiCard(colors: colors, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _RichAiCardHeading(icon: Icons.photo_library_outlined, title: _richValue(json['title'], fallback: 'Imagens'), subtitle: _richValue(json['subtitle']), colors: colors),
+      const SizedBox(height: 10),
+      SizedBox(
+        height: 142,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 9),
+          itemBuilder: (context, index) {
+            final url = _richSafeUrl(items[index]['url'] ?? items[index]['image']);
+            return SizedBox(
+              width: 190,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: url.isEmpty
+                        ? Container(
+                            width: double.infinity,
+                            color: colors.pageBackground,
+                            alignment: Alignment.center,
+                            child: Icon(Icons.image_not_supported_outlined, color: colors.onSurfaceVariant),
+                          )
+                        : Image.network(
+                            url,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: double.infinity,
+                              color: colors.pageBackground,
+                              alignment: Alignment.center,
+                              child: Icon(Icons.broken_image_outlined, color: colors.onSurfaceVariant),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _richValue(items[index]['caption'] ?? items[index]['title'], fallback: 'Imagem ${index + 1}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.onSurface, fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ]),
+            );
+          },
+        ),
+      ),
+      if (items.isEmpty) Text('Não há imagens para apresentar.', style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12)),
+    ]));
+  }
+}
+
+class _RichAiLinePainter extends CustomPainter {
+  const _RichAiLinePainter({required this.values, required this.color, required this.gridColor});
+  final List<double> values;
+  final Color color;
+  final Color gridColor;
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2 || size.isEmpty) return;
+    final grid = Paint()..color = gridColor..strokeWidth = .7;
+    for (var i = 1; i <= 3; i++) {
+      final y = size.height * i / 4;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+    final minValue = values.reduce((a, b) => a < b ? a : b);
+    final maxValue = values.reduce((a, b) => a > b ? a : b);
+    final range = (maxValue - minValue).abs() < 0.000001 ? 1.0 : maxValue - minValue;
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final x = size.width * i / (values.length - 1);
+      final y = size.height - ((values[i] - minValue) / range) * (size.height * .82) - size.height * .09;
+      if (i == 0) { path.moveTo(x, y); } else { path.lineTo(x, y); }
+    }
+    final line = Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.4..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, line);
+  }
+  @override
+  bool shouldRepaint(covariant _RichAiLinePainter oldDelegate) => oldDelegate.values != values || oldDelegate.color != color || oldDelegate.gridColor != gridColor;
+}
+
+class _RichAiMapPatternPainter extends CustomPainter {
+  const _RichAiMapPatternPainter({required this.line, required this.fill});
+  final Color line;
+  final Color fill;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bg = Paint()..color = fill;
+    canvas.drawRect(Offset.zero & size, bg);
+    final road = Paint()..color = line..strokeWidth = 7..strokeCap = StrokeCap.round;
+    final thin = Paint()..color = line.withOpacity(.65)..strokeWidth = 2;
+    final path1 = Path()..moveTo(-10, size.height * .75)..cubicTo(size.width * .18, size.height * .62, size.width * .3, size.height * .2, size.width * .58, size.height * .28)..cubicTo(size.width * .78, size.height * .34, size.width * .83, size.height * .8, size.width + 10, size.height * .62);
+    canvas.drawPath(path1, road);
+    final path2 = Path()..moveTo(size.width * .16, -10)..cubicTo(size.width * .32, size.height * .18, size.width * .38, size.height * .56, size.width * .52, size.height + 10);
+    canvas.drawPath(path2, road);
+    for (var i = 0; i < 5; i++) {
+      final y = size.height * (i + 1) / 6;
+      canvas.drawLine(Offset(0, y), Offset(size.width * .2, y - 6), thin);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant _RichAiMapPatternPainter oldDelegate) => oldDelegate.line != line || oldDelegate.fill != fill;
 }
 
 class _RichTextBlockParser {
@@ -1558,7 +2578,42 @@ class _RichTextBlockParser {
       } else if (token.startsWith('![')) {
         final match = RegExp(r'^!\[([^\]]*)\]\(([^)]+)\)').firstMatch(token);
         if (match != null) {
-          spans.add(TextSpan(text: match.group(1)!.isEmpty ? 'imagem' : match.group(1)!));
+          final alt = match.group(1)!.trim();
+          final imageUrl = _richSafeUrl(match.group(2));
+          if (imageUrl.isNotEmpty) {
+            spans.add(WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    width: 260,
+                    height: 150,
+                    fit: BoxFit.cover,
+                    semanticLabel: alt.isEmpty ? 'Imagem da resposta' : alt,
+                    loadingBuilder: (context, child, progress) => progress == null
+                        ? child
+                        : Container(width: 260, height: 150, color: s.hover, alignment: Alignment.center,
+                            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: s.primary))),
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 260,
+                      height: 76,
+                      color: s.hover,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.all(10),
+                      child: Text(alt.isEmpty ? 'Imagem indisponível' : alt,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: s.onSurfaceVariant, fontSize: 11.5)),
+                    ),
+                  ),
+                ),
+              ),
+            ));
+          } else {
+            spans.add(TextSpan(text: alt.isEmpty ? 'imagem indisponível' : alt));
+          }
         }
       } else if (token.startsWith('[')) {
         final match = RegExp(r'^\[([^\]]+)\]\(([^)]+)\)').firstMatch(token);

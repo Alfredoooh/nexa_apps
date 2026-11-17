@@ -9,7 +9,7 @@ import '../browser_library.dart';
 import '../localization.dart';
 import '../models.dart';
 import '../shell/shell_tab_request.dart';
-import '../shell/slide_page_route.dart';
+import '../shell/fade_page_route.dart';
 import 'bookmarks_screen.dart';
 import 'downloads_screen.dart';
 import 'ai_search_screen.dart';
@@ -19,6 +19,10 @@ import 'settings_screen.dart';
 
 const MethodChannel _nativeBrowserChannel = MethodChannel('looply/native_ui');
 
+/// Host de navegação e ponte de ciclo de vida. Não desenha páginas web em Flutter.
+/// O conteúdo dos sites é sempre renderizado pelo android.webkit.WebView dentro
+/// de OrbitBrowserActivity.kt; a rota Flutter é mantida apenas para coordenar
+/// abas, estado, transições e a abertura/fecho da Activity nativa.
 class OrbitBrowserScreen extends StatefulWidget {
   const OrbitBrowserScreen({
     super.key,
@@ -347,7 +351,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final routeTabId = widget.tabId;
     final isSearchPage = page is SearchScreen;
     final route = isSearchPage
-        ? SlidePageRoute<void>(builder: (_) => page)
+        ? FadePageRoute<void>(builder: (_) => page)
         : MaterialPageRoute<void>(builder: (_) => page);
     await Navigator.of(context).push<void>(route);
 
@@ -389,11 +393,11 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
     final internalUri = Uri.tryParse(activeUrl);
     if (internalUri?.scheme == 'looply' && internalUri?.host == 'ai-search') {
       return AiSearchScreen(
-        key: ValueKey<String>(activeUrl),
         initialQuery: internalUri?.queryParameters['q'] ?? '',
       );
     }
 
+    // Superfície neutra atrás da Activity Android. Não é um browser Flutter.
     final isDark =
         Theme.of(context).brightness == Brightness.dark ||
             widget.isIncognito;
