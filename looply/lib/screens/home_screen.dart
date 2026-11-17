@@ -10,7 +10,6 @@ import '../auth_service.dart';
 import '../shell/shell_tab_request.dart';
 import 'auth_screen.dart';
 import 'profile_screen.dart';
-import '../shell/slide_page_route.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/search_engine_pngs.dart';
 import '../widgets/drawer_menu_button.dart';
@@ -188,7 +187,7 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => Navigator.of(context).push<void>(
-            SlidePageRoute<void>(
+            MaterialPageRoute<void>(
               builder: (_) => SearchScreen(
                 controller: _controller,
                 autoFocusDelay: const Duration(milliseconds: 300),
@@ -218,7 +217,7 @@ class _SignedInAvatar extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: () => Navigator.of(context).push<void>(
-            SlidePageRoute<void>(builder: (_) => const ProfileScreen()),
+            MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
           ),
           child: Padding(
             padding: const EdgeInsets.all(3),

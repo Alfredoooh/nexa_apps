@@ -10,7 +10,6 @@ import '../browser_library.dart';
 import '../theme.dart';
 import '../shell/browser_navigation.dart';
 import 'history_screen.dart';
-import '../shell/slide_page_route.dart';
 import 'site_usage_detail_screen.dart';
 import '../widgets/material_symbols.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -125,7 +124,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Expanded(child: Text(appText('recent'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
                 if (entries.isNotEmpty)
                   TextButton(
-                    onPressed: () => Navigator.of(context).push(SlidePageRoute<void>(builder: (_) => const HistoryScreen())),
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
                     child: Text(appText('view_all')),
                   ),
               ],
@@ -690,7 +689,7 @@ class _VisitedSitesCard extends StatelessWidget {
         onTap: hosts.isEmpty
             ? null
             : () => Navigator.of(context).push(
-                  SlidePageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
+                  MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
                 ),
         borderRadius: BorderRadius.circular(999),
         child: Padding(

@@ -2,7 +2,6 @@ import 'package:material_ui/material_ui.dart';
 
 import '../localization.dart';
 import '../security/browser_security_service.dart';
-import '../shell/slide_page_route.dart';
 import '../theme.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/m3_switch.dart';
@@ -192,7 +191,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
       if (!saved || !mounted) return;
     }
     await Navigator.of(context).push<void>(
-      SlidePageRoute<void>(builder: (_) => const BlockedSitesScreen()),
+      MaterialPageRoute<void>(builder: (_) => const BlockedSitesScreen()),
     );
   }
 
