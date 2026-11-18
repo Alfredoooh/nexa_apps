@@ -4,7 +4,7 @@ import android.app.Activity
 import android.animation.ValueAnimator
 import android.app.DownloadManager
 import android.content.Context
-import android.content.res.ColorStateList
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -12,7 +12,7 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
+import android.webkit.MimeTypeMap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -45,6 +45,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.SslErrorHandler
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
@@ -56,6 +57,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -69,12 +71,24 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import java.io.ByteArrayInputStream
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import java.io.ByteArrayOutputStream
 import java.net.URLConnection
 import java.util.Locale
 import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+private data class BrowserElementHit(
+    val kind: String,
+    val linkUrl: String = "",
+    val mediaUrl: String = "",
+    val pageUrl: String = "",
+    val title: String = "",
+    val description: String = "",
+)
 
 class OrbitBrowserActivity : AppCompatActivity() {
 
@@ -94,6 +108,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         const val RESULT_TRANSITION_SCREENSHOT = "com.looply.browser.app.orbit.RESULT_TRANSITION_SCREENSHOT"
         const val RESULT_NEW_URL = "com.looply.browser.app.orbit.RESULT_NEW_URL"
 
+        private const val INTERNAL_ERROR_BASE = "https://browseit.internal/error/"
         private const val PREFS = "FlutterSharedPreferences"
         private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
         private const val PREF_PURE_BLACK = "flutter.looply_theme_pure_dark"
@@ -111,20 +126,98 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
         private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
         private const val MAX_TAB_STATE_CHARS = 3_000_000
-        // Unlocks survive Activity recreation while the app process is alive;
-        // process death clears the set and therefore restores every block.
-        private val temporarilyUnlockedHosts = mutableSetOf<String>()
-        private var lastBlockedRulesSnapshot: String? = null
 
-        fun clearTemporarySiteUnlocks() {
-            temporarilyUnlockedHosts.clear()
-            lastBlockedRulesSnapshot = null
-        }
+        private const val AD_COSMETIC_FILTER_SCRIPT = """
+            (function(){
+              if (window.__browseItCosmeticFilterInstalled) return;
+              window.__browseItCosmeticFilterInstalled = true;
+              const selectors = [
+                'ins.adsbygoogle', '[data-ad-slot]', '[data-ad-client]',
+                '.ad-container', '.ad-banner', '.advertisement', '.advertising',
+                '.sponsored-ad', '.sponsored-content', '.taboola', '.outbrain',
+                'iframe[src*="doubleclick"]', 'iframe[src*="googlesyndication"]',
+                'iframe[src*="adservice"]', '[id^="google_ads_"]'
+              ];
+              const hideAds = root => {
+                try { root.querySelectorAll(selectors.join(',')).forEach(el => {
+                  if (el && el.dataset && el.dataset.browseItKeep === 'true') return;
+                  if (el) { el.style.setProperty('display', 'none', 'important'); el.setAttribute('aria-hidden', 'true'); }
+                }); } catch (_) {}
+              };
+              const prepareMedia = root => {
+                try { root.querySelectorAll('video,audio').forEach(media => {
+                  media.setAttribute('playsinline', '');
+                  media.setAttribute('webkit-playsinline', '');
+                  if (!media.hasAttribute('preload')) media.setAttribute('preload', 'metadata');
+                }); } catch (_) {}
+              };
+              hideAds(document);
+              prepareMedia(document);
+              const observer = new MutationObserver(records => records.forEach(record =>
+                record.addedNodes && record.addedNodes.forEach(node => {
+                  if (node && node.nodeType === 1) {
+                    hideAds(node.parentElement || document);
+                    prepareMedia(node.parentElement || document);
+                    prepareMedia(node);
+                  }
+                })
+              ));
+              observer.observe(document.documentElement, {childList:true, subtree:true});
+              document.querySelectorAll('video').forEach(v => {
+                try { v.playsInline = true; v.preload = v.preload || 'metadata'; } catch (_) {}
+              });
+            })();
+        """.trimIndent()
+
+        private const val MEDIA_COMPATIBILITY_SCRIPT = """
+            (function(){
+              if (window.__browseItMediaCompatibilityInstalled) return;
+              window.__browseItMediaCompatibilityInstalled = true;
+              const style = document.createElement('style');
+              style.textContent = `
+                video,audio { background: transparent !important; max-width: 100%; }
+                video { object-fit: contain; }
+                video::-webkit-media-controls-enclosure { background: transparent !important; }
+                video::-webkit-media-controls-panel { background: rgba(20,20,20,.72); }
+                video::-webkit-media-controls-start-playback-button,
+                video::-webkit-media-controls-overlay-play-button {
+                  display: none !important; -webkit-appearance: none;
+                }
+              `;
+              (document.head || document.documentElement).appendChild(style);
+              const prepare = root => {
+                try { root.querySelectorAll('video,audio').forEach(media => {
+                  media.setAttribute('playsinline', '');
+                  media.setAttribute('webkit-playsinline', '');
+                  if (!media.hasAttribute('preload')) media.setAttribute('preload', 'metadata');
+                  if (media.tagName === 'VIDEO' && !media.hasAttribute('poster')) {
+                    media.style.setProperty('background-color', 'transparent', 'important');
+                  }
+                }); } catch (_) {}
+              };
+              prepare(document);
+              const observer = new MutationObserver(records => records.forEach(record =>
+                record.addedNodes && record.addedNodes.forEach(node => {
+                  if (node && node.nodeType === 1) prepare(node.parentElement || document);
+                  if (node && node.nodeType === 1) prepare(node);
+                })
+              ));
+              if (document.documentElement) observer.observe(document.documentElement, {childList:true, subtree:true});
+            })();
+        """.trimIndent()
 
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
+        private val blockedHostLabels = setOf(
+            "ad", "ads", "adserver", "adservice", "advertising", "banner",
+            "popunder", "tracking", "tracker", "pixel", "beacon", "affiliate", "prebid",
+        )
+        private val adPathPattern = Regex(
+            "(?:^|/)(?:ads?|adserver|adservice|advertising|banners?|popunder|trackers?|tracking|pixels?|beacons?|prebid)(?:[/._-]|$)",
+            RegexOption.IGNORE_CASE,
+        )
         private val blockedDomains = setOf(
             "doubleclick.net", "googlesyndication.com",
             "googleadservices.com", "google-analytics.com",
@@ -216,7 +309,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var findField: EditText
     private lateinit var tabsButton: android.widget.FrameLayout
 
-    private var currentUrl = "https://www.google.com"
+    @Volatile private var currentUrl = "https://www.google.com"
     private var currentTitle = "Google"
     private var tabId = ""
     private var tabCount = 1
@@ -240,9 +333,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private var toolbarScrollFreezeUntilMs = 0L
     private var menuLabels = JSONObject()
     private var isFinishingWithResult = false
-    private var isShowingBlockedPage = false
-    private var pendingBlockedUrl: String? = null
-    private var pendingBlockedHost: String? = null
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var imagesEnabled = true
+    @Volatile private var showingInternalErrorPage = false
+    @Volatile private var failedNavigationUrl: String? = null
+    private val adBlockRules by lazy { NativeAdBlockRules.get(applicationContext).also { it.start() } }
 
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -363,7 +459,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     } else if (findBar.visibility == View.VISIBLE) {
                         closeFindBar()
                     } else if (webView.canGoBack()) {
-                        goBackSafely()
+                        webView.goBack()
                     } else {
                         finishToFlutter(
                             if (previewOnly) "previewClosed" else "home"
@@ -384,12 +480,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
             currentUrl = webView.url?.takeIf { it.isNotBlank() } ?: currentUrl
             currentTitle = webView.title?.takeIf { it.isNotBlank() } ?: currentTitle
             refreshTitle()
-            if (isUserBlockedUrl(currentUrl)) {
-                webView.stopLoading()
-                showBlockedPage(currentUrl)
-            }
         } else {
-            loadUrlUnlessBlocked(currentUrl)
+            webView.loadUrl(currentUrl)
         }
     }
 
@@ -399,12 +491,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
         outState.putString(STATE_TITLE, currentTitle)
         outState.putInt(STATE_SCROLL_X, webView.scrollX)
         outState.putInt(STATE_SCROLL_Y, webView.scrollY)
-        if (!isShowingBlockedPage) {
-            outState.putBundle(
-                STATE_WEBVIEW,
-                Bundle().also { webView.saveState(it) }
-            )
-        }
+        outState.putBundle(
+            STATE_WEBVIEW,
+            Bundle().also { webView.saveState(it) }
+        )
     }
 
     private fun createInterface() {
@@ -438,7 +528,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(12), 0)
-            background = rippleBackground(toolbarPillColor(), 24)
+            background = rounded(toolbarPillColor(), 24)
             isClickable = true
             isFocusable = true
             setOnClickListener { finishToFlutter("search") }
@@ -620,7 +710,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 }
             isEnabled = !previewOnly
             setOnRefreshListener {
-                if (::webView.isInitialized) webView.reload()
+                if (::webView.isInitialized) reloadCurrentPage()
                 else isRefreshing = false
             }
             addView(webView, ViewGroup.LayoutParams(-1, -1))
@@ -776,23 +866,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Revalida a URL quando a aplicação regressa do segundo plano. Se o
-        // bloqueio temporário foi revogado, substitui imediatamente a página.
-        if (!isShowingBlockedPage && ::webView.isInitialized && isUserBlockedUrl(currentUrl)) {
-            webView.stopLoading()
-            showBlockedPage(currentUrl)
-        }
-        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE,
-            )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
         if (::webView.isInitialized) {
             applyWebsiteDarkMode(webView.settings)
-            applyAutofillPolicy()
             webView.settings.cacheMode = when {
                 incognito -> WebSettings.LOAD_NO_CACHE
                 navigationAcceleratorEnabled -> WebSettings.LOAD_CACHE_ELSE_NETWORK
@@ -801,21 +876,14 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 webView.settings.offscreenPreRaster = navigationAcceleratorEnabled
             }
+            if (adBlockEnabled) {
+                webView.post {
+                    if (!isFinishing && ::webView.isInitialized && webView.url == currentUrl) {
+                        webView.evaluateJavascript(AD_COSMETIC_FILTER_SCRIPT, null)
+                    }
+                }
+            }
             updateToolbarColors()
-        }
-    }
-
-    private fun applyAutofillPolicy() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !::webView.isInitialized) return
-        // O próprio fornecedor Autofill do Android decide se guarda passwords,
-        // endereços e outros campos; o BrowseIt apenas permite a integração
-        // quando pelo menos uma das categorias foi ativada pelo utilizador.
-        val passwordsEnabled = prefs.getBoolean("flutter.looply_save_passwords_enabled", false)
-        val addressesEnabled = prefs.getBoolean("flutter.looply_profile_save_addresses", false)
-        webView.importantForAutofill = if (passwordsEnabled || addressesEnabled) {
-            View.IMPORTANT_FOR_AUTOFILL_YES
-        } else {
-            View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         }
     }
 
@@ -869,6 +937,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun configureWebView() {
+        adBlockRules.start()
         val settings = webView.settings
 
         settings.javaScriptEnabled = true
@@ -901,7 +970,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         settings.setSupportMultipleWindows(false)
         settings.allowFileAccess = false
         settings.allowContentAccess = true
-        applyAutofillPolicy()
 
         if (Build.VERSION.SDK_INT >= 26) {
             settings.safeBrowsingEnabled = true
@@ -924,17 +992,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 val uri = request.url
                 val scheme = uri.scheme?.lowercase(Locale.ROOT).orEmpty()
 
-                if (scheme == "browseit-security") {
-                    requestSecurityUnlock()
+                if (scheme == "browseit" && uri.host == "retry") {
+                    retryFailedNavigation()
                     return true
                 }
-                if (scheme == "http" || scheme == "https") {
-                    if (isUserBlockedUrl(uri.toString())) {
-                        showBlockedPage(uri.toString())
-                        return true
-                    }
-                    return false
+                if (scheme == "browseit" && uri.host == "home") {
+                    finishToFlutter("home")
+                    return true
                 }
+                if (scheme == "http" || scheme == "https") return false
 
                 return openExternalUri(uri)
             }
@@ -945,17 +1011,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 url: String
             ): Boolean {
                 val uri = Uri.parse(url)
-                if (uri.scheme == "browseit-security") {
-                    requestSecurityUnlock()
+                if (uri.scheme == "browseit" && uri.host == "retry") {
+                    retryFailedNavigation()
+                    return true
+                }
+                if (uri.scheme == "browseit" && uri.host == "home") {
+                    finishToFlutter("home")
                     return true
                 }
                 if (uri.scheme == "http" || uri.scheme == "https") {
-                    if (isUserBlockedUrl(uri.toString())) {
-                        showBlockedPage(uri.toString())
-                        return true
-                    }
                     return false
                 }
+
                 return openExternalUri(uri)
             }
 
@@ -963,7 +1030,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 view: WebView,
                 request: WebResourceRequest
             ): WebResourceResponse? {
-                if (!incognito && adBlockEnabled && isBlocked(request.url)) {
+                if (adBlockEnabled && isBlocked(request.url, request)) {
                     recordBlockedRequest()
                     return WebResourceResponse(
                         "text/plain",
@@ -980,20 +1047,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 url: String,
                 favicon: Bitmap?
             ) {
-                if (isShowingBlockedPage) {
-                    currentTitle = "Página indisponível por segurança"
+                if (url.startsWith(INTERNAL_ERROR_BASE)) {
+                    showingInternalErrorPage = true
+                    if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+                    hideToolbar(false)
+                    setProgressSmooth(100, immediate = true)
+                    progress.visibility = View.GONE
                     refreshTitle()
+                    updateToolbarColors()
                     return
                 }
+
+                showingInternalErrorPage = false
+                failedNavigationUrl = null
                 currentUrl = url
-                if (isTemporarilyUnlockedUrl(url)) {
-                    window.setFlags(
-                        WindowManager.LayoutParams.FLAG_SECURE,
-                        WindowManager.LayoutParams.FLAG_SECURE,
-                    )
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                }
                 currentTitle = ""
                 pageToolbarColor = null
                 lastScrollDirection = 0
@@ -1009,16 +1076,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String) {
-                if (isShowingBlockedPage) {
-                    currentTitle = "Página indisponível por segurança"
-                    refreshTitle()
+                if (url.startsWith(INTERNAL_ERROR_BASE) || showingInternalErrorPage) {
                     if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
-                    progressAnimator?.cancel()
+                    setProgressSmooth(100, immediate = true)
                     progress.visibility = View.GONE
-                    progress.alpha = 1f
-                    progressTarget = 1000
+                    refreshTitle()
+                    updateToolbarColors()
                     return
                 }
+
                 currentUrl = url
                 currentTitle = view.title?.takeIf { it.isNotBlank() } ?: hostOf(url)
 
@@ -1028,6 +1094,10 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
                 refreshTitle()
                 updateToolbarColors()
+                view.evaluateJavascript(MEDIA_COMPATIBILITY_SCRIPT, null)
+                if (adBlockEnabled) {
+                    view.evaluateJavascript(AD_COSMETIC_FILTER_SCRIPT, null)
+                }
                 view.post {
                     val restoredX = pendingRestoredScrollX
                     val restoredY = pendingRestoredScrollY
@@ -1050,14 +1120,47 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 request: WebResourceRequest,
                 error: WebResourceError
             ) {
-                if (request.isForMainFrame) {
-                    if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
-                    showBrowserSnackbar(
-                        error.description?.toString()
-                            ?: menuText("loadingError", "Could not load this page.")
+                if (request.isForMainFrame && !showingInternalErrorPage &&
+                    !request.url.toString().startsWith(INTERNAL_ERROR_BASE)) {
+                    val description = error.description?.toString()
+                        ?: menuText("loadingError", "Could not load this page.")
+                    showInternalErrorPage(request.url.toString(), description, error.errorCode)
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: WebResourceRequest,
+                errorResponse: WebResourceResponse
+            ) {
+                if (request.isForMainFrame && errorResponse.statusCode >= 400 &&
+                    !showingInternalErrorPage && !request.url.toString().startsWith(INTERNAL_ERROR_BASE)) {
+                    showInternalErrorPage(
+                        request.url.toString(),
+                        "HTTP ${errorResponse.statusCode}",
+                        errorResponse.statusCode,
                     )
                 }
             }
+
+            override fun onReceivedSslError(
+                view: WebView,
+                handler: SslErrorHandler,
+                error: android.net.http.SslError
+            ) {
+                handler.cancel()
+                if (!showingInternalErrorPage) {
+                    showInternalErrorPage(
+                        error.url ?: currentUrl,
+                        localizedBrowserText(
+                            "Não foi possível estabelecer uma ligação segura.",
+                            "A secure connection could not be established."
+                        ),
+                        error.primaryError,
+                    )
+                }
+            }
+
         }
 
         webView.webChromeClient = object : WebChromeClient() {
@@ -1121,15 +1224,18 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
         )
 
-        webView.setOnLongClickListener {
-            val hit = webView.hitTestResult
-            val target = hit.extra?.takeIf { it.isNotBlank() }
-
-            if (target.isNullOrBlank()) {
-                return@setOnLongClickListener false
+        webView.setOnTouchListener { _, event ->
+            if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN ||
+                event.actionMasked == android.view.MotionEvent.ACTION_MOVE
+            ) {
+                lastTouchX = event.x
+                lastTouchY = event.y
             }
+            false
+        }
 
-            showElementSheet(target, hit.type)
+        webView.setOnLongClickListener {
+            inspectElementAtTouch(webView.hitTestResult)
             true
         }
     }
@@ -1143,7 +1249,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             contentDescription = description
             isClickable = true
             isFocusable = true
-            background = rippleBackground(toolbarBg, 18)
+            background = selectableBackground()
             addView(
                 MaterialSymbolsRounded.textView(
                     this@OrbitBrowserActivity,
@@ -1162,7 +1268,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             contentDescription = "Separadores: $count"
             isClickable = true
             isFocusable = true
-            background = rippleBackground(toolbarBg, 18)
+            background = selectableBackground()
             val icon = ImageView(this@OrbitBrowserActivity).apply {
                 setImageDrawable(
                     MaterialSymbolsRounded.tabsCounterDrawable(
@@ -1207,7 +1313,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         dialog.window?.let { dialogWindow ->
             dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             val attributes = dialogWindow.attributes
-            attributes.dimAmount = .54f
+            attributes.dimAmount = .34f
             dialogWindow.attributes = attributes
         }
     }
@@ -1389,7 +1495,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 isClickable = enabled
                 isFocusable = enabled
                 alpha = if (enabled) 1f else .38f
-                background = rippleBackground(quickSurface, 999)
+                background = rounded(quickSurface, 999)
                 addView(icon, android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
                 setOnClickListener {
                     if (enabled) {
@@ -1410,7 +1516,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
 
         quickAction("arrow_forward", menuText("forward", "Forward"), webView.canGoForward()) {
-            goForwardSafely()
+            webView.goForward()
         }
         quickAction("star", menuText("bookmark", "Bookmark")) {
             finishToFlutter("bookmark")
@@ -1422,7 +1528,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             showSiteInfo()
         }
         quickAction("refresh", menuText("reload", "Reload page")) {
-            webView.reload()
+            reloadCurrentPage()
         }
 
         quickScroller.addView(
@@ -1522,6 +1628,41 @@ class OrbitBrowserActivity : AppCompatActivity() {
         menuRow(menuText("pageZoom", "Page zoom"), "zoom_in") { showScaleCard(pageScale = true) }
         menuRow(menuText("print", "Print page"), "print") { printPage() }
         menuRow(menuText("share", "Share page"), "share") { shareAddress() }
+        menuRow(localizedBrowserText("Abrir no navegador externo", "Open in external browser"), "open_in_new") {
+            openCurrentPageExternally()
+        }
+        menuRow(localizedBrowserText("Copiar ligação limpa", "Copy clean link"), "link") {
+            copyCleanCurrentUrl()
+        }
+        menuRow(localizedBrowserText("Copiar título e endereço", "Copy title and address"), "content_copy") {
+            copyText("$currentTitle\n$currentUrl")
+        }
+        menuDivider()
+        menuRow(localizedBrowserText("Modo de leitura", "Reader mode"), "description") {
+            showReaderMode()
+        }
+        menuRow(localizedBrowserText("Recarregar sem cache", "Hard reload"), "refresh") {
+            webView.clearCache(false)
+            reloadCurrentPage()
+        }
+        menuRow(localizedBrowserText("Guardar página offline", "Save page offline"), "archive") {
+            savePageOffline()
+        }
+        menuRow(
+            if (webView.settings.loadsImagesAutomatically)
+                localizedBrowserText("Desativar imagens", "Disable images")
+            else localizedBrowserText("Ativar imagens", "Enable images"),
+            "image",
+        ) { togglePageImages() }
+        menuRow(
+            if (webView.settings.javaScriptEnabled)
+                localizedBrowserText("Desativar JavaScript", "Disable JavaScript")
+            else localizedBrowserText("Ativar JavaScript", "Enable JavaScript"),
+            "code",
+        ) { togglePageJavaScript() }
+        menuRow(localizedBrowserText("Ver código-fonte", "View page source"), "code_blocks") {
+            showPageSource()
+        }
         menuRow(menuText("settings", "Browser settings"), "settings") { finishToFlutter("settings") }
 
         val menuHeight = minOf(dp(570), maxPopupHeight - dp(66)).coerceAtLeast(dp(180))
@@ -1543,12 +1684,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (popupWindowRef === popup) popupWindowRef = null
         }
 
-        // Posiciona o menu como camada sobreposta à âncora, em vez de o
-        // empurrar para baixo do botão que o abriu.
-        val anchorLocation = IntArray(2)
-        anchor.getLocationInWindow(anchorLocation)
-        val overlayTop = (anchorLocation[1] - dp(3)).coerceAtLeast(dp(4))
-        popup.showAtLocation(root, Gravity.TOP or Gravity.END, dp(8), overlayTop)
+        // Ancoragem real ao botão de menu (alinhada pela extremidade direita).
+        // O próprio Android decide se a janela abre abaixo ou acima quando
+        // necessário e mantém a relação com o anchor durante deslocamentos.
+        // A entrada/saída continua a usar os Fade transitions nativos.
+        popup.showAsDropDown(anchor, -dp(8), dp(5), Gravity.END)
     }
 
     private var popupWindowRef: PopupWindow? = null
@@ -1600,71 +1740,667 @@ class OrbitBrowserActivity : AppCompatActivity() {
         parent.addView(row, LinearLayout.LayoutParams(-1, dp(56)))
     }
 
-    private fun showElementSheet(target: String, hitType: Int) {
-        val isImage = hitType == WebView.HitTestResult.IMAGE_TYPE ||
-            hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-        val isLink = hitType == WebView.HitTestResult.ANCHOR_TYPE ||
-            hitType == WebView.HitTestResult.SRC_ANCHOR_TYPE
-        val dialog = BottomSheetDialog(this)
+    private fun inspectElementAtTouch(fallback: WebView.HitTestResult) {
+        val density = resources.displayMetrics.density.coerceAtLeast(1f)
+        val x = (lastTouchX / density).roundToInt().coerceAtLeast(0)
+        val y = (lastTouchY / density).roundToInt().coerceAtLeast(0)
+        val script = """
+            (function(){
+              try {
+                let e = document.elementFromPoint($x, $y);
+                if (!e) return null;
+                const closest = (n, q) => n && n.closest ? n.closest(q) : null;
+                const a = closest(e, 'a[href]');
+                const img = closest(e, 'img');
+                const video = closest(e, 'video') || (e.tagName === 'SOURCE' && closest(e, 'video'));
+                const audio = closest(e, 'audio') || (e.tagName === 'SOURCE' && closest(e, 'audio'));
+                const source = e.tagName === 'SOURCE' ? e : null;
+                const mediaUrl = video ? (video.currentSrc || video.src || (video.querySelector('source') || {}).src || '')
+                  : audio ? (audio.currentSrc || audio.src || (audio.querySelector('source') || {}).src || '')
+                  : img ? (img.currentSrc || img.src || img.getAttribute('src') || '')
+                  : source ? (source.src || '') : '';
+                const kind = video ? 'video' : audio ? 'audio' : img ? 'image' : a ? 'link' : 'other';
+                return JSON.stringify({
+                  kind: kind,
+                  link: a ? (a.href || '') : '',
+                  media: mediaUrl,
+                  page: location.href,
+                  title: document.title || '',
+                  description: img ? (img.alt || '') : (e.getAttribute('aria-label') || e.textContent || '')
+                });
+              } catch (_) { return null; }
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(script) { raw ->
+            val encoded = runCatching {
+                val parsed = org.json.JSONTokener(raw ?: "null").nextValue()
+                parsed as? String
+            }.getOrNull()
+            val payload = encoded?.let { runCatching { JSONObject(it) }.getOrNull() }
+            if (payload == null) {
+                val legacy = fallback.extra?.takeIf { it.isNotBlank() }
+                if (legacy != null) {
+                    val kind = when (fallback.type) {
+                        WebView.HitTestResult.IMAGE_TYPE,
+                        WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> "image"
+                        WebView.HitTestResult.ANCHOR_TYPE,
+                        WebView.HitTestResult.SRC_ANCHOR_TYPE -> "link"
+                        else -> "other"
+                    }
+                    showElementSheet(BrowserElementHit(kind, linkUrl = if (kind == "link") legacy else "", mediaUrl = if (kind == "image") legacy else "", pageUrl = currentUrl))
+                }
+                return@evaluateJavascript
+            }
+            val hit = BrowserElementHit(
+                kind = payload.optString("kind", "other"),
+                linkUrl = payload.optString("link"),
+                mediaUrl = payload.optString("media"),
+                pageUrl = payload.optString("page", currentUrl),
+                title = payload.optString("title"),
+                description = payload.optString("description"),
+            )
+            if (hit.kind != "other" || hit.linkUrl.isNotBlank() || hit.mediaUrl.isNotBlank()) {
+                showElementSheet(hit)
+            } else {
+                val legacy = fallback.extra?.takeIf { it.isNotBlank() }
+                if (!legacy.isNullOrBlank()) showElementSheet(
+                    BrowserElementHit("other", pageUrl = currentUrl, description = legacy)
+                )
+            }
+        }
+    }
 
+    private fun showElementSheet(hit: BrowserElementHit) {
+        val isImage = hit.kind == "image"
+        val isVideo = hit.kind == "video"
+        val isAudio = hit.kind == "audio"
+        val isLink = hit.kind == "link" || hit.linkUrl.isNotBlank()
+        val primaryTarget = when {
+            isImage || isVideo || isAudio -> hit.mediaUrl
+            hit.linkUrl.isNotBlank() -> hit.linkUrl
+            else -> hit.pageUrl
+        }.ifBlank { hit.pageUrl }
+        if (!isSafeWebUrl(primaryTarget)) return
+
+        val dialog = BottomSheetDialog(this)
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(16), dp(18), dp(20))
             background = rounded(pageBg, 22)
         }
-
+        val title = when {
+            isImage -> localizedBrowserText("Imagem", "Image")
+            isVideo -> localizedBrowserText("Vídeo", "Video")
+            isAudio -> localizedBrowserText("Áudio", "Audio")
+            isLink -> localizedBrowserText("Ligação", "Link")
+            else -> localizedBrowserText("Conteúdo da página", "Page content")
+        }
         content.addView(
             TextView(this).apply {
-                text = when {
-                    isImage -> menuText("image", "Image")
-                    isLink -> menuText("link", "Link")
-                    else -> menuText("media", "Media")
-                }
-                textSize = 16f
+                text = title
+                textSize = 17f
                 setTextColor(primaryText)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD
                 maxLines = 1
             },
-            LinearLayout.LayoutParams(-1, dp(36))
+            LinearLayout.LayoutParams(-1, dp(34))
         )
         content.addView(
             TextView(this).apply {
-                text = target
+                text = hit.description.ifBlank { primaryTarget }
                 textSize = 12f
                 setTextColor(secondaryText)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             },
-            LinearLayout.LayoutParams(-1, dp(44))
+            LinearLayout.LayoutParams(-1, dp(42))
         )
 
-        addSheetItem(content, "open_in_new", menuText("openNewTab", "Open in new tab")) {
+        if (isImage) {
+            addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar imagem", "Preview image")) {
+                dialog.dismiss()
+                showMediaPreviewDialog(hit.mediaUrl, "image")
+            }
+            addSheetItem(content, "share", localizedBrowserText("Partilhar imagem", "Share image")) {
+                dialog.dismiss()
+                shareRemoteImage(hit.mediaUrl)
+            }
+            addSheetItem(content, "link", localizedBrowserText("Partilhar ligação da imagem", "Share image link")) {
+                dialog.dismiss()
+                shareText(hit.mediaUrl)
+            }
+            addSheetItem(content, "content_copy", localizedBrowserText("Copiar endereço da imagem", "Copy image address")) {
+                dialog.dismiss()
+                copyText(hit.mediaUrl)
+            }
+            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
+                dialog.dismiss()
+                startDownload(hit.mediaUrl, null, null, "image/*")
+            }
+            addSheetItem(content, "open_in_new", localizedBrowserText("Abrir imagem numa nova aba", "Open image in new tab")) {
+                dialog.dismiss()
+                finishToFlutter("newTab", hit.mediaUrl)
+            }
+            if (isLink && isSafeWebUrl(hit.linkUrl) && hit.linkUrl != hit.mediaUrl) {
+                addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página ligada", "Preview linked page")) {
+                    dialog.dismiss()
+                    showLinkPreviewDialog(hit.linkUrl)
+                }
+                addSheetItem(content, "share", localizedBrowserText("Partilhar ligação da página", "Share linked page")) {
+                    dialog.dismiss()
+                    shareText(hit.linkUrl)
+                }
+                addSheetItem(content, "open_in_new", localizedBrowserText("Abrir página ligada numa nova aba", "Open linked page in new tab")) {
+                    dialog.dismiss()
+                    finishToFlutter("newTab", hit.linkUrl)
+                }
+            }
+        } else if (isVideo || isAudio) {
+            addSheetItem(content, "play_circle", localizedBrowserText("Pré-visualizar conteúdo", "Preview media")) {
+                dialog.dismiss()
+                showMediaPreviewDialog(hit.mediaUrl, hit.kind)
+            }
+            addSheetItem(content, "share", if (isVideo) localizedBrowserText("Partilhar ligação do vídeo", "Share video link") else localizedBrowserText("Partilhar ligação do áudio", "Share audio link")) {
+                dialog.dismiss()
+                shareText(hit.mediaUrl)
+            }
+            if (isDirectMediaUrl(hit.mediaUrl)) {
+                addSheetItem(content, "download", if (isVideo) localizedBrowserText("Partilhar ficheiro de vídeo", "Share video file") else localizedBrowserText("Partilhar ficheiro de áudio", "Share audio file")) {
+                    dialog.dismiss()
+                    shareRemoteMedia(hit.mediaUrl, if (isVideo) "video/*" else "audio/*")
+                }
+            }
+            addSheetItem(content, "content_copy", if (isVideo) localizedBrowserText("Copiar ligação do vídeo", "Copy video link") else localizedBrowserText("Copiar ligação do áudio", "Copy audio link")) {
+                dialog.dismiss()
+                copyText(hit.mediaUrl)
+            }
+            if (isDirectMediaUrl(hit.mediaUrl)) {
+                addSheetItem(content, "download", localizedBrowserText("Transferir conteúdo", "Download media")) {
+                    dialog.dismiss()
+                    startDownload(hit.mediaUrl, null, null, if (isVideo) "video/*" else "audio/*")
+                }
+            }
+            addSheetItem(content, "open_in_new", localizedBrowserText("Abrir conteúdo numa nova aba", "Open media in new tab")) {
+                dialog.dismiss()
+                finishToFlutter("newTab", hit.mediaUrl)
+            }
+            if (isLink && isSafeWebUrl(hit.linkUrl) && hit.linkUrl != hit.mediaUrl) {
+                addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página ligada", "Preview linked page")) {
+                    dialog.dismiss()
+                    showLinkPreviewDialog(hit.linkUrl)
+                }
+                addSheetItem(content, "share", localizedBrowserText("Partilhar ligação da página", "Share linked page")) {
+                    dialog.dismiss()
+                    shareText(hit.linkUrl)
+                }
+                addSheetItem(content, "open_in_new", localizedBrowserText("Abrir página ligada numa nova aba", "Open linked page in new tab")) {
+                    dialog.dismiss()
+                    finishToFlutter("newTab", hit.linkUrl)
+                }
+            }
+        } else {
+            val link = hit.linkUrl.ifBlank { hit.pageUrl }
+            addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página", "Preview page")) {
+                dialog.dismiss()
+                showLinkPreviewDialog(link)
+            }
+            addSheetItem(content, "arrow_forward", localizedBrowserText("Abrir nesta aba", "Open in this tab")) {
+                dialog.dismiss()
+                loadAddress(link)
+            }
+            addSheetItem(content, "open_in_new", menuText("openNewTab", "Open in new tab")) {
+                dialog.dismiss()
+                finishToFlutter("newTab", link)
+            }
+            addSheetItem(content, "content_copy", menuText("copyLink", "Copy link")) {
+                dialog.dismiss()
+                copyText(link)
+            }
+            addSheetItem(content, "share", menuText("share", "Share link")) {
+                dialog.dismiss()
+                shareText(link)
+            }
+            if (!incognito && isLink) {
+                addSheetItem(content, "star", menuText("addBookmark", "Add bookmark")) {
+                    dialog.dismiss()
+                    finishToFlutter("bookmarkUrl", link)
+                }
+            }
+        }
+        dialog.setContentView(content)
+        dialog.show()
+    }
+
+    private fun reloadCurrentPage() {
+        if (showingInternalErrorPage) retryFailedNavigation() else webView.reload()
+    }
+
+    private fun retryFailedNavigation() {
+        val retryUrl = failedNavigationUrl?.takeIf(::isSafeWebUrl) ?: return
+        showingInternalErrorPage = false
+        failedNavigationUrl = null
+        currentUrl = retryUrl
+        webView.loadUrl(retryUrl)
+    }
+
+    private fun showInternalErrorPage(url: String, detail: String, errorCode: Int) {
+        if (!isSafeWebUrl(url)) return
+        failedNavigationUrl = url
+        currentUrl = url
+        showingInternalErrorPage = true
+        currentTitle = localizedBrowserText("Sem ligação", "Connection problem")
+        pageToolbarColor = null
+        if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+        setProgressSmooth(100, immediate = true)
+        progress.visibility = View.GONE
+
+        val background = cssColor(pageBg)
+        val surface = cssColor(toolbarBg)
+        val foreground = cssColor(primaryText)
+        val muted = cssColor(secondaryText)
+        val button = cssColor(accent)
+        val safeDetail = android.text.TextUtils.htmlEncode(detail.take(180))
+        val safeUrl = android.text.TextUtils.htmlEncode(url.take(160))
+        val heading = android.text.TextUtils.htmlEncode(
+            localizedBrowserText("Não foi possível abrir esta página", "This page could not be opened")
+        )
+        val explanation = android.text.TextUtils.htmlEncode(
+            localizedBrowserText(
+                "Verifica a ligação à Internet e tenta novamente.",
+                "Check your internet connection and try again."
+            )
+        )
+        val retryLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Tentar novamente", "Try again"))
+        val homeLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Voltar ao início", "Go to home"))
+        val html = """
+            <!doctype html><html lang="${if (menuLabels.optString("appLocale", "pt").startsWith("pt")) "pt" else "en"}">
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+            <meta name="color-scheme" content="${if (dark) "dark" else "light"}">
+            <style>
+              *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:$background;color:$foreground;font-family:Roboto,"Arial",sans-serif}
+              body{display:flex;align-items:center;justify-content:center;padding:28px 22px}
+              main{width:100%;max-width:420px;text-align:center;background:$surface;border-radius:24px;padding:30px 22px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
+              .icon{width:64px;height:64px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;background:${cssColor(if (dark) Color.rgb(55, 62, 75) else Color.rgb(232, 240, 254))};color:$button;font-size:30px}
+              h1{font-size:21px;line-height:1.3;margin:0 0 10px;font-weight:700;color:$foreground}
+              p{font-size:15px;line-height:1.55;margin:0 0 18px;color:$muted}
+              .detail{font-size:12px;word-break:break-word;opacity:.8;margin:0 0 22px}
+              a{display:block;text-decoration:none;border-radius:999px;padding:14px 18px;font-size:15px;font-weight:600;margin-top:10px}
+              .primary{background:$button;color:#fff}.secondary{background:transparent;color:$foreground;border:1px solid $muted}
+            </style></head><body><main>
+              <div class="icon" aria-hidden="true">⌁</div><h1>$heading</h1><p>$explanation</p>
+              <p class="detail">$safeUrl<br>$safeDetail · $errorCode</p>
+              <a class="primary" href="browseit://retry">$retryLabel</a>
+              <a class="secondary" href="browseit://home">$homeLabel</a>
+            </main></body></html>
+        """.trimIndent()
+        refreshTitle()
+        webView.stopLoading()
+        webView.loadDataWithBaseURL(INTERNAL_ERROR_BASE, html, "text/html", "UTF-8", null)
+    }
+
+    private fun cssColor(color: Int): String = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and color)
+
+    private fun localizedBrowserText(portuguese: String, english: String): String {
+        val language = menuLabels.optString("appLocale", "pt").lowercase(Locale.ROOT)
+        return if (language.startsWith("pt")) portuguese else english
+    }
+
+    private fun isSafeWebUrl(value: String): Boolean {
+        val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return false
+        return uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank()
+    }
+
+    private fun isDirectMediaUrl(value: String): Boolean {
+        if (!isSafeWebUrl(value)) return false
+        val path = Uri.parse(value).path.orEmpty().lowercase(Locale.ROOT)
+        return listOf(".mp4", ".webm", ".mov", ".m4v", ".mp3", ".m4a", ".ogg", ".wav", ".aac")
+            .any(path::endsWith)
+    }
+
+    private fun showLinkPreviewDialog(target: String) {
+        if (!isSafeWebUrl(target)) return
+        showWebContentDialog(target, "page")
+    }
+
+    private fun showMediaPreviewDialog(target: String, kind: String) {
+        if (!isSafeWebUrl(target)) return
+        showWebContentDialog(target, kind)
+    }
+
+    private fun showWebContentDialog(target: String, kind: String) {
+        val dialog = BottomSheetDialog(this)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(pageBg)
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(8), dp(8), dp(8))
+            setBackgroundColor(toolbarBg)
+        }
+        val label = TextView(this).apply {
+            text = when (kind) {
+                "image" -> localizedBrowserText("Pré-visualização da imagem", "Image preview")
+                "video" -> localizedBrowserText("Pré-visualização do vídeo", "Video preview")
+                "audio" -> localizedBrowserText("Pré-visualização do áudio", "Audio preview")
+                else -> localizedBrowserText("Pré-visualização da página", "Page preview")
+            }
+            setTextColor(primaryText)
+            textSize = 15f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            maxLines = 1
+        }
+        top.addView(label, LinearLayout.LayoutParams(0, dp(44), 1f))
+        fun topAction(icon: String, description: String, action: () -> Unit) {
+            val button = android.widget.FrameLayout(this).apply {
+                contentDescription = description
+                background = selectableBackground()
+                isClickable = true
+                isFocusable = true
+                addView(
+                    MaterialSymbolsRounded.textView(this@OrbitBrowserActivity, icon, secondaryText, 22f),
+                    android.widget.FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER)
+                )
+                setOnClickListener { action() }
+            }
+            top.addView(button, LinearLayout.LayoutParams(dp(42), dp(44)))
+        }
+        var previewWebView: WebView? = null
+        topAction("arrow_forward", localizedBrowserText("Abrir nesta aba", "Open in this tab")) {
+            dialog.dismiss()
+            loadAddress(target)
+        }
+        topAction("open_in_new", localizedBrowserText("Abrir em nova aba", "Open in new tab")) {
             dialog.dismiss()
             finishToFlutter("newTab", target)
         }
-        addSheetItem(content, "content_copy", menuText("copyLink", "Copy link")) {
-            dialog.dismiss()
+        topAction("content_copy", localizedBrowserText("Copiar endereço", "Copy address")) {
             copyText(target)
         }
-        addSheetItem(content, "share", menuText("share", "Share")) {
-            dialog.dismiss()
-            shareText(target)
-        }
-        if (isLink && !incognito) {
-            addSheetItem(content, "star", menuText("addBookmark", "Add bookmark")) {
-                dialog.dismiss()
-                finishToFlutter("bookmarkUrl", target)
-            }
-        }
-        if (isImage && !incognito) {
-            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
-                dialog.dismiss()
-                startDownload(target, null, null, null)
-            }
-        }
+        topAction("share", localizedBrowserText("Partilhar", "Share")) { shareText(target) }
+        topAction("close", localizedBrowserText("Fechar", "Close")) { dialog.dismiss() }
 
-        dialog.setContentView(content)
+        val preview = WebView(this).apply {
+            setBackgroundColor(pageBg)
+            isVerticalScrollBarEnabled = true
+            settings.javaScriptEnabled = kind == "page"
+            settings.domStorageEnabled = kind == "page"
+            settings.loadsImagesAutomatically = true
+            settings.mediaPlaybackRequiresUserGesture = true
+            settings.javaScriptCanOpenWindowsAutomatically = false
+            settings.setSupportMultipleWindows(false)
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.cacheMode = if (incognito) WebSettings.LOAD_NO_CACHE else WebSettings.LOAD_CACHE_ELSE_NETWORK
+            if (Build.VERSION.SDK_INT >= 26) settings.safeBrowsingEnabled = true
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    return request.url.scheme !in listOf("http", "https")
+                }
+                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                    if (adBlockEnabled && isBlocked(request.url, request)) {
+                        return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                    }
+                    return super.shouldInterceptRequest(view, request)
+                }
+            }
+        }
+        previewWebView = preview
+        container.addView(top, LinearLayout.LayoutParams(-1, dp(56)))
+        container.addView(preview, LinearLayout.LayoutParams(-1, dp(560)))
+        dialog.setContentView(container)
+        dialog.setOnDismissListener {
+            previewWebView?.let { view ->
+                runCatching {
+                    view.stopLoading()
+                    view.webChromeClient = null
+                    view.webViewClient = object : WebViewClient() {}
+                    (view.parent as? ViewGroup)?.removeView(view)
+                    view.destroy()
+                }
+            }
+            previewWebView = null
+        }
         dialog.show()
+        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+
+        val previewBackground = cssColor(pageBg)
+        val previewForeground = cssColor(primaryText)
+        when (kind) {
+            "image" -> preview.loadDataWithBaseURL(
+                currentUrl,
+                "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:$previewBackground;display:flex;align-items:center;justify-content:center;min-height:100vh'><img src='${android.text.TextUtils.htmlEncode(target)}' style='max-width:100%;max-height:100vh;object-fit:contain'></body></html>",
+                "text/html", "UTF-8", null
+            )
+            "video" -> preview.loadDataWithBaseURL(
+                currentUrl,
+                "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:$previewBackground;display:flex;align-items:center;justify-content:center;min-height:100vh'><video src='${android.text.TextUtils.htmlEncode(target)}' controls playsinline style='max-width:100%;max-height:100vh'></video></body></html>",
+                "text/html", "UTF-8", null
+            )
+            "audio" -> preview.loadDataWithBaseURL(
+                currentUrl,
+                "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='margin:0;background:$previewBackground;color:$previewForeground;display:flex;align-items:center;justify-content:center;min-height:100vh'><audio src='${android.text.TextUtils.htmlEncode(target)}' controls></audio></body></html>",
+                "text/html", "UTF-8", null
+            )
+            else -> preview.loadUrl(target)
+        }
+    }
+
+    private fun shareRemoteImage(imageUrl: String) {
+        if (!isSafeWebUrl(imageUrl)) return
+        showBrowserSnackbar(localizedBrowserText("A preparar imagem para partilhar…", "Preparing image to share…"))
+        val userAgent = runCatching { webView.settings.userAgentString }.getOrDefault("BrowseIt Android")
+        val referringPageUrl = currentUrl
+        Thread {
+            var tempFile: File? = null
+            var mimeType = "image/*"
+            var connection: HttpURLConnection? = null
+            try {
+                val activeConnection = URL(imageUrl).openConnection() as HttpURLConnection
+                connection = activeConnection
+                activeConnection.connectTimeout = 8_000
+                activeConnection.readTimeout = 12_000
+                activeConnection.instanceFollowRedirects = true
+                activeConnection.setRequestProperty("User-Agent", userAgent)
+                activeConnection.setRequestProperty("Referer", referringPageUrl)
+                CookieManager.getInstance().getCookie(imageUrl)?.takeIf { it.isNotBlank() }?.let {
+                    activeConnection.setRequestProperty("Cookie", it)
+                }
+                activeConnection.connect()
+                if (activeConnection.responseCode !in 200..299) {
+                    throw IllegalStateException("Image response ${activeConnection.responseCode}")
+                }
+                mimeType = activeConnection.contentType?.substringBefore(';')
+                    ?.takeIf { it.startsWith("image/") }
+                    ?: throw IllegalStateException("Not an image")
+                val directory = File(cacheDir, "shared_media").apply { mkdirs() }
+                val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                    ?.take(8) ?: "img"
+                val outputFile = File(directory, "browseit_${System.currentTimeMillis()}.$extension")
+                tempFile = outputFile
+                activeConnection.inputStream.use { input ->
+                    outputFile.outputStream().use { output ->
+                        val buffer = ByteArray(16 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > 20L * 1024L * 1024L) {
+                                throw IllegalStateException("Image exceeds share limit")
+                            }
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                tempFile?.delete()
+                runOnUiThread {
+                    showBrowserSnackbar(localizedBrowserText(
+                        "Não foi possível preparar a imagem.",
+                        "Could not prepare the image."
+                    ))
+                }
+                return@Thread
+            } finally {
+                connection?.disconnect()
+            }
+
+            val completedFile = tempFile ?: return@Thread
+            runOnUiThread {
+                try {
+                    val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", completedFile)
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = mimeType
+                        putExtra(Intent.EXTRA_STREAM, contentUri)
+                        clipData = ClipData.newUri(contentResolver, "BrowseIt image", contentUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(send, localizedBrowserText("Partilhar imagem", "Share image")))
+                } catch (_: Exception) {
+                    showBrowserSnackbar(localizedBrowserText("Não foi possível partilhar a imagem.", "Could not share the image."))
+                }
+            }
+        }.start()
+    }
+
+    private fun shareRemoteMedia(mediaUrl: String, fallbackMime: String) {
+        if (!isSafeWebUrl(mediaUrl)) return
+        showBrowserSnackbar(localizedBrowserText("A preparar conteúdo para partilhar…", "Preparing media to share…"))
+        val userAgent = runCatching { webView.settings.userAgentString }.getOrDefault("BrowseIt Android")
+        val referringPageUrl = currentUrl
+        Thread {
+            var tempFile: File? = null
+            var mimeType = fallbackMime
+            var connection: HttpURLConnection? = null
+            try {
+                val activeConnection = URL(mediaUrl).openConnection() as HttpURLConnection
+                connection = activeConnection
+                activeConnection.connectTimeout = 8_000
+                activeConnection.readTimeout = 15_000
+                activeConnection.instanceFollowRedirects = true
+                activeConnection.setRequestProperty("User-Agent", userAgent)
+                activeConnection.setRequestProperty("Referer", referringPageUrl)
+                CookieManager.getInstance().getCookie(mediaUrl)?.takeIf { it.isNotBlank() }?.let {
+                    activeConnection.setRequestProperty("Cookie", it)
+                }
+                activeConnection.connect()
+                if (activeConnection.responseCode !in 200..299) {
+                    throw IllegalStateException("Media response ${activeConnection.responseCode}")
+                }
+                val responseMime = activeConnection.contentType?.substringBefore(';')?.trim().orEmpty()
+                if (responseMime.startsWith("video/") || responseMime.startsWith("audio/")) {
+                    mimeType = responseMime
+                }
+                val directory = File(cacheDir, "shared_media").apply { mkdirs() }
+                val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                    ?.take(8) ?: if (fallbackMime.startsWith("video")) "mp4" else "audio"
+                val outputFile = File(directory, "browseit_media_${System.currentTimeMillis()}.$extension")
+                tempFile = outputFile
+                activeConnection.inputStream.use { input ->
+                    outputFile.outputStream().use { output ->
+                        val buffer = ByteArray(16 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            // Share actions are intentionally bounded. Larger
+                            // streams can still be shared safely as a URL.
+                            if (total > 50L * 1024L * 1024L) {
+                                throw IllegalStateException("Media exceeds share limit")
+                            }
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                tempFile?.delete()
+                runOnUiThread {
+                    showBrowserSnackbar(localizedBrowserText(
+                        "Não foi possível preparar o ficheiro. Partilha a ligação do conteúdo.",
+                        "Could not prepare the file. Share the media link instead."
+                    ))
+                }
+                return@Thread
+            } finally {
+                connection?.disconnect()
+            }
+
+            val completedFile = tempFile ?: return@Thread
+            runOnUiThread {
+                try {
+                    val contentUri = FileProvider.getUriForFile(this, "$packageName.fileprovider", completedFile)
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = mimeType
+                        putExtra(Intent.EXTRA_STREAM, contentUri)
+                        clipData = ClipData.newUri(contentResolver, "BrowseIt media", contentUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(
+                        send,
+                        localizedBrowserText("Partilhar conteúdo", "Share media")
+                    ))
+                } catch (_: Exception) {
+                    completedFile.delete()
+                    showBrowserSnackbar(localizedBrowserText("Não foi possível partilhar o conteúdo.", "Could not share the media."))
+                }
+            }
+        }.start()
+    }
+
+    private fun savePageOffline() {
+        val directory = File(filesDir, "offline_pages").apply { mkdirs() }
+        val safeName = (hostOf(currentUrl).replace(Regex("[^A-Za-z0-9._-]"), "_") + "_" + System.currentTimeMillis())
+        val path = File(directory, "$safeName.mht").absolutePath
+        webView.saveWebArchive(path, true) { saved ->
+            runOnUiThread {
+                showBrowserSnackbar(
+                    if (saved.isNullOrBlank()) localizedBrowserText("Não foi possível guardar a página.", "Could not save page.")
+                    else localizedBrowserText("Página guardada para leitura offline.", "Page saved for offline reading.")
+                )
+            }
+        }
+    }
+
+    private fun togglePageImages() {
+        imagesEnabled = !webView.settings.loadsImagesAutomatically
+        webView.settings.loadsImagesAutomatically = imagesEnabled
+        webView.reload()
+    }
+
+    private fun togglePageJavaScript() {
+        webView.settings.javaScriptEnabled = !webView.settings.javaScriptEnabled
+        webView.reload()
+        showBrowserSnackbar(
+            if (webView.settings.javaScriptEnabled) localizedBrowserText("JavaScript ativado", "JavaScript enabled")
+            else localizedBrowserText("JavaScript desativado", "JavaScript disabled")
+        )
+    }
+
+    private fun showPageSource() {
+        webView.evaluateJavascript("(function(){return document.documentElement ? document.documentElement.outerHTML : '';})();") { raw ->
+            val source = runCatching {
+                org.json.JSONTokener(raw ?: "\"\"").nextValue() as? String
+            }.getOrNull().orEmpty()
+            val display = source.take(80_000).ifBlank { "(empty document)" }
+            val body = TextView(this).apply {
+                text = display
+                textSize = 11f
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextColor(primaryText)
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                setTextIsSelectable(true)
+            }
+            val scroll = ScrollView(this).apply { addView(body) }
+            MaterialAlertDialogBuilder(this)
+                .setTitle(localizedBrowserText("Código-fonte da página", "Page source"))
+                .setView(scroll)
+                .setPositiveButton(menuText("close", "Close"), null)
+                .show()
+        }
     }
 
     private fun openFindBar() {
@@ -1940,6 +2676,88 @@ class OrbitBrowserActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(send, menuText("share", "Share link")))
     }
 
+    private fun openCurrentPageExternally() {
+        if (!isSafeWebUrl(currentUrl)) return
+        try {
+            startActivity(Intent.createChooser(
+                Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl)),
+                localizedBrowserText("Abrir com", "Open with"),
+            ))
+        } catch (_: Exception) {
+            showBrowserSnackbar(localizedBrowserText("Não existe uma aplicação compatível.", "No compatible app is available."))
+        }
+    }
+
+    private fun copyCleanCurrentUrl() {
+        val uri = runCatching { Uri.parse(currentUrl) }.getOrNull() ?: return
+        val trackingKeys = setOf("fbclid", "gclid", "dclid", "_ga", "_gl", "mc_cid", "mc_eid", "ref", "ref_src", "source")
+        val builder = uri.buildUpon().clearQuery()
+        uri.queryParameterNames.forEach { key ->
+            val normalized = key.lowercase(Locale.ROOT)
+            if (normalized.startsWith("utm_") || normalized in trackingKeys) return@forEach
+            uri.getQueryParameters(key).forEach { value -> builder.appendQueryParameter(key, value) }
+        }
+        copyText(builder.build().toString())
+    }
+
+    private fun showReaderMode() {
+        val extractor = """
+            (() => {
+              const candidates = Array.from(document.querySelectorAll('article,main,[role="main"]'));
+              const root = candidates.sort((a,b) => (b.innerText || '').length - (a.innerText || '').length)[0] || document.body;
+              if (!root) return JSON.stringify({title:document.title || '',text:''});
+              const clone = root.cloneNode(true);
+              clone.querySelectorAll('script,style,nav,header,footer,form,button,iframe,video,audio,[hidden],[aria-hidden="true"]').forEach(n => n.remove());
+              const text = (clone.innerText || clone.textContent || '').replace(/\n{3,}/g,'\n\n').trim();
+              return JSON.stringify({title:document.title || '',text:text.slice(0,60000)});
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(extractor) { raw ->
+            val payload = runCatching {
+                val encoded = org.json.JSONTokener(raw ?: "null").nextValue() as? String
+                encoded?.let(::JSONObject)
+            }.getOrNull()
+            val article = payload?.optString("text").orEmpty()
+            if (article.isBlank()) {
+                showBrowserSnackbar(localizedBrowserText("Não foi possível extrair o texto principal.", "Could not extract the main text."))
+                return@evaluateJavascript
+            }
+            val title = payload?.optString("title")?.takeIf { it.isNotBlank() } ?: hostOf(currentUrl)
+            val content = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(20), dp(18), dp(20), dp(20))
+                background = rounded(pageBg, 24)
+            }
+            content.addView(TextView(this).apply {
+                text = title
+                textSize = 20f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setTextColor(primaryText)
+            }, LinearLayout.LayoutParams(-1, -2))
+            content.addView(TextView(this).apply {
+                text = hostOf(currentUrl)
+                textSize = 12f
+                setTextColor(secondaryText)
+                setPadding(0, dp(4), 0, dp(14))
+            }, LinearLayout.LayoutParams(-1, -2))
+            val body = TextView(this).apply {
+                text = article
+                textSize = 16f
+                setTextColor(primaryText)
+                setLineSpacing(dp(4).toFloat(), 1f)
+                setTextIsSelectable(true)
+            }
+            content.addView(ScrollView(this).apply {
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(body, ViewGroup.LayoutParams(-1, -2))
+            }, LinearLayout.LayoutParams(-1, dp(500)))
+            val dialog = BottomSheetDialog(this)
+            dialog.setContentView(content)
+            dialog.show()
+            dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        }
+    }
+
     private fun startDownload(
         url: String,
         userAgent: String?,
@@ -1986,28 +2804,16 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun isBlocked(uri: Uri): Boolean {
+    private fun isBlocked(uri: Uri, request: WebResourceRequest? = null): Boolean {
         val host = uri.host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
 
-        if (blockedDomains.any { host == it || host.endsWith(".$it") }) {
-            return true
-        }
+        if (blockedDomains.any { host == it || host.endsWith(".$it") }) return true
+        if (adBlockRules.shouldBlock(uri, currentUrl, request)) return true
 
         val labels = host.split('.').flatMap { it.split('-') }
+        if (labels.any { it in blockedHostLabels }) return true
 
-        val blockedLabels = setOf(
-            "ad", "ads", "adserver", "adservice",
-            "advertising", "banner", "popunder",
-            "tracking", "tracker", "pixel",
-            "beacon", "affiliate", "prebid"
-        )
-
-        if (labels.any { it in blockedLabels }) return true
-
-        return Regex(
-            "(?:^|/)(?:ads?|adserver|adservice|advertising|banners?|popunder|trackers?|tracking|pixels?|beacons?)(?:[/._-]|$)",
-            RegexOption.IGNORE_CASE
-        ).containsMatchIn(uri.encodedPath.orEmpty())
+        return adPathPattern.containsMatchIn(uri.encodedPath.orEmpty())
     }
 
     private fun recordBlockedRequest() {
@@ -2050,7 +2856,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             pageToolbarColor = null
             if (::toolbar.isInitialized) toolbar.setBackgroundColor(toolbarBg)
             if (::appBarContainer.isInitialized) appBarContainer.setBackgroundColor(toolbarBg)
-            if (::titlePill.isInitialized) titlePill.background = rippleBackground(toolbarPillColor(), 24)
+            if (::titlePill.isInitialized) titlePill.background = rounded(toolbarPillColor(), 24)
             if (::titleView.isInitialized) titleView.setTextColor(toolbarText())
             tintTabCountButton(toolbarText())
             tintMenuOptionsButton(toolbarText())
@@ -2084,7 +2890,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 applySystemBars()
                 toolbar.setBackgroundColor(toolbarBg)
                 appBarContainer.setBackgroundColor(toolbarBg)
-                titlePill.background = rippleBackground(toolbarPillColor(), 24)
+                titlePill.background = rounded(toolbarPillColor(), 24)
 
                 titleView.setTextColor(toolbarText())
                 tintTabCountButton(toolbarText())
@@ -2268,19 +3074,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         isFinishingWithResult = true
         persistTabState()
 
-        // Nunca guardar uma miniatura da página protegida (nem da página
-        // temporariamente autorizada) na grelha de separadores.
-        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
-            val privatePreview = createBlackPreview()
-            completeFinishToFlutter(
-                action,
-                newUrl,
-                privatePreview,
-                if (action == "tabs") privatePreview else null,
-            )
-            return
-        }
-
         if (incognito || previewOnly || !::webView.isInitialized) {
             completeFinishToFlutter(action, newUrl, null, null)
             return
@@ -2292,7 +3085,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 action,
                 newUrl,
                 pageThumbnail,
-                if (action == "tabs") fullScreenshot else null,
+                if (action == "tabs" || action == "home") fullScreenshot else null,
             )
         }
     }
@@ -2365,7 +3158,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     return@request
                 }
 
-                val full = encodeScreenshot(bitmap, 60)
+                val full = encodeScreenshot(bitmap, 72)
                 val location = IntArray(2)
                 webView.getLocationInWindow(location)
                 val left = location[0].coerceIn(0, bitmap.width - 1)
@@ -2377,7 +3170,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 } catch (_: Exception) {
                     null
                 }
-                val pageBytes = page?.let { encodeScreenshot(it, 58) }
+                val pageBytes = page?.let { encodeScreenshot(it, 68) }
                 page?.recycle()
                 bitmap.recycle()
                 onCaptured(pageBytes ?: takeThumbnail(), full ?: takeBrowserTransitionScreenshot())
@@ -2450,7 +3243,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun persistTabState() {
         val key = tabStateKey() ?: return
-        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) return
 
         if (!::webView.isInitialized || webView.url.isNullOrBlank()) {
             return
@@ -2489,16 +3281,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        if (isShowingBlockedPage || isTemporarilyUnlockedUrl(currentUrl)) {
-            // Android's task snapshot is captured around this lifecycle edge.
-            // Keep the blocked content out of Recents even on OEM launchers.
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE,
-            )
-            root.setBackgroundColor(Color.BLACK)
-            webView.setBackgroundColor(Color.BLACK)
-        }
         persistTabState()
         super.onPause()
     }
@@ -2532,7 +3314,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             target.draw(Canvas(bitmap))
 
             ByteArrayOutputStream().use { stream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 56, stream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 72, stream)
                 bitmap.recycle()
                 stream.toByteArray()
             }
@@ -2552,208 +3334,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
             webView.draw(Canvas(bitmap))
 
             ByteArrayOutputStream().use { stream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 58, stream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 68, stream)
                 bitmap.recycle()
                 stream.toByteArray()
             }
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun goBackSafely() {
-        val history = webView.copyBackForwardList()
-        val previousIndex = history.currentIndex - 1
-        val previousUrl = if (previousIndex >= 0) history.getItemAtIndex(previousIndex)?.url else null
-        if (!previousUrl.isNullOrBlank() && isUserBlockedUrl(previousUrl)) {
-            showBlockedPage(previousUrl)
-        } else {
-            webView.goBack()
-        }
-    }
-
-    private fun goForwardSafely() {
-        val history = webView.copyBackForwardList()
-        val nextIndex = history.currentIndex + 1
-        val nextUrl = if (nextIndex < history.size) history.getItemAtIndex(nextIndex)?.url else null
-        if (!nextUrl.isNullOrBlank() && isUserBlockedUrl(nextUrl)) {
-            showBlockedPage(nextUrl)
-        } else {
-            webView.goForward()
-        }
-    }
-
-    private fun loadUrlUnlessBlocked(url: String) {
-        if (isUserBlockedUrl(url)) {
-            showBlockedPage(url)
-        } else {
-            isShowingBlockedPage = false
-            pendingBlockedUrl = null
-            pendingBlockedHost = null
-            webView.loadUrl(url)
-        }
-    }
-
-    private fun isUserBlockedUrl(url: String): Boolean {
-        val host = normalizedHost(url) ?: return false
-        val configured = prefs.getString("flutter.looply_blocked_sites_v1", null).orEmpty()
-        if (lastBlockedRulesSnapshot != configured) {
-            temporarilyUnlockedHosts.clear()
-            lastBlockedRulesSnapshot = configured
-        }
-        if (temporarilyUnlockedHosts.any { host == it || host.endsWith(".$it") }) return false
-        if (configured.isBlank()) return false
-        val blocked = runCatching {
-            val array = org.json.JSONArray(configured)
-            (0 until array.length()).mapNotNull { index ->
-                array.optString(index)
-                    .trim()
-                    .lowercase(Locale.ROOT)
-                    .removePrefix("www.")
-                    .takeIf(String::isNotBlank)
-            }
-        }.getOrDefault(emptyList())
-        return blocked.any { host == it || host.endsWith(".$it") }
-    }
-
-    private fun normalizedHost(url: String): String? =
-        runCatching { Uri.parse(url).host?.lowercase(Locale.ROOT)?.removePrefix("www.") }
-            .getOrNull()
-            ?.takeIf(String::isNotBlank)
-
-    private fun isTemporarilyUnlockedUrl(url: String): Boolean {
-        val host = normalizedHost(url) ?: return false
-        return temporarilyUnlockedHosts.any { host == it || host.endsWith(".$it") }
-    }
-
-    private fun createBlackPreview(): ByteArray? {
-        return runCatching {
-            val bitmap = Bitmap.createBitmap(48, 80, Bitmap.Config.ARGB_8888)
-            bitmap.eraseColor(Color.BLACK)
-            ByteArrayOutputStream().use { stream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 45, stream)
-                bitmap.recycle()
-                stream.toByteArray()
-            }
-        }.getOrNull()
-    }
-
-    private fun showBlockedPage(url: String) {
-        val rawHost = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
-            ?: "this site"
-        val host = rawHost.replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
-        pendingBlockedUrl = url
-        pendingBlockedHost = rawHost
-        isShowingBlockedPage = true
-        currentUrl = url
-        val pageTitle = menuText("blockedPageTitle", "Page unavailable for security reasons")
-        currentTitle = pageTitle
-        pageToolbarColor = null
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        webView.stopLoading()
-        progressAnimator?.cancel()
-        progress.visibility = View.GONE
-        progress.alpha = 1f
-        if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
-
-        val background = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and pageBg)
-        val foreground = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and primaryText)
-        val muted = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and secondaryText)
-        val surfaceColor = when {
-            !dark -> Color.rgb(241, 243, 244)
-            pureBlack -> Color.rgb(25, 25, 25)
-            else -> Color.rgb(43, 45, 48)
-        }
-        val surface = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and surfaceColor)
-        val accentColor = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and accent)
-        val language = menuText("language", "pt").replace(Regex("[^A-Za-z-]"), "").ifBlank { "pt" }
-        val message = android.text.Html.escapeHtml(
-            menuText("blockedPageMessage", "The domain {site} is blocked in this browser.")
-        ).replace("{site}", "<b>$host</b>")
-        val title = android.text.Html.escapeHtml(pageTitle)
-        val unlock = android.text.Html.escapeHtml(
-            menuText("blockedPageUnlock", "Temporarily unblock")
-        )
-        val colorScheme = if (dark) "dark" else "light"
-        val html = """
-            <!doctype html><html lang="$language"><head>
-            <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-            <meta name="color-scheme" content="$colorScheme">
-            <title>$title</title>
-            <style>
-              :root{color-scheme:$colorScheme;--page:$background;--fg:$foreground;--muted:$muted;--surface:$surface;--accent:$accentColor}
-              *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--page);color:var(--fg)}
-              body{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:28px 22px;
-              font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-              main{width:min(100%,420px);text-align:center}
-              .icon{width:68px;height:68px;margin:0 auto 22px;border-radius:22px;background:var(--surface);
-              display:grid;place-items:center;font-size:30px;color:var(--accent)}
-              h1{font-size:23px;line-height:1.22;letter-spacing:-.35px;margin:0 0 12px;font-weight:700}
-              p{color:var(--muted);line-height:1.55;margin:0 0 26px;overflow-wrap:anywhere}
-              a{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 25px;
-              border-radius:999px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700}
-              a:active{opacity:.82}
-            </style></head><body><main><div class="icon">⛨</div>
-            <h1>$title</h1><p>$message</p>
-            <a href="browseit-security://unlock">$unlock</a></main></body></html>
-        """.trimIndent()
-        webView.loadDataWithBaseURL("https://browseit.invalid/", html, "text/html", "UTF-8", null)
-        refreshTitle()
-        updateToolbarColors()
-    }
-
-    private fun requestSecurityUnlock() {
-        val host = pendingBlockedHost ?: return
-        if (!BrowserSecurityStore.hasCredential(this)) {
-            Toast.makeText(this, menuText("securitySetupRequired", "Set up a PIN or password in Security first."), Toast.LENGTH_LONG).show()
-            return
-        }
-        val mode = BrowserSecurityStore.credentialMode(this)
-        val field = EditText(this).apply {
-            hint = if (mode == "pin") "PIN" else menuText("password", "Password")
-            inputType = if (mode == "pin") InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-                        else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            isSingleLine = true
-            setTextColor(primaryText)
-            setHintTextColor(secondaryText)
-        }
-        val messageKey = if (mode == "pin") "unlockPinMessage" else "unlockPasswordMessage"
-        val message = menuText(messageKey, "Enter your credential to open {site} during this session.")
-            .replace("{site}", host)
-        val dialog = looplyMaterialDialogBuilder()
-            .setTitle(menuText("unlockSiteTitle", "Unblock site"))
-            .setMessage(message)
-            .setView(field)
-            .setNegativeButton(menuText("cancel", "Cancel"), null)
-            .setPositiveButton(menuText("unlock", "Unblock"), null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val candidate = field.text?.toString().orEmpty()
-                if (BrowserSecurityStore.verify(this, candidate)) {
-                    temporarilyUnlockedHosts.add(host.lowercase(Locale.ROOT))
-                    val target = pendingBlockedUrl
-                    isShowingBlockedPage = false
-                    pendingBlockedUrl = null
-                    pendingBlockedHost = null
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                    root.setBackgroundColor(pageBg)
-                    webView.setBackgroundColor(pageBg)
-                    dialog.dismiss()
-                    if (!target.isNullOrBlank()) {
-                        currentUrl = target
-                        webView.loadUrl(target)
-                    }
-                } else {
-                    field.error = menuText("invalidUnlock", "Incorrect PIN or password.")
-                    field.text?.clear()
-                }
-            }
-        }
-        dialog.show()
-        applyLooplyDialogDim(dialog)
-        field.requestFocus()
     }
 
     private fun hostOf(url: String): String {
@@ -2766,15 +3353,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             cornerRadius = dp(radiusDp).toFloat()
             setColor(color)
         }
-    }
-
-    private fun rippleBackground(color: Int, radiusDp: Int): RippleDrawable {
-        val ripple = if (dark) Color.argb(38, 255, 255, 255) else Color.argb(30, 0, 0, 0)
-        return RippleDrawable(
-            ColorStateList.valueOf(ripple),
-            rounded(color, radiusDp),
-            rounded(Color.WHITE, radiusDp),
-        )
     }
 
     private fun selectableBackground(): android.graphics.drawable.Drawable? {

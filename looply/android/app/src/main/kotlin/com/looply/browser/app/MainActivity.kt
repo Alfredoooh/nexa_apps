@@ -117,6 +117,10 @@ class MainActivity : FlutterActivity() {
     private var nativeStatsChannel: MethodChannel? = null
     private var nativeUiChannel: MethodChannel? = null
     private lateinit var appPreferences: SharedPreferences
+    private var appSplashOverlay: View? = null
+    private var appSplashAnimationComplete = false
+    private var appFlutterUiReady = false
+    private var appSplashHideStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // O Android guarda o modo de aparência escolhido pela aplicação.
@@ -124,16 +128,97 @@ class MainActivity : FlutterActivity() {
         // do splash acompanhem a preferência da Looply, não apenas o tema global.
         val savedMode = readSavedThemeMode()
         val savedPureBlack = readSavedPureBlack()
+        val savedDark = isAppDarkTheme(savedMode)
+        // Choose an explicit launch theme from BrowseIt's stored preference.
+        // This prevents older Android versions from selecting the splash solely
+        // from the device's uiMode qualifier.
+        setTheme(if (savedDark) R.style.LaunchTheme_Dark else R.style.LaunchTheme_Light)
         applyApplicationNightMode(savedMode)
         extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
 
-        // Splash agora é 100% nativo (LaunchTheme / windowSplashScreen*):
-        // nenhuma View Kotlin é desenhada por cima. applyWindowTheme só
-        // ajusta as cores de status/navigation bar para a Activity.
+        // O LaunchTheme fornece o splash nativo do Android; este overlay curto
+        // garante que o fundo respeita a preferência interna do BrowseIt também
+        // nas versões em que o Android só disponibiliza o tema do sistema.
         applyWindowTheme(savedMode, savedPureBlack)
+        showAppPreferenceSplash(savedMode, savedPureBlack)
 
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun isAppDarkTheme(mode: String): Boolean = when (mode) {
+        "dark" -> true
+        "light" -> false
+        else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+    }
+
+    private fun showAppPreferenceSplash(mode: String, pureBlack: Boolean) {
+        // Splash uses exactly two surfaces, independently of AMOLED settings:
+        // white for the app's light mode and BrowseIt's dark charcoal otherwise.
+        val background = if (isAppDarkTheme(mode)) Color.rgb(23, 24, 26) else Color.WHITE
+
+        // The Android launch window is resource-qualified by the app's night
+        // mode. This overlay closes the pre-Android-12 gap where older Android
+        // versions only expose the device's system night qualifier.
+        window.setBackgroundDrawable(ColorDrawable(background))
+        window.statusBarColor = background
+        window.navigationBarColor = background
+
+        val decor = window.decorView as? ViewGroup ?: run {
+            appSplashAnimationComplete = true
+            return
+        }
+        val density = resources.displayMetrics.density
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(background)
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        val icon = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+        }
+        overlay.addView(
+            icon,
+            FrameLayout.LayoutParams((148 * density).toInt(), (148 * density).toInt(), Gravity.CENTER),
+        )
+        decor.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+        appSplashOverlay = overlay
+
+        icon.playSplashCircle {
+            appSplashAnimationComplete = true
+            maybeHideAppPreferenceSplash()
+        }
+
+        // A broken OEM AnimatedImageDrawable must never leave a permanent
+        // cover over the first Flutter frame.
+        mainHandler.postDelayed({
+            appSplashAnimationComplete = true
+            appFlutterUiReady = true
+            maybeHideAppPreferenceSplash()
+        }, 5_000L)
+    }
+
+    private fun maybeHideAppPreferenceSplash() {
+        if (!appSplashAnimationComplete || !appFlutterUiReady || appSplashHideStarted) return
+        appSplashHideStarted = true
+        val overlay = appSplashOverlay ?: return
+        overlay.animate()
+            .alpha(0f)
+            .setDuration(150L)
+            .withEndAction {
+                (overlay.parent as? ViewGroup)?.removeView(overlay)
+                if (appSplashOverlay === overlay) appSplashOverlay = null
+            }
+            .start()
+    }
+
+    override fun onFlutterUiDisplayed() {
+        super.onFlutterUiDisplayed()
+        appFlutterUiReady = true
+        maybeHideAppPreferenceSplash()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -159,6 +244,13 @@ class MainActivity : FlutterActivity() {
                     "setAppThemeMode" -> {
                         val mode = call.argument<String>("mode") ?: "system"
                         val pureBlack = call.argument<Boolean>("pureBlack") ?: false
+                        // Persist synchronously on the native side as well. The
+                        // next process launch can select the correct launch theme
+                        // before Flutter initializes SharedPreferences.
+                        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                            .putString(PREF_THEME_MODE, mode)
+                            .putBoolean("flutter.looply_theme_pure_dark", pureBlack)
+                            .apply()
                         applyApplicationNightMode(mode)
                         applyWindowTheme(mode, pureBlack)
                         result.success(true)
@@ -175,17 +267,6 @@ class MainActivity : FlutterActivity() {
                     "isDefaultBrowser" -> result.success(isDefaultBrowser())
                     "requestDefaultBrowser" -> result.success(requestDefaultBrowser())
                     "getAiSearchEnabled" -> result.success(readAiSearchEnabled())
-                    "hasBrowserSecurityCredential" -> result.success(BrowserSecurityStore.hasCredential(this))
-                    "getBrowserSecurityCredentialMode" -> result.success(BrowserSecurityStore.credentialMode(this))
-                    "verifyBrowserSecurityCredential" -> {
-                        val secret = call.argument<String>("secret") ?: ""
-                        result.success(BrowserSecurityStore.verify(this, secret))
-                    }
-                    "setBrowserSecurityCredential" -> {
-                        val mode = call.argument<String>("mode") ?: ""
-                        val secret = call.argument<String>("secret") ?: ""
-                        result.success(BrowserSecurityStore.setCredential(this, mode, secret))
-                    }
                     else -> result.notImplemented()
                 }
             }
@@ -226,16 +307,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        if (level == android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
-            // O bloqueio temporário só existe enquanto a aplicação está em primeiro plano.
-            OrbitBrowserActivity.clearTemporarySiteUnlocks()
-        }
-    }
-
     override fun onDestroy() {
-        if (isFinishing) OrbitBrowserActivity.clearTemporarySiteUnlocks()
+        appSplashOverlay?.let { overlay ->
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+        }
+        appSplashOverlay = null
         nativeStatsChannel = null
         nativeUiChannel = null
         nativeDownloadChannel = null
@@ -318,7 +394,7 @@ class MainActivity : FlutterActivity() {
             else -> Color.rgb(23, 24, 26)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
-        window.statusBarColor = Color.TRANSPARENT
+        window.statusBarColor = background
         window.navigationBarColor = background
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")
