@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+    <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:statusBarColor">@color/looply_splash_background</item>
         <item name="android:navigationBarColor">@color/looply_splash_background</item>
     </style>
     <!-- Launch themes selected from the app's saved theme preference by MainActivity. -->
-    <style name="LaunchTheme.Light" parent="@android:style/Theme.Black.NoTitleBar">
+    <style name="LaunchTheme.Light" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
         <item name="android:statusBarColor">@color/looply_splash_light</item>
         <item name="android:navigationBarColor">@color/looply_splash_light</item>
@@ -15,7 +15,7 @@
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowNoTitle">true</item>
     </style>
-    <style name="LaunchTheme.Dark" parent="@android:style/Theme.Black.NoTitleBar">
+    <style name="LaunchTheme.Dark" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
         <item name="android:statusBarColor">@color/looply_splash_dark</item>
         <item name="android:navigationBarColor">@color/looply_splash_dark</item>
@@ -24,7 +24,7 @@
         <item name="android:windowNoTitle">true</item>
     </style>
 
-    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+    <style name="NormalTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/looply_splash_background</item>
         <item name="android:statusBarColor">@color/looply_splash_background</item>
         <item name="android:navigationBarColor">@color/looply_splash_background</item>

@@ -272,6 +272,17 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           ShellTabRequest.instance.requestBrowser(nextTab.id);
           return;
 
+        case 'newIncognitoTab':
+          final newUrl = (data['newUrl'] as String?)?.trim();
+          final nextTab = tabsController.createBrowserTab(
+            newUrl?.isNotEmpty == true ? newUrl! : 'https://www.google.com',
+            title: appText('private_tab'),
+            isIncognito: true,
+          );
+          tabsController.activate(nextTab.id);
+          ShellTabRequest.instance.requestBrowser(nextTab.id);
+          return;
+
         case 'bookmark':
           if (!widget.isIncognito) {
             bookmarksController.add(currentTitle, currentUrl);

@@ -227,18 +227,18 @@ class _SignedInAvatar extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(3),
             child: CircleAvatar(
-              radius: 20,
+              radius: 18,
               backgroundColor: background,
               child: ClipOval(
                 child: user.photoUrl != null && user.photoUrl!.isNotEmpty
                     ? Image.network(
                         user.photoUrl!,
-                        width: 40,
-                        height: 40,
+                        width: 36,
+                        height: 36,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 36, height: 36, fit: BoxFit.cover),
                       )
-                    : Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                    : Image.asset('images/avatar.png', width: 36, height: 36, fit: BoxFit.cover),
               ),
             ),
           ),

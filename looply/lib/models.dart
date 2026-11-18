@@ -860,6 +860,19 @@ class TabsController extends ChangeNotifier {
     IconData icon,
     Uint8List? thumbnail,
   ) {
+    // O ecrã interno do Looply é uma única aba de aplicação. Ao atualizar a
+    // entrada, limpa cartões antigos criados por versões que separavam Início,
+    // Atividade e Jogos em abas diferentes.
+    final obsoleteAppTabs = _tabs
+        .where((tab) => tab.kind == TabKind.appScreen && tab.url != screenKey)
+        .toList(growable: false);
+    if (obsoleteAppTabs.isNotEmpty) {
+      final obsoleteIds = obsoleteAppTabs.map((tab) => tab.id).toSet();
+      _tabs.removeWhere((tab) => obsoleteIds.contains(tab.id));
+      for (final id in obsoleteIds) {
+        unawaited(_deleteTabSnapshot(id));
+      }
+    }
     final existing = getAppScreen(screenKey);
     if (existing != null) {
       existing.appScreenLabel = label;
@@ -985,6 +998,17 @@ class TabsController extends ChangeNotifier {
   BrowserTab? getAppScreen(String screenKey) {
     for (final tab in _tabs) {
       if (tab.kind == TabKind.appScreen && tab.url == screenKey) return tab;
+    }
+    return null;
+  }
+
+  BrowserTab? getAiSearchTab({bool isIncognito = false}) {
+    for (final tab in _tabs) {
+      if (tab.isIncognito == isIncognito &&
+          tab.kind != TabKind.appScreen &&
+          tab.url.startsWith('looply://ai-search')) {
+        return tab;
+      }
     }
     return null;
   }

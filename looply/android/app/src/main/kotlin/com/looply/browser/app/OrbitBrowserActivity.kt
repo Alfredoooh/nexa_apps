@@ -1,16 +1,19 @@
 package com.looply.browser.app
 
 import android.app.Activity
+import android.app.Dialog
 import android.animation.ValueAnimator
 import android.app.DownloadManager
 import android.content.Context
 import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.webkit.MimeTypeMap
 import android.net.Uri
@@ -88,6 +91,7 @@ private data class BrowserElementHit(
     val pageUrl: String = "",
     val title: String = "",
     val description: String = "",
+    val thumbnailUrl: String = "",
 )
 
 class OrbitBrowserActivity : AppCompatActivity() {
@@ -206,9 +210,21 @@ class OrbitBrowserActivity : AppCompatActivity() {
             })();
         """.trimIndent()
 
-        private const val DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        private const val DESKTOP_VIEWPORT_SCRIPT = """
+            (() => {
+              try {
+                let viewport = document.querySelector('meta[name="viewport"]');
+                if (!viewport) {
+                  viewport = document.createElement('meta');
+                  viewport.name = 'viewport';
+                  document.head.appendChild(viewport);
+                }
+                viewport.content = 'width=1280, initial-scale=0.8, minimum-scale=0.25, maximum-scale=5, user-scalable=yes';
+                document.documentElement.style.minWidth = '980px';
+                document.body && (document.body.style.minWidth = '980px');
+              } catch (_) {}
+            })();
+        """
 
         private val blockedHostLabels = setOf(
             "ad", "ads", "adserver", "adservice", "advertising", "banner",
@@ -305,6 +321,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var titleView: TextView
     private lateinit var progress: ProgressBar
     private lateinit var webView: WebView
+    private lateinit var homeButtonIcon: TextView
     private lateinit var findBar: LinearLayout
     private lateinit var findField: EditText
     private lateinit var tabsButton: android.widget.FrameLayout
@@ -518,10 +535,21 @@ class OrbitBrowserActivity : AppCompatActivity() {
             setBackgroundColor(toolbarBg)
         }
 
-        val home = actionButton("home", "Início") {
-            finishToFlutter("home")
+        homeButtonIcon = MaterialSymbolsRounded.textView(
+            this,
+            "home",
+            toolbarText(),
+            26f,
+            "Início",
+        )
+        val home = android.widget.FrameLayout(this).apply {
+            contentDescription = "Início"
+            isClickable = true
+            isFocusable = true
+            background = selectableBackground()
+            addView(homeButtonIcon, android.widget.FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
+            setOnClickListener { finishToFlutter("home") }
         }
-
         toolbar.addView(home, LinearLayout.LayoutParams(dp(42), dp(46)))
 
         titlePill = LinearLayout(this).apply {
@@ -1095,6 +1123,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 refreshTitle()
                 updateToolbarColors()
                 view.evaluateJavascript(MEDIA_COMPATIBILITY_SCRIPT, null)
+                if (desktopMode) view.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
                 if (adBlockEnabled) {
                     view.evaluateJavascript(AD_COSMETIC_FILTER_SCRIPT, null)
                 }
@@ -1485,7 +1514,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         this@OrbitBrowserActivity,
                         glyph,
                         primaryText,
-                        dp(24),
+                        dp(27),
                     )
                 )
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -1496,7 +1525,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 isFocusable = enabled
                 alpha = if (enabled) 1f else .38f
                 background = rounded(quickSurface, 999)
-                addView(icon, android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+                addView(icon, android.widget.FrameLayout.LayoutParams(dp(27), dp(27), Gravity.CENTER))
                 setOnClickListener {
                     if (enabled) {
                         popupWindowRef?.dismiss()
@@ -1571,12 +1600,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
                                 this@OrbitBrowserActivity,
                                 glyph,
                                 secondaryText,
-                                dp(24),
+                                dp(27),
                             )
                         )
                         scaleType = ImageView.ScaleType.FIT_CENTER
                     },
-                    LinearLayout.LayoutParams(dp(24), dp(24)),
+                    LinearLayout.LayoutParams(dp(27), dp(27)),
                 )
                 addView(View(this@OrbitBrowserActivity), LinearLayout.LayoutParams(dp(12), 1))
                 addView(
@@ -1684,11 +1713,21 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (popupWindowRef === popup) popupWindowRef = null
         }
 
-        // Ancoragem real ao botão de menu (alinhada pela extremidade direita).
-        // O próprio Android decide se a janela abre abaixo ou acima quando
-        // necessário e mantém a relação com o anchor durante deslocamentos.
-        // A entrada/saída continua a usar os Fade transitions nativos.
-        popup.showAsDropDown(anchor, -dp(8), dp(5), Gravity.END)
+        // Coloca o menu sobre o próprio botão de overflow, alinhando a borda
+        // direita ao ícone. Assim o popup cobre o botão em vez de nascer abaixo.
+        val anchorLocation = IntArray(2)
+        anchor.getLocationOnScreen(anchorLocation)
+        val visibleFrame = Rect()
+        anchor.getWindowVisibleDisplayFrame(visibleFrame)
+        val popupX = (anchorLocation[0] + anchor.width - popupWidth)
+            .coerceAtLeast(dp(8))
+        val preferredY = anchorLocation[1]
+        val popupY = if (preferredY + popupHeight > visibleFrame.bottom) {
+            (anchorLocation[1] + anchor.height - popupHeight).coerceAtLeast(visibleFrame.top)
+        } else {
+            preferredY.coerceAtLeast(visibleFrame.top)
+        }
+        popup.showAtLocation(root, Gravity.TOP or Gravity.LEFT, popupX, popupY)
     }
 
     private var popupWindowRef: PopupWindow? = null
@@ -1760,10 +1799,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
                   : img ? (img.currentSrc || img.src || img.getAttribute('src') || '')
                   : source ? (source.src || '') : '';
                 const kind = video ? 'video' : audio ? 'audio' : img ? 'image' : a ? 'link' : 'other';
+                const thumbnail = video ? (video.poster || '') : img ? (img.currentSrc || img.src || '') : '';
                 return JSON.stringify({
                   kind: kind,
                   link: a ? (a.href || '') : '',
                   media: mediaUrl,
+                  thumbnail: thumbnail,
                   page: location.href,
                   title: document.title || '',
                   description: img ? (img.alt || '') : (e.getAttribute('aria-label') || e.textContent || '')
@@ -1798,6 +1839,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 pageUrl = payload.optString("page", currentUrl),
                 title = payload.optString("title"),
                 description = payload.optString("description"),
+                thumbnailUrl = payload.optString("thumbnail"),
             )
             if (hit.kind != "other" || hit.linkUrl.isNotBlank() || hit.mediaUrl.isNotBlank()) {
                 showElementSheet(hit)
@@ -1822,153 +1864,216 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }.ifBlank { hit.pageUrl }
         if (!isSafeWebUrl(primaryTarget)) return
 
-        val dialog = BottomSheetDialog(this)
-        val content = LinearLayout(this).apply {
+        val dialog = Dialog(this)
+        val surface = if (!dark) Color.WHITE else if (pureBlack) Color.rgb(28, 28, 30) else Color.rgb(53, 55, 64)
+        val divider = if (!dark) Color.rgb(225, 227, 230) else Color.rgb(77, 79, 88)
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(16), dp(18), dp(20))
-            background = rounded(pageBg, 22)
+            background = rounded(surface, 25)
+            clipToOutline = true
         }
-        val title = when {
-            isImage -> localizedBrowserText("Imagem", "Image")
-            isVideo -> localizedBrowserText("Vídeo", "Video")
-            isAudio -> localizedBrowserText("Áudio", "Audio")
-            isLink -> localizedBrowserText("Ligação", "Link")
-            else -> localizedBrowserText("Conteúdo da página", "Page content")
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
         }
-        content.addView(
-            TextView(this).apply {
-                text = title
-                textSize = 17f
+        val thumb = ImageView(this).apply {
+            scaleType = if (isImage || isVideo) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.CENTER_INSIDE
+            background = rounded(if (dark) Color.rgb(44, 46, 54) else Color.rgb(239, 241, 244), if (isImage || isVideo) 3 else 999)
+            clipToOutline = true
+        }
+        val thumbnailUrl = when {
+            hit.thumbnailUrl.isNotBlank() -> hit.thumbnailUrl
+            isImage -> hit.mediaUrl
+            isLink -> runCatching {
+                val host = Uri.parse(primaryTarget).host.orEmpty()
+                if (host.isBlank()) "" else "https://www.google.com/s2/favicons?domain=${Uri.encode(host)}&sz=128"
+            }.getOrDefault("")
+            else -> ""
+        }
+        if (isImage || isVideo) {
+            header.addView(thumb, LinearLayout.LayoutParams(dp(100), dp(68)))
+        } else {
+            val hostInitial = Uri.parse(primaryTarget).host.orEmpty().removePrefix("www.").firstOrNull()?.uppercaseChar()?.toString() ?: "•"
+            val fallback = TextView(this).apply {
+                text = hostInitial
+                textSize = 21f
+                gravity = Gravity.CENTER
+                setTextColor(if (dark) Color.WHITE else Color.rgb(45, 48, 54))
+                background = rounded(if (dark) Color.rgb(68, 71, 80) else Color.rgb(225, 228, 232), 999)
+            }
+            val thumbFrame = android.widget.FrameLayout(this).apply {
+                addView(fallback, android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.CENTER))
+                addView(thumb, android.widget.FrameLayout.LayoutParams(dp(54), dp(54), Gravity.CENTER))
+                thumb.alpha = 0f
+            }
+            header.addView(thumbFrame, LinearLayout.LayoutParams(dp(58), dp(58)))
+        }
+
+        val headerText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, 0, 0)
+        }
+        val host = Uri.parse(primaryTarget).host.orEmpty().removePrefix("www.")
+        val heading = when {
+            hit.description.isNotBlank() -> hit.description.replace(Regex("\\s+"), " ").trim()
+            hit.title.isNotBlank() && !isImage && !isVideo -> hit.title
+            isImage -> localizedBrowserText("Imagem selecionada", "Selected image")
+            isVideo -> localizedBrowserText("Vídeo selecionado", "Selected video")
+            isAudio -> localizedBrowserText("Áudio selecionado", "Selected audio")
+            else -> host.ifBlank { localizedBrowserText("Ligação", "Link") }
+        }
+        headerText.addView(TextView(this).apply {
+            text = heading
+            textSize = 15.5f
+            setTextColor(primaryText)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(-1, -2))
+        headerText.addView(TextView(this).apply {
+            text = primaryTarget
+            textSize = 12.5f
+            setTextColor(secondaryText)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            setPadding(0, dp(5), 0, 0)
+        }, LinearLayout.LayoutParams(-1, -2))
+        header.addView(headerText, LinearLayout.LayoutParams(0, -2, 1f))
+        card.addView(header, LinearLayout.LayoutParams(-1, -2))
+        card.addView(View(this).apply { setBackgroundColor(divider) }, LinearLayout.LayoutParams(-1, dp(1)))
+
+        val actionScroll = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+        }
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        fun action(label: String, callback: () -> Unit) {
+            val row = TextView(this).apply {
+                text = label
+                textSize = 16f
                 setTextColor(primaryText)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                maxLines = 1
-            },
-            LinearLayout.LayoutParams(-1, dp(34))
-        )
-        content.addView(
-            TextView(this).apply {
-                text = hit.description.ifBlank { primaryTarget }
-                textSize = 12f
-                setTextColor(secondaryText)
+                gravity = Gravity.CENTER_VERTICAL
+                includeFontPadding = false
                 maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            },
-            LinearLayout.LayoutParams(-1, dp(42))
-        )
+                setPadding(dp(22), dp(8), dp(18), dp(8))
+                minHeight = dp(56)
+                background = selectableBackground()
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    dialog.dismiss()
+                    callback()
+                }
+            }
+            actions.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
 
         if (isImage) {
-            addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar imagem", "Preview image")) {
-                dialog.dismiss()
-                showMediaPreviewDialog(hit.mediaUrl, "image")
-            }
-            addSheetItem(content, "share", localizedBrowserText("Partilhar imagem", "Share image")) {
-                dialog.dismiss()
-                shareRemoteImage(hit.mediaUrl)
-            }
-            addSheetItem(content, "link", localizedBrowserText("Partilhar ligação da imagem", "Share image link")) {
-                dialog.dismiss()
-                shareText(hit.mediaUrl)
-            }
-            addSheetItem(content, "content_copy", localizedBrowserText("Copiar endereço da imagem", "Copy image address")) {
-                dialog.dismiss()
-                copyText(hit.mediaUrl)
-            }
-            addSheetItem(content, "download", menuText("downloadImage", "Download image")) {
-                dialog.dismiss()
-                startDownload(hit.mediaUrl, null, null, "image/*")
-            }
-            addSheetItem(content, "open_in_new", localizedBrowserText("Abrir imagem numa nova aba", "Open image in new tab")) {
-                dialog.dismiss()
+            action(localizedBrowserText("Abrir imagem num novo separador", "Open image in new tab")) {
                 finishToFlutter("newTab", hit.mediaUrl)
             }
-            if (isLink && isSafeWebUrl(hit.linkUrl) && hit.linkUrl != hit.mediaUrl) {
-                addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página ligada", "Preview linked page")) {
-                    dialog.dismiss()
-                    showLinkPreviewDialog(hit.linkUrl)
-                }
-                addSheetItem(content, "share", localizedBrowserText("Partilhar ligação da página", "Share linked page")) {
-                    dialog.dismiss()
-                    shareText(hit.linkUrl)
-                }
-                addSheetItem(content, "open_in_new", localizedBrowserText("Abrir página ligada numa nova aba", "Open linked page in new tab")) {
-                    dialog.dismiss()
-                    finishToFlutter("newTab", hit.linkUrl)
-                }
+            action(localizedBrowserText("Pré-visualizar imagem", "Preview image")) {
+                showMediaPreviewDialog(hit.mediaUrl, "image")
             }
+            action(localizedBrowserText("Copiar imagem", "Copy image")) { copyText(hit.mediaUrl) }
+            action(localizedBrowserText("Transferir imagem", "Download image")) {
+                startDownload(hit.mediaUrl, null, null, "image/*")
+            }
+            action(localizedBrowserText("Pesquisar a imagem no Google", "Search image with Google")) {
+                finishToFlutter("newTab", "https://lens.google.com/uploadbyurl?url=${Uri.encode(hit.mediaUrl)}")
+            }
+            action(localizedBrowserText("Partilhar imagem", "Share image")) { shareRemoteImage(hit.mediaUrl) }
         } else if (isVideo || isAudio) {
-            addSheetItem(content, "play_circle", localizedBrowserText("Pré-visualizar conteúdo", "Preview media")) {
-                dialog.dismiss()
+            val mediaLabel = if (isVideo) "vídeo" else "áudio"
+            val mediaLabelEn = if (isVideo) "video" else "audio"
+            action(localizedBrowserText("Abrir $mediaLabel num novo separador", "Open $mediaLabelEn in new tab")) {
+                finishToFlutter("newTab", hit.mediaUrl)
+            }
+            action(localizedBrowserText("Pré-visualizar $mediaLabel", "Preview $mediaLabelEn")) {
                 showMediaPreviewDialog(hit.mediaUrl, hit.kind)
             }
-            addSheetItem(content, "share", if (isVideo) localizedBrowserText("Partilhar ligação do vídeo", "Share video link") else localizedBrowserText("Partilhar ligação do áudio", "Share audio link")) {
-                dialog.dismiss()
-                shareText(hit.mediaUrl)
-            }
+            action(localizedBrowserText("Copiar ligação do $mediaLabel", "Copy $mediaLabelEn link")) { copyText(hit.mediaUrl) }
             if (isDirectMediaUrl(hit.mediaUrl)) {
-                addSheetItem(content, "download", if (isVideo) localizedBrowserText("Partilhar ficheiro de vídeo", "Share video file") else localizedBrowserText("Partilhar ficheiro de áudio", "Share audio file")) {
-                    dialog.dismiss()
-                    shareRemoteMedia(hit.mediaUrl, if (isVideo) "video/*" else "audio/*")
-                }
-            }
-            addSheetItem(content, "content_copy", if (isVideo) localizedBrowserText("Copiar ligação do vídeo", "Copy video link") else localizedBrowserText("Copiar ligação do áudio", "Copy audio link")) {
-                dialog.dismiss()
-                copyText(hit.mediaUrl)
-            }
-            if (isDirectMediaUrl(hit.mediaUrl)) {
-                addSheetItem(content, "download", localizedBrowserText("Transferir conteúdo", "Download media")) {
-                    dialog.dismiss()
+                action(localizedBrowserText("Transferir $mediaLabel", "Download $mediaLabelEn")) {
                     startDownload(hit.mediaUrl, null, null, if (isVideo) "video/*" else "audio/*")
                 }
             }
-            addSheetItem(content, "open_in_new", localizedBrowserText("Abrir conteúdo numa nova aba", "Open media in new tab")) {
-                dialog.dismiss()
-                finishToFlutter("newTab", hit.mediaUrl)
-            }
-            if (isLink && isSafeWebUrl(hit.linkUrl) && hit.linkUrl != hit.mediaUrl) {
-                addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página ligada", "Preview linked page")) {
-                    dialog.dismiss()
-                    showLinkPreviewDialog(hit.linkUrl)
-                }
-                addSheetItem(content, "share", localizedBrowserText("Partilhar ligação da página", "Share linked page")) {
-                    dialog.dismiss()
-                    shareText(hit.linkUrl)
-                }
-                addSheetItem(content, "open_in_new", localizedBrowserText("Abrir página ligada numa nova aba", "Open linked page in new tab")) {
-                    dialog.dismiss()
-                    finishToFlutter("newTab", hit.linkUrl)
-                }
-            }
+            action(localizedBrowserText("Partilhar ligação do $mediaLabel", "Share $mediaLabelEn link")) { shareText(hit.mediaUrl) }
         } else {
-            val link = hit.linkUrl.ifBlank { hit.pageUrl }
-            addSheetItem(content, "visibility", localizedBrowserText("Pré-visualizar página", "Preview page")) {
-                dialog.dismiss()
-                showLinkPreviewDialog(link)
-            }
-            addSheetItem(content, "arrow_forward", localizedBrowserText("Abrir nesta aba", "Open in this tab")) {
-                dialog.dismiss()
-                loadAddress(link)
-            }
-            addSheetItem(content, "open_in_new", menuText("openNewTab", "Open in new tab")) {
-                dialog.dismiss()
+            val link = hit.linkUrl.ifBlank { primaryTarget }
+            action(localizedBrowserText("Abrir num novo separador", "Open in new tab")) {
                 finishToFlutter("newTab", link)
             }
-            addSheetItem(content, "content_copy", menuText("copyLink", "Copy link")) {
-                dialog.dismiss()
-                copyText(link)
+            action(localizedBrowserText("Abrir no separador de navegação anónima", "Open in incognito tab")) {
+                finishToFlutter("newIncognitoTab", link)
             }
-            addSheetItem(content, "share", menuText("share", "Share link")) {
-                dialog.dismiss()
-                shareText(link)
+            action(localizedBrowserText("Pré-visualizar página", "Preview page")) { showLinkPreviewDialog(link) }
+            action(localizedBrowserText("Copiar endereço do link", "Copy link address")) { copyText(link) }
+            action(localizedBrowserText("Copiar texto do link", "Copy link text")) {
+                copyText(hit.description.ifBlank { hit.title.ifBlank { link } })
             }
-            if (!incognito && isLink) {
-                addSheetItem(content, "star", menuText("addBookmark", "Add bookmark")) {
-                    dialog.dismiss()
-                    finishToFlutter("bookmarkUrl", link)
-                }
+            action(localizedBrowserText("Transferir link", "Download link")) {
+                startDownload(link, null, null, null)
             }
+            action(localizedBrowserText("Adicionar à Lista de leitura", "Add to reading list")) {
+                if (!incognito) finishToFlutter("bookmarkUrl", link)
+            }
+            action(localizedBrowserText("Partilhar link", "Share link")) { shareText(link) }
         }
-        dialog.setContentView(content)
+
+        actionScroll.addView(actions, android.widget.FrameLayout.LayoutParams(-1, -2))
+        card.addView(actionScroll, LinearLayout.LayoutParams(-1, -2))
+        dialog.setContentView(card, ViewGroup.LayoutParams(-1, -2))
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
+        val dialogWidth = minOf(dp(560), (resources.displayMetrics.widthPixels * .80f).toInt())
+        val maxDialogHeight = (resources.displayMetrics.heightPixels * .82f).toInt()
+        card.measure(
+            View.MeasureSpec.makeMeasureSpec(dialogWidth, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(maxDialogHeight, View.MeasureSpec.AT_MOST),
+        )
+        val dialogHeight = card.measuredHeight.coerceAtLeast(dp(180)).coerceAtMost(maxDialogHeight)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(dialogWidth, dialogHeight)
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(.46f)
+        }
+        loadContextThumbnail(thumbnailUrl, thumb, dialog, primaryTarget)
+    }
+
+    private fun loadContextThumbnail(url: String, target: ImageView, dialog: Dialog, referer: String) {
+        if (!isSafeWebUrl(url)) return
+        Thread {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = URL(url).openConnection() as HttpURLConnection
+                connection.connectTimeout = 6_000
+                connection.readTimeout = 8_000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", runCatching { webView.settings.userAgentString }.getOrDefault("BrowseIt"))
+                connection.setRequestProperty("Referer", referer)
+                connection.getInputStream().use { input ->
+                    val bitmap = BitmapFactory.decodeStream(input)
+                    if (bitmap != null) runOnUiThread {
+                        if (!isFinishing && dialog.isShowing) {
+                            target.setImageBitmap(bitmap)
+                            target.alpha = 1f
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                connection?.disconnect()
+            }
+        }.start()
     }
 
     private fun reloadCurrentPage() {
@@ -2068,10 +2173,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun showWebContentDialog(target: String, kind: String) {
-        val dialog = BottomSheetDialog(this)
+        val dialog = Dialog(this)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(pageBg)
+            background = rounded(pageBg, 14)
+            clipToOutline = true
         }
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -2149,7 +2255,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
         previewWebView = preview
         container.addView(top, LinearLayout.LayoutParams(-1, dp(56)))
-        container.addView(preview, LinearLayout.LayoutParams(-1, dp(560)))
+        container.addView(preview, LinearLayout.LayoutParams(-1, dp(480)))
         dialog.setContentView(container)
         dialog.setOnDismissListener {
             previewWebView?.let { view ->
@@ -2163,8 +2269,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
             previewWebView = null
         }
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
-        dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setLayout(
+                (resources.displayMetrics.widthPixels * .92f).toInt(),
+                WindowManager.LayoutParams.WRAP_CONTENT,
+            )
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(.42f)
+        }
 
         val previewBackground = cssColor(pageBg)
         val previewForeground = cssColor(primaryText)
@@ -2420,15 +2535,29 @@ class OrbitBrowserActivity : AppCompatActivity() {
             .hideSoftInputFromWindow(findField.windowToken, 0)
     }
 
+    private fun buildDesktopUserAgent(): String {
+        val mobileAgent = originalUserAgent ?: WebSettings.getDefaultUserAgent(this)
+        return mobileAgent
+            .replace(Regex("\\(Linux; Android [^)]+\\)"), "(Windows NT 10.0; Win64; x64)")
+            .replace(" Mobile", "")
+    }
+
     private fun toggleDesktopMode() {
         desktopMode = !desktopMode
         webView.settings.userAgentString = if (desktopMode) {
-            DESKTOP_UA
+            buildDesktopUserAgent()
         } else {
             originalUserAgent ?: WebSettings.getDefaultUserAgent(this)
         }
         webView.settings.useWideViewPort = true
         webView.settings.loadWithOverviewMode = desktopMode
+        webView.settings.setSupportZoom(true)
+        webView.settings.builtInZoomControls = true
+        webView.settings.displayZoomControls = false
+        if (desktopMode) {
+            webView.clearCache(false)
+            webView.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
+        }
         webView.reload()
         showBrowserSnackbar(
             if (desktopMode) menuText("desktopEnabled", "Desktop site enabled")
@@ -2438,11 +2567,205 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun translatePage() {
         val targetLanguage = menuLabels.optString("targetLanguage", "en")
-            .takeIf { it.matches(Regex("^[a-zA-Z-]{2,8}$")) } ?: "en"
-        val translateUrl =
-            "https://translate.google.com/translate?sl=auto&tl=$targetLanguage&u=" +
-                Uri.encode(currentUrl)
-        webView.loadUrl(translateUrl)
+            .lowercase(Locale.ROOT)
+            .takeIf { it.matches(Regex("^[a-z]{2,3}(?:-[a-z]{2})?$")) } ?: "en"
+        showBrowserSnackbar(localizedBrowserText("A traduzir o texto da página…", "Translating page text…"))
+        val collectScript = """
+            (() => {
+              const rejected = 'script,style,noscript,svg,canvas,iframe,textarea,input,select,option,code,pre,[contenteditable="true"]';
+              const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+              const nodes = [];
+              let node;
+              while ((node = walker.nextNode()) && nodes.length < 2500) {
+                const parent = node.parentElement;
+                if (!parent || parent.closest(rejected)) continue;
+                const style = getComputedStyle(parent);
+                if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+                const value = node.nodeValue || '';
+                const text = value.trim();
+                if (text.length < 2 || !/[\p{L}]/u.test(text)) continue;
+                const leading = (value.match(/^\s*/) || [''])[0];
+                const trailing = (value.match(/\s*$/) || [''])[0];
+                nodes.push({i: nodes.length, text: text, leading: leading, trailing: trailing});
+              }
+              window.__looplyTranslationNodes = [];
+              const secondWalker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+              let index = 0, current;
+              while ((current = secondWalker.nextNode()) && index < nodes.length) {
+                const parent = current.parentElement;
+                if (!parent || parent.closest(rejected)) continue;
+                const value = current.nodeValue || '', text = value.trim();
+                if (text.length < 2 || !/[\p{L}]/u.test(text)) continue;
+                const style = getComputedStyle(parent);
+                if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) continue;
+                window.__looplyTranslationNodes[index++] = current;
+              }
+              return JSON.stringify(nodes);
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(collectScript) { raw ->
+            val encoded = runCatching { org.json.JSONTokener(raw ?: "null").nextValue() as? String }.getOrNull()
+            val nodes = runCatching { org.json.JSONArray(encoded ?: "[]") }.getOrNull()
+            if (nodes == null || nodes.length() == 0) {
+                showBrowserSnackbar(localizedBrowserText("Não há texto para traduzir nesta página.", "No page text was found to translate."))
+                return@evaluateJavascript
+            }
+
+            data class TranslationNode(
+                val index: Int,
+                val text: String,
+                val leading: String,
+                val trailing: String,
+            )
+
+            val pending = ArrayList<TranslationNode>(nodes.length())
+            for (index in 0 until nodes.length()) {
+                val item = nodes.optJSONObject(index) ?: continue
+                val original = item.optString("text")
+                if (original.isBlank()) continue
+                pending.add(
+                    TranslationNode(
+                        index = index,
+                        text = original,
+                        leading = item.optString("leading"),
+                        trailing = item.optString("trailing"),
+                    )
+                )
+            }
+
+            Thread {
+                var translatedCount = 0
+                var failedCount = 0
+                var cursor = 0
+                while (cursor < pending.size) {
+                    val batch = ArrayList<TranslationNode>(8)
+                    var characterCount = 0
+                    while (cursor < pending.size && batch.size < 8) {
+                        val candidate = pending[cursor]
+                        val addedLength = candidate.text.length + 36
+                        if (batch.isNotEmpty() && characterCount + addedLength > 3_200) break
+                        batch.add(candidate)
+                        characterCount += addedLength
+                        cursor++
+                    }
+
+                    val translations = translateBatchWithFreeEndpoint(
+                        batch.map { it.text },
+                        targetLanguage,
+                    ) ?: batch.map { translateTextWithFreeEndpoint(it.text, targetLanguage) }
+
+                    val assignments = org.json.JSONArray()
+                    for (batchIndex in batch.indices) {
+                        val translated = translations.getOrNull(batchIndex)
+                        if (translated.isNullOrBlank()) {
+                            failedCount++
+                            continue
+                        }
+                        val entry = batch[batchIndex]
+                        assignments.put(
+                            org.json.JSONObject()
+                                .put("i", entry.index)
+                                .put("v", entry.leading + translated + entry.trailing)
+                        )
+                        translatedCount++
+                    }
+
+                    if (assignments.length() > 0) {
+                        val script = """
+                            (function(items){
+                              if (!window.__looplyTranslationNodes) return;
+                              for (var i = 0; i < items.length; i++) {
+                                var item = items[i];
+                                var node = window.__looplyTranslationNodes[item.i];
+                                if (node && node.isConnected) node.nodeValue = item.v;
+                              }
+                            })(${assignments.toString()});
+                        """.trimIndent()
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) webView.evaluateJavascript(script, null)
+                        }
+                    }
+                    Thread.sleep(100)
+                }
+
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) {
+                        val message = when {
+                            translatedCount == 0 -> localizedBrowserText(
+                                "Não foi possível traduzir a página. Tente novamente.",
+                                "The page could not be translated. Try again.",
+                            )
+                            failedCount > 0 -> localizedBrowserText(
+                                "Tradução parcial: $translatedCount blocos traduzidos; $failedCount não foram traduzidos.",
+                                "Partial translation: $translatedCount blocks translated; $failedCount failed.",
+                            )
+                            else -> localizedBrowserText(
+                                "Tradução concluída ($translatedCount blocos).",
+                                "Translation completed ($translatedCount text blocks).",
+                            )
+                        }
+                        showBrowserSnackbar(message)
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun translateBatchWithFreeEndpoint(texts: List<String>, targetLanguage: String): List<String>? {
+        if (texts.isEmpty()) return emptyList()
+        if (texts.size == 1) {
+            val single = translateTextWithFreeEndpoint(texts.first(), targetLanguage) ?: return null
+            return listOf(single)
+        }
+
+        val markers = (0 until texts.lastIndex).map { index -> "\uE000L${index}\uE001" }
+        val query = buildString {
+            texts.forEachIndexed { index, text ->
+                append(text.take(4_500))
+                if (index < markers.size) {
+                    append(' ')
+                    append(markers[index])
+                    append(' ')
+                }
+            }
+        }
+        val translated = requestFreeTranslation(query, targetLanguage) ?: return null
+        val pieces = translated.split(*markers.toTypedArray())
+        if (pieces.size != texts.size) return null
+        return pieces.map { it.trim() }
+    }
+
+    private fun translateTextWithFreeEndpoint(text: String, targetLanguage: String): String? =
+        requestFreeTranslation(text.take(4_500), targetLanguage)
+
+    /** Uses Google's public web translation endpoint; it is free to access but undocumented. */
+    private fun requestFreeTranslation(text: String, targetLanguage: String): String? {
+        var connection: HttpURLConnection? = null
+        return try {
+            val url = URL(
+                "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" +
+                    Uri.encode(targetLanguage) + "&dt=t&q=" + Uri.encode(text)
+            )
+            connection = url.openConnection() as HttpURLConnection
+            connection.connectTimeout = 7_000
+            connection.readTimeout = 9_000
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/142.0.0.0 Mobile Safari/537.36")
+            connection.instanceFollowRedirects = true
+            if (connection.responseCode !in 200..299) return null
+            val body = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val root = org.json.JSONArray(body)
+            val segments = root.optJSONArray(0) ?: return null
+            buildString {
+                for (i in 0 until segments.length()) {
+                    append(segments.optJSONArray(i)?.optString(0).orEmpty())
+                }
+            }.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection?.disconnect()
+        }
     }
 
     private fun showScaleCard(pageScale: Boolean) {
@@ -2860,10 +3183,12 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (::titleView.isInitialized) titleView.setTextColor(toolbarText())
             tintTabCountButton(toolbarText())
             tintMenuOptionsButton(toolbarText())
+            tintHomeButton(toolbarText())
             applySystemBars()
             return
         }
 
+        tintHomeButton(toolbarText())
         webView.evaluateJavascript(
             """
             (() => {
@@ -2895,8 +3220,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 titleView.setTextColor(toolbarText())
                 tintTabCountButton(toolbarText())
                 tintMenuOptionsButton(toolbarText())
+                tintHomeButton(toolbarText())
             }
         }
+    }
+
+    private fun tintHomeButton(color: Int) {
+        if (::homeButtonIcon.isInitialized) homeButtonIcon.setTextColor(color)
     }
 
     private fun parseCssColor(value: String?): Int? {

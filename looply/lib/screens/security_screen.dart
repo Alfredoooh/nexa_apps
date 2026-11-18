@@ -19,12 +19,17 @@ class SecurityScreen extends StatefulWidget {
 class _SecurityScreenState extends State<SecurityScreen> {
   bool _credentialConfigured = false;
   bool _loading = true;
+  bool _biometricChecking = true;
+  bool _biometricVerified = false;
 
   @override
   void initState() {
     super.initState();
     BrowserSecurityService.restore();
     _refreshCredentialState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _authenticateSecurityEntry();
+    });
   }
 
   Future<void> _refreshCredentialState() async {
@@ -34,6 +39,57 @@ class _SecurityScreenState extends State<SecurityScreen> {
       _credentialConfigured = configured;
       _loading = false;
     });
+  }
+
+  Future<bool> _authenticateSecurityEntry() async {
+    if (!mounted) return false;
+    setState(() {
+      _biometricChecking = true;
+      _biometricVerified = false;
+    });
+    final available = await BrowserSecurityService.hasEnrolledBiometrics();
+    if (!mounted) return false;
+    if (!available) {
+      setState(() => _biometricChecking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appText('security_biometric_required'))),
+      );
+      return false;
+    }
+    final verified = await BrowserSecurityService.authenticateBiometrically(
+      reason: appText('security_biometric_reason'),
+    );
+    if (!mounted) return false;
+    setState(() {
+      _biometricChecking = false;
+      _biometricVerified = verified;
+    });
+    if (!verified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(appText('security_biometric_failed'))),
+      );
+    }
+    return verified;
+  }
+
+  Future<bool> _ensureBiometricAccess() async {
+    if (_biometricVerified) return true;
+    return _authenticateSecurityEntry();
+  }
+
+  InputDecoration _securityInputDecoration(String label, {Widget? suffixIcon}) {
+    final focused = accentColor(context);
+    return InputDecoration(
+      labelText: label,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: settingsCardColor(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: focused, width: 1.4)),
+      labelStyle: TextStyle(color: mutedText(context)),
+    );
   }
 
   Future<bool> _verifyExistingCredential() async {
@@ -80,8 +136,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
                   keyboardType: oldMode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => Navigator.of(context, rootNavigator: true).pop(true),
-                  decoration: InputDecoration(
-                    labelText: oldMode == 'pin' ? appText('current_pin') : appText('current_password'),
+                  decoration: _securityInputDecoration(
+                    oldMode == 'pin' ? appText('current_pin') : appText('current_password'),
                     suffixIcon: IconButton(
                       onPressed: () => setSheetState(() => obscure = !obscure),
                       icon: AppMaterialIcon(obscure ? AppIcons.eye : AppIcons.eyeSlash),
@@ -127,6 +183,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Future<bool> _configureCredential() async {
+    if (!await _ensureBiometricAccess() || !mounted) return false;
     if (_credentialConfigured || await BrowserSecurityService.hasCredential()) {
       final verified = await _verifyExistingCredential();
       if (!verified || !mounted) return false;
@@ -200,14 +257,13 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       keyboardType: mode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
                       textInputAction: TextInputAction.next,
                       maxLength: mode == 'pin' ? 12 : 64,
-                      decoration: InputDecoration(
-                        labelText: mode == 'pin' ? appText('pin_format_hint') : appText('password_format_hint'),
-                        counterText: '',
+                      decoration: _securityInputDecoration(
+                        mode == 'pin' ? appText('pin_format_hint') : appText('password_format_hint'),
                         suffixIcon: IconButton(
                           onPressed: () => setSheetState(() => visible = !visible),
                           icon: AppMaterialIcon(visible ? AppIcons.eyeSlash : AppIcons.eye),
                         ),
-                      ),
+                      ).copyWith(counterText: ''),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -215,7 +271,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     controller: confirmController,
                     obscureText: true,
                     textInputAction: TextInputAction.done,
-                    decoration: InputDecoration(labelText: appText('confirm_protection')),
+                    decoration: _securityInputDecoration(appText('confirm_protection')),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -291,6 +347,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Future<void> _openBlockedSites() async {
+    if (!await _ensureBiometricAccess() || !mounted) return;
     final configured = _credentialConfigured || await BrowserSecurityService.hasCredential();
     if (!mounted) return;
     if (!configured) {
@@ -303,6 +360,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Future<void> _togglePasswordSaving(bool enabled) async {
+    if (!await _ensureBiometricAccess() || !mounted) return;
     if (enabled && !_credentialConfigured) {
       final saved = await _configureCredential();
       if (!saved || !mounted) return;
@@ -326,7 +384,38 @@ class _SecurityScreenState extends State<SecurityScreen> {
         leading: AppBackButton(tooltip: appText('back'), color: text),
         title: Text(appText('security_title'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
       ),
-      body: ListView(
+      body: !_biometricVerified
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppMaterialIcon(AppIcons.shieldCheck, color: text, size: 42),
+                    const SizedBox(height: 16),
+                    Text(
+                      _biometricChecking
+                          ? appText('security_biometric_checking')
+                          : appText('security_biometric_required'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      appText('security_biometric_enable_hint'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: muted, fontSize: 13, height: 1.4),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: _biometricChecking ? null : _authenticateSecurityEntry,
+                      child: Text(appText('retry')),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
         children: [
           ClipRRect(
@@ -361,7 +450,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       icon: AppIcons.lockSimple,
                       label: appText('save_passwords'),
                       subtitle: appText('save_passwords_description'),
-                      trailing: M3ExpressiveSwitch(value: enabled, onChanged: _togglePasswordSaving),
+                      trailing: IgnorePointer(
+                        child: M3ExpressiveSwitch(value: enabled, onChanged: (_) {}),
+                      ),
                       showChevron: false,
                       onTap: () => _togglePasswordSaving(!enabled),
                     ),

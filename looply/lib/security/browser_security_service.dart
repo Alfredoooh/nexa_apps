@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../cloud_sync.dart';
@@ -16,6 +17,29 @@ class BrowserSecurityService {
   static const String _passwordSavingKey = 'looply_save_passwords_enabled';
 
   static final ValueNotifier<bool> passwordSavingEnabled = ValueNotifier<bool>(false);
+  static final LocalAuthentication _localAuth = LocalAuthentication();
+
+  static Future<bool> hasEnrolledBiometrics() async {
+    try {
+      final available = await _localAuth.getAvailableBiometrics();
+      return available.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> authenticateBiometrically({required String reason}) async {
+    try {
+      if (!await hasEnrolledBiometrics()) return false;
+      return await _localAuth.authenticate(
+        localizedReason: reason,
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
 
   static Future<void> restore() async {
     try {

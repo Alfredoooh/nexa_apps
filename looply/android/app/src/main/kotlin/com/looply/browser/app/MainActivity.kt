@@ -50,7 +50,7 @@ import android.graphics.Typeface
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SwitchCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -61,7 +61,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val CHANNEL = "looply/native_ui"
         private const val PREFS_NAME = "FlutterSharedPreferences"
@@ -117,10 +117,6 @@ class MainActivity : FlutterActivity() {
     private var nativeStatsChannel: MethodChannel? = null
     private var nativeUiChannel: MethodChannel? = null
     private lateinit var appPreferences: SharedPreferences
-    private var appSplashOverlay: View? = null
-    private var appSplashAnimationComplete = false
-    private var appFlutterUiReady = false
-    private var appSplashHideStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // O Android guarda o modo de aparência escolhido pela aplicação.
@@ -137,11 +133,9 @@ class MainActivity : FlutterActivity() {
         extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
 
-        // O LaunchTheme fornece o splash nativo do Android; este overlay curto
-        // garante que o fundo respeita a preferência interna do BrowseIt também
-        // nas versões em que o Android só disponibiliza o tema do sistema.
+        // O LaunchTheme nativo já apresentou o ícone drawable. Aqui apenas
+        // sincronizamos as barras do sistema com o tema escolhido na aplicação.
         applyWindowTheme(savedMode, savedPureBlack)
-        showAppPreferenceSplash(savedMode, savedPureBlack)
 
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -151,74 +145,6 @@ class MainActivity : FlutterActivity() {
         "light" -> false
         else -> (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
-    }
-
-    private fun showAppPreferenceSplash(mode: String, pureBlack: Boolean) {
-        // Splash uses exactly two surfaces, independently of AMOLED settings:
-        // white for the app's light mode and BrowseIt's dark charcoal otherwise.
-        val background = if (isAppDarkTheme(mode)) Color.rgb(23, 24, 26) else Color.WHITE
-
-        // The Android launch window is resource-qualified by the app's night
-        // mode. This overlay closes the pre-Android-12 gap where older Android
-        // versions only expose the device's system night qualifier.
-        window.setBackgroundDrawable(ColorDrawable(background))
-        window.statusBarColor = background
-        window.navigationBarColor = background
-
-        val decor = window.decorView as? ViewGroup ?: run {
-            appSplashAnimationComplete = true
-            return
-        }
-        val density = resources.displayMetrics.density
-        val overlay = FrameLayout(this).apply {
-            setBackgroundColor(background)
-            isClickable = false
-            isFocusable = false
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        }
-        val icon = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-        }
-        overlay.addView(
-            icon,
-            FrameLayout.LayoutParams((148 * density).toInt(), (148 * density).toInt(), Gravity.CENTER),
-        )
-        decor.addView(overlay, FrameLayout.LayoutParams(-1, -1))
-        appSplashOverlay = overlay
-
-        icon.playSplashCircle {
-            appSplashAnimationComplete = true
-            maybeHideAppPreferenceSplash()
-        }
-
-        // A broken OEM AnimatedImageDrawable must never leave a permanent
-        // cover over the first Flutter frame.
-        mainHandler.postDelayed({
-            appSplashAnimationComplete = true
-            appFlutterUiReady = true
-            maybeHideAppPreferenceSplash()
-        }, 5_000L)
-    }
-
-    private fun maybeHideAppPreferenceSplash() {
-        if (!appSplashAnimationComplete || !appFlutterUiReady || appSplashHideStarted) return
-        appSplashHideStarted = true
-        val overlay = appSplashOverlay ?: return
-        overlay.animate()
-            .alpha(0f)
-            .setDuration(150L)
-            .withEndAction {
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-                if (appSplashOverlay === overlay) appSplashOverlay = null
-            }
-            .start()
-    }
-
-    override fun onFlutterUiDisplayed() {
-        super.onFlutterUiDisplayed()
-        appFlutterUiReady = true
-        maybeHideAppPreferenceSplash()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -308,10 +234,6 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        appSplashOverlay?.let { overlay ->
-            (overlay.parent as? ViewGroup)?.removeView(overlay)
-        }
-        appSplashOverlay = null
         nativeStatsChannel = null
         nativeUiChannel = null
         nativeDownloadChannel = null
@@ -630,7 +552,7 @@ class MainActivity : FlutterActivity() {
         requestPermissions(missing.toTypedArray(), runtimePermissionRequestCode)
     }
 
-    @Deprecated("Deprecated in Android API; retained for compatibility with the FlutterActivity permission callback")
+    @Deprecated("Deprecated in Android API; retained for compatibility with the Flutter embedding permission callback")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != runtimePermissionRequestCode) return

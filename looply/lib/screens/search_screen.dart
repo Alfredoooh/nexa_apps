@@ -169,11 +169,15 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
 
     if (!isUrl && aiSearchModeEnabled.value) {
       final aiUrl = 'looply://ai-search?q=${Uri.encodeComponent(value)}';
-      final tab = tabsController.createBrowserTab(
-        aiUrl,
-        title: 'AI Search',
-        isIncognito: widget.isIncognito,
-      );
+      final tab = tabsController.getAiSearchTab(isIncognito: widget.isIncognito) ??
+          tabsController.createBrowserTab(
+            aiUrl,
+            title: 'AI Search',
+            isIncognito: widget.isIncognito,
+          );
+      if (tab.url != aiUrl) {
+        tabsController.updateTab(tab.id, url: aiUrl, title: 'AI Search');
+      }
       tabsController.activate(tab.id);
       Navigator.of(context).popUntil((route) => route.isFirst);
       ShellTabRequest.instance.requestBrowser(tab.id);

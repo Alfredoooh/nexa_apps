@@ -25,4 +25,5 @@ const Map<String, Map<String, String>> appTranslations = <String, Map<String, St
   'ru': ru.ruTranslations,
   'hi': hi.hiTranslations,
   'tr': tr.trTranslations,
+
 };

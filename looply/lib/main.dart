@@ -192,6 +192,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final Map<String, GlobalKey> _homePreviewKeys = {};
   // As páginas principais são Início e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'activity_screen', 'games_screen'];
+  static const String _appShellTabKey = 'app_shell_screen';
   List<String> get _screenLabels => <String>[appText('home'), appText('activity'), appText('games')];
   final List<IconData> _screenIcons = const [AppIcons.house, AppIcons.clockCounterClockwise, AppIcons.sportsEsports];
   late final AnimationController _morphController;
@@ -865,9 +866,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     if (bitmap == null || sourceRect == null) {
       final appTab = tabsController.upsertAppScreenTab(
-        _screenKeys[_selectedTab],
-        _screenLabels[_selectedTab],
-        _screenIcons[_selectedTab],
+        _appShellTabKey,
+        'Looply',
+        AppIcons.house,
         bitmap,
       );
       _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
@@ -889,9 +890,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     _lastScreenSnapshot = bitmap;
     final appTab = tabsController.upsertAppScreenTab(
-      _screenKeys[_selectedTab],
-      _screenLabels[_selectedTab],
-      _screenIcons[_selectedTab],
+      _appShellTabKey,
+      'Looply',
+      AppIcons.house,
       bitmap,
     );
     _previewKeys.putIfAbsent(appTab.id, GlobalKey.new);
@@ -1131,7 +1132,9 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     }
 
     if (targetTab != null && targetTab.kind == TabKind.appScreen) {
-      var index = _screenKeys.indexOf(targetTab.url);
+      var index = targetTab.url == _appShellTabKey
+          ? _selectedTab
+          : _screenKeys.indexOf(targetTab.url);
       // Compatibilidade com separadores de ecrã 'Jogos' e 'Descobrir' gravados
       // por versões anteriores: encaminha-os para o Início, já que nenhum dos
       // dois continua exposto na navegação principal.
@@ -1312,14 +1315,15 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
   void _returnHomeFromTabs() {
-    final homeTab = tabsController.getAppScreen(_screenKeys.first) ??
+    _selectedTab = 0;
+    final appTab = tabsController.getAppScreen(_appShellTabKey) ??
         tabsController.upsertAppScreenTab(
-          _screenKeys.first,
-          _screenLabels.first,
-          _screenIcons.first,
+          _appShellTabKey,
+          'Looply',
+          AppIcons.house,
           null,
         );
-    unawaited(_closeTabsGrid(openTab: homeTab));
+    unawaited(_closeTabsGrid(openTab: appTab));
   }
 
   @override
