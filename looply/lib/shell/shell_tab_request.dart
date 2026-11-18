@@ -20,6 +20,11 @@ class ShellTabRequest extends ChangeNotifier {
   Rect? browserCloseSourceRect;
   String? browserCloseTabId;
 
+  bool browserHomeRequested = false;
+  String? browserHomeTabId;
+  Uint8List? browserHomeScreenshot;
+  Rect? browserHomeSourceRect;
+
   int? requestedIndex;
 
   bool browserPreviewRequested = false;
@@ -34,42 +39,53 @@ class ShellTabRequest extends ChangeNotifier {
     browserCloseTabId = null;
   }
 
+  void _clearBrowserHomeRequest() {
+    browserHomeRequested = false;
+    browserHomeTabId = null;
+    browserHomeScreenshot = null;
+    browserHomeSourceRect = null;
+  }
+
   void request(int index) {
     clearBrowserPreviewRequest();
+    _clearBrowserCloseRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = null;
-    _clearBrowserCloseRequest();
     requestedIndex = index;
     notifyListeners();
   }
 
   void requestTabs() {
     clearBrowserPreviewRequest();
+    _clearBrowserCloseRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = true;
     orbitBrowserRequested = false;
     browserTabRequested = null;
-    _clearBrowserCloseRequest();
     requestedIndex = null;
     notifyListeners();
   }
 
   void requestOrbitBrowser() {
     clearBrowserPreviewRequest();
+    _clearBrowserCloseRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = false;
     orbitBrowserRequested = true;
     browserTabRequested = null;
-    _clearBrowserCloseRequest();
     requestedIndex = null;
     notifyListeners();
   }
 
   void requestBrowser(String tabId) {
     clearBrowserPreviewRequest();
+    _clearBrowserCloseRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = tabId;
-    _clearBrowserCloseRequest();
     requestedIndex = null;
     notifyListeners();
   }
@@ -79,10 +95,11 @@ class ShellTabRequest extends ChangeNotifier {
     required Uint8List screenshot,
     required Rect? sourceRect,
   }) {
+    _clearBrowserCloseRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = null;
-    _clearBrowserCloseRequest();
     requestedIndex = null;
     browserPreviewRequested = true;
     browserPreviewTabId = tabId;
@@ -104,6 +121,7 @@ class ShellTabRequest extends ChangeNotifier {
     required Rect? sourceRect,
   }) {
     clearBrowserPreviewRequest();
+    _clearBrowserHomeRequest();
     tabsRequested = false;
     orbitBrowserRequested = false;
     browserTabRequested = null;
@@ -113,5 +131,27 @@ class ShellTabRequest extends ChangeNotifier {
     browserCloseSourceRect = sourceRect;
     browserCloseTabId = tabId;
     notifyListeners();
+  }
+
+  void requestBrowserToHome({
+    required String tabId,
+    required Uint8List? screenshot,
+    required Rect? sourceRect,
+  }) {
+    clearBrowserPreviewRequest();
+    _clearBrowserCloseRequest();
+    tabsRequested = false;
+    orbitBrowserRequested = false;
+    browserTabRequested = null;
+    requestedIndex = null;
+    browserHomeRequested = true;
+    browserHomeTabId = tabId;
+    browserHomeScreenshot = screenshot;
+    browserHomeSourceRect = sourceRect;
+    notifyListeners();
+  }
+
+  void clearBrowserHomeRequest() {
+    _clearBrowserHomeRequest();
   }
 }
