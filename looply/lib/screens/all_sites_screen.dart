@@ -104,11 +104,13 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
       showDragHandle: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (sheetContext) => AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
-        child: const _AddCustomSiteSheet(),
+      builder: (sheetContext) => LooplyModalSystemBar(
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: const _AddCustomSiteSheet(),
+        ),
       ),
     );
   }

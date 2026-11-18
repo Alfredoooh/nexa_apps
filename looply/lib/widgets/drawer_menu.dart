@@ -416,7 +416,8 @@ void showThemeSheet(BuildContext context) {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     ),
-    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+    builder: (sheetContext) => LooplyModalSystemBar(
+      child: ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
         valueListenable: themeController.pureDark,
@@ -469,6 +470,7 @@ void showThemeSheet(BuildContext context) {
             ),
           );
         },
+      ),
       ),
     ),
   );

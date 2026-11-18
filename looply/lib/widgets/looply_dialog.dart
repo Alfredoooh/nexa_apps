@@ -222,3 +222,33 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
     );
   }
 }
+
+/// Keeps Android system-bar icon contrast aligned with Looply's active theme
+/// while a modal surface is displayed.
+class LooplyModalSystemBar extends StatelessWidget {
+  const LooplyModalSystemBar({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final systemBarStyle = (isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark)
+        .copyWith(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: pageBg(context),
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarDividerColor: Colors.transparent,
+    );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: systemBarStyle,
+      child: child,
+    );
+  }
+}

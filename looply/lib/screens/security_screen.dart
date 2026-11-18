@@ -46,7 +46,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
       isScrollControlled: true,
       backgroundColor: pageBg(context),
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => LooplyModalSystemBar(
+        child: SafeArea(
         child: Padding(
           padding: EdgeInsets.only(
             left: 20,
@@ -107,6 +108,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
           ),
         ),
       ),
+      ),
     );
 
     final oldSecret = oldController.text;
@@ -140,7 +142,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
       isScrollControlled: true,
       backgroundColor: pageBg(context),
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => LooplyModalSystemBar(
+        child: SafeArea(
         child: Padding(
           padding: EdgeInsets.only(
             left: 20,
@@ -234,6 +237,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
 
