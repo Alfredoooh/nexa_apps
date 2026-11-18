@@ -5,77 +5,6 @@ import '../theme.dart';
 import '../localization.dart';
 import 'material_symbols.dart';
 
-/// Mantém os ícones da barra de estado legíveis e aplica o mesmo escurecimento
-/// ao abrir qualquer modal (diálogo ou bottom sheet) do BrowseIt.
-class LooplyModalSystemBar extends StatefulWidget {
-  const LooplyModalSystemBar({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  State<LooplyModalSystemBar> createState() => _LooplyModalSystemBarState();
-}
-
-class _LooplyModalSystemBarState extends State<LooplyModalSystemBar> {
-  static int _openOverlays = 0;
-  static SystemUiOverlayStyle? _restoreStyle;
-  bool _registered = false;
-  late SystemUiOverlayStyle _modalStyle;
-
-  SystemUiOverlayStyle _baseStyle(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = pageBg(context);
-    return (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-      statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-      systemNavigationBarColor: bg,
-      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final base = _baseStyle(context);
-    // The modal barrier dims Flutter content, but on several Android OEM
-    // builds the transparent status bar is not composited with that barrier.
-    // Apply the same black scrim explicitly to the system status-bar area.
-    _modalStyle = base.copyWith(
-      statusBarColor: const Color(0x8A000000),
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    );
-    if (!_registered) {
-      _registered = true;
-      if (_openOverlays == 0) _restoreStyle = base;
-      _openOverlays++;
-    }
-    // AnnotatedRegion alone misses modal routes whose SafeArea starts below
-    // the status bar. Set the native overlay explicitly as well.
-    SystemChrome.setSystemUIOverlayStyle(_modalStyle);
-  }
-
-  @override
-  void dispose() {
-    if (_registered) {
-      _openOverlays = (_openOverlays - 1).clamp(0, 1000).toInt();
-      if (_openOverlays == 0) {
-        final restore = _restoreStyle;
-        if (restore != null) SystemChrome.setSystemUIOverlayStyle(restore);
-        _restoreStyle = null;
-      }
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: _modalStyle,
-        child: widget.child,
-      );
-}
-
 class LooplyDialogAction<T> {
   const LooplyDialogAction({required this.label, required this.value, this.isPrimary = false, this.isDestructive = false});
   final String label;
@@ -86,6 +15,9 @@ class LooplyDialogAction<T> {
 
 /// Usa a rota padrão showDialog e o AlertDialog Material 3 do tema do BrowseIt.
 /// Não define transições próprias; a rota mantém a animação Material nativa.
+/// A status bar não é mais escurecida manualmente: o comportamento padrão
+/// do Flutter (barrier escurece só o conteúdo, status bar fica como estava)
+/// foi restaurado.
 Future<T?> showLooplyDialog<T>({
   required BuildContext context,
   required String title,
@@ -107,62 +39,60 @@ Future<T?> showLooplyDialog<T>({
       final availableHeight = (media.size.height - media.viewInsets.bottom - 48)
           .clamp(240.0, media.size.height)
           .toDouble();
-      return LooplyModalSystemBar(
-        child: AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          backgroundColor: surface,
-          surfaceTintColor: Colors.transparent,
-          elevation: 6,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          title: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Text(
-                  title,
-                  textAlign: TextAlign.start,
-                  softWrap: true,
-                  style: TextStyle(
-                    color: mainText(dialogContext),
-                    fontSize: 20,
-                    height: 1.25,
-                    letterSpacing: -.2,
-                    fontWeight: FontWeight.w600,
-                  ),
+      return AlertDialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+        title: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                textAlign: TextAlign.start,
+                softWrap: true,
+                style: TextStyle(
+                  color: mainText(dialogContext),
+                  fontSize: 20,
+                  height: 1.25,
+                  letterSpacing: -.2,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ],
-          ),
-          contentPadding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 560, maxHeight: availableHeight),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              physics: const BouncingScrollPhysics(),
-              child: DefaultTextStyle.merge(
-                style: TextStyle(color: mutedText(dialogContext), fontSize: 14, height: 1.5),
-                child: content,
-              ),
             ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-          actionsAlignment: MainAxisAlignment.end,
-          actionsOverflowAlignment: OverflowBarAlignment.end,
-          actionsOverflowDirection: VerticalDirection.down,
-          actionsOverflowButtonSpacing: 8,
-          actions: [
-            for (final action in actions)
-              _DialogActionButton<T>(
-                action: action,
-                onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(action.value),
-              ),
           ],
         ),
+        contentPadding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 560, maxHeight: availableHeight),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const BouncingScrollPhysics(),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: mutedText(dialogContext), fontSize: 14, height: 1.5),
+              child: content,
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+        actionsAlignment: MainAxisAlignment.end,
+        actionsOverflowAlignment: OverflowBarAlignment.end,
+        actionsOverflowDirection: VerticalDirection.down,
+        actionsOverflowButtonSpacing: 8,
+        actions: [
+          for (final action in actions)
+            _DialogActionButton<T>(
+              action: action,
+              onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(action.value),
+            ),
+        ],
       );
     },
   );

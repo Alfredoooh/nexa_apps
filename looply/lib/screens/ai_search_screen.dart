@@ -9,13 +9,19 @@ import '../theme.dart';
 import '../services/ai_search_service.dart';
 import '../widgets/material_symbols.dart';
 import '../widgets/rich_ai_text.dart';
-import '../widgets/search_engine_pngs.dart';
 import '../widgets/drawer_menu_button.dart';
-import '../widgets/looply_dialog.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 
-/// Pesquisa com IA. A interface e os blocos de resposta são inteiramente
-/// Flutter; a renderização de páginas do browser continua na Activity Kotlin.
+enum _AiChatRole { user, assistant }
+
+class _AiChatMessage {
+  _AiChatMessage({required this.role, required this.text, this.isStreaming = false});
+  final _AiChatRole role;
+  String text;
+  bool isStreaming;
+}
+
+/// Pesquisa com IA, em formato de conversa. Interface inteiramente Flutter.
 class AiSearchScreen extends StatefulWidget {
   const AiSearchScreen({super.key, this.initialQuery = ''});
 
@@ -27,9 +33,8 @@ class AiSearchScreen extends StatefulWidget {
 
 class _AiSearchScreenState extends State<AiSearchScreen> {
   late final TextEditingController _controller;
-  String _submittedQuery = '';
-  String _answer = '';
-  String? _error;
+  final List<_AiChatMessage> _messages = [];
+  final ScrollController _scrollController = ScrollController();
   bool _isLoading = false;
   int _requestId = 0;
   final StringBuffer _streamBuffer = StringBuffer();
@@ -38,8 +43,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialQuery);
-    _submittedQuery = widget.initialQuery;
+    _controller = TextEditingController();
     drawer_menu.LooplyDrawerBridge.showHomeAction.value = true;
 
     final initial = widget.initialQuery.trim();
@@ -54,26 +58,11 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   void didUpdateWidget(covariant AiSearchScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialQuery != widget.initialQuery) {
-      if (widget.initialQuery != _controller.text) {
-        _controller.value = TextEditingValue(
-          text: widget.initialQuery,
-          selection: TextSelection.collapsed(offset: widget.initialQuery.length),
-        );
-      }
-      _submittedQuery = widget.initialQuery;
       final query = widget.initialQuery.trim();
       if (query.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_runSearch(query));
         });
-      } else {
-        _requestId++;
-        _streamUpdateTimer?.cancel();
-        _streamUpdateTimer = null;
-        _streamBuffer.clear();
-        _answer = '';
-        _error = null;
-        _isLoading = false;
       }
     }
   }
@@ -85,28 +74,26 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     _streamBuffer.clear();
     drawer_menu.LooplyDrawerBridge.showHomeAction.value = false;
     _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   void _submit(String raw) {
     final query = raw.trim();
     if (query.isEmpty || _isLoading) return;
     FocusScope.of(context).unfocus();
-
-    final activeTab = tabsController.activeTab;
-    if (activeTab != null && activeTab.url.startsWith('looply://ai-search')) {
-      final oldQuery = Uri.tryParse(activeTab.url)?.queryParameters['q'] ?? '';
-      if (oldQuery != query) {
-        // A atualização da URL é refletida em didUpdateWidget, que inicia
-        // uma única consulta e mantém a mesma instância do ecrã.
-        tabsController.updateTab(
-          activeTab.id,
-          url: 'looply://ai-search?q=${Uri.encodeComponent(query)}',
-          title: 'AI Search',
-        );
-        return;
-      }
-    }
+    _controller.clear();
     unawaited(_runSearch(query));
   }
 
@@ -121,7 +108,10 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       }
       final chunk = _streamBuffer.toString();
       _streamBuffer.clear();
-      if (chunk.isNotEmpty) setState(() => _answer += chunk);
+      if (chunk.isNotEmpty) {
+        setState(() => _messages.last.text += chunk);
+        _scrollToBottom();
+      }
     });
   }
 
@@ -134,7 +124,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     }
     final chunk = _streamBuffer.toString();
     _streamBuffer.clear();
-    if (chunk.isNotEmpty) setState(() => _answer += chunk);
+    if (chunk.isNotEmpty) setState(() => _messages.last.text += chunk);
   }
 
   Future<void> _runSearch(String query) async {
@@ -144,12 +134,13 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     _streamUpdateTimer?.cancel();
     _streamUpdateTimer = null;
     _streamBuffer.clear();
+
     setState(() {
-      _submittedQuery = clean;
-      _answer = '';
-      _error = null;
+      _messages.add(_AiChatMessage(role: _AiChatRole.user, text: clean));
+      _messages.add(_AiChatMessage(role: _AiChatRole.assistant, text: '', isStreaming: true));
       _isLoading = true;
     });
+    _scrollToBottom();
 
     try {
       final answer = await BrowseItAiSearchService.search(
@@ -159,217 +150,100 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       if (!mounted || request != _requestId) return;
       _flushStreamTokens(request);
       setState(() {
-        _answer = answer;
+        _messages.last.text = answer;
+        _messages.last.isStreaming = false;
         _isLoading = false;
-        _error = null;
       });
     } catch (error) {
       if (!mounted || request != _requestId) return;
       _flushStreamTokens(request);
       final message = error.toString().replaceFirst(RegExp(r'^(Bad state|Exception):\s*'), '');
       setState(() {
+        _messages.last.text = message.isEmpty ? appText('answer_failed') : message;
+        _messages.last.isStreaming = false;
         _isLoading = false;
-        _error = message;
       });
     }
+    _scrollToBottom();
   }
 
-  Future<void> _copyAnswer() async {
-    if (_answer.trim().isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: _answer));
-    if (!mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(appText('answer_copied'))),
-    );
-  }
-
-  void _showAttachmentOptions() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: pageBg(context),
-      showDragHandle: true,
-      builder: (context) => LooplyModalSystemBar(
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const AppMaterialIcon(AppIcons.image),
-                  title: Text(appText('images')),
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                ListTile(
-                  leading: const AppMaterialIcon(AppIcons.uploadSimple),
-                  title: Text(appText('files')),
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWelcome(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context) {
     return Center(
-      key: const ValueKey<String>('ai-search-welcome'),
+      key: const ValueKey<String>('ai-search-empty'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
         child: Text(
           appText('ai_thinking'),
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: mainText(context),
-            fontSize: 27,
-            height: 1.2,
-            letterSpacing: -.55,
-            fontWeight: FontWeight.w400,
+            color: mutedText(context),
+            fontSize: 20,
+            height: 1.3,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
     );
   }
 
-  Widget _composerAction({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-    Color? color,
-    Color? background,
-    double width = 46,
-  }) {
+  Widget _buildUserBubble(BuildContext context, _AiChatMessage message) {
+  final scheme = Theme.of(context).colorScheme;
+  return Align(
+    alignment: Alignment.centerRight,
+    child: Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      padding: const EdgeInsets.fromLTRB(18, 13, 18, 13),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        message.text,
+        style: TextStyle(color: scheme.onPrimaryContainer, fontSize: 15.5, height: 1.4, fontWeight: FontWeight.w500),
+      ),
+    ),
+  );
+}
+
+  Widget _buildAssistantMessage(BuildContext context, _AiChatMessage message) {
+    final muted = mutedText(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: message.text.isEmpty && message.isStreaming
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: accentColor(context))),
+                  const SizedBox(width: 10),
+                  Text(appText('searching_answer'), style: TextStyle(color: muted, fontSize: 13)),
+                ],
+              )
+            : RichAiText(
+                text: message.text,
+                bodyTextStyle: TextStyle(color: mainText(context), fontSize: 15.5, height: 1.5),
+              ),
+      ),
+    );
+  }
+
+  Widget _composerIcon({required IconData icon, required String tooltip, required VoidCallback? onPressed}) {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: background ?? Colors.transparent,
+        color: Colors.transparent,
         shape: const CircleBorder(),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onPressed,
           child: SizedBox(
-            width: width,
-            height: 46,
-            child: Center(child: AppMaterialIcon(icon, color: color ?? mutedText(context), size: 23)),
+            width: 32,
+            height: 32,
+            child: Center(child: AppMaterialIcon(icon, color: mutedText(context), size: 22)),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAnswer(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
-    return SingleChildScrollView(
-      key: ValueKey<String>('ai-search-result-$_submittedQuery'),
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: pillColor(context),
-              borderRadius: BorderRadius.circular(17),
-              border: Border.all(color: lineColor(context).withOpacity(.55), width: .7),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.search_rounded, color: accentColor(context), size: 19),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _submittedQuery,
-                    style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w600, height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 19),
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(color: accentColor(context).withOpacity(.12), shape: BoxShape.circle),
-                child: Center(child: Image.asset(searchEngineAsset('AI Search'), width: 20, height: 20)),
-              ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Text(appText('response_title'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
-              ),
-              if (_answer.isNotEmpty)
-                IconButton(
-                  tooltip: appText('copy_address'),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _copyAnswer,
-                  icon: Icon(Icons.copy_rounded, size: 19, color: muted),
-                ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          if (_answer.isNotEmpty)
-            RichAiText(
-              text: _answer,
-              bodyTextStyle: TextStyle(color: text, fontSize: 15, height: 1.48),
-            ),
-          if (_isLoading && _answer.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 22),
-              child: Row(
-                children: [
-                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: accentColor(context))),
-                  const SizedBox(width: 11),
-                  Text(appText('searching_answer'), style: TextStyle(color: muted, fontSize: 13)),
-                ],
-              ),
-            ),
-          if (_isLoading && _answer.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(children: [
-                SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 1.8, color: accentColor(context))),
-                const SizedBox(width: 8),
-                Text(appText('finishing_answer'), style: TextStyle(color: muted, fontSize: 11.5)),
-              ]),
-            ),
-          if (_error != null)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: accentColor(context).withOpacity(.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: accentColor(context).withOpacity(.22)),
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Icon(Icons.info_outline_rounded, color: accentColor(context), size: 19),
-                  const SizedBox(width: 8),
-                  Text(appText('answer_failed'), style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700)),
-                ]),
-                const SizedBox(height: 7),
-                Text(_error!, style: TextStyle(color: muted, fontSize: 12.5, height: 1.4)),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => unawaited(_runSearch(_submittedQuery)),
-                    icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: Text(appText('try_again')),
-                    style: TextButton.styleFrom(foregroundColor: accentColor(context)),
-                  ),
-                ),
-              ]),
-            ),
-        ],
       ),
     );
   }
@@ -379,6 +253,8 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     final accent = accentColor(context);
+    final hasText = _controller.text.trim().isNotEmpty;
+
     return Scaffold(
       backgroundColor: pageBg(context),
       body: SafeArea(
@@ -397,109 +273,94 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               ),
             ),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                reverseDuration: const Duration(milliseconds: 140),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                child: _submittedQuery.trim().isEmpty ? _buildWelcome(context) : _buildAnswer(context),
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(minHeight: 154, maxWidth: 720),
-                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
-                  decoration: BoxDecoration(
-                    color: settingsCardColor(context),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(color: lineColor(context).withOpacity(.72), width: .9),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(minHeight: 48, maxHeight: 82),
-                        child: TextField(
-                          controller: _controller,
-                          minLines: 1,
-                          maxLines: 3,
-                          textInputAction: TextInputAction.send,
-                          textCapitalization: TextCapitalization.sentences,
-                          style: TextStyle(color: text, fontSize: 17, height: 1.35),
-                          cursorColor: accent,
-                          onSubmitted: _submit,
-                          decoration: InputDecoration(
-                            hintText: appText('ask_anything'),
-                            hintStyle: TextStyle(color: muted, fontSize: 17, height: 1.35),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          _composerAction(
-                            icon: AppIcons.plus,
-                            tooltip: appText('add'),
-                            onPressed: _showAttachmentOptions,
-                            color: text,
-                            background: muted.withOpacity(.16),
-                            width: 50,
-                          ),
-                          const Spacer(),
-                          _composerAction(
-                            icon: AppIcons.microphone,
-                            tooltip: appText('voice_search'),
-                            onPressed: () => ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                              SnackBar(content: Text(appText('voice_unavailable'))),
-                            ),
-                            color: text,
-                            width: 44,
-                          ),
-                          const SizedBox(width: 8),
-                          _composerAction(
-                            icon: AppIcons.image,
-                            tooltip: appText('image_search'),
-                            onPressed: _showAttachmentOptions,
-                            color: text,
-                            width: 44,
-                          ),
-                          const SizedBox(width: 8),
-                          Material(
-                            color: accent,
-                            shape: const CircleBorder(),
-                            clipBehavior: Clip.antiAlias,
-                            child: InkWell(
-                              customBorder: const CircleBorder(),
-                              onTap: _isLoading ? null : () => _submit(_controller.text),
-                              child: SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: Center(child: AppMaterialIcon(AppIcons.arrowUp, color: Colors.white, size: 25)),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: _messages.isEmpty
+                  ? _buildEmptyState(context)
+                  : ListView.separated(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 100),
+                      itemCount: _messages.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 20),
+                      itemBuilder: (context, index) {
+                        final message = _messages[index];
+                        return message.role == _AiChatRole.user
+                            ? _buildUserBubble(context, message)
+                            : _buildAssistantMessage(context, message);
+                      },
+                    ),
             ),
           ],
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+              decoration: BoxDecoration(
+                color: panelColor(context),
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 12, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  _composerIcon(
+                    icon: AppIcons.plus,
+                    tooltip: appText('add'),
+                    onPressed: () {},
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: _submit,
+                      style: TextStyle(color: text, fontSize: 16, height: 1.4),
+                      cursorColor: accent,
+                      decoration: InputDecoration(
+                        hintText: appText('ask_anything'),
+                        hintStyle: TextStyle(color: muted),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  Material(
+                    color: hasText ? accent : mutedText(context).withOpacity(.16),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: (hasText && !_isLoading) ? () => _submit(_controller.text) : null,
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Center(
+                          child: AppMaterialIcon(
+                            AppIcons.arrowUp,
+                            size: 20,
+                            color: hasText ? Theme.of(context).colorScheme.onPrimary : mutedText(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
-
 }

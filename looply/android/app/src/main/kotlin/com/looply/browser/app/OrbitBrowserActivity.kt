@@ -127,7 +127,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
         private const val MAX_TAB_STATE_CHARS = 3_000_000
 
-        private const val AD_COSMETIC_FILTER_SCRIPT = """
+        private val AD_COSMETIC_FILTER_SCRIPT = """
             (function(){
               if (window.__browseItCosmeticFilterInstalled) return;
               window.__browseItCosmeticFilterInstalled = true;
@@ -169,7 +169,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             })();
         """.trimIndent()
 
-        private const val MEDIA_COMPATIBILITY_SCRIPT = """
+        private val MEDIA_COMPATIBILITY_SCRIPT = """
             (function(){
               if (window.__browseItMediaCompatibilityInstalled) return;
               window.__browseItMediaCompatibilityInstalled = true;

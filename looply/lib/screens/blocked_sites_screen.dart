@@ -5,6 +5,7 @@ import '../security/browser_security_service.dart';
 import '../theme.dart';
 import '../widgets/looply_dialog.dart';
 import '../widgets/material_symbols.dart';
+import 'activity_screen.dart' show SiteFaviconAvatar;
 
 class BlockedSitesScreen extends StatefulWidget {
   const BlockedSitesScreen({super.key});
@@ -145,62 +146,69 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
         backgroundColor: bg,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        leadingWidth: 104,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBackButton(tooltip: appText('back'), color: text, buttonSize: 48),
-            IconButton(
-              tooltip: appText('add_blocked_site'),
-              onPressed: _addSite,
-              icon: AppMaterialIcon(AppIcons.plus, color: accentColor(context), size: 24),
-            ),
-          ],
-        ),
+        leading: AppBackButton(tooltip: appText('back'), color: text),
         title: Text(appText('blocked_sites'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w600)),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _sites.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AppMaterialIcon(AppIcons.shieldCheck, color: muted, size: 42),
-                        const SizedBox(height: 12),
-                        Text(appText('blocked_sites_empty'), style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 16)),
-                        const SizedBox(height: 6),
-                        Text(appText('blocked_sites_empty_description'), textAlign: TextAlign.center,
-                            style: TextStyle(color: muted, fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  itemCount: _sites.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final host = _sites[index];
-                    return Material(
-                      color: settingsCardColor(context),
-                      borderRadius: BorderRadius.circular(18),
-                      clipBehavior: Clip.antiAlias,
-                      child: ListTile(
-                        leading: AppMaterialIcon(AppIcons.shield, color: accentColor(context)),
-                        title: Text(host, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                        subtitle: Text(appText('blocked_site_subtitle'), style: TextStyle(color: muted, fontSize: 12)),
-                        trailing: IconButton(
-                          tooltip: appText('remove_block'),
-                          onPressed: () => _removeSite(host),
-                          icon: AppMaterialIcon(AppIcons.trash, color: muted),
+      body: Stack(
+        children: [
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _sites.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AppMaterialIcon(AppIcons.shieldCheck, color: muted, size: 42),
+                            const SizedBox(height: 12),
+                            Text(appText('blocked_sites_empty'), style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 16)),
+                            const SizedBox(height: 6),
+                            Text(appText('blocked_sites_empty_description'), textAlign: TextAlign.center,
+                                style: TextStyle(color: muted, fontSize: 13)),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                      itemCount: _sites.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final host = _sites[index];
+                        return Material(
+                          color: settingsCardColor(context),
+                          borderRadius: BorderRadius.circular(18),
+                          clipBehavior: Clip.antiAlias,
+                          child: ListTile(
+                            leading: SiteFaviconAvatar(url: host, size: 38),
+                            title: Text(host, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                            subtitle: Text(appText('blocked_site_subtitle'), style: TextStyle(color: muted, fontSize: 12)),
+                            trailing: IconButton(
+                              tooltip: appText('remove_block'),
+                              onPressed: () => _removeSite(host),
+                              icon: AppMaterialIcon(AppIcons.trash, color: muted),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+          Positioned(
+            right: 18,
+            bottom: 18,
+            child: FloatingActionButton(
+              heroTag: 'looply-blocked-sites-add-fab',
+              tooltip: appText('add_blocked_site'),
+              backgroundColor: looplyPrimary,
+              foregroundColor: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 4,
+              onPressed: _addSite,
+              child: const AppMaterialIcon(AppIcons.plus, size: 24, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

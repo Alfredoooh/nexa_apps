@@ -1,8 +1,10 @@
 package com.looply.browser.app
 
 import android.graphics.ImageDecoder
+import android.graphics.drawable.Animatable2
 import android.graphics.drawable.AnimatedImageDrawable
 import android.graphics.drawable.AnimationDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.widget.ImageView
 
@@ -38,9 +40,10 @@ internal fun ImageView.playSplashCircle(onFinished: () -> Unit) {
             postDelayed(onFinished, 650L)
             return
         }
+
         drawable.repeatCount = 0
-        drawable.registerAnimationCallback(object : AnimatedImageDrawable.AnimationCallback() {
-            override fun onAnimationEnd(drawable: android.graphics.drawable.Drawable) {
+        drawable.registerAnimationCallback(object : Animatable2.AnimationCallback() {
+            override fun onAnimationEnd(drawable: Drawable) {
                 post(onFinished)
             }
         })
