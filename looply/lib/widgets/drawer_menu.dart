@@ -416,9 +416,8 @@ void showThemeSheet(BuildContext context) {
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     ),
-    builder: (sheetContext) => LooplyModalSystemBar(
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: themeController,
+    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
         valueListenable: themeController.pureDark,
         builder: (context, pureBlack, __) {
@@ -457,7 +456,7 @@ void showThemeSheet(BuildContext context) {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   const SizedBox(height: 12),
                   Container(width: 32, height: 4, decoration: BoxDecoration(color: mutedForMode(context, mode).withOpacity(.45), borderRadius: BorderRadius.circular(99))),
-                  Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: AlignmentDirectional.centerStart, child: Text(appText('theme'), style: TextStylpe(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
+                  Padding(padding: const EdgeInsets.fromLTRB(20, 12, 20, 8), child: Align(alignment: AlignmentDirectional.centerStart, child: Text(appText('theme'), style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800)))),
                   option(label: appText('light'), selected: mode == ThemeMode.light, onTap: () => themeController.setMode(ThemeMode.light)),
                   if (mode == ThemeMode.dark) ...[
                     option(label: appText('dark'), selected: !pureBlack, onTap: () => themeController.setMode(ThemeMode.dark)),
@@ -470,7 +469,6 @@ void showThemeSheet(BuildContext context) {
             ),
           );
         },
-      ),
       ),
     ),
   );

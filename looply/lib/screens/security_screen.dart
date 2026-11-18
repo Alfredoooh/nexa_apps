@@ -36,9 +36,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
     });
   }
 
-  // Bottom sheet para verificar a credencial existente antes de permitir
-  // reconfigurar. Usa autofocus + SafeArea para o campo nunca ficar
-  // escondido pelo teclado.
   Future<bool> _verifyExistingCredential() async {
     final oldMode = await BrowserSecurityService.credentialMode();
     final oldController = TextEditingController();
@@ -49,65 +46,63 @@ class _SecurityScreenState extends State<SecurityScreen> {
       isScrollControlled: true,
       backgroundColor: pageBg(context),
       showDragHandle: true,
-      builder: (sheetContext) => LooplyModalSystemBar(
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 8,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-            ),
-            child: StatefulBuilder(
-              builder: (context, setSheetState) => Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      AppMaterialIcon(AppIcons.shieldCheck, color: mainText(context), size: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          appText('verify_existing_protection'),
-                          style: TextStyle(color: mainText(context), fontSize: 19, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: oldController,
-                    autofocus: true,
-                    obscureText: obscure,
-                    keyboardType: oldMode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => Navigator.of(context, rootNavigator: true).pop(true),
-                    decoration: InputDecoration(
-                      labelText: oldMode == 'pin' ? appText('current_pin') : appText('current_password'),
-                      suffixIcon: IconButton(
-                        onPressed: () => setSheetState(() => obscure = !obscure),
-                        icon: AppMaterialIcon(obscure ? AppIcons.eye : AppIcons.eyeSlash),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 8,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setSheetState) => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    AppMaterialIcon(AppIcons.shieldCheck, color: mainText(context), size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        appText('verify_existing_protection'),
+                        style: TextStyle(color: mainText(context), fontSize: 19, fontWeight: FontWeight.w700),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: oldController,
+                  autofocus: true,
+                  obscureText: obscure,
+                  keyboardType: oldMode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => Navigator.of(context, rootNavigator: true).pop(true),
+                  decoration: InputDecoration(
+                    labelText: oldMode == 'pin' ? appText('current_pin') : appText('current_password'),
+                    suffixIcon: IconButton(
+                      onPressed: () => setSheetState(() => obscure = !obscure),
+                      icon: AppMaterialIcon(obscure ? AppIcons.eye : AppIcons.eyeSlash),
+                    ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
-                        child: Text(appText('cancel')),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
-                        child: Text(appText('continue')),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+                      child: Text(appText('cancel')),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+                      child: Text(appText('continue')),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -129,8 +124,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
     return true;
   }
 
-  // Bottom sheet para configurar PIN/senha. Campos sempre visíveis mesmo
-  // com o teclado aberto (isScrollControlled + viewInsets no padding).
   Future<bool> _configureCredential() async {
     if (_credentialConfigured || await BrowserSecurityService.hasCredential()) {
       final verified = await _verifyExistingCredential();
@@ -147,98 +140,96 @@ class _SecurityScreenState extends State<SecurityScreen> {
       isScrollControlled: true,
       backgroundColor: pageBg(context),
       showDragHandle: true,
-      builder: (sheetContext) => LooplyModalSystemBar(
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 8,
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-            ),
-            child: StatefulBuilder(
-              builder: (context, setSheetState) => SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        AppMaterialIcon(AppIcons.shieldCheck, color: mainText(context), size: 22),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            appText('configure_protection'),
-                            style: TextStyle(color: mainText(context), fontSize: 19, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      appText('choose_protection_help'),
-                      style: TextStyle(color: mutedText(context), fontSize: 13, height: 1.4),
-                    ),
-                    const SizedBox(height: 16),
-                    ValueListenableBuilder<String>(
-                      valueListenable: modeController,
-                      builder: (context, mode, _) => SegmentedButton<String>(
-                        segments: [
-                          ButtonSegment<String>(value: 'pin', label: Text(appText('pin'))),
-                          ButtonSegment<String>(value: 'password', label: Text(appText('password'))),
-                        ],
-                        selected: <String>{mode},
-                        onSelectionChanged: (selection) {
-                          modeController.value = selection.first;
-                          secretController.clear();
-                          confirmController.clear();
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    ValueListenableBuilder<String>(
-                      valueListenable: modeController,
-                      builder: (context, mode, _) => TextField(
-                        controller: secretController,
-                        autofocus: true,
-                        obscureText: !visible,
-                        keyboardType: mode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
-                        textInputAction: TextInputAction.next,
-                        maxLength: mode == 'pin' ? 12 : 64,
-                        decoration: InputDecoration(
-                          labelText: mode == 'pin' ? appText('pin_format_hint') : appText('password_format_hint'),
-                          counterText: '',
-                          suffixIcon: IconButton(
-                            onPressed: () => setSheetState(() => visible = !visible),
-                            icon: AppMaterialIcon(visible ? AppIcons.eyeSlash : AppIcons.eye),
-                          ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 8,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setSheetState) => SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppMaterialIcon(AppIcons.shieldCheck, color: mainText(context), size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          appText('configure_protection'),
+                          style: TextStyle(color: mainText(context), fontSize: 19, fontWeight: FontWeight.w700),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: confirmController,
-                      obscureText: true,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(labelText: appText('confirm_protection')),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
-                          child: Text(appText('cancel')),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
-                          child: Text(appText('save')),
-                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    appText('choose_protection_help'),
+                    style: TextStyle(color: mutedText(context), fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: 16),
+                  ValueListenableBuilder<String>(
+                    valueListenable: modeController,
+                    builder: (context, mode, _) => SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment<String>(value: 'pin', label: Text(appText('pin'))),
+                        ButtonSegment<String>(value: 'password', label: Text(appText('password'))),
                       ],
+                      selected: <String>{mode},
+                      onSelectionChanged: (selection) {
+                        modeController.value = selection.first;
+                        secretController.clear();
+                        confirmController.clear();
+                      },
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 14),
+                  ValueListenableBuilder<String>(
+                    valueListenable: modeController,
+                    builder: (context, mode, _) => TextField(
+                      controller: secretController,
+                      autofocus: true,
+                      obscureText: !visible,
+                      keyboardType: mode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
+                      textInputAction: TextInputAction.next,
+                      maxLength: mode == 'pin' ? 12 : 64,
+                      decoration: InputDecoration(
+                        labelText: mode == 'pin' ? appText('pin_format_hint') : appText('password_format_hint'),
+                        counterText: '',
+                        suffixIcon: IconButton(
+                          onPressed: () => setSheetState(() => visible = !visible),
+                          icon: AppMaterialIcon(visible ? AppIcons.eyeSlash : AppIcons.eye),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: confirmController,
+                    obscureText: true,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(labelText: appText('confirm_protection')),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context, rootNavigator: true).pop(false),
+                        child: Text(appText('cancel')),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () => Navigator.of(context, rootNavigator: true).pop(true),
+                        child: Text(appText('save')),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -387,9 +378,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 }
 
-// Mesmo visual do _SettingsTile da SettingsScreen: badge circular pillColor,
-// ícone neutro (mainText, não accentColor), para a tela ficar coerente com
-// o resto do app em vez de destoar com ícones azuis soltos.
 class _SecurityTile extends StatelessWidget {
   const _SecurityTile({
     required this.icon,

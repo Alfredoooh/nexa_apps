@@ -15,9 +15,8 @@ void showSearchEnginePicker(BuildContext context) {
     showDragHandle: false,
     useSafeArea: true,
     isScrollControlled: true,
-    builder: (sheetContext) => LooplyModalSystemBar(
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: themeController,
+    builder: (sheetContext) => ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
       builder: (context, mode, _) {
         final surface = panelForMode(context, mode);
         final text = textForMode(context, mode);
@@ -147,7 +146,6 @@ void showSearchEnginePicker(BuildContext context) {
           ),
         );
       },
-      ),
     ),
   );
 }
