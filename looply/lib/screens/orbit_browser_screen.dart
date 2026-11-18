@@ -320,7 +320,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
 
         case 'home':
         default:
-          ShellTabRequest.instance.request(0);
+          if (!widget.isIncognito && thumbnail == null && transitionScreenshot != null) {
+            tabsController.updateTab(widget.tabId, thumbnail: transitionScreenshot);
+          }
+          ShellTabRequest.instance.requestBrowserToHome(
+            tabId: widget.tabId,
+            screenshot: transitionScreenshot ?? thumbnail,
+            sourceRect: _nativeBrowserSourceRect(),
+          );
           return;
       }
     } on MissingPluginException {

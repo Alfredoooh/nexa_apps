@@ -16,9 +16,14 @@ import '../widgets/drawer_menu_button.dart';
 import 'search_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, this.onOpenDrawer});
+  const HomeScreen({
+    super.key,
+    this.onOpenDrawer,
+    required this.recentTabPreviewKeys,
+  });
 
   final VoidCallback? onOpenDrawer;
+  final Map<String, GlobalKey> recentTabPreviewKeys;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +42,7 @@ class HomeScreen extends StatelessWidget {
                 const _HomeSearchInput(),
                 const SizedBox(height: 12),
                 const SizedBox(height: 4),
-                const RecentTabPreviewsCard(),
+                RecentTabPreviewsCard(previewKeys: recentTabPreviewKeys),
               ],
             ),
           ),
@@ -246,18 +251,22 @@ class _SignedInAvatar extends StatelessWidget {
 // Até dez miniaturas, exclusivamente imagem. O toque envia a captura e a
 // posição do cartão para o Container Transform já usado pela grelha de abas.
 class RecentTabPreviewsCard extends StatefulWidget {
-  const RecentTabPreviewsCard({super.key});
+  const RecentTabPreviewsCard({
+    super.key,
+    required this.previewKeys,
+  });
+
+  final Map<String, GlobalKey> previewKeys;
 
   @override
   State<RecentTabPreviewsCard> createState() => _RecentTabPreviewsCardState();
 }
 
 class _RecentTabPreviewsCardState extends State<RecentTabPreviewsCard> {
-  final Map<String, GlobalKey> _previewKeys = <String, GlobalKey>{};
 
   Rect? _rectFor(String id) {
     try {
-      final box = _previewKeys[id]?.currentContext?.findRenderObject() as RenderBox?;
+      final box = widget.previewKeys[id]?.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached || !box.hasSize) return null;
       final origin = box.localToGlobal(Offset.zero);
       return origin & box.size;
@@ -290,7 +299,7 @@ class _RecentTabPreviewsCardState extends State<RecentTabPreviewsCard> {
               .toList()
             ..sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
           final tabs = visible.take(10).toList(growable: false);
-          _previewKeys.removeWhere((id, _) => !tabs.any((tab) => tab.id == id));
+          widget.previewKeys.removeWhere((id, _) => !tabs.any((tab) => tab.id == id));
           if (tabs.isEmpty) return const SizedBox.shrink();
 
           return Container(
@@ -308,7 +317,7 @@ class _RecentTabPreviewsCardState extends State<RecentTabPreviewsCard> {
                 separatorBuilder: (_, __) => const SizedBox(width: 11),
                 itemBuilder: (context, index) {
                   final tab = tabs[index];
-                  final key = _previewKeys.putIfAbsent(tab.id, GlobalKey.new);
+                  final key = widget.previewKeys.putIfAbsent(tab.id, GlobalKey.new);
                   return Material(
                     key: key,
                     color: pillColor(context),

@@ -189,6 +189,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final GlobalKey _repaintKey = GlobalKey();
   final Map<String, GlobalKey> _previewKeys = {};
   final Map<String, GlobalKey> _cardKeys = {};
+  final Map<String, GlobalKey> _homePreviewKeys = {};
   // As páginas principais são Início e Atividade.
   final List<String> _screenKeys = const ['home_screen', 'activity_screen', 'games_screen'];
   List<String> get _screenLabels => <String>[appText('home'), appText('activity'), appText('games')];
@@ -462,6 +463,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         !liveBrowserIds.contains(id) || id != _activeBrowserTabId);
     _previewKeys.removeWhere((id, _) => !liveTabIds.contains(id));
     _cardKeys.removeWhere((id, _) => !liveTabIds.contains(id));
+    _homePreviewKeys.removeWhere((id, _) => !liveTabIds.contains(id));
 
     var activeWasRemoved = false;
     if (_activeBrowserTabId != null &&
@@ -628,6 +630,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       return;
     }
 
+    if (request.browserHomeRequested) {
+      final tabId = request.browserHomeTabId;
+      final screenshot = request.browserHomeScreenshot;
+      final sourceRect = request.browserHomeSourceRect;
+      request.clearBrowserHomeRequest();
+      if (tabId != null) {
+        unawaited(_closeBrowserToHomePreview(
+          tabId: tabId,
+          screenshot: screenshot,
+          sourceRect: sourceRect,
+        ));
+      }
+      return;
+    }
+
     if (request.browserCloseRequested) {
       request.browserCloseRequested = false;
       final tabId = request.browserCloseTabId;
@@ -758,9 +775,13 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                         borderRadius: radius,
                         child: Image(
                           image: imageProvider,
-                          fit: BoxFit.cover,
+                          // Preserve the complete web viewport while the card
+                          // morphs to its destination. Cover used to crop the
+                          // captured page during the expansion and made it look
+                          // artificially zoomed.
+                          fit: BoxFit.fill,
                           gaplessPlayback: true,
-                          filterQuality: FilterQuality.low,
+                          filterQuality: FilterQuality.medium,
                         ),
                       ),
                     ),
@@ -1156,6 +1177,69 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   }
 
 
+  Future<void> _closeBrowserToHomePreview({
+    required String tabId,
+    required Uint8List? screenshot,
+    required Rect? sourceRect,
+  }) async {
+    if (!mounted || _morphing || _showingTabsGrid) return;
+    _morphing = true;
+
+    final tab = tabsController.getTab(tabId);
+    if (tab != null) tabsController.activate(tab.id);
+
+    final imageProvider = screenshot == null
+        ? null
+        : await _prepareSnapshotImage(screenshot);
+    if (!mounted) {
+      _morphing = false;
+      return;
+    }
+
+    // The browser tab has already received its new thumbnail from
+    // OrbitBrowserScreen. Reveal Home underneath the same snapshot, then morph
+    // into that exact recent-tab card rather than merely fading to Home.
+    _browserFadeController.stop();
+    _browserFadeController.value = 1;
+    setState(() {
+      _activeBrowserTabId = null;
+      _showingTabsGrid = false;
+      _selectedTab = 0;
+    });
+    _persistCurrentActivity();
+
+    if (imageProvider != null && sourceRect != null) {
+      _insertSnapshotOverlay(
+        image: imageProvider,
+        from: sourceRect,
+        opening: false,
+      );
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      _removeSnapshotOverlay();
+      _morphing = false;
+      return;
+    }
+
+    if (imageProvider != null && sourceRect != null) {
+      final destination = _homePreviewKeys[tabId] == null
+          ? null
+          : _rectInOverlay(_homePreviewKeys[tabId]!);
+      if (destination != null && destination.width > 0 && destination.height > 0) {
+        await _animateSnapshot(to: destination);
+      } else {
+        _removeSnapshotOverlay();
+      }
+    } else {
+      _removeSnapshotOverlay();
+    }
+
+    if (mounted) setState(() => _morphing = false);
+  }
+
   Future<void> _openBrowserFromHomePreview({
     required String tabId,
     required Uint8List screenshot,
@@ -1261,7 +1345,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     // nem reconstruir a WebView persistente. O Container Transform da grelha
     // continua independente e inalterado.
     final shellPages = <Widget>[
-      HomeScreen(onOpenDrawer: _openShellDrawer),
+      HomeScreen(
+        onOpenDrawer: _openShellDrawer,
+        recentTabPreviewKeys: _homePreviewKeys,
+      ),
       const ActivityScreen(),
       const GamesScreen(),
     ];
