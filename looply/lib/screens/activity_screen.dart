@@ -124,7 +124,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Expanded(child: Text(appText('recent'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
                 if (entries.isNotEmpty)
                   TextButton(
-                    onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
+                    onPressed: () => Navigator.of(context, rootNavigator: true).push<void>(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
                     child: Text(appText('view_all')),
                   ),
               ],
@@ -688,7 +688,7 @@ class _VisitedSitesCard extends StatelessWidget {
       child: InkWell(
         onTap: hosts.isEmpty
             ? null
-            : () => Navigator.of(context).push(
+            : () => Navigator.of(context, rootNavigator: true).push<void>(
                   MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
                 ),
         borderRadius: BorderRadius.circular(999),

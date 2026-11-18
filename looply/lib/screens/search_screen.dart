@@ -521,20 +521,29 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   }
 
   Widget _clearButton(Color muted) {
-    return GestureDetector(
-      onTap: () {
-        _controller.clear();
-        _focusNode.requestFocus();
-      },
-      child: Container(
-        width: 22,
-        height: 22,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: muted.withOpacity(.35),
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 2, end: 4),
+      child: Tooltip(
+        message: appText('clear'),
+        child: Material(
+          color: settingsCardColor(context),
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () {
+              _controller.clear();
+              _suggestions = <String>[];
+              _debounce?.cancel();
+              _focusNode.requestFocus();
+            },
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(child: AppMaterialIcon(AppIcons.x, size: 18, color: muted)),
+            ),
+          ),
         ),
-        child: AppMaterialIcon(AppIcons.x, size: 20, color: Theme.of(context).scaffoldBackgroundColor),
       ),
     );
   }

@@ -183,7 +183,7 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
         borderRadius: BorderRadius.circular(999),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => Navigator.of(context).push<void>(
+          onTap: () => Navigator.of(context, rootNavigator: true).push<void>(
             MaterialPageRoute<void>(
               builder: (_) => SearchScreen(
                 controller: _controller,
@@ -192,7 +192,10 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
             ),
           ),
           borderRadius: BorderRadius.circular(999),
-          child: _field(context, readOnly: true),
+          child: IgnorePointer(
+            // O campo readonly não pode consumir o toque; a cápsula inteira abre a pesquisa.
+            child: _field(context, readOnly: true),
+          ),
         ),
       ),
     );

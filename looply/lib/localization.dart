@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/translations.dart';
+import 'l10n/extra_translations.dart';
 
 class AppLanguage {
   const AppLanguage({required this.code, required this.name, required this.nativeName});
@@ -62,6 +63,8 @@ final AppLanguageController appLanguageController = AppLanguageController();
 
 String appText(String key) {
   final languageCode = appLanguageController.value.code;
+  final extra = appExtraTranslations[languageCode]?[key];
+  if (extra != null && extra.trim().isNotEmpty) return extra;
   final language = appTranslations[languageCode] ?? appTranslations['pt']!;
   final localized = language[key];
   if (localized != null && localized.trim().isNotEmpty) return localized;

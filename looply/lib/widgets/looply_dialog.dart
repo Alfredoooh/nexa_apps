@@ -41,7 +41,11 @@ class _LooplyModalSystemBarState extends State<LooplyModalSystemBar> {
     // The modal barrier dims Flutter content, but on several Android OEM
     // builds the transparent status bar is not composited with that barrier.
     // Apply the same black scrim explicitly to the system status-bar area.
-    _modalStyle = base.copyWith(statusBarColor: const Color(0x6B000000));
+    _modalStyle = base.copyWith(
+      statusBarColor: const Color(0x8A000000),
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    );
     if (!_registered) {
       _registered = true;
       if (_openOverlays == 0) _restoreStyle = base;
@@ -80,9 +84,8 @@ class LooplyDialogAction<T> {
   final bool isDestructive;
 }
 
-/// Diálogo próprio do BrowseIt: painel arredondado e simples, sem contorno
-/// nem botão de fechar — fecha-se através das ações ou do toque fora dele.
-/// Evita AlertDialog/Dialogs fornecidos pelo tema da plataforma.
+/// Usa a rota padrão showDialog e o AlertDialog Material 3 do tema do BrowseIt.
+/// Não define transições próprias; a rota mantém a animação Material nativa.
 Future<T?> showLooplyDialog<T>({
   required BuildContext context,
   required String title,
@@ -91,127 +94,74 @@ Future<T?> showLooplyDialog<T>({
   IconData? icon,
   bool barrierDismissible = true,
 }) {
-  return showGeneralDialog<T>(
+  return showDialog<T>(
     context: context,
+    useRootNavigator: true,
+    useSafeArea: true,
     barrierDismissible: barrierDismissible,
-    barrierLabel: appText('close'),
-    barrierColor: Colors.black.withOpacity(.42),
-    transitionDuration: const Duration(milliseconds: 310),
-    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+    barrierColor: Colors.black.withOpacity(.54),
+    builder: (dialogContext) {
       final isDark = Theme.of(dialogContext).brightness == Brightness.dark;
       final surface = isDark ? settingsCardColor(dialogContext) : Colors.white;
       final media = MediaQuery.of(dialogContext);
-      final availableHeight = (media.size.height - media.viewInsets.bottom - 32)
+      final availableHeight = (media.size.height - media.viewInsets.bottom - 48)
           .clamp(240.0, media.size.height)
           .toDouble();
       return LooplyModalSystemBar(
-        child: SafeArea(
-          child: AnimatedPadding(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + media.viewInsets.bottom),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 560,
-                  maxHeight: availableHeight,
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Material(
-                    color: surface,
-                    surfaceTintColor: Colors.transparent,
-                    elevation: 3,
-                    clipBehavior: Clip.antiAlias,
-                    borderRadius: BorderRadius.circular(24),
-                    child: SingleChildScrollView(
-                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              if (icon != null) ...[
-                                AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
-                                const SizedBox(width: 12),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  textAlign: TextAlign.start,
-                                  softWrap: true,
-                                  style: TextStyle(
-                                    color: mainText(dialogContext),
-                                    fontSize: 20,
-                                    height: 1.25,
-                                    letterSpacing: -.2,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          DefaultTextStyle.merge(
-                            style: TextStyle(
-                              color: mutedText(dialogContext),
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                            child: content,
-                          ),
-                          if (actions.isNotEmpty) ...[
-                            const SizedBox(height: 22),
-                            LayoutBuilder(
-                              builder: (context, constraints) => Align(
-                                alignment: AlignmentDirectional.centerEnd,
-                                child: Wrap(
-                                  alignment: WrapAlignment.end,
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    for (final action in actions)
-                                      ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: constraints.maxWidth.clamp(112.0, 240.0).toDouble(),
-                                        ),
-                                        child: _DialogActionButton<T>(
-                                          action: action,
-                                          onPressed: () => Navigator.of(dialogContext).pop(action.value),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+        child: AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          backgroundColor: surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 6,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+          title: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (icon != null) ...[
+                AppMaterialIcon(icon, color: mainText(dialogContext), size: 24),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.start,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: mainText(dialogContext),
+                    fontSize: 20,
+                    height: 1.25,
+                    letterSpacing: -.2,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+            ],
+          ),
+          contentPadding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 560, maxHeight: availableHeight),
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const BouncingScrollPhysics(),
+              child: DefaultTextStyle.merge(
+                style: TextStyle(color: mutedText(dialogContext), fontSize: 14, height: 1.5),
+                child: content,
+              ),
             ),
           ),
-        ),
-      );
-    },
-    // Entrada expressiva com mola suave, mantendo a superfície e as cores Looply.
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final spatial = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
-      final effects = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: effects,
-        child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(spatial),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: .93, end: 1).animate(spatial),
-            child: child,
-          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+          actionsAlignment: MainAxisAlignment.end,
+          actionsOverflowAlignment: OverflowBarAlignment.end,
+          actionsOverflowDirection: VerticalDirection.down,
+          actionsOverflowButtonSpacing: 8,
+          actions: [
+            for (final action in actions)
+              _DialogActionButton<T>(
+                action: action,
+                onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(action.value),
+              ),
+          ],
         ),
       );
     },

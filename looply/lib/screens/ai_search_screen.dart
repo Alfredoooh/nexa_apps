@@ -179,7 +179,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     await Clipboard.setData(ClipboardData(text: _answer));
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(content: Text('Resposta copiada.')),
+      SnackBar(content: Text(appText('answer_copied'))),
     );
   }
 
@@ -214,39 +214,47 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   }
 
   Widget _buildWelcome(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
     return Center(
       key: const ValueKey<String>('ai-search-welcome'),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                color: accentColor(context).withOpacity(.12),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Image.asset(searchEngineAsset('AI Search'), width: 42, height: 42, fit: BoxFit.contain),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'AI Search',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appText('ai_search_description'),
-              textAlign: TextAlign.center,
-              style: TextStyle(color: muted, fontSize: 14, height: 1.5),
-            ),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Text(
+          appText('ai_thinking'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: mainText(context),
+            fontSize: 27,
+            height: 1.2,
+            letterSpacing: -.55,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _composerAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    Color? color,
+    Color? background,
+    double width = 46,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: background ?? Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: width,
+            height: 46,
+            child: Center(child: AppMaterialIcon(icon, color: color ?? mutedText(context), size: 23)),
+          ),
         ),
       ),
     );
@@ -294,7 +302,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               ),
               const SizedBox(width: 9),
               Expanded(
-                child: Text('Resposta', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
+                child: Text(appText('response_title'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800)),
               ),
               if (_answer.isNotEmpty)
                 IconButton(
@@ -318,7 +326,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 children: [
                   SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.2, color: accentColor(context))),
                   const SizedBox(width: 11),
-                  Text('A pesquisar e a organizar a resposta…', style: TextStyle(color: muted, fontSize: 13)),
+                  Text(appText('searching_answer'), style: TextStyle(color: muted, fontSize: 13)),
                 ],
               ),
             ),
@@ -328,7 +336,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               child: Row(children: [
                 SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 1.8, color: accentColor(context))),
                 const SizedBox(width: 8),
-                Text('A concluir resposta…', style: TextStyle(color: muted, fontSize: 11.5)),
+                Text(appText('finishing_answer'), style: TextStyle(color: muted, fontSize: 11.5)),
               ]),
             ),
           if (_error != null)
@@ -345,7 +353,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 Row(children: [
                   Icon(Icons.info_outline_rounded, color: accentColor(context), size: 19),
                   const SizedBox(width: 8),
-                  Text('Não foi possível obter a resposta', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700)),
+                  Text(appText('answer_failed'), style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700)),
                 ]),
                 const SizedBox(height: 7),
                 Text(_error!, style: TextStyle(color: muted, fontSize: 12.5, height: 1.4)),
@@ -355,7 +363,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                   child: TextButton.icon(
                     onPressed: () => unawaited(_runSearch(_submittedQuery)),
                     icon: const Icon(Icons.refresh_rounded, size: 17),
-                    label: const Text('Tentar novamente'),
+                    label: Text(appText('try_again')),
                     style: TextButton.styleFrom(foregroundColor: accentColor(context)),
                   ),
                 ),
@@ -370,25 +378,21 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
+    final accent = accentColor(context);
     return Scaffold(
       backgroundColor: pageBg(context),
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SizedBox(
-                height: 64,
-                child: Row(
-                  children: [
-                    LooplyDrawerMenuButton(
-                      onPressed: () => drawer_menu.showLooplyDrawer(context),
-                    ),
-                    const SizedBox(width: 4),
-                    Image.asset(searchEngineAsset('AI Search'), width: 24, height: 24, fit: BoxFit.contain),
-                    const SizedBox(width: 10),
-                    Text('AI Search', style: TextStyle(color: text, fontSize: 18, fontWeight: FontWeight.w700)),
-                  ],
+            SizedBox(
+              height: 62,
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 16),
+                  child: LooplyDrawerMenuButton(
+                    onPressed: () => drawer_menu.showLooplyDrawer(context),
+                  ),
                 ),
               ),
             ),
@@ -396,6 +400,8 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 reverseDuration: const Duration(milliseconds: 140),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
                 transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
                 child: _submittedQuery.trim().isEmpty ? _buildWelcome(context) : _buildAnswer(context),
               ),
@@ -403,65 +409,89 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             SafeArea(
               top: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 56),
-                      padding: const EdgeInsets.fromLTRB(6, 5, 6, 5),
-                      decoration: BoxDecoration(
-                        color: pillColor(context),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: lineColor(context), width: .7),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 154, maxWidth: 720),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
+                  decoration: BoxDecoration(
+                    color: settingsCardColor(context),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(color: lineColor(context).withOpacity(.72), width: .9),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48, maxHeight: 82),
+                        child: TextField(
+                          controller: _controller,
+                          minLines: 1,
+                          maxLines: 3,
+                          textInputAction: TextInputAction.send,
+                          textCapitalization: TextCapitalization.sentences,
+                          style: TextStyle(color: text, fontSize: 17, height: 1.35),
+                          cursorColor: accent,
+                          onSubmitted: _submit,
+                          decoration: InputDecoration(
+                            hintText: appText('ask_anything'),
+                            hintStyle: TextStyle(color: muted, fontSize: 17, height: 1.35),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
                       ),
-                      child: Row(
+                      const SizedBox(height: 10),
+                      Row(
                         children: [
-                          IconButton(
+                          _composerAction(
+                            icon: AppIcons.plus,
                             tooltip: appText('add'),
                             onPressed: _showAttachmentOptions,
-                            padding: EdgeInsets.zero,
-                            visualDensity: VisualDensity.compact,
-                            constraints: const BoxConstraints.tightFor(width: 40, height: 44),
-                            icon: AppMaterialIcon(AppIcons.plus, color: muted, size: 22),
+                            color: text,
+                            background: muted.withOpacity(.16),
+                            width: 50,
                           ),
-                          Expanded(
-                            child: TextField(
-                              controller: _controller,
-                              textInputAction: TextInputAction.search,
-                              textAlignVertical: TextAlignVertical.center,
-                              style: TextStyle(color: text, fontSize: 15),
-                              cursorColor: accentColor(context),
-                              onSubmitted: _submit,
-                              decoration: InputDecoration(
-                                hintText: appText('search_hint'),
-                                hintStyle: TextStyle(color: muted, fontSize: 14),
-                                border: InputBorder.none,
-                                enabledBorder: InputBorder.none,
-                                focusedBorder: InputBorder.none,
-                                isDense: true,
-                                contentPadding: EdgeInsets.zero,
-                              ),
+                          const Spacer(),
+                          _composerAction(
+                            icon: AppIcons.microphone,
+                            tooltip: appText('voice_search'),
+                            onPressed: () => ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                              SnackBar(content: Text(appText('voice_unavailable'))),
                             ),
+                            color: text,
+                            width: 44,
                           ),
-                          const SizedBox(width: 5),
+                          const SizedBox(width: 8),
+                          _composerAction(
+                            icon: AppIcons.image,
+                            tooltip: appText('image_search'),
+                            onPressed: _showAttachmentOptions,
+                            color: text,
+                            width: 44,
+                          ),
+                          const SizedBox(width: 8),
                           Material(
-                            color: accentColor(context),
+                            color: accent,
                             shape: const CircleBorder(),
                             clipBehavior: Clip.antiAlias,
                             child: InkWell(
-                              onTap: _isLoading ? null : () => _submit(_controller.text),
                               customBorder: const CircleBorder(),
+                              onTap: _isLoading ? null : () => _submit(_controller.text),
                               child: SizedBox(
-                                width: 42,
-                                height: 42,
-                                child: Center(child: AppMaterialIcon(AppIcons.arrowUp, color: Colors.white, size: 22)),
+                                width: 48,
+                                height: 48,
+                                child: Center(child: AppMaterialIcon(AppIcons.arrowUp, color: Colors.white, size: 25)),
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -471,4 +501,5 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       ),
     );
   }
+
 }

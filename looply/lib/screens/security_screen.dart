@@ -41,18 +41,18 @@ class _SecurityScreenState extends State<SecurityScreen> {
       final oldController = TextEditingController();
       final verified = await showLooplyDialog<bool>(
         context: context,
-        title: 'Confirmar proteção atual',
+        title: appText('verify_existing_protection'),
         icon: AppIcons.shieldCheck,
         content: TextField(
           controller: oldController,
           autofocus: true,
           obscureText: true,
           keyboardType: oldMode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
-          decoration: InputDecoration(labelText: oldMode == 'pin' ? 'PIN atual' : 'Palavra-passe atual'),
+          decoration: InputDecoration(labelText: oldMode == 'pin' ? appText('current_pin') : appText('current_password')),
         ),
-        actions: const <LooplyDialogAction<bool>>[
-          LooplyDialogAction<bool>(label: 'Cancelar', value: false),
-          LooplyDialogAction<bool>(label: 'Continuar', value: true, isPrimary: true),
+        actions: <LooplyDialogAction<bool>>[
+          LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+          LooplyDialogAction<bool>(label: appText('continue'), value: true, isPrimary: true),
         ],
       );
       final oldSecret = oldController.text;
@@ -61,7 +61,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
       final isValid = await BrowserSecurityService.verifyCredential(oldSecret);
       if (!isValid) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('A proteção atual está incorreta.')),
+          SnackBar(content: Text(appText('protection_incorrect'))) ,
         );
         return false;
       }
@@ -74,22 +74,22 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
     final accepted = await showLooplyDialog<bool>(
       context: context,
-      title: 'Configurar proteção',
+      title: appText('configure_protection'),
       icon: AppIcons.shieldCheck,
       content: StatefulBuilder(
         builder: (dialogContext, setDialogState) => Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Escolhe um PIN ou uma palavra-passe. Será solicitada para desbloquear sites protegidos.',
+            Text(appText('choose_protection_help'),
                 style: TextStyle(color: mutedText(dialogContext), fontSize: 13, height: 1.4)),
             const SizedBox(height: 14),
             ValueListenableBuilder<String>(
               valueListenable: modeController,
               builder: (context, mode, _) => SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment<String>(value: 'pin', label: Text('PIN')),
-                  ButtonSegment<String>(value: 'password', label: Text('Palavra-passe')),
+                segments: [
+                  ButtonSegment<String>(value: 'pin', label: Text(appText('pin'))),
+                  ButtonSegment<String>(value: 'password', label: Text(appText('password'))),
                 ],
                 selected: <String>{mode},
                 onSelectionChanged: (selection) {
@@ -109,7 +109,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                 textInputAction: TextInputAction.next,
                 maxLength: mode == 'pin' ? 12 : 64,
                 decoration: InputDecoration(
-                  labelText: mode == 'pin' ? 'PIN (4 a 12 dígitos)' : 'Palavra-passe (mínimo 8 caracteres)',
+                  labelText: mode == 'pin' ? appText('pin_format_hint') : appText('password_format_hint'),
                   counterText: '',
                   suffixIcon: IconButton(
                     onPressed: () => setDialogState(() => visible = !visible),
@@ -123,14 +123,14 @@ class _SecurityScreenState extends State<SecurityScreen> {
               controller: confirmController,
               obscureText: true,
               textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(labelText: 'Confirmar proteção'),
+              decoration: InputDecoration(labelText: appText('confirm_protection')),
             ),
           ],
         ),
       ),
-      actions: const <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: 'Cancelar', value: false),
-        LooplyDialogAction<bool>(label: 'Guardar', value: true, isPrimary: true),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('save'), value: true, isPrimary: true),
       ],
     );
 
@@ -150,7 +150,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
     if (!valid || secret != confirmed) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A proteção é inválida ou os campos não coincidem.')),
+        SnackBar(content: Text(appText('protection_invalid'))) ,
       );
       modeController.dispose();
       secretController.dispose();
@@ -163,7 +163,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
       await _refreshCredentialState();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Proteção configurada com segurança neste dispositivo.')),
+          SnackBar(content: Text(appText('protection_saved'))) ,
         );
       }
       modeController.dispose();
@@ -173,7 +173,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível configurar a proteção: $error')),
+          SnackBar(content: Text('${appText('protection_save_failed')} $error')),
         );
       }
       modeController.dispose();
@@ -190,7 +190,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
       final saved = await _configureCredential();
       if (!saved || !mounted) return;
     }
-    await Navigator.of(context).push<void>(
+    await Navigator.of(context, rootNavigator: true).push<void>(
       MaterialPageRoute<void>(builder: (_) => const BlockedSitesScreen()),
     );
   }
@@ -217,7 +217,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         leading: AppBackButton(tooltip: appText('back'), color: text),
-        title: Text('Segurança', style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
+        title: Text(appText('security_title'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
@@ -228,8 +228,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
             clipBehavior: Clip.antiAlias,
             child: ListTile(
               leading: AppMaterialIcon(AppIcons.shieldCheck, color: accentColor(context)),
-              title: Text('PIN ou palavra-passe', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-              subtitle: Text(_loading ? 'A verificar…' : _credentialConfigured ? 'Proteção configurada neste dispositivo' : 'Ainda não configurada',
+              title: Text(appText('security_credential_title'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+              subtitle: Text(_loading ? appText('security_verifying') : _credentialConfigured ? appText('protection_configured') : appText('protection_not_configured'),
                   style: TextStyle(color: muted, fontSize: 12)),
               trailing: AppMaterialIcon(AppIcons.caretRight, color: muted),
               onTap: _configureCredential,
@@ -242,8 +242,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
             clipBehavior: Clip.antiAlias,
             child: ListTile(
               leading: AppMaterialIcon(AppIcons.shield, color: accentColor(context)),
-              title: Text('Sites bloqueados', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-              subtitle: Text('Impedir a abertura de domínios escolhidos', style: TextStyle(color: muted, fontSize: 12)),
+              title: Text(appText('blocked_sites'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+              subtitle: Text(appText('blocked_sites_description'), style: TextStyle(color: muted, fontSize: 12)),
               trailing: AppMaterialIcon(AppIcons.caretRight, color: muted),
               onTap: _openBlockedSites,
             ),
@@ -257,8 +257,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
               clipBehavior: Clip.antiAlias,
               child: ListTile(
                 leading: AppMaterialIcon(AppIcons.lockSimple, color: accentColor(context)),
-                title: Text('Guardar palavras-passe', style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                subtitle: Text('Usar o serviço de palavras-passe configurado no Android', style: TextStyle(color: muted, fontSize: 12)),
+                title: Text(appText('save_passwords'), style: TextStyle(color: text, fontWeight: FontWeight.w600)),
+                subtitle: Text(appText('save_passwords_description'), style: TextStyle(color: muted, fontSize: 12)),
                 trailing: M3ExpressiveSwitch(value: enabled, onChanged: _togglePasswordSaving),
                 onTap: () => _togglePasswordSaving(!enabled),
               ),
@@ -267,7 +267,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
           const SizedBox(height: 14),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text('O BrowseIt guarda apenas um verificador protegido do PIN ou da palavra-passe neste dispositivo. As credenciais dos sites são geridas pelo serviço de preenchimento do Android e não são incluídas nos backups.',
+            child: Text(appText('security_disclaimer'),
                 style: TextStyle(color: muted, fontSize: 12, height: 1.45)),
           ),
         ],

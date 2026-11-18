@@ -36,13 +36,13 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
     final controller = TextEditingController();
     final accepted = await showLooplyDialog<bool>(
       context: context,
-      title: 'Bloquear site',
+      title: appText('add_blocked_site'),
       icon: AppIcons.shield,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Introduz o domínio, por exemplo exemplo.com. O bloqueio também se aplica aos subdomínios.',
+          Text(appText('blocked_site_domain_help'),
               style: TextStyle(color: mutedText(context), fontSize: 13, height: 1.4)),
           const SizedBox(height: 12),
           TextField(
@@ -50,13 +50,13 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
             autofocus: true,
             keyboardType: TextInputType.url,
             textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(hintText: 'exemplo.com'),
+            decoration: InputDecoration(hintText: appText('blocked_site_domain_hint')),
           ),
         ],
       ),
-      actions: const <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: 'Cancelar', value: false),
-        LooplyDialogAction<bool>(label: 'Bloquear', value: true, isPrimary: true),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('block'), value: true, isPrimary: true),
       ],
     );
     final value = controller.text.trim();
@@ -68,11 +68,11 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
       await _loadSites();
     } on FormatException {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Introduz um domínio válido, sem caminhos ou parâmetros.')),
+        SnackBar(content: Text(appText('invalid_domain'))) ,
       );
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Não foi possível bloquear o site: $error')),
+        SnackBar(content: Text('${appText('block_site_failed')} $error')),
       );
     }
   }
@@ -82,13 +82,13 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
     final credentialController = TextEditingController();
     final requested = await showLooplyDialog<bool>(
       context: context,
-      title: 'Confirmar remoção',
+      title: appText('confirm_remove_block'),
       icon: AppIcons.shieldCheck,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Confirma a tua proteção para remover permanentemente o bloqueio de $host.',
+          Text(appText('confirm_remove_block_description').replaceAll('{site}', host),
               style: TextStyle(color: mutedText(context), fontSize: 13, height: 1.4)),
           const SizedBox(height: 12),
           TextField(
@@ -96,13 +96,13 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
             autofocus: true,
             obscureText: true,
             keyboardType: mode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
-            decoration: InputDecoration(labelText: mode == 'pin' ? 'PIN' : 'Palavra-passe'),
+            decoration: InputDecoration(labelText: mode == 'pin' ? appText('pin') : appText('password')),
           ),
         ],
       ),
-      actions: const <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: 'Cancelar', value: false),
-        LooplyDialogAction<bool>(label: 'Continuar', value: true, isPrimary: true),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('continue'), value: true, isPrimary: true),
       ],
     );
     final secret = credentialController.text;
@@ -112,19 +112,19 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
     final verified = await BrowserSecurityService.verifyCredential(secret);
     if (!verified) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PIN ou palavra-passe incorretos.')),
+        SnackBar(content: Text(appText('invalid_credential'))) ,
       );
       return;
     }
 
     final confirmed = await showLooplyDialog<bool>(
       context: context,
-      title: 'Remover bloqueio?',
+      title: appText('remove_block_title'),
       icon: AppIcons.shield,
-      content: Text('O domínio $host voltará a poder ser aberto.'),
-      actions: const <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: 'Cancelar', value: false),
-        LooplyDialogAction<bool>(label: 'Remover', value: true, isPrimary: true),
+      content: Text(appText('remove_block_description').replaceAll('{site}', host)),
+      actions: <LooplyDialogAction<bool>>[
+        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
+        LooplyDialogAction<bool>(label: appText('remove'), value: true, isPrimary: true),
       ],
     );
     if (confirmed != true || !mounted) return;
@@ -151,13 +151,13 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
           children: [
             AppBackButton(tooltip: appText('back'), color: text, buttonSize: 48),
             IconButton(
-              tooltip: 'Adicionar site bloqueado',
+              tooltip: appText('add_blocked_site'),
               onPressed: _addSite,
               icon: AppMaterialIcon(AppIcons.plus, color: accentColor(context), size: 24),
             ),
           ],
         ),
-        title: Text('Sites bloqueados', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w600)),
+        title: Text(appText('blocked_sites'), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w600)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -170,9 +170,9 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
                       children: [
                         AppMaterialIcon(AppIcons.shieldCheck, color: muted, size: 42),
                         const SizedBox(height: 12),
-                        Text('Nenhum site bloqueado', style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 16)),
+                        Text(appText('blocked_sites_empty'), style: TextStyle(color: text, fontWeight: FontWeight.w600, fontSize: 16)),
                         const SizedBox(height: 6),
-                        Text('Usa o botão + no topo para adicionar um domínio.', textAlign: TextAlign.center,
+                        Text(appText('blocked_sites_empty_description'), textAlign: TextAlign.center,
                             style: TextStyle(color: muted, fontSize: 13)),
                       ],
                     ),
@@ -191,9 +191,9 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
                       child: ListTile(
                         leading: AppMaterialIcon(AppIcons.shield, color: accentColor(context)),
                         title: Text(host, style: TextStyle(color: text, fontWeight: FontWeight.w600)),
-                        subtitle: Text('Bloqueado neste dispositivo', style: TextStyle(color: muted, fontSize: 12)),
+                        subtitle: Text(appText('blocked_site_subtitle'), style: TextStyle(color: muted, fontSize: 12)),
                         trailing: IconButton(
-                          tooltip: 'Remover bloqueio',
+                          tooltip: appText('remove_block'),
                           onPressed: () => _removeSite(host),
                           icon: AppMaterialIcon(AppIcons.trash, color: muted),
                         ),

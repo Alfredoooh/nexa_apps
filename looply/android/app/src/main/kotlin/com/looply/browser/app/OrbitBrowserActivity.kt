@@ -4,6 +4,7 @@ import android.app.Activity
 import android.animation.ValueAnimator
 import android.app.DownloadManager
 import android.content.Context
+import android.content.res.ColorStateList
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -11,6 +12,7 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -436,7 +438,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(12), 0)
-            background = rounded(toolbarPillColor(), 24)
+            background = rippleBackground(toolbarPillColor(), 24)
             isClickable = true
             isFocusable = true
             setOnClickListener { finishToFlutter("search") }
@@ -1141,7 +1143,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             contentDescription = description
             isClickable = true
             isFocusable = true
-            background = selectableBackground()
+            background = rippleBackground(toolbarBg, 18)
             addView(
                 MaterialSymbolsRounded.textView(
                     this@OrbitBrowserActivity,
@@ -1160,7 +1162,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             contentDescription = "Separadores: $count"
             isClickable = true
             isFocusable = true
-            background = selectableBackground()
+            background = rippleBackground(toolbarBg, 18)
             val icon = ImageView(this@OrbitBrowserActivity).apply {
                 setImageDrawable(
                     MaterialSymbolsRounded.tabsCounterDrawable(
@@ -1205,7 +1207,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         dialog.window?.let { dialogWindow ->
             dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             val attributes = dialogWindow.attributes
-            attributes.dimAmount = .34f
+            attributes.dimAmount = .54f
             dialogWindow.attributes = attributes
         }
     }
@@ -1387,7 +1389,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 isClickable = enabled
                 isFocusable = enabled
                 alpha = if (enabled) 1f else .38f
-                background = rounded(quickSurface, 999)
+                background = rippleBackground(quickSurface, 999)
                 addView(icon, android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
                 setOnClickListener {
                     if (enabled) {
@@ -2048,7 +2050,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             pageToolbarColor = null
             if (::toolbar.isInitialized) toolbar.setBackgroundColor(toolbarBg)
             if (::appBarContainer.isInitialized) appBarContainer.setBackgroundColor(toolbarBg)
-            if (::titlePill.isInitialized) titlePill.background = rounded(toolbarPillColor(), 24)
+            if (::titlePill.isInitialized) titlePill.background = rippleBackground(toolbarPillColor(), 24)
             if (::titleView.isInitialized) titleView.setTextColor(toolbarText())
             tintTabCountButton(toolbarText())
             tintMenuOptionsButton(toolbarText())
@@ -2082,7 +2084,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 applySystemBars()
                 toolbar.setBackgroundColor(toolbarBg)
                 appBarContainer.setBackgroundColor(toolbarBg)
-                titlePill.background = rounded(toolbarPillColor(), 24)
+                titlePill.background = rippleBackground(toolbarPillColor(), 24)
 
                 titleView.setTextColor(toolbarText())
                 tintTabCountButton(toolbarText())
@@ -2637,13 +2639,16 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun showBlockedPage(url: String) {
-        val host = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
-            ?: "este site"
+        val rawHost = runCatching { Uri.parse(url).host?.removePrefix("www.") }.getOrNull()
+            ?: "this site"
+        val host = rawHost.replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
         pendingBlockedUrl = url
-        pendingBlockedHost = host
+        pendingBlockedHost = rawHost
         isShowingBlockedPage = true
         currentUrl = url
-        currentTitle = "Página indisponível por segurança"
+        val pageTitle = menuText("blockedPageTitle", "Page unavailable for security reasons")
+        currentTitle = pageTitle
         pageToolbarColor = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         webView.stopLoading()
@@ -2651,20 +2656,47 @@ class OrbitBrowserActivity : AppCompatActivity() {
         progress.visibility = View.GONE
         progress.alpha = 1f
         if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+
+        val background = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and pageBg)
+        val foreground = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and primaryText)
+        val muted = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and secondaryText)
+        val surfaceColor = when {
+            !dark -> Color.rgb(241, 243, 244)
+            pureBlack -> Color.rgb(25, 25, 25)
+            else -> Color.rgb(43, 45, 48)
+        }
+        val surface = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and surfaceColor)
+        val accentColor = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and accent)
+        val language = menuText("language", "pt").replace(Regex("[^A-Za-z-]"), "").ifBlank { "pt" }
+        val message = android.text.Html.escapeHtml(
+            menuText("blockedPageMessage", "The domain {site} is blocked in this browser.")
+        ).replace("{site}", "<b>$host</b>")
+        val title = android.text.Html.escapeHtml(pageTitle)
+        val unlock = android.text.Html.escapeHtml(
+            menuText("blockedPageUnlock", "Temporarily unblock")
+        )
+        val colorScheme = if (dark) "dark" else "light"
         val html = """
-            <!doctype html><html lang="pt"><head><meta name="viewport" content="width=device-width,initial-scale=1">
-            <meta name="color-scheme" content="dark light"><title>Bloqueado</title>
+            <!doctype html><html lang="$language"><head>
+            <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+            <meta name="color-scheme" content="$colorScheme">
+            <title>$title</title>
             <style>
-              *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;
-              padding:28px;background:#111;color:#f5f5f5;font:16px system-ui,-apple-system,sans-serif}
-              main{width:min(100%,420px);text-align:center} .icon{width:66px;height:66px;margin:0 auto 22px;
-              border-radius:22px;background:#252525;display:grid;place-items:center;font-size:30px}
-              h1{font-size:23px;line-height:1.2;margin:0 0 12px}p{color:#b7b7b7;line-height:1.5;margin:0 0 26px;overflow-wrap:anywhere}
+              :root{color-scheme:$colorScheme;--page:$background;--fg:$foreground;--muted:$muted;--surface:$surface;--accent:$accentColor}
+              *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--page);color:var(--fg)}
+              body{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:28px 22px;
+              font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+              main{width:min(100%,420px);text-align:center}
+              .icon{width:68px;height:68px;margin:0 auto 22px;border-radius:22px;background:var(--surface);
+              display:grid;place-items:center;font-size:30px;color:var(--accent)}
+              h1{font-size:23px;line-height:1.22;letter-spacing:-.35px;margin:0 0 12px;font-weight:700}
+              p{color:var(--muted);line-height:1.55;margin:0 0 26px;overflow-wrap:anywhere}
               a{display:inline-flex;align-items:center;justify-content:center;min-height:50px;padding:0 25px;
-              border-radius:999px;background:#1a73e8;color:white;text-decoration:none;font-weight:700}
+              border-radius:999px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700}
+              a:active{opacity:.82}
             </style></head><body><main><div class="icon">⛨</div>
-            <h1>Página indisponível por segurança</h1><p>O domínio <b>${host}</b> está bloqueado neste navegador.</p>
-            <a href="browseit-security://unlock">Desbloquear temporariamente</a></main></body></html>
+            <h1>$title</h1><p>$message</p>
+            <a href="browseit-security://unlock">$unlock</a></main></body></html>
         """.trimIndent()
         webView.loadDataWithBaseURL("https://browseit.invalid/", html, "text/html", "UTF-8", null)
         refreshTitle()
@@ -2674,22 +2706,27 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private fun requestSecurityUnlock() {
         val host = pendingBlockedHost ?: return
         if (!BrowserSecurityStore.hasCredential(this)) {
-            Toast.makeText(this, "Configura primeiro um PIN ou uma palavra-passe em Segurança.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, menuText("securitySetupRequired", "Set up a PIN or password in Security first."), Toast.LENGTH_LONG).show()
             return
         }
         val mode = BrowserSecurityStore.credentialMode(this)
         val field = EditText(this).apply {
-            hint = if (mode == "pin") "PIN" else "Palavra-passe"
+            hint = if (mode == "pin") "PIN" else menuText("password", "Password")
             inputType = if (mode == "pin") InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
                         else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             isSingleLine = true
+            setTextColor(primaryText)
+            setHintTextColor(secondaryText)
         }
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Desbloquear site")
-            .setMessage("Introduz a tua ${if (mode == "pin") "PIN" else "palavra-passe"} para abrir $host nesta sessão.")
+        val messageKey = if (mode == "pin") "unlockPinMessage" else "unlockPasswordMessage"
+        val message = menuText(messageKey, "Enter your credential to open {site} during this session.")
+            .replace("{site}", host)
+        val dialog = looplyMaterialDialogBuilder()
+            .setTitle(menuText("unlockSiteTitle", "Unblock site"))
+            .setMessage(message)
             .setView(field)
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Desbloquear", null)
+            .setNegativeButton(menuText("cancel", "Cancel"), null)
+            .setPositiveButton(menuText("unlock", "Unblock"), null)
             .create()
         dialog.setOnShowListener {
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -2709,12 +2746,13 @@ class OrbitBrowserActivity : AppCompatActivity() {
                         webView.loadUrl(target)
                     }
                 } else {
-                    field.error = "PIN ou palavra-passe incorretos"
+                    field.error = menuText("invalidUnlock", "Incorrect PIN or password.")
                     field.text?.clear()
                 }
             }
         }
         dialog.show()
+        applyLooplyDialogDim(dialog)
         field.requestFocus()
     }
 
@@ -2728,6 +2766,15 @@ class OrbitBrowserActivity : AppCompatActivity() {
             cornerRadius = dp(radiusDp).toFloat()
             setColor(color)
         }
+    }
+
+    private fun rippleBackground(color: Int, radiusDp: Int): RippleDrawable {
+        val ripple = if (dark) Color.argb(38, 255, 255, 255) else Color.argb(30, 0, 0, 0)
+        return RippleDrawable(
+            ColorStateList.valueOf(ripple),
+            rounded(color, radiusDp),
+            rounded(Color.WHITE, radiusDp),
+        )
     }
 
     private fun selectableBackground(): android.graphics.drawable.Drawable? {
