@@ -1,16 +1,32 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../cloud_sync.dart';
+
+/// Imagem anexada a um pedido de pesquisa com IA.
+class BrowseItAiImage {
+  const BrowseItAiImage({
+    required this.name,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  final String name;
+  final String mimeType;
+  final Uint8List bytes;
+}
 
 /// Cliente HTTP da pesquisa com IA.
 ///
 /// O endereço é fornecido no build, sem embutir chaves privadas no APK:
 /// --dart-define=BROWSEIT_AI_SEARCH_URL=https://teu-worker.example/api/ai/search
 ///
-/// Contrato: POST JSON com query, instruções Markdown e schemas dos widgets.
+/// Contrato: POST JSON com query, anexos multimodais em attachments[],
+/// instruções Markdown e schemas dos widgets. O servidor deve descodificar
+/// data_base64 e encaminhar as imagens ao modelo multimodal.
 /// Resposta JSON {answer: Markdown} ou SSE compatível com OpenAI.
 /// O serviço não inclui chaves privadas no APK nem assume uma rota inexistente.
 class BrowseItAiSearchService {
@@ -25,6 +41,7 @@ class BrowseItAiSearchService {
 
   static Future<String> search(
     String query, {
+    List<BrowseItAiImage> images = const <BrowseItAiImage>[],
     void Function(String token)? onToken,
   }) async {
     final cleanQuery = query.trim();
@@ -52,6 +69,14 @@ class BrowseItAiSearchService {
         })
         ..body = jsonEncode({
           'query': cleanQuery,
+          'attachments': images
+              .map((image) => <String, Object>{
+                    'type': 'image',
+                    'name': image.name,
+                    'mime_type': image.mimeType,
+                    'data_base64': base64Encode(image.bytes),
+                  })
+              .toList(growable: false),
           'stream': true,
           'format': 'markdown',
           'rich_widgets': true,

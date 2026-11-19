@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:image_picker/image_picker.dart';
+import 'package:lottie/lottie.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -13,18 +16,36 @@ import '../widgets/drawer_menu_button.dart';
 import '../widgets/drawer_menu.dart' as drawer_menu;
 
 enum _AiChatRole { user, assistant }
+enum _AiAttachmentAction { image, camera }
 
-enum _AiMenuAction { clearConversation }
+class _PickedAiImage {
+  const _PickedAiImage({
+    required this.name,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  final String name;
+  final String mimeType;
+  final Uint8List bytes;
+}
 
 class _AiChatMessage {
-  _AiChatMessage({required this.role, required this.text, this.isStreaming = false});
+  _AiChatMessage({
+    required this.role,
+    required this.text,
+    this.image,
+    this.isStreaming = false,
+  });
+
   final _AiChatRole role;
+  final _PickedAiImage? image;
   String text;
   bool isStreaming;
 }
 
-/// Interface de AI Search inspirada no layout compacto do ecrã de conversa:
-/// barra superior, marca central, sugestões horizontais e compositor fixo.
+/// Ecrã AI Search em estilo de conversa: apenas drawer no topo,
+/// identidade BrowseIt AI no estado vazio e composer flutuante inferior.
 class AiSearchScreen extends StatefulWidget {
   const AiSearchScreen({super.key, this.initialQuery = ''});
 
@@ -36,18 +57,14 @@ class AiSearchScreen extends StatefulWidget {
 
 class _AiSearchScreenState extends State<AiSearchScreen> {
   late final TextEditingController _controller;
+  final ImagePicker _imagePicker = ImagePicker();
   final List<_AiChatMessage> _messages = <_AiChatMessage>[];
   final ScrollController _scrollController = ScrollController();
+  _PickedAiImage? _pendingImage;
   bool _isLoading = false;
   int _requestId = 0;
   final StringBuffer _streamBuffer = StringBuffer();
   Timer? _streamUpdateTimer;
-
-  static const List<String> _suggestions = <String>[
-    'Create an image for my presentation',
-    'Design a programming tutor that teaches basics in a fun way',
-    'Explain a difficult topic with simple examples',
-  ];
 
   @override
   void initState() {
@@ -61,6 +78,10 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
         if (mounted) unawaited(_runSearch(initial));
       });
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_recoverLostPickerData());
+    });
   }
 
   @override
@@ -87,6 +108,19 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     super.dispose();
   }
 
+  Future<void> _recoverLostPickerData() async {
+    try {
+      final response = await _imagePicker.retrieveLostData();
+      if (response.isEmpty || !mounted) return;
+      final files = response.files;
+      final file = response.file ?? (files != null && files.isNotEmpty ? files.first : null);
+      if (file != null) await _attachPickedFile(file);
+    } catch (_) {
+      // A recuperação só é necessária quando o Android recria a Activity
+      // durante a utilização da câmara ou do seletor de imagens.
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -99,12 +133,16 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   }
 
   void _submit(String raw) {
-    final query = raw.trim();
-    if (query.isEmpty || _isLoading) return;
+    if (_isLoading) return;
+    final image = _pendingImage;
+    final enteredText = raw.trim();
+    if (enteredText.isEmpty && image == null) return;
+
+    final query = enteredText.isEmpty ? 'Analisa a imagem anexada.' : enteredText;
     FocusScope.of(context).unfocus();
     _controller.clear();
-    setState(() {});
-    unawaited(_runSearch(query));
+    setState(() => _pendingImage = null);
+    unawaited(_runSearch(query, image: image));
   }
 
   void _startNewConversation() {
@@ -116,19 +154,67 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     _controller.clear();
     setState(() {
       _messages.clear();
+      _pendingImage = null;
       _isLoading = false;
     });
   }
 
-  void _showAttachmentNotice() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Os anexos ainda não estão configurados nesta versão.'),
-          duration: Duration(seconds: 2),
-        ),
+  Future<void> _handleAttachmentAction(_AiAttachmentAction action) async {
+    switch (action) {
+      case _AiAttachmentAction.image:
+        await _pickImage(ImageSource.gallery);
+        break;
+      case _AiAttachmentAction.camera:
+        await _pickImage(ImageSource.camera);
+        break;
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 88,
       );
+      if (file == null || !mounted) return;
+      await _attachPickedFile(file);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(source == ImageSource.camera
+                ? 'Não foi possível abrir a câmara.'
+                : 'Não foi possível abrir as imagens.'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+    }
+  }
+
+  Future<void> _attachPickedFile(XFile file) async {
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || !mounted) return;
+
+    final name = file.name.trim().isEmpty ? 'browseit-image.jpg' : file.name;
+    final extension = name.contains('.') ? name.split('.').last.toLowerCase() : 'jpg';
+    final mimeType = switch (extension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'gif' => 'image/gif',
+      'heic' => 'image/heic',
+      'heif' => 'image/heif',
+      'bmp' => 'image/bmp',
+      _ => 'image/jpeg',
+    };
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _pendingImage = _PickedAiImage(name: name, mimeType: mimeType, bytes: bytes);
+    });
   }
 
   void _queueStreamToken(String token, int request) {
@@ -163,7 +249,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     }
   }
 
-  Future<void> _runSearch(String query) async {
+  Future<void> _runSearch(String query, {_PickedAiImage? image}) async {
     final clean = query.trim();
     if (clean.isEmpty || !mounted) return;
     final request = ++_requestId;
@@ -172,15 +258,21 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     _streamBuffer.clear();
 
     setState(() {
-      _messages.add(_AiChatMessage(role: _AiChatRole.user, text: clean));
+      _messages.add(_AiChatMessage(role: _AiChatRole.user, text: clean, image: image));
       _messages.add(_AiChatMessage(role: _AiChatRole.assistant, text: '', isStreaming: true));
       _isLoading = true;
     });
     _scrollToBottom();
 
     try {
+      final imagePayload = image == null
+          ? const <BrowseItAiImage>[]
+          : <BrowseItAiImage>[
+              BrowseItAiImage(name: image.name, mimeType: image.mimeType, bytes: image.bytes),
+            ];
       final answer = await BrowseItAiSearchService.search(
         clean,
+        images: imagePayload,
         onToken: (token) => _queueStreamToken(token, request),
       );
       if (!mounted || request != _requestId) return;
@@ -204,28 +296,25 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final muted = mutedText(context);
     return Center(
       key: const ValueKey<String>('ai-search-empty'),
-      child: Image.asset(
-        'assets/ai_search/ai_mark.png',
-        width: 72,
-        height: 72,
+      child: Lottie.asset(
+        'assets/animations/browseit_ai_idle.json',
+        width: 148,
+        height: 148,
         fit: BoxFit.contain,
-        color: muted.withOpacity(.38),
-        colorBlendMode: BlendMode.srcIn,
-        filterQuality: FilterQuality.high,
+        animate: true,
+        repeat: true,
       ),
     );
   }
 
   Widget _buildUserBubble(BuildContext context, _AiChatMessage message) {
-    final scheme = Theme.of(context).colorScheme;
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
-        padding: const EdgeInsets.fromLTRB(18, 13, 18, 13),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(
           color: pillColor(context),
           borderRadius: const BorderRadius.only(
@@ -235,9 +324,28 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             bottomRight: Radius.circular(7),
           ),
         ),
-        child: Text(
-          message.text,
-          style: TextStyle(color: mainText(context), fontSize: 15.5, height: 1.4, fontWeight: FontWeight.w500),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.image != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.memory(
+                  message.image!.bytes,
+                  width: 216,
+                  height: 164,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
+                ),
+              ),
+              const SizedBox(height: 9),
+            ],
+            Text(
+              message.text,
+              style: TextStyle(color: mainText(context), fontSize: 15.5, height: 1.4, fontWeight: FontWeight.w500),
+            ),
+          ],
         ),
       ),
     );
@@ -253,12 +361,14 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(
-                    'assets/ai_search/ai_mark.png',
-                    width: 20,
-                    height: 20,
-                    color: muted,
-                    colorBlendMode: BlendMode.srcIn,
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Lottie.asset(
+                      'assets/animations/browseit_ai_idle.json',
+                      fit: BoxFit.contain,
+                      repeat: true,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Text(appText('searching_answer'), style: TextStyle(color: muted, fontSize: 13)),
@@ -272,300 +382,208 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     );
   }
 
-  Widget _topAction({required IconData icon, required String tooltip, required VoidCallback onPressed}) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Center(child: AppMaterialIcon(icon, color: mainText(context), size: 23)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _composerAction({required IconData icon, required String tooltip}) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: _showAttachmentNotice,
-          child: SizedBox(
-            width: 34,
-            height: 48,
-            child: Center(child: AppMaterialIcon(icon, color: mainText(context), size: 25)),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTopBar(BuildContext context) {
-    final muted = mutedText(context);
-    return SizedBox(
-      height: 58,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Align(
+    final topInset = MediaQuery.of(context).padding.top;
+    return Container(
+      padding: EdgeInsets.only(top: topInset),
+      decoration: BoxDecoration(color: pageBg(context)),
+      child: SizedBox(
+        height: 64,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Align(
             alignment: Alignment.centerLeft,
             child: LooplyDrawerMenuButton(
               onPressed: () => drawer_menu.showLooplyDrawer(context),
             ),
           ),
-          Center(
-            child: Material(
-              color: pillColor(context),
-              borderRadius: BorderRadius.circular(15),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () {
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(const SnackBar(content: Text('BrowseIt Plus ainda não está disponível.')));
-                },
-                borderRadius: BorderRadius.circular(15),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Get Plus', style: TextStyle(color: mainText(context), fontSize: 15, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 8),
-                      AppMaterialIcon(AppIcons.sparkles, size: 19, color: mainText(context)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _topAction(
-                  icon: AppIcons.pencilSimple,
-                  tooltip: 'New chat',
-                  onPressed: _startNewConversation,
-                ),
-                PopupMenuButton<_AiMenuAction>(
-                  tooltip: 'More options',
-                  icon: AppMaterialIcon(AppIcons.dotsThreeVertical, color: mainText(context), size: 23),
-                  color: panelColor(context),
-                  onSelected: (action) {
-                    switch (action) {
-                      case _AiMenuAction.clearConversation:
-                        _startNewConversation();
-                    }
-                  },
-                  itemBuilder: (context) => <PopupMenuEntry<_AiMenuAction>>[
-                    PopupMenuItem<_AiMenuAction>(
-                      value: _AiMenuAction.clearConversation,
-                      child: Row(
-                        children: [
-                          AppMaterialIcon(AppIcons.trash, size: 19, color: muted),
-                          const SizedBox(width: 10),
-                          Text(appText('clear'), style: TextStyle(color: mainText(context))),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildSuggestions(BuildContext context) {
-    final text = mainText(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SizedBox(
-      height: 96,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        itemCount: _suggestions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final prompt = _suggestions[index];
-          final words = switch (index) {
-            0 => const ['Create an image', 'for my presentation'],
-            1 => const ['Design a programming tutor', 'that teaches basics in a fun way'],
-            _ => const ['Explain a difficult topic', 'with simple examples'],
-          };
-          return Material(
-            color: isDark ? pillColor(context) : const Color(0xFFF0F0F0),
-            borderRadius: BorderRadius.circular(28),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => _submit(prompt),
-              borderRadius: BorderRadius.circular(28),
-              child: SizedBox(
-                width: index == 1 ? 258 : 218,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 13, 16, 11),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(words[0], maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 15.5, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      Text(words[1], maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: mutedText(context), fontSize: 14.5)),
-                    ],
-                  ),
+  Widget _buildAttachmentPreview(BuildContext context) {
+    final image = _pendingImage;
+    if (image == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, right: 7),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.memory(
+              image.bytes,
+              width: 42,
+              height: 42,
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned(
+            top: -6,
+            right: -6,
+            child: Material(
+              color: mainText(context),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => setState(() => _pendingImage = null),
+                child: SizedBox(
+                  width: 19,
+                  height: 19,
+                  child: Center(child: AppMaterialIcon(AppIcons.x, size: 12, color: pageBg(context))),
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildComposer(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
-    final hasText = _controller.text.trim().isNotEmpty;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final canSubmit = _controller.text.trim().isNotEmpty || _pendingImage != null;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
-      child: Row(
-        children: [
-          _composerAction(icon: Symbols.photo_camera_rounded, tooltip: 'Camera'),
-          const SizedBox(width: 3),
-          _composerAction(icon: AppIcons.image, tooltip: 'Photos'),
-          const SizedBox(width: 3),
-          _composerAction(icon: Symbols.folder_open_rounded, tooltip: 'Files'),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 54),
-              padding: const EdgeInsets.fromLTRB(17, 4, 5, 4),
-              decoration: BoxDecoration(
-                color: isDark ? panelColor(context) : const Color(0xFFE9E9E9),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      textCapitalization: TextCapitalization.sentences,
-                      onChanged: (_) => setState(() {}),
-                      onSubmitted: _submit,
-                      style: TextStyle(color: text, fontSize: 15.5, height: 1.35),
-                      cursorColor: accentColor(context),
-                      decoration: InputDecoration(
-                        hintText: 'Message',
-                        hintStyle: TextStyle(color: muted.withOpacity(.95), fontSize: 15.5),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
+      padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 62),
+        padding: const EdgeInsets.fromLTRB(7, 6, 6, 6),
+        decoration: BoxDecoration(
+          color: isDark ? pillColor(context) : const Color(0xFFE9E9E9),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          children: [
+            PopupMenuButton<_AiAttachmentAction>(
+              tooltip: 'Anexar imagem',
+              padding: EdgeInsets.zero,
+              offset: const Offset(0, -8),
+              color: popupSurfaceColor(context),
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onSelected: (action) => unawaited(_handleAttachmentAction(action)),
+              itemBuilder: (context) => <PopupMenuEntry<_AiAttachmentAction>>[
+                PopupMenuItem<_AiAttachmentAction>(
+                  value: _AiAttachmentAction.image,
+                  height: 48,
+                  child: Row(
+                    children: [
+                      AppMaterialIcon(AppIcons.image, size: 21, color: mainText(context)),
+                      const SizedBox(width: 12),
+                      Text('Imagem', style: TextStyle(color: mainText(context), fontSize: 14.5)),
+                    ],
                   ),
-                  Material(
-                    color: Colors.transparent,
-                    shape: const CircleBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: hasText ? () => _submit(_controller.text) : _showAttachmentNotice,
-                      child: SizedBox(
-                        width: 38,
-                        height: 38,
-                        child: Center(
-                          child: AppMaterialIcon(
-                            hasText ? AppIcons.arrowUp : AppIcons.microphone,
-                            size: 22,
-                            color: muted,
-                          ),
-                        ),
-                      ),
-                    ),
+                ),
+                PopupMenuItem<_AiAttachmentAction>(
+                  value: _AiAttachmentAction.camera,
+                  height: 48,
+                  child: Row(
+                    children: [
+                      AppMaterialIcon(Symbols.photo_camera_rounded, size: 21, color: mainText(context)),
+                      const SizedBox(width: 12),
+                      Text('Câmara', style: TextStyle(color: mainText(context), fontSize: 14.5)),
+                    ],
                   ),
-                ],
+                ),
+              ],
+              child: SizedBox(
+                width: 43,
+                height: 48,
+                child: Center(child: AppMaterialIcon(AppIcons.plus, size: 28, color: mainText(context))),
               ),
             ),
-          ),
-          const SizedBox(width: 9),
-          Material(
-            color: Colors.black,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _showAttachmentNotice,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: Center(
-                  child: Icon(Symbols.graphic_eq_rounded, color: Colors.white, size: 26, weight: 500),
+            _buildAttachmentPreview(context),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.send,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: _submit,
+                style: TextStyle(color: mainText(context), fontSize: 16, height: 1.35),
+                cursorColor: accentColor(context),
+                decoration: InputDecoration(
+                  hintText: 'Message',
+                  hintStyle: TextStyle(color: mutedText(context).withOpacity(.95), fontSize: 16),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            Material(
+              color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFD0D0D0),
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: canSubmit && !_isLoading ? () => _submit(_controller.text) : null,
+                child: SizedBox(
+                  width: 43,
+                  height: 43,
+                  child: Center(
+                    child: AppMaterialIcon(
+                      AppIcons.arrowUp,
+                      size: 25,
+                      color: canSubmit ? const Color(0xFF454545) : const Color(0xFF777777),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
-    final empty = _messages.isEmpty;
-
     return Scaffold(
       backgroundColor: pageBg(context),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(context),
-            Expanded(
-              child: empty
-                  ? _buildEmptyState(context)
-                  : ListView.separated(
-                      controller: _scrollController,
-                      physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-                      itemCount: _messages.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 22),
-                      itemBuilder: (context, index) {
-                        final message = _messages[index];
-                        return message.role == _AiChatRole.user
-                            ? _buildUserBubble(context, message)
-                            : _buildAssistantMessage(context, message);
-                      },
-                    ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: SafeArea(
+              child: Column(
+                children: [
+                  const SizedBox(height: 64),
+                  Expanded(
+                    child: _messages.isEmpty
+                        ? _buildEmptyState(context)
+                        : ListView.separated(
+                            controller: _scrollController,
+                            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
+                            itemCount: _messages.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 22),
+                            itemBuilder: (context, index) {
+                              final message = _messages[index];
+                              return message.role == _AiChatRole.user
+                                  ? _buildUserBubble(context, message)
+                                  : _buildAssistantMessage(context, message);
+                            },
+                          ),
+                  ),
+                  _buildComposer(context),
+                ],
+              ),
             ),
-            if (empty && !keyboardVisible) _buildSuggestions(context),
-            _buildComposer(context),
-          ],
-        ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildTopBar(context),
+          ),
+        ],
       ),
     );
   }

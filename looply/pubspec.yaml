@@ -42,7 +42,7 @@ flutter:
   assets:
     - assets/animations/browseit_logo.json
     - assets/ai_search/ai_mark.png
-
+    - assets/animations/browseit_ai_idle.json
     - assets/search_engines/
     - assets/games/
     - assets/games/covers/
