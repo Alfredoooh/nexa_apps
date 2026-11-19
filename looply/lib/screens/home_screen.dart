@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:lottie/lottie.dart';
 import 'dart:ui' show Rect;
 
 import '../localization.dart';
@@ -36,6 +37,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           SafeArea(
             child: ListView(
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: EdgeInsets.fromLTRB(12, topInset > 0 ? 68 : 72, 12, 28),
               children: [
                 const SizedBox(height: 12),
@@ -71,6 +73,8 @@ class LooplyHomeAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = pageBg(context);
     final topInset = MediaQuery.of(context).padding.top;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final logoColor = isDark ? Colors.white : Colors.black;
 
     return Container(
       padding: EdgeInsets.only(top: topInset),
@@ -79,24 +83,61 @@ class LooplyHomeAppBar extends StatelessWidget {
         height: 64,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              LooplyDrawerMenuButton(
-                onPressed: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: LooplyDrawerMenuButton(
+                  onPressed: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
+                ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                appText('home'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: mainText(context), fontSize: 20, fontWeight: FontWeight.w700),
+              // O canvas Lottie é quadrado; o recorte central conserva a
+              // palavra BrowseIt numa escala legível, sem deformar o vetor.
+              IgnorePointer(
+                child: SizedBox(
+                  width: 112,
+                  height: 50,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      minWidth: 126,
+                      maxWidth: 126,
+                      minHeight: 126,
+                      maxHeight: 126,
+                      alignment: Alignment.center,
+                      child: Lottie.asset(
+                        'assets/animations/browseit_logo.json',
+                        key: const ValueKey<String>('browseit-home-logo-lottie'),
+                        width: 126,
+                        height: 126,
+                        fit: BoxFit.contain,
+                        animate: true,
+                        repeat: false,
+                        delegates: LottieDelegates(
+                          values: [
+                            ValueDelegate.color(
+                              const ['**', 'Black fill · Even-Odd'],
+                              value: logoColor,
+                            ),
+                            ValueDelegate.strokeColor(
+                              const ['**', 'Write-on stroke'],
+                              value: logoColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              const Spacer(),
-              ValueListenableBuilder<LooplyUser?>(
-                valueListenable: authController,
-                builder: (context, user, _) => user == null
-                    ? const _CompactSignInButton()
-                    : _SignedInAvatar(user: user),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ValueListenableBuilder<LooplyUser?>(
+                  valueListenable: authController,
+                  builder: (context, user, _) => user == null
+                      ? const _CompactSignInButton()
+                      : _SignedInAvatar(user: user),
+                ),
               ),
             ],
           ),
@@ -232,20 +273,20 @@ class _SignedInAvatar extends StatelessWidget {
             MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(3),
+            padding: const EdgeInsets.all(2),
             child: CircleAvatar(
-              radius: 20,
+              radius: 17.5,
               backgroundColor: background,
               child: ClipOval(
                 child: user.photoUrl != null && user.photoUrl!.isNotEmpty
                     ? Image.network(
                         user.photoUrl!,
-                        width: 40,
-                        height: 40,
+                        width: 35,
+                        height: 35,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 35, height: 35, fit: BoxFit.cover),
                       )
-                    : Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                    : Image.asset('images/avatar.png', width: 35, height: 35, fit: BoxFit.cover),
               ),
             ),
           ),

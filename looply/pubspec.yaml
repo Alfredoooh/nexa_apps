@@ -39,6 +39,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/animations/browseit_logo.json
+    - assets/ai_search/ai_mark.png
+
     - assets/search_engines/
     - assets/games/
     - assets/games/covers/

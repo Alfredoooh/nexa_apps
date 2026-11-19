@@ -109,6 +109,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
         ),
         body: ListView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
           children: [
             _RangeSelector(value: _range, onChanged: (value) => setState(() => _range = value)),
@@ -124,7 +125,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Expanded(child: Text(appText('recent'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
                 if (entries.isNotEmpty)
                   TextButton(
-                    onPressed: () => Navigator.of(context, rootNavigator: true).push<void>(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
+                    onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
                     child: Text(appText('view_all')),
                   ),
               ],
@@ -657,8 +658,9 @@ class _DayStreakCardState extends State<_DayStreakCard> {
   }
 }
 
-/// Sites visitados: os favicons aparecem lado a lado, sem sobreposição.
-/// O resumo pertence à tela Activity; não é um atalho da Home.
+/// Resumo visual dos domínios mais visitados. Os favicons formam uma fila
+/// sobreposta de círculos, como no cartão de referência, em vez de ícones
+/// separados por espaços largos.
 class _VisitedSitesCard extends StatelessWidget {
   const _VisitedSitesCard();
 
@@ -680,35 +682,63 @@ class _VisitedSitesCard extends StatelessWidget {
     final text = mainText(context);
     final muted = mutedText(context);
     final hosts = _recentUniqueHosts();
+    final visibleCount = hosts.isEmpty ? 1 : hosts.length;
+    final stackWidth = 42.0 + ((visibleCount - 1) * 27.0);
 
     return Material(
       color: settingsCardColor(context),
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: hosts.isEmpty
             ? null
-            : () => Navigator.of(context, rootNavigator: true).push<void>(
+            : () => Navigator.of(context).push<void>(
                   MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
                 ),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(22),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               AnimatedBuilder(
                 animation: browserFaviconCache,
-                builder: (context, _) => Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (hosts.isEmpty)
-                      _VisitedSiteFavicon(fallbackColor: muted)
-                    else
-                      for (var index = 0; index < hosts.length; index++) ...[
-                        if (index > 0) const SizedBox(width: 7),
-                        _VisitedSiteFavicon(host: hosts[index], fallbackColor: muted),
-                      ],
-                  ],
+                builder: (context, _) => SizedBox(
+                  width: stackWidth,
+                  height: 44,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (hosts.isEmpty)
+                        Positioned(
+                          left: 0,
+                          top: 1,
+                          child: _VisitedSiteFavicon(fallbackColor: muted),
+                        )
+                      else
+                        for (var index = 0; index < hosts.length; index++)
+                          Positioned(
+                            left: index * 27.0,
+                            top: 1,
+                            child: Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: settingsCardColor(context),
+                                  width: 2,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: SiteFaviconAvatar(
+                                  url: 'https://${hosts[index]}',
+                                  size: 40,
+                                ),
+                              ),
+                            ),
+                          ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
@@ -720,15 +750,18 @@ class _VisitedSitesCard extends StatelessWidget {
                       appText('visited_sites'),
                       style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
                       appText('visited_sites_subtitle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: muted, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              Icon(Symbols.chevron_right_rounded, color: muted),
+              const SizedBox(width: 4),
+              AppMaterialIcon(AppIcons.caretRight, color: muted, size: 20),
             ],
           ),
         ),
@@ -738,27 +771,12 @@ class _VisitedSitesCard extends StatelessWidget {
 }
 
 class _VisitedSiteFavicon extends StatelessWidget {
-  const _VisitedSiteFavicon({this.host, required this.fallbackColor});
+  const _VisitedSiteFavicon({required this.fallbackColor});
 
-  final String? host;
   final Color fallbackColor;
 
   @override
   Widget build(BuildContext context) {
-    Widget image = Icon(Symbols.public_rounded, color: fallbackColor, size: 22, weight: 400, opticalSize: 24);
-    final encoded = host == null ? null : browserFaviconCache.forUrl('https://$host');
-    if (encoded != null) {
-      try {
-        image = Image.memory(
-          base64Decode(encoded),
-          width: 27,
-          height: 27,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Icon(Symbols.public_rounded, color: fallbackColor, size: 22, weight: 400, opticalSize: 24),
-        );
-      } catch (_) {}
-    }
-
     return Container(
       width: 40,
       height: 40,
@@ -767,7 +785,7 @@ class _VisitedSiteFavicon extends StatelessWidget {
         color: pillColor(context),
         shape: BoxShape.circle,
       ),
-      child: ClipOval(child: image),
+      child: AppMaterialIcon(AppIcons.globe, color: fallbackColor, size: 22),
     );
   }
 }
