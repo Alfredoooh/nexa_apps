@@ -30,7 +30,7 @@ dependencies:
   m3e_segmented_list: ^0.0.3
   m3e_buttons: ^1.0.4
   m3e_menu: ^0.0.1
-  lottie: ^3.3.
+  lottie: any
 
 dev_dependencies:
   flutter_test:
