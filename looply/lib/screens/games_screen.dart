@@ -1,90 +1,14 @@
-import 'dart:convert';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 
 import '../localization.dart';
+import '../services/catalog_api.dart';
 import '../theme.dart';
 import '../widgets/material_symbols.dart';
+import 'game_detail_screen.dart';
 
-const MethodChannel _nativeGameChannel = MethodChannel('looply/native_ui');
-const String _bundledGamesCatalog = 'assets/games/games_catalog.json';
-
-class _GameCategory {
-  const _GameCategory({required this.id, required this.name, this.description = ''});
-  final String id;
-  final String name;
-  final String description;
-
-  factory _GameCategory.fromJson(Map<String, dynamic> json) => _GameCategory(
-        id: json['id']?.toString() ?? 'other',
-        name: json['name']?.toString() ?? 'Outros',
-        description: json['description']?.toString() ?? '',
-      );
-}
-
-class _GameEntry {
-  const _GameEntry({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.category,
-    required this.cover,
-    required this.fallbackAsset,
-    required this.featured,
-    required this.launchType,
-    this.launchUrl,
-    this.htmlSource,
-    this.baseUrl,
-    this.orientation = 'auto',
-  });
-
-  final String id;
-  final String name;
-  final String description;
-  final String category;
-  final String cover;
-  final String fallbackAsset;
-  final bool featured;
-  final String launchType;
-  final String? launchUrl;
-  final String? htmlSource;
-  final String? baseUrl;
-  final String orientation;
-
-  factory _GameEntry.fromJson(Map<String, dynamic> json) {
-    final launch = json['launch'] is Map
-        ? Map<String, dynamic>.from(json['launch'] as Map)
-        : <String, dynamic>{};
-    final type = launch['type']?.toString() ?? 'url';
-    if (!const {'url', 'source_url', 'html'}.contains(type)) {
-      throw FormatException('Tipo de lançamento inválido no jogo ${json['id']}.');
-    }
-    final html = launch['html']?.toString();
-    final url = launch['url']?.toString();
-    if (type == 'html' && (html == null || html.isEmpty)) {
-      throw FormatException('O jogo ${json['id']} não contém código HTML.');
-    }
-    if (type != 'html' && (url == null || url.trim().isEmpty)) {
-      throw FormatException('O jogo ${json['id']} não contém um link HTTPS.');
-    }
-    return _GameEntry(
-      id: json['id']?.toString() ?? 'game-${json.hashCode}',
-      name: json['name']?.toString() ?? 'Jogo',
-      description: json['description']?.toString() ?? '',
-      category: json['category']?.toString() ?? 'other',
-      cover: json['cover']?.toString() ?? json['icon']?.toString() ?? '',
-      fallbackAsset: json['fallbackAsset']?.toString() ?? '',
-      featured: json['featured'] == true,
-      launchType: type,
-      launchUrl: url,
-      htmlSource: html,
-      baseUrl: launch['baseUrl']?.toString(),
-      orientation: json['orientation']?.toString() ?? 'auto',
-    );
-  }
-}
+const String _brokenConsoleAnimation = 'assets/animations/game_console_broken.json';
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -94,13 +18,10 @@ class GamesScreen extends StatefulWidget {
 }
 
 class _GamesScreenState extends State<GamesScreen> {
-  List<_GameEntry> _games = const <_GameEntry>[];
-  List<_GameCategory> _categories = const <_GameCategory>[];
+  CatalogSnapshot? _catalog;
+  String? _error;
   String _selectedCategory = 'all';
-  Uri? _remoteCatalogUri;
-  Uri? _gamesBaseUri;
-  String? _catalogError;
-  String? _openingGame;
+  bool _premiumOnly = false;
   bool _loading = true;
 
   @override
@@ -109,148 +30,52 @@ class _GamesScreenState extends State<GamesScreen> {
     _loadCatalog();
   }
 
-  Future<void> _loadCatalog() async {
+  Future<void> _loadCatalog({bool force = false}) async {
+    if (mounted) setState(() { _loading = true; _error = null; });
     try {
-      final localText = await rootBundle.loadString(_bundledGamesCatalog);
-      final localJson = jsonDecode(localText);
-      if (localJson is! Map<String, dynamic>) {
-        throw const FormatException('O catálogo local não tem o formato esperado.');
-      }
-      var selectedJson = localJson;
-      Uri? selectedUri;
-      Uri? selectedGamesBaseUri;
-      final repository = localJson['repository'] is Map
-          ? Map<String, dynamic>.from(localJson['repository'] as Map)
-          : <String, dynamic>{};
-      final catalogUrl = repository['catalogUrl']?.toString() ?? '';
-      final configuredRemote = _isConfiguredHttpsUrl(catalogUrl) ? Uri.tryParse(catalogUrl) : null;
-      final localGamesBase = Uri.tryParse(repository['gamesBaseUrl']?.toString() ?? '');
-      if (localGamesBase != null && localGamesBase.scheme == 'https' && localGamesBase.host.isNotEmpty && !localGamesBase.toString().contains('SEU_')) {
-        selectedGamesBaseUri = localGamesBase;
-      }
-      if (configuredRemote != null) {
-        try {
-          final response = await http.get(configuredRemote).timeout(const Duration(seconds: 8));
-          if (response.statusCode == 200) {
-            final remoteJson = jsonDecode(utf8.decode(response.bodyBytes));
-            if (remoteJson is Map<String, dynamic> && remoteJson['games'] is List) {
-              selectedJson = remoteJson;
-              selectedUri = configuredRemote;
-              final remoteRepository = remoteJson['repository'] is Map
-                  ? Map<String, dynamic>.from(remoteJson['repository'] as Map)
-                  : <String, dynamic>{};
-              final remoteGamesBase = Uri.tryParse(remoteRepository['gamesBaseUrl']?.toString() ?? '');
-              if (remoteGamesBase != null && remoteGamesBase.scheme == 'https' && remoteGamesBase.host.isNotEmpty) {
-                selectedGamesBaseUri = remoteGamesBase;
-              }
-            }
-          }
-        } catch (_) {
-          // Um catálogo remoto indisponível não deve bloquear os jogos locais.
-        }
-      }
-
-      final categories = (selectedJson['categories'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => _GameCategory.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false);
-      final games = (selectedJson['games'] as List? ?? const [])
-          .whereType<Map>()
-          .map((item) => _GameEntry.fromJson(Map<String, dynamic>.from(item)))
-          .toList(growable: false);
+      final result = await BrowseItCatalogApi.instance.fetchCatalog(forceRefresh: force);
       if (!mounted) return;
       setState(() {
-        _categories = categories;
-        _games = games;
-        _remoteCatalogUri = selectedUri;
-        _gamesBaseUri = selectedGamesBaseUri;
+        _catalog = result;
         _loading = false;
-        _catalogError = games.isEmpty ? 'O catálogo não contém jogos.' : null;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
+        _error = error.toString();
         _loading = false;
-        _catalogError = 'Não foi possível ler o catálogo: $error';
       });
     }
   }
 
-  bool _isConfiguredHttpsUrl(String value) =>
-      value.startsWith('https://') &&
-      !value.contains('SEU_USUARIO') &&
-      !value.contains('SEU_REPOSITORIO') &&
-      Uri.tryParse(value)?.host.isNotEmpty == true;
-
-  Uri? _resolveCatalogAsset(String path) {
-    if (_remoteCatalogUri == null || path.isEmpty) return null;
-    final uri = Uri.tryParse(path);
-    if (uri == null) return null;
-    if (uri.hasScheme) return uri.scheme == 'https' && uri.host.isNotEmpty ? uri : null;
-    return _remoteCatalogUri!.resolve(path);
+  List<CatalogGame> get _visibleGames {
+    final source = _catalog?.games ?? const <CatalogGame>[];
+    return source.where((game) {
+      if (_selectedCategory != 'all' && game.category != _selectedCategory) return false;
+      if (_premiumOnly && !game.premium) return false;
+      return true;
+    }).toList(growable: false);
   }
 
-  Uri? _resolveLaunchUrl(_GameEntry game) {
-    final value = game.launchUrl?.trim() ?? '';
-    final parsed = Uri.tryParse(value);
-    if (parsed == null) return null;
-    if (parsed.hasScheme) {
-      return parsed.scheme == 'https' && parsed.host.isNotEmpty ? parsed : null;
-    }
-
-    final baseString = game.baseUrl;
-    final base = baseString == null || baseString.isEmpty ? _gamesBaseUri : Uri.tryParse(baseString);
-    if (base != null && base.scheme == 'https' && base.host.isNotEmpty) return base.resolve(value);
-    return null;
+  void _openDetails(CatalogGame game) {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
+    );
   }
-
-  Future<void> _openGame(_GameEntry game) async {
-    if (_openingGame != null) return;
-    final launchUrl = _resolveLaunchUrl(game);
-    if (game.launchType != 'html' && launchUrl == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('O link deste jogo não é um endereço HTTPS válido.')),
-      );
-      return;
-    }
-    setState(() => _openingGame = game.id);
-    try {
-      await _nativeGameChannel.invokeMethod<bool>('openGame', <String, Object?>{
-        'launchType': game.launchType,
-        'url': launchUrl?.toString(),
-        'html': game.htmlSource,
-        'baseUrl': game.baseUrl,
-        'title': game.name,
-        'orientation': game.orientation,
-      });
-    } on PlatformException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message ?? appText('game_open_failed'))),
-      );
-    } on MissingPluginException {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(appText('game_open_failed'))),
-      );
-    } finally {
-      if (mounted) setState(() => _openingGame = null);
-    }
-  }
-
-  List<_GameEntry> get _visibleGames => _selectedCategory == 'all'
-      ? _games
-      : _games.where((game) => game.category == _selectedCategory).toList(growable: false);
 
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    final accent = accentColor(context);
-    final featured = _visibleGames.where((game) => game.featured).toList(growable: false);
-    final allFeatured = featured.isEmpty ? _visibleGames : featured;
-
     final bg = pageBg(context);
+    final games = _visibleGames;
+    final offlineGames = games.where((game) => game.downloadUrl.isNotEmpty).toList(growable: false);
+    final onlineGames = games.where((game) => game.downloadUrl.isEmpty).toList(growable: false);
+    final catalogIsEmpty = (_catalog?.games.isEmpty ?? true);
+    final categories = _catalog?.categories ?? const <CatalogCategory>[];
+    final events = _catalog?.events ?? const <CatalogEvent>[];
+
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
@@ -264,212 +89,216 @@ class _GamesScreenState extends State<GamesScreen> {
         scrolledUnderElevation: 0,
         titleSpacing: 18,
         title: Text(appText('games'), style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
+        actions: [
+          IconButton(
+            tooltip: 'Atualizar catálogo',
+            onPressed: _loading ? null : () => _loadCatalog(force: true),
+            icon: AppMaterialIcon(AppIcons.arrowClockwise, color: muted),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SafeArea(
-        child: _loading
-            ? Center(child: CircularProgressIndicator(color: accent, strokeWidth: 2.2))
-            : CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: <Widget>[
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-                    sliver: SliverToBoxAdapter(
-                      child: Row(
-                        children: [
-                          Expanded(child: Text('Jogos rápidos para jogar diretamente no BrowseIt.',
-                            style: TextStyle(color: muted, fontSize: 13.5, height: 1.35))),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                            decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(999)),
-                            child: Text('${_visibleGames.length}', style: TextStyle(color: muted, fontSize: 13, fontWeight: FontWeight.w700)),
-                          ),
-                        ],
+        top: false,
+        child: _loading && _catalog == null
+            ? Center(child: CircularProgressIndicator(color: accentColor(context), strokeWidth: 2.2))
+            : _error != null && _catalog == null
+                ? _CatalogErrorState(message: _error!, onRetry: () => _loadCatalog(force: true))
+                : CustomScrollView(
+                    physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: _GameFilterRail(
+                          categories: categories,
+                          selectedCategory: _selectedCategory,
+                          premiumOnly: _premiumOnly,
+                          onCategoryChanged: (id) => setState(() { _selectedCategory = id; _premiumOnly = false; }),
+                          onPremiumChanged: (value) => setState(() { _premiumOnly = value; _selectedCategory = 'all'; }),
+                        ),
                       ),
-                    ),
-                  ),
-                  if (_categories.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 42,
-                        child: ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          children: <Widget>[
-                            _CategoryChip(label: 'Todos', selected: _selectedCategory == 'all', onTap: () => setState(() => _selectedCategory = 'all')),
-                            for (final category in _categories)
-                              _CategoryChip(
-                                label: category.name,
-                                selected: _selectedCategory == category.id,
-                                onTap: () => setState(() => _selectedCategory = category.id),
+                      if (games.isEmpty && catalogIsEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _GamesEmptyState(
+                            onRetry: () => _loadCatalog(force: true),
+                            apiMissing: !BrowseItCatalogApi.instance.isConfigured,
+                          ),
+                        )
+                      else if (games.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(28),
+                              child: Text(
+                                'Não existem jogos nesta categoria.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: mutedText(context), fontSize: 14),
                               ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (allFeatured.isNotEmpty) ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 13),
-                      sliver: SliverToBoxAdapter(
-                        child: Text('Em destaque', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800)),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 262,
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: allFeatured.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 14),
-                          itemBuilder: (context, index) => _FeaturedGameCard(
-                            game: allFeatured[index],
-                            imageUri: _resolveCatalogAsset(allFeatured[index].cover),
-                            opening: _openingGame == allFeatured[index].id,
-                            onTap: () => _openGame(allFeatured[index]),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 14),
-                    sliver: SliverToBoxAdapter(
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(child: Text('Todos os jogos', style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w800))),
-                          Text('${_visibleGames.length}', style: TextStyle(color: muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        )
+                      else ...[
+                        if (offlineGames.isNotEmpty) ...[
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(20, 25, 18, 13),
+                            sliver: SliverToBoxAdapter(
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text('Jogos offline', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -.35))),
+                                  _SectionArrowButton(onTap: () => _loadCatalog(force: true)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                            sliver: SliverList.builder(
+                              itemCount: offlineGames.length,
+                              itemBuilder: (context, index) => Padding(
+                                padding: EdgeInsets.only(bottom: index == offlineGames.length - 1 ? 0 : 18),
+                                child: _OfflineGameRow(
+                                  game: offlineGames[index],
+                                  onTap: () => _openDetails(offlineGames[index]),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
-                      ),
-                    ),
-                  ),
-                  if (_catalogError != null && _games.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              AppMaterialIcon(AppIcons.warningCircle, color: muted, size: 32),
-                              const SizedBox(height: 12),
-                              Text(_catalogError!, textAlign: TextAlign.center, style: TextStyle(color: muted)),
-                              const SizedBox(height: 12),
-                              TextButton(onPressed: () { setState(() => _loading = true); _loadCatalog(); }, child: const Text('Tentar novamente')),
-                            ],
+                        if (onlineGames.isNotEmpty) ...[
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(20, offlineGames.isEmpty ? 25 : 8, 18, 13),
+                            sliver: SliverToBoxAdapter(
+                              child: Row(
+                                children: [
+                                  Expanded(child: Text('Jogos online', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -.35))),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+                            sliver: SliverList.builder(
+                              itemCount: onlineGames.length,
+                              itemBuilder: (context, index) => Padding(
+                                padding: EdgeInsets.only(bottom: index == onlineGames.length - 1 ? 0 : 18),
+                                child: _OfflineGameRow(
+                                  game: onlineGames[index],
+                                  onTap: () => _openDetails(onlineGames[index]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                      if (events.isNotEmpty && !_premiumOnly && _selectedCategory == 'all') ...[
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 18, 14),
+                          sliver: SliverToBoxAdapter(
+                            child: Text('Eventos a decorrer agora', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -.35)),
                           ),
                         ),
-                      ),
-                    )
-                  else if (_visibleGames.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(28),
-                        child: Text('Não existem jogos nesta categoria.', textAlign: TextAlign.center, style: TextStyle(color: muted)),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                      sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 18,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: .91,
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 330,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: events.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 14),
+                              itemBuilder: (context, index) {
+                                final event = events[index];
+                                final game = _catalog!.games.where((item) => item.id == event.gameId).firstOrNull;
+                                if (game == null) return const SizedBox.shrink();
+                                return _GameEventCard(event: event, game: game, onTap: () => _openDetails(game));
+                              },
+                            ),
+                          ),
                         ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final game = _visibleGames[index];
-                            return _GameGridCard(
-                              game: game,
-                              imageUri: _resolveCatalogAsset(game.cover),
-                              opening: _openingGame == game.id,
-                              onTap: () => _openGame(game),
-                            );
-                          },
-                          childCount: _visibleGames.length,
-                        ),
-                      ),
-                    ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-                    sliver: SliverToBoxAdapter(
-                      child: Text('Os jogos são carregados na WebView nativa do BrowseIt.', textAlign: TextAlign.center,
-                          style: TextStyle(color: muted, fontSize: 11.5, height: 1.35)),
-                    ),
+                      ],
+                      const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                    ],
                   ),
-                ],
-              ),
       ),
     );
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, required this.selected, required this.onTap});
+class _GameFilterRail extends StatelessWidget {
+  const _GameFilterRail({
+    required this.categories,
+    required this.selectedCategory,
+    required this.premiumOnly,
+    required this.onCategoryChanged,
+    required this.onPremiumChanged,
+  });
+  final List<CatalogCategory> categories;
+  final String selectedCategory;
+  final bool premiumOnly;
+  final ValueChanged<String> onCategoryChanged;
+  final ValueChanged<bool> onPremiumChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 2),
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          _GameFilterChip(
+            icon: AppIcons.sportsEsports,
+            label: 'Todos',
+            selected: selectedCategory == 'all' && !premiumOnly,
+            onTap: () { onCategoryChanged('all'); onPremiumChanged(false); },
+          ),
+          for (final category in categories)
+            _GameFilterChip(
+              icon: AppIcons.squaresFour,
+              label: category.name,
+              selected: selectedCategory == category.id,
+              onTap: () => onCategoryChanged(category.id),
+            ),
+          _GameFilterChip(
+            icon: AppIcons.sealCheck,
+            label: 'Premium',
+            selected: premiumOnly,
+            onTap: () => onPremiumChanged(!premiumOnly),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GameFilterChip extends StatelessWidget {
+  const _GameFilterChip({required this.icon, required this.label, required this.selected, required this.onTap});
+  final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          label: Text(label),
-          selected: selected,
-          onSelected: (_) => onTap(),
-          showCheckmark: false,
-          labelStyle: TextStyle(color: selected ? Theme.of(context).colorScheme.onPrimary : mainText(context), fontWeight: FontWeight.w600, fontSize: 12.5),
-          selectedColor: accentColor(context),
-          backgroundColor: pillColor(context),
-          side: BorderSide(color: selected ? accentColor(context) : lineColor(context)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-          visualDensity: VisualDensity.compact,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-      );
-}
-
-class _FeaturedGameCard extends StatelessWidget {
-  const _FeaturedGameCard({required this.game, required this.imageUri, required this.opening, required this.onTap});
-  final _GameEntry game;
-  final Uri? imageUri;
-  final bool opening;
-  final VoidCallback onTap;
-
-  @override
   Widget build(BuildContext context) {
+    final accent = accentColor(context);
     final text = mainText(context);
-    return SizedBox(
-      width: 318,
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
       child: Material(
-        color: settingsCardColor(context),
-        borderRadius: BorderRadius.circular(25),
-        clipBehavior: Clip.antiAlias,
+        color: selected ? accent.withOpacity(.13) : pillColor(context),
+        borderRadius: BorderRadius.circular(999),
         child: InkWell(
-          onTap: opening ? null : onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _GameCover(game: game, remoteUri: imageUri)),
-              SizedBox(
-                height: 76,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 9, 12, 9),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w800))),
-                      const SizedBox(width: 10),
-                      _PlayPill(opening: opening, onTap: onTap),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AppMaterialIcon(icon, size: 20, color: selected ? accent : text),
+              const SizedBox(width: 8),
+              Text(label, style: TextStyle(color: selected ? accent : text, fontSize: 14, fontWeight: FontWeight.w600)),
+            ]),
           ),
         ),
       ),
@@ -477,99 +306,191 @@ class _FeaturedGameCard extends StatelessWidget {
   }
 }
 
-class _GameGridCard extends StatelessWidget {
-  const _GameGridCard({required this.game, required this.imageUri, required this.opening, required this.onTap});
-  final _GameEntry game;
-  final Uri? imageUri;
-  final bool opening;
+class _SectionArrowButton extends StatelessWidget {
+  const _SectionArrowButton({required this.onTap});
   final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+        color: pillColor(context),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(width: 48, height: 48, child: Center(child: AppMaterialIcon(AppIcons.arrowRight, size: 22, color: mainText(context)))),
+        ),
+      );
+}
 
+class _OfflineGameRow extends StatelessWidget {
+  const _OfflineGameRow({required this.game, required this.onTap});
+  final CatalogGame game;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final muted = mutedText(context);
+    final text = mainText(context);
+    final iconUri = BrowseItCatalogApi.instance.resolveRemote(game.icon.isNotEmpty ? game.icon : game.cover);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(width: 88, height: 88, child: _RemoteGameImage(uri: iconUri?.toString(), fit: BoxFit.cover)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const SizedBox(height: 1),
+              Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 5),
+              Text(game.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 14, height: 1.3)),
+              const SizedBox(height: 8),
+              Wrap(spacing: 13, runSpacing: 5, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                if (game.rating > 0) _MetaBadge(text: game.rating.toStringAsFixed(1), icon: AppIcons.star, iconColor: const Color(0xFF1A73E8)),
+                if (formatCatalogSize(game.sizeBytes).isNotEmpty) Text(formatCatalogSize(game.sizeBytes), style: TextStyle(color: muted, fontSize: 13)),
+                if (game.premium) _MetaBadge(text: 'Premium', icon: AppIcons.sealCheck, iconColor: accentColor(context)),
+              ]),
+            ])),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetaBadge extends StatelessWidget {
+  const _MetaBadge({required this.text, required this.icon, required this.iconColor});
+  final String text;
+  final IconData icon;
+  final Color iconColor;
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(text, style: TextStyle(color: mutedText(context), fontSize: 12.5, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          AppMaterialIcon(icon, size: 16, color: iconColor, fill: 1),
+        ]),
+      );
+}
+
+class _RemoteGameImage extends StatelessWidget {
+  const _RemoteGameImage({this.uri, this.fit = BoxFit.cover});
+  final String? uri;
+  final BoxFit fit;
+  @override
+  Widget build(BuildContext context) {
+    final accent = accentColor(context);
+    final placeholder = Container(
+      color: pillColor(context),
+      alignment: Alignment.center,
+      child: AppMaterialIcon(AppIcons.sportsEsports, size: 34, color: accent),
+    );
+    if (uri == null || uri!.isEmpty) return placeholder;
+    return Image.network(uri!, fit: fit, filterQuality: FilterQuality.medium,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
+  }
+}
+
+class _GameEventCard extends StatelessWidget {
+  const _GameEventCard({required this.event, required this.game, required this.onTap});
+  final CatalogEvent event;
+  final CatalogGame game;
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: opening ? null : onTap,
-        borderRadius: BorderRadius.circular(19),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(19),
-                child: SizedBox.expand(child: _GameCover(game: game, remoteUri: imageUri)),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: text, fontSize: 14.5, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 3),
-            Text(game.description, maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: muted, fontSize: 11.5, height: 1.25)),
-          ],
+    final banner = BrowseItCatalogApi.instance.resolveRemote(event.banner);
+    final icon = BrowseItCatalogApi.instance.resolveRemote(game.icon.isNotEmpty ? game.icon : game.cover);
+    return SizedBox(
+      width: 342,
+      child: Material(
+        color: settingsCardColor(context),
+        borderRadius: BorderRadius.circular(27),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: Stack(fit: StackFit.expand, children: [
+              _RemoteGameImage(uri: banner?.toString()),
+              Align(alignment: Alignment.bottomCenter, child: Container(height: 76, decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(.82)])))),
+              Positioned(left: 16, right: 16, bottom: 15, child: Text(event.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700))),
+            ])),
+            SizedBox(height: 80, child: Padding(padding: const EdgeInsets.fromLTRB(14, 10, 12, 10), child: Row(children: [
+              ClipRRect(borderRadius: BorderRadius.circular(13), child: SizedBox(width: 52, height: 52, child: _RemoteGameImage(uri: icon?.toString()))),
+              const SizedBox(width: 11),
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(game.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(event.subtitle.isEmpty ? game.developer : event.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 12)),
+              ])),
+              const SizedBox(width: 8),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9), decoration: BoxDecoration(color: accentColor(context), borderRadius: BorderRadius.circular(999)), child: const Text('Ver', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+            ]))),
+          ]),
         ),
       ),
     );
   }
 }
 
-class _GameCover extends StatelessWidget {
-  const _GameCover({required this.game, required this.remoteUri});
-  final _GameEntry game;
-  final Uri? remoteUri;
-
+class _GamesEmptyState extends StatelessWidget {
+  const _GamesEmptyState({required this.onRetry, required this.apiMissing});
+  final VoidCallback onRetry;
+  final bool apiMissing;
   @override
   Widget build(BuildContext context) {
-    final fallback = Image.asset(
-      game.fallbackAsset,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => _GameCoverFallback(game: game),
-    );
-    if (remoteUri == null) return fallback;
-    return Image.network(
-      remoteUri.toString(),
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (_, __, ___) => fallback,
+    final text = mainText(context);
+    final muted = mutedText(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        SizedBox(height: 206, child: Lottie.asset(_brokenConsoleAnimation, repeat: true, fit: BoxFit.contain)),
+        const SizedBox(height: 5),
+        Text('Ainda não há jogos', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Text(
+          apiMissing
+              ? 'Liga o catálogo Render no build Android. Quando adicionares jogos ao repositório, eles aparecerão automaticamente aqui.'
+              : 'O catálogo está vazio neste momento. Os jogos publicados no repositório aparecerão aqui automaticamente.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: muted, fontSize: 13.5, height: 1.45),
+        ),
+        const SizedBox(height: 15),
+        TextButton.icon(onPressed: onRetry, icon: const AppMaterialIcon(AppIcons.arrowClockwise, size: 19), label: const Text('Atualizar')),
+      ]),
     );
   }
 }
 
-class _GameCoverFallback extends StatelessWidget {
-  const _GameCoverFallback({required this.game});
-  final _GameEntry game;
-
+class _CatalogErrorState extends StatelessWidget {
+  const _CatalogErrorState({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
   @override
-  Widget build(BuildContext context) => Container(
-        color: pillColor(context),
-        alignment: Alignment.center,
-        child: AppMaterialIcon(AppIcons.sportsEsports, size: 38, color: accentColor(context)),
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            AppMaterialIcon(AppIcons.wifiSlash, size: 42, color: mutedText(context)),
+            const SizedBox(height: 12),
+            Text('Não foi possível ligar ao catálogo', textAlign: TextAlign.center, style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: mutedText(context), fontSize: 12.5, height: 1.4)),
+            const SizedBox(height: 14),
+            FilledButton(onPressed: onRetry, child: const Text('Tentar novamente')),
+          ]),
+        ),
       );
 }
 
-class _PlayPill extends StatelessWidget {
-  const _PlayPill({required this.opening, required this.onTap});
-  final bool opening;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: accentColor(context),
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          onTap: opening ? null : onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: SizedBox(
-            height: 42,
-            width: 104,
-            child: Center(
-              child: opening
-                  ? const SizedBox(width: 19, height: 19, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Jogar', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ),
-      );
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

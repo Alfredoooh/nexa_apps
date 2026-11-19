@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:lottie/lottie.dart';
 
 import '../localization.dart';
 import '../models.dart';
@@ -89,6 +90,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final recent = entries.take(5).toList();
     final dark = Theme.of(context).brightness == Brightness.dark;
 
+    final hasActivity = entries.isNotEmpty || AdBlockStats.instance.totalBlocked > 0;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark
           ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
@@ -108,7 +111,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           title: Text(appText('activity'),
               style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
         ),
-        body: ListView(
+        body: !hasActivity
+            ? const _ActivityEmptyState()
+            : ListView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
           children: [
@@ -166,6 +171,31 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 );
               }),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+class _ActivityEmptyState extends StatelessWidget {
+  const _ActivityEmptyState();
+  @override
+  Widget build(BuildContext context) {
+    final text = mainText(context);
+    final muted = mutedText(context);
+    return Center(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(30, 20, 30, 40),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(height: 220, child: Lottie.asset('assets/animations/activity_chart_empty.json', repeat: true, fit: BoxFit.contain)),
+            const SizedBox(height: 8),
+            Text('Ainda não há atividade', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Text('Quando navegares e usares o BrowseIt, as tuas estatísticas e os sites visitados aparecerão aqui.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13.5, height: 1.45)),
+          ]),
         ),
       ),
     );

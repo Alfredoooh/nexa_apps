@@ -24,6 +24,7 @@ import 'shell/tabs_grid_screen.dart';
 import 'theme.dart';
 import 'localization.dart';
 import 'widgets/material_symbols.dart';
+import 'widgets/global_sites_fab.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,6 +77,7 @@ class LooplyApp extends StatelessWidget {
         builder: (context, mode, __) => ValueListenableBuilder<bool>(
           valueListenable: themeController.pureDark,
           builder: (context, pureBlack, ___) => MaterialApp(
+            navigatorKey: browseItNavigatorKey,
             title: 'BrowseIt',
             debugShowCheckedModeBanner: false,
             builder: (context, child) => M3ETheme(
@@ -95,6 +97,7 @@ class LooplyApp extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       child ?? const SizedBox.shrink(),
+                      const Positioned.fill(child: GlobalSitesFloatingButton()),
                       // Offstage mantém os glifos Rounded necessários à Activity
                       // Kotlin dentro da fonte submetida ao icon tree-shaker.
                       Positioned(
