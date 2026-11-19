@@ -53,7 +53,7 @@ import android.graphics.Typeface
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SwitchCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -64,7 +64,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     companion object {
         private const val CHANNEL = "looply/native_ui"
         private const val PREFS_NAME = "FlutterSharedPreferences"

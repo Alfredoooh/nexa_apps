@@ -1,165 +1,166 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tabs M3 Expressive</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>BrowseIt — Sem ligação</title>
 <style>
   :root {
     --bg: #ffffff;
-    --surface: #f2f2f5;
-    --text: #1a1a1a;
-    --text-dim: #6b6b70;
-    --primary: #5c8fd6;
-    --on-primary: #ffffff;
-    color-scheme: light dark;
+    --surface: #f4f4f4;
+    --text: #141414;
+    --muted: #666666;
+    --primary: #0A84FF;
   }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f0f10;
-      --surface: #1c1c1f;
-      --text: #f0f0f0;
-      --text-dim: #9a9a9f;
-      --primary: #7aa6e0;
-      --on-primary: #0f0f10;
-    }
+  [data-theme="dark"] {
+    --bg: #111111;
+    --surface: #1a1a1a;
+    --text: #f2f2f2;
+    --muted: #a3a3a3;
+    --primary: #4DA8FF;
   }
-
-  * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  html, body {
-    margin: 0;
-    height: 100%;
-  }
-
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
   body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
     background: var(--bg);
     color: var(--text);
-    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-
-  /* ===== Tab bar M3 Expressive (primary, pill indicator) ===== */
-  .tabbar {
-    position: relative;
-    display: flex;
-    background: var(--surface);
-    border-radius: 999px;
-    padding: 4px;
-    width: 280px;
-  }
-
-  .tab-indicator {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    height: calc(100% - 8px);
-    width: calc(50% - 4px);
-    background: var(--primary);
-    border-radius: 999px;
-    transition: transform 0.45s cubic-bezier(0.34, 1.4, 0.4, 1);
-  }
-
-  .tabbar.right .tab-indicator {
-    transform: translateX(100%);
-  }
-
-  .tab-btn {
-    position: relative;
-    z-index: 1;
-    flex: 1;
-    border: none;
-    background: none;
-    padding: 12px 0;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: color 0.3s cubic-bezier(0.2, 0, 0, 1);
-  }
-
-  .tab-btn.active {
-    color: var(--on-primary);
-  }
-
-  /* ===== Conteúdo deslizante ===== */
-  .content-wrap {
-    width: 280px;
-    height: 160px;
-    overflow: hidden;
-    border-radius: 24px;
-    background: var(--surface);
-    position: relative;
-  }
-
-  .content-track {
-    display: flex;
-    width: 200%;
-    height: 100%;
-    transition: transform 0.45s cubic-bezier(0.34, 1.2, 0.4, 1);
-  }
-
-  .content-wrap.right .content-track {
-    transform: translateX(-50%);
-  }
-
-  .panel {
-    width: 50%;
-    height: 100%;
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    color: var(--text-dim);
-    flex-shrink: 0;
+    padding: 28px 22px;
   }
+
+  main {
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    background: var(--surface);
+    border-radius: 24px;
+    padding: 36px 26px 30px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+  }
+
+  .error-illustration {
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 22px;
+    display: block;
+  }
+
+  .error-illustration circle.bg {
+    opacity: 0;
+    animation: fade-in 0.4s ease forwards;
+  }
+
+  /* Cada traço do wifi desenha-se em sequência, do mais externo ao mais interno */
+  .wifi-stroke {
+    stroke-dasharray: 60;
+    stroke-dashoffset: 60;
+    opacity: 0;
+    animation: draw 0.5s ease forwards, fade-in 0.01s linear forwards;
+  }
+  .wifi-stroke:nth-of-type(1) { animation-delay: 0.15s, 0.15s; }
+  .wifi-stroke:nth-of-type(2) { animation-delay: 0.45s, 0.45s; }
+
+  .wifi-dot {
+    opacity: 0;
+    transform: scale(0);
+    transform-origin: center;
+    animation: dot-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation-delay: 0.75s;
+  }
+
+  /* O traço diagonal "sem ligação" desenha-se por último, por cima de tudo */
+  .wifi-cross {
+    stroke-dasharray: 76;
+    stroke-dashoffset: 76;
+    opacity: 0;
+    animation: draw-cross 0.4s ease forwards, fade-in 0.01s linear forwards;
+    animation-delay: 1.0s, 1.0s;
+  }
+
+  @keyframes fade-in {
+    to { opacity: 1; }
+  }
+  @keyframes draw {
+    to { stroke-dashoffset: 0; opacity: 0.4; }
+  }
+  @keyframes draw-cross {
+    to { stroke-dashoffset: 0; opacity: 1; }
+  }
+  @keyframes dot-pop {
+    to { opacity: 0.4; transform: scale(1); }
+  }
+
+  /* Texto e botões aparecem depois da ilustração terminar */
+  h1, p, a.action {
+    opacity: 0;
+    transform: translateY(8px);
+    animation: content-in 0.45s ease forwards;
+  }
+  h1 { animation-delay: 1.2s; }
+  p.explanation { animation-delay: 1.3s; }
+  p.detail { animation-delay: 1.4s; }
+  a.primary { animation-delay: 1.5s; }
+  a.secondary { animation-delay: 1.6s; }
+
+  @keyframes content-in {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  h1 {
+    font-size: 21px;
+    line-height: 1.3;
+    margin: 0 0 10px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  p {
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0 0 18px;
+    color: var(--muted);
+  }
+  .detail {
+    font-size: 12px;
+    word-break: break-word;
+    opacity: 0.8;
+    margin: 0 0 22px;
+    font-family: "Roboto Mono", monospace;
+  }
+
+  a.action {
+    display: block;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    margin-top: 10px;
+  }
+  .primary { background: var(--primary); color: #ffffff; }
+  .secondary { background: transparent; color: var(--text); border: 1px solid var(--muted); }
 </style>
 </head>
 <body>
 
-  <div class="tabbar" id="tabbar">
-    <div class="tab-indicator"></div>
-    <button class="tab-btn active" data-tab="0">Tab 1</button>
-    <button class="tab-btn" data-tab="1">Tab 2</button>
-  </div>
+  <main>
+    <svg class="error-illustration" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle class="bg" cx="48" cy="48" r="48" fill="var(--primary)" fill-opacity="0.1"/>
+      <path class="wifi-stroke" d="M30 44c10-9 26-9 36 0" stroke="var(--primary)" stroke-width="4" stroke-linecap="round"/>
+      <path class="wifi-stroke" d="M37 54c6-5 16-5 22 0" stroke="var(--primary)" stroke-width="4" stroke-linecap="round"/>
+      <circle class="wifi-dot" cx="48" cy="64" r="3.5" fill="var(--primary)"/>
+      <path class="wifi-cross" d="M30 30l36 36" stroke="var(--primary)" stroke-width="4.5" stroke-linecap="round"/>
+    </svg>
 
-  <div class="content-wrap" id="contentWrap">
-    <div class="content-track">
-      <div class="panel">Conteúdo do Tab 1</div>
-      <div class="panel">Conteúdo do Tab 2</div>
-    </div>
-  </div>
+    <h1>Não foi possível abrir esta página</h1>
+    <p class="explanation">Verifica a ligação à Internet e tenta novamente.</p>
+    <p class="detail">https://exemplo.com/pagina<br>net::ERR_INTERNET_DISCONNECTED · -2</p>
 
-  <script>
-    const tabbar = document.getElementById('tabbar');
-    const contentWrap = document.getElementById('contentWrap');
-    const tabBtns = document.querySelectorAll('.tab-btn');
-
-    tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const index = btn.dataset.tab;
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        if (index === '1') {
-          tabbar.classList.add('right');
-          contentWrap.classList.add('right');
-        } else {
-          tabbar.classList.remove('right');
-          contentWrap.classList.remove('right');
-        }
-      });
-    });
-  </script>
+    <a class="action primary" href="browseit://retry">Tentar novamente</a>
+    <a class="action secondary" href="browseit://home">Voltar ao início</a>
+  </main>
 
 </body>
 </html>

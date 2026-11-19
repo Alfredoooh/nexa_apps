@@ -27,6 +27,19 @@ class BrowseItCloudSync {
 
   static Uri _uri(String path) => Uri.parse('${_workerUrl.replaceFirst(RegExp(r'/+$'), '')}$path');
 
+  /// Returns the user's Cloudflare session header without exposing the token
+  /// to the UI or persisting it outside flutter_secure_storage.
+  static Future<Map<String, String>> aiAuthorizationHeaders() async {
+    if (!isConfigured) {
+      throw StateError('O serviço Cloudflare ainda não está configurado.');
+    }
+    final token = await _secureStorage.read(key: _sessionKey);
+    if (token == null || token.isEmpty) {
+      throw StateError('Inicia sessão com Google para utilizar a pesquisa com IA.');
+    }
+    return <String, String>{'Authorization': 'Bearer $token'};
+  }
+
   static Future<String?> createAuthChallenge() async {
     if (!isConfigured) return null;
     final response = await http

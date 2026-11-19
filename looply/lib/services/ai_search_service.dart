@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../cloud_sync.dart';
+
 /// Cliente HTTP da pesquisa com IA.
 ///
 /// O endereço é fornecido no build, sem embutir chaves privadas no APK:
@@ -41,10 +43,12 @@ class BrowseItAiSearchService {
 
     final client = http.Client();
     try {
+      final authorization = await BrowseItCloudSync.aiAuthorizationHeaders();
       final request = http.Request('POST', uri)
-        ..headers.addAll(const {
+        ..headers.addAll({
           'Accept': 'application/json, text/event-stream',
           'Content-Type': 'application/json; charset=utf-8',
+          ...authorization,
         })
         ..body = jsonEncode({
           'query': cleanQuery,
@@ -108,7 +112,7 @@ class BrowseItAiSearchService {
               'Devolve respostas completas e bem estruturadas em Markdown. Usa títulos hierárquicos, introdução breve, secções temáticas, parágrafos objetivos, listas ordenadas e não ordenadas, tabelas quando facilitarem a comparação, citações e blocos NOTE/TIP/IMPORTANT/WARNING. Usa LaTeX para matemática, unidades e fórmulas quando for útil. Usa blocos de código fenced com a linguagem correta para código. Quando ajudar a compreensão, gera blocos visuais fenced em JSON válido: widget_market, widget_calendar, widget_map, widget_chart, widget_metric, widget_steps, widget_table, widget_comparison, widget_progress, widget_checklist, widget_timeline, widget_alert, widget_faq, widget_sources, widget_weather, widget_news, widget_product, widget_rating, widget_key_values, widget_bar_chart, widget_image_gallery. Inclui fontes verificáveis em widget_sources quando pesquisares factos atuais. Não inventes preços, estatísticas, datas, avaliações, fontes, coordenadas nem imagens. Se não tiveres dados reais para um campo, omite-o em vez de fabricar valores. Mantém o texto e os blocos coerentes e não repitas a mesma informação em vários formatos.',
         });
 
-      final response = await client.send(request).timeout(const Duration(seconds: 30));
+      final response = await client.send(request).timeout(const Duration(seconds: 90));
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final errorBody = await response.stream.bytesToString();
         throw StateError(_readServerError(errorBody, response.statusCode));
