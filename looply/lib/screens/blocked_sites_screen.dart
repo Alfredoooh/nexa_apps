@@ -79,45 +79,6 @@ class _BlockedSitesScreenState extends State<BlockedSitesScreen> {
   }
 
   Future<void> _removeSite(String host) async {
-    final mode = await BrowserSecurityService.credentialMode();
-    final credentialController = TextEditingController();
-    final requested = await showLooplyDialog<bool>(
-      context: context,
-      title: appText('confirm_remove_block'),
-      icon: AppIcons.shieldCheck,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(appText('confirm_remove_block_description').replaceAll('{site}', host),
-              style: TextStyle(color: mutedText(context), fontSize: 13, height: 1.4)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: credentialController,
-            autofocus: true,
-            obscureText: true,
-            keyboardType: mode == 'pin' ? TextInputType.number : TextInputType.visiblePassword,
-            decoration: InputDecoration(labelText: mode == 'pin' ? appText('pin') : appText('password')),
-          ),
-        ],
-      ),
-      actions: <LooplyDialogAction<bool>>[
-        LooplyDialogAction<bool>(label: appText('cancel'), value: false),
-        LooplyDialogAction<bool>(label: appText('continue'), value: true, isPrimary: true),
-      ],
-    );
-    final secret = credentialController.text;
-    credentialController.dispose();
-    if (requested != true || !mounted) return;
-
-    final verified = await BrowserSecurityService.verifyCredential(secret);
-    if (!verified) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(appText('invalid_credential'))) ,
-      );
-      return;
-    }
-
     final confirmed = await showLooplyDialog<bool>(
       context: context,
       title: appText('remove_block_title'),

@@ -228,6 +228,23 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     );
   }
 
+  double? _horizontalDragStartX;
+
+  void _handleHorizontalDragStart(DragStartDetails details) {
+    _horizontalDragStartX = details.globalPosition.dx;
+  }
+
+  void _handleHorizontalSwipe(DragEndDetails details) {
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    final startedAtEdge = (_horizontalDragStartX ?? double.infinity) <= 34;
+    _horizontalDragStartX = null;
+    // Match the Home screen gesture: a rightward swipe beginning at the
+    // physical screen edge opens the existing shell drawer.
+    if (mounted && startedAtEdge && velocity > 420) {
+      drawer_menu.LooplyDrawerBridge.open?.call();
+    }
+  }
+
   Widget _composerIcon({required IconData icon, required String tooltip, required VoidCallback? onPressed}) {
     return Tooltip(
       message: tooltip,
@@ -255,7 +272,11 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     final accent = accentColor(context);
     final hasText = _controller.text.trim().isNotEmpty;
 
-    return Scaffold(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: _handleHorizontalDragStart,
+      onHorizontalDragEnd: _handleHorizontalSwipe,
+      child: Scaffold(
       backgroundColor: pageBg(context),
       body: SafeArea(
         child: Column(
@@ -360,6 +381,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

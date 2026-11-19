@@ -1,10 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../shell/browser_navigation.dart';
+
 import '../localization.dart';
 import '../theme.dart';
 import '../widgets/material_symbols.dart';
-import '../widgets/looply_dialog.dart';
 
 class AppInfoScreen extends StatelessWidget {
   const AppInfoScreen({super.key});
@@ -70,13 +71,13 @@ class AppInfoScreen extends StatelessWidget {
                     _AboutRow(
                       icon: AppIcons.shieldCheck,
                       title: appText('privacy_policy'),
-                      onTap: () => _showLegal(context, appText('privacy_policy'), appText('about_privacy_text')),
+                      onTap: () => openOrbitTab(context, 'https://example.com/privacy-policy', title: appText('privacy_policy')),
                     ),
                     Divider(height: 1, indent: 54, endIndent: 16, color: lineColor(context)),
                     _AboutRow(
                       icon: AppIcons.info,
                       title: appText('terms_of_use'),
-                      onTap: () => _showLegal(context, appText('terms_of_use'), appText('about_terms_text')),
+                      onTap: () => openOrbitTab(context, 'https://example.com/terms-of-use', title: appText('terms_of_use')),
                     ),
                     Divider(height: 1, indent: 54, endIndent: 16, color: lineColor(context)),
                     _AboutRow(
@@ -100,17 +101,6 @@ class AppInfoScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> _showLegal(BuildContext context, String title, String body) {
-  return showLooplyDialog<void>(
-    context: context,
-    title: title,
-    content: SelectableText(body),
-    actions: <LooplyDialogAction<void>>[
-      LooplyDialogAction<void>(label: appText('close'), value: null, isPrimary: true),
-    ],
-  );
 }
 
 class _AboutRow extends StatelessWidget {

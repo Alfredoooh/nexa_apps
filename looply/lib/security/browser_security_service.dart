@@ -2,13 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../cloud_sync.dart';
 
-/// Keeps site-blocking rules in app preferences and delegates credential
-/// verification storage to the Android layer. Only a salted verifier is kept.
+/// Stores site-blocking rules and delegates access checks to Android device authentication.
 class BrowserSecurityService {
   BrowserSecurityService._();
 
@@ -17,29 +15,6 @@ class BrowserSecurityService {
   static const String _passwordSavingKey = 'looply_save_passwords_enabled';
 
   static final ValueNotifier<bool> passwordSavingEnabled = ValueNotifier<bool>(false);
-  static final LocalAuthentication _localAuth = LocalAuthentication();
-
-  static Future<bool> hasEnrolledBiometrics() async {
-    try {
-      final available = await _localAuth.getAvailableBiometrics();
-      return available.isNotEmpty;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static Future<bool> authenticateBiometrically({required String reason}) async {
-    try {
-      if (!await hasEnrolledBiometrics()) return false;
-      return await _localAuth.authenticate(
-        localizedReason: reason,
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
-      );
-    } catch (_) {
-      return false;
-    }
-  }
 
   static Future<void> restore() async {
     try {
@@ -50,48 +25,28 @@ class BrowserSecurityService {
     }
   }
 
-  static Future<bool> hasCredential() async {
+
+  /// Uses the device's existing screen lock / fingerprint / face authentication.
+  /// Looply never creates or stores a second PIN or password for this feature.
+  static Future<bool> canAuthenticateDevice() async {
     try {
-      return await _channel.invokeMethod<bool>('hasBrowserSecurityCredential') ?? false;
-    } on MissingPluginException {
-      return false;
+      return await _channel.invokeMethod<bool>('canAuthenticateDevice') ?? false;
     } on PlatformException {
+      return false;
+    } on MissingPluginException {
       return false;
     }
   }
 
-  static Future<String> credentialMode() async {
+  static Future<bool> authenticateDevice({String reason = 'Confirmar identidade'}) async {
     try {
-      return await _channel.invokeMethod<String>('getBrowserSecurityCredentialMode') ?? 'pin';
-    } on PlatformException {
-      return 'pin';
-    } on MissingPluginException {
-      return 'pin';
-    }
-  }
-
-  static Future<bool> verifyCredential(String secret) async {
-    try {
-      return await _channel.invokeMethod<bool>('verifyBrowserSecurityCredential', <String, Object>{
-        'secret': secret,
+      return await _channel.invokeMethod<bool>('authenticateDevice', <String, Object>{
+        'reason': reason,
       }) ?? false;
     } on PlatformException {
       return false;
     } on MissingPluginException {
       return false;
-    }
-  }
-
-  static Future<void> setCredential({required String mode, required String secret}) async {
-    if (mode != 'pin' && mode != 'password') {
-      throw ArgumentError.value(mode, 'mode');
-    }
-    final saved = await _channel.invokeMethod<bool>('setBrowserSecurityCredential', <String, Object>{
-      'mode': mode,
-      'secret': secret,
-    });
-    if (saved != true) {
-      throw StateError('O dispositivo não conseguiu guardar a proteção.');
     }
   }
 

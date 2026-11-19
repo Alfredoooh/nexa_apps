@@ -9,6 +9,9 @@ import android.net.Uri
 import android.webkit.PermissionRequest
 import android.webkit.GeolocationPermissions
 import androidx.credentials.CredentialManager
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.CustomCredential
 import androidx.credentials.exceptions.NoCredentialException
@@ -50,7 +53,7 @@ import android.graphics.Typeface
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SwitchCompat
-import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -61,7 +64,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-class MainActivity : FlutterFragmentActivity() {
+class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "looply/native_ui"
         private const val PREFS_NAME = "FlutterSharedPreferences"
@@ -117,6 +120,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var nativeStatsChannel: MethodChannel? = null
     private var nativeUiChannel: MethodChannel? = null
     private lateinit var appPreferences: SharedPreferences
+    private var deviceBiometricPrompt: BiometricPrompt? = null
+    private var deviceAuthenticationResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // O Android guarda o modo de aparência escolhido pela aplicação.
@@ -133,8 +138,9 @@ class MainActivity : FlutterFragmentActivity() {
         extractBrowsableUrl(intent)?.let(pendingExternalUrls::addLast)
         super.onCreate(savedInstanceState)
 
-        // O LaunchTheme nativo já apresentou o ícone drawable. Aqui apenas
-        // sincronizamos as barras do sistema com o tema escolhido na aplicação.
+        // O LaunchTheme fornece o splash nativo do Android; este overlay curto
+        // garante que o fundo respeita a preferência interna do BrowseIt também
+        // nas versões em que o Android só disponibiliza o tema do sistema.
         applyWindowTheme(savedMode, savedPureBlack)
 
         appPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -181,6 +187,12 @@ class MainActivity : FlutterFragmentActivity() {
                         applyWindowTheme(mode, pureBlack)
                         result.success(true)
                     }
+                    "canAuthenticateDevice" -> {
+                        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                        result.success(BiometricManager.from(this).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS)
+                    }
+                    "authenticateDevice" -> authenticateDevice(call.argument<String>("reason") ?: "Confirmar identidade", result)
                     "shareText" -> shareText(call, result)
                     "showNativePopup" -> showNativePopup(call, result)
                     "showNativeDialog" -> showNativeDialog(call, result)
@@ -233,7 +245,49 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    private fun authenticateDevice(reason: String, result: MethodChannel.Result) {
+        if (deviceAuthenticationResult != null) {
+            result.error("AUTHENTICATION_BUSY", "Já existe uma autenticação em curso.", null)
+            return
+        }
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val availability = BiometricManager.from(this).canAuthenticate(authenticators)
+        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
+            result.error("DEVICE_AUTH_UNAVAILABLE", "Configure um bloqueio de ecrã no Android.", availability)
+            return
+        }
+        deviceAuthenticationResult = result
+        val executor = ContextCompat.getMainExecutor(this)
+        deviceBiometricPrompt = BiometricPrompt(this, executor, object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(authResult: BiometricPrompt.AuthenticationResult) {
+                deviceAuthenticationResult?.success(true)
+                deviceAuthenticationResult = null
+                deviceBiometricPrompt = null
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                deviceAuthenticationResult?.success(false)
+                deviceAuthenticationResult = null
+                deviceBiometricPrompt = null
+            }
+
+            override fun onAuthenticationFailed() {
+                // A tentativa não terminal mantém o prompt visível para nova tentativa.
+            }
+        })
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Proteção do Looply")
+            .setSubtitle(reason.take(120))
+            .setAllowedAuthenticators(authenticators)
+            .build()
+        deviceBiometricPrompt?.authenticate(promptInfo)
+    }
+
     override fun onDestroy() {
+        deviceAuthenticationResult?.success(false)
+        deviceAuthenticationResult = null
+        deviceBiometricPrompt = null
         nativeStatsChannel = null
         nativeUiChannel = null
         nativeDownloadChannel = null
@@ -552,7 +606,7 @@ class MainActivity : FlutterFragmentActivity() {
         requestPermissions(missing.toTypedArray(), runtimePermissionRequestCode)
     }
 
-    @Deprecated("Deprecated in Android API; retained for compatibility with the Flutter embedding permission callback")
+    @Deprecated("Deprecated in Android API; retained for compatibility with the FlutterActivity permission callback")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != runtimePermissionRequestCode) return

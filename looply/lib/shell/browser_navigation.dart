@@ -13,7 +13,7 @@ BrowserTab openOrbitTab(
   String url, {
   String? title,
 }) {
-  final tab = tabsController.createBrowserTab(url);
+  final tab = tabsController.createBrowserTab(url, title: title);
   tabsController.activate(tab.id);
   activityController.log(ActivityKind.site, title ?? url, url);
 

@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../localization.dart';
 import '../auth_service.dart';
@@ -203,6 +204,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 2),
                         _ProfileToggleTile(
                           icon: AppIcons.gear,
+                          leading: SvgPicture.asset('assets/icons/svg/regular/gear.svg', width: 21, height: 21,
+                            colorFilter: ColorFilter.mode(mutedText(context), BlendMode.srcIn)),
                           title: appText('settings'),
                           subtitle: _syncAppSettings
                               ? appText('synced_across_devices')
@@ -306,6 +309,7 @@ class _ProfileFadeBottomBar extends StatelessWidget {
 class _ProfileToggleTile extends StatelessWidget {
   const _ProfileToggleTile({
     required this.icon,
+    this.leading,
     required this.title,
     required this.subtitle,
     required this.value,
@@ -314,6 +318,7 @@ class _ProfileToggleTile extends StatelessWidget {
   });
 
   final IconData icon;
+  final Widget? leading;
   final String title;
   final String subtitle;
   final bool value;
@@ -337,7 +342,7 @@ class _ProfileToggleTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                AppMaterialIcon(icon, color: accent, size: 20),
+                leading ?? AppMaterialIcon(icon, color: accent, size: 20),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

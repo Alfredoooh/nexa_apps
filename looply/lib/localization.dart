@@ -65,8 +65,6 @@ String appText(String key) {
   final languageCode = appLanguageController.value.code;
   final extra = appExtraTranslations[languageCode]?[key];
   if (extra != null && extra.trim().isNotEmpty) return extra;
-  final extraFallback = appExtraTranslations['en']?[key];
-  if (extraFallback != null && extraFallback.trim().isNotEmpty) return extraFallback;
   final language = appTranslations[languageCode] ?? appTranslations['pt']!;
   final localized = language[key];
   if (localized != null && localized.trim().isNotEmpty) return localized;

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Looply — Suporte</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f4f4f4;
+    --text: #141414;
+    --muted: #666666;
+    --border: #e0e0e0;
+    --link: #0A84FF;
+    --primary: #0A84FF;
+  }
+  [data-theme="dark"] {
+    --bg: #111111;
+    --surface: #1a1a1a;
+    --text: #f2f2f2;
+    --muted: #a3a3a3;
+    --border: #2d2d2d;
+    --link: #4DA8FF;
+    --primary: #4DA8FF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    line-height: 1.65;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .appbar { padding: 28px 24px 0; max-width: 780px; margin: 0 auto; }
+  .appbar-top { display: flex; align-items: center; justify-content: space-between; }
+  .brand-block { display: flex; align-items: center; gap: 14px; }
+
+  .app-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: linear-gradient(to bottom, #0A84FF, #BEE7FA);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+    flex-shrink: 0;
+  }
+
+  .brand-block h1 { font-size: 1.5rem; font-weight: 900; margin: 0; letter-spacing: -0.02em; }
+  .brand-block p { margin: 2px 0 0; color: var(--muted); font-size: 0.88rem; }
+  .icon-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
+  .icon-btn .material-symbols-outlined { font-size: 22px; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 24px 24px 110px; }
+
+  .hero-illustration { width: 100%; max-width: 280px; margin: 8px auto 20px; display: block; }
+
+  .updated { color: var(--muted); font-size: 0.85rem; margin: -8px 0 28px; text-align: center; }
+
+  h2 { font-size: 1.25rem; font-weight: 700; margin-top: 48px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  p, li { color: var(--text); }
+  a { color: var(--text); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; margin: 28px 0; }
+
+  /* Busca do assistente */
+  .search-box {
+    position: relative;
+    margin: 0 0 24px;
+  }
+  .search-box input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px 14px 46px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+  .search-box .material-symbols-outlined {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 20px;
+  }
+  .search-empty {
+    display: none;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding: 30px 0;
+  }
+
+  /* Categorias (chips) */
+  .category-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    scrollbar-width: none;
+  }
+  .category-row::-webkit-scrollbar { display: none; }
+  .category-chip {
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .category-chip.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+  }
+
+  /* Secção de FAQ agrupada */
+  .faq-group { margin-top: 36px; }
+  .faq-group-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .faq-item { margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+  .faq-item summary {
+    cursor: pointer;
+    font-weight: 700;
+    padding: 4px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary .material-symbols-outlined { color: var(--muted); font-size: 20px; flex-shrink: 0; transition: transform 0.15s ease; }
+  .faq-item[open] summary .material-symbols-outlined { transform: rotate(180deg); }
+  .faq-item p { margin-top: 10px; color: var(--muted); }
+  .faq-item mark { background: rgba(10, 132, 255, 0.22); color: inherit; border-radius: 3px; }
+  .faq-item.hidden { display: none; }
+
+  /* Secção "ainda precisa de ajuda" com atalhos rápidos */
+  .quick-help {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 20px 0 8px;
+  }
+  .quick-help-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+  }
+  .quick-help-item .material-symbols-outlined { color: var(--primary); font-size: 24px; }
+  .quick-help-item span.title { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+
+  form { display: flex; flex-direction: column; gap: 14px; }
+  label { font-size: 0.88rem; color: var(--muted); }
+  input, textarea, select {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; color: var(--text); font-family: inherit; font-size: 0.95rem; width: 100%;
+  }
+  textarea { resize: vertical; min-height: 120px; }
+  button[type="submit"] {
+    background: var(--primary); color: #ffffff; border: none; border-radius: 28px;
+    padding: 15px; font-size: 0.95rem; font-weight: 700; cursor: pointer; margin-top: 6px;
+  }
+
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(10, 132, 255, 0.1);
+    border: 1px solid rgba(10, 132, 255, 0.35);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 28px;
+    font-size: 0.88rem;
+  }
+  .status-banner .material-symbols-outlined { color: var(--primary); }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #2fbf71; flex-shrink: 0;
+  }
+
+  .more-links { margin-top: 56px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .more-links p.label { font-weight: 700; margin: 24px 0 14px; font-size: 1rem; }
+  .more-links a.text-link {
+    display: block; color: var(--link); text-decoration: underline;
+    font-size: 0.95rem; font-weight: 700; margin-bottom: 12px;
+  }
+
+  footer { border-top: 1px solid var(--border); margin-top: 48px; padding-top: 22px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+  <div class="appbar">
+    <div class="appbar-top">
+      <div class="brand-block">
+        <div class="app-icon"></div>
+        <div>
+          <h1>Looply</h1>
+          <p>BrowseIt — Suporte</p>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="toggleTheme()" aria-label="Alternar tema">
+        <span class="material-symbols-outlined" id="theme-icon">dark_mode</span>
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <svg class="hero-illustration" viewBox="0 0 320 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="160" cy="90" r="76" fill="var(--surface)" stroke="var(--border)" stroke-width="2"/>
+      <path d="M124 78c0-17 14-29 36-29s36 12 36 29c0 13-9 20-19 25-7 4-10 7-10 14" stroke="url(#chatGrad)" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <circle cx="160" cy="128" r="5" fill="#0A84FF"/>
+      <defs>
+        <linearGradient id="chatGrad" x1="124" y1="49" x2="196" y2="117" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#0A84FF"/>
+          <stop offset="1" stop-color="#4DC4FF"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <p class="updated">O assistente de Suporte do BrowseIt</p>
+
+    <div class="status-banner">
+      <span class="status-dot"></span>
+      <span>A equipa está online — respondemos pessoalmente a cada mensagem</span>
+    </div>
+
+    <!-- Busca -->
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span>
+      <input type="text" id="faqSearch" placeholder="Pesquisar uma dúvida (ex: sincronização, conta, anúncios...)" oninput="filterFAQ()">
+    </div>
+
+    <!-- Categorias -->
+    <div class="category-row" id="categoryRow">
+      <button class="category-chip active" data-cat="all" onclick="setCategory('all', this)">Todas</button>
+      <button class="category-chip" data-cat="geral" onclick="setCategory('geral', this)">Geral</button>
+      <button class="category-chip" data-cat="conta" onclick="setCategory('conta', this)">Conta e sincronização</button>
+      <button class="category-chip" data-cat="navegacao" onclick="setCategory('navegacao', this)">Navegação</button>
+      <button class="category-chip" data-cat="jogos" onclick="setCategory('jogos', this)">Jogos e anúncios</button>
+      <button class="category-chip" data-cat="privacidade" onclick="setCategory('privacidade', this)">Privacidade</button>
+      <button class="category-chip" data-cat="tecnico" onclick="setCategory('tecnico', this)">Problemas técnicos</button>
+    </div>
+
+    <p class="search-empty" id="searchEmpty">Nenhuma pergunta encontrada. Tente outra palavra ou contacte-nos abaixo.</p>
+
+    <!-- Atalhos rápidos -->
+    <div class="quick-help">
+      <button class="quick-help-item" onclick="document.getElementById('contactForm').scrollIntoView({behavior:'smooth'})">
+        <span class="material-symbols-outlined">mail</span>
+        <span class="title">Contactar a equipa</span>
+      </button>
+      <button class="quick-help-item" onclick="setCategory('tecnico', document.querySelector('[data-cat=tecnico]'))">
+        <span class="material-symbols-outlined">build</span>
+        <span class="title">Resolver um erro</span>
+      </button>
+    </div>
+
+    <!-- ===== GERAL ===== -->
+    <div class="faq-group" data-group="geral">
+      <p class="faq-group-title">Geral</p>
+
+      <details class="faq-item" data-cat="geral">
+        <summary>O que é o BrowseIt? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>O BrowseIt é um navegador de internet (browser) para Android, desenvolvido pela Looply, com gestão de separadores, favoritos, histórico, transferências e uma secção de jogos integrada.</p>
+      </details>
+
+      <details class="faq-item" data-cat="geral">
+        <summary>O BrowseIt é gratuito? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Sim. O BrowseIt é totalmente gratuito, sustentado através da exibição de anúncios geridos pelo AdMob.</p>
+      </details>
+
+      <details class="faq-item" data-cat="geral">
+        <summary>Qual é a idade mínima para usar o BrowseIt? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>O BrowseIt destina-se a utilizadores com 13 anos de idade ou mais.</p>
+      </details>
+
+      <details class="faq-item" data-cat="geral">
+        <summary>Em que dispositivos funciona o BrowseIt? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Atualmente o BrowseIt está disponível para dispositivos Android.</p>
+      </details>
+
+      <details class="faq-item" data-cat="geral">
+        <summary>Quem desenvolve o BrowseIt? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>O BrowseIt é desenvolvido e mantido pela Looply, uma startup digital totalmente virtual, fundada e operada por duas pessoas.</p>
+      </details>
+    </div>
+
+    <!-- ===== CONTA E SINCRONIZAÇÃO ===== -->
+    <div class="faq-group" data-group="conta">
+      <p class="faq-group-title">Conta e sincronização</p>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>Preciso de criar uma conta para usar o navegador? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Não. A criação de conta é opcional e serve apenas para ativar a sincronização de dados entre dispositivos.</p>
+      </details>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>Como crio uma conta no BrowseIt? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>A autenticação é feita através do mecanismo nativo de gestão de credenciais do Android, associado à sua Conta Google. Não é preciso criar uma palavra-passe nova.</p>
+      </details>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>O que é sincronizado entre dispositivos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Favoritos, histórico, separadores abertos e definições são sincronizados entre dispositivos onde utilize a mesma conta, se ativar essa opção.</p>
+      </details>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>Como desativo a sincronização? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Pode desativar a sincronização a qualquer momento nas definições da Aplicação. Os dados continuam disponíveis localmente no dispositivo.</p>
+      </details>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>Como elimino a minha conta e os meus dados? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Pode eliminar a sua conta diretamente nas definições da Aplicação. Isto remove os dados de sincronização associados à sua conta nos nossos servidores.</p>
+      </details>
+
+      <details class="faq-item" data-cat="conta">
+        <summary>Esqueci-me da palavra-passe. O que faço? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Como a autenticação usa a sua Conta Google, a recuperação de acesso é feita diretamente através da Google, não através do BrowseIt.</p>
+      </details>
+    </div>
+
+    <!-- ===== NAVEGAÇÃO ===== -->
+    <div class="faq-group" data-group="navegacao">
+      <p class="faq-group-title">Navegação</p>
+
+      <details class="faq-item" data-cat="navegacao">
+        <summary>Como abro um novo separador? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Toque no ícone de separadores na barra inferior e depois no botão de "+" para abrir um novo separador.</p>
+      </details>
+
+      <details class="faq-item" data-cat="navegacao">
+        <summary>Como encontro o meu histórico de navegação? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Aceda ao menu principal e selecione "Histórico" para ver as páginas visitadas recentemente, organizadas por data.</p>
+      </details>
+
+      <details class="faq-item" data-cat="navegacao">
+        <summary>Onde ficam guardadas as minhas transferências (downloads)? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Pode aceder à lista de transferências através do menu "Transferências". Os ficheiros podem ser abertos diretamente dentro da Aplicação, incluindo imagens, vídeos, áudio, documentos e PDF.</p>
+      </details>
+
+      <details class="faq-item" data-cat="navegacao">
+        <summary>Posso mudar o motor de pesquisa padrão? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Sim, o BrowseIt permite navegar através de múltiplos motores de pesquisa, configuráveis nas definições da Aplicação.</p>
+      </details>
+
+      <details class="faq-item" data-cat="navegacao">
+        <summary>Como adiciono uma página aos favoritos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Com a página aberta, toque no ícone de estrela na barra de endereço para adicioná-la aos favoritos.</p>
+      </details>
+    </div>
+
+    <!-- ===== JOGOS E ANÚNCIOS ===== -->
+    <div class="faq-group" data-group="jogos">
+      <p class="faq-group-title">Jogos e anúncios</p>
+
+      <details class="faq-item" data-cat="jogos">
+        <summary>Como acedo à secção de jogos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>A secção de jogos está acessível diretamente a partir do menu principal da Aplicação.</p>
+      </details>
+
+      <details class="faq-item" data-cat="jogos">
+        <summary>Os jogos são todos feitos pela Looply? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Não necessariamente. Os jogos podem ser desenvolvidos diretamente pela Looply e/ou disponibilizados através de plataformas de distribuição de terceiros, mediante acordos de parceria.</p>
+      </details>
+
+      <details class="faq-item" data-cat="jogos">
+        <summary>Posso bloquear os anúncios dentro da secção de jogos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Os anúncios exibidos dentro das funcionalidades nativas da Aplicação, como a secção de jogos, fazem parte da integração técnica dessas funcionalidades e não podem ser bloqueados da mesma forma que os anúncios em sites visitados durante a navegação geral.</p>
+      </details>
+
+      <details class="faq-item" data-cat="jogos">
+        <summary>Por que vejo anúncios diferentes na navegação e nos jogos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>A experiência publicitária na navegação de sites externos pode diferir da experiência dentro das funcionalidades nativas, consoante as definições de privacidade e bloqueio de conteúdo que configure para a navegação geral.</p>
+      </details>
+
+      <details class="faq-item" data-cat="jogos">
+        <summary>Como gerencio a publicidade personalizada? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Pode gerir as suas preferências de publicidade personalizada diretamente nas definições de privacidade e anúncios do seu dispositivo Android.</p>
+      </details>
+    </div>
+
+    <!-- ===== PRIVACIDADE ===== -->
+    <div class="faq-group" data-group="privacidade">
+      <p class="faq-group-title">Privacidade</p>
+
+      <details class="faq-item" data-cat="privacidade">
+        <summary>Como posso saber mais sobre que dados são recolhidos? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Consulte a secção de Privacidade completa, disponível no fim desta página, para mais detalhes.</p>
+      </details>
+
+      <details class="faq-item" data-cat="privacidade">
+        <summary>A Looply vende os meus dados a terceiros? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Não. A Looply não vende nem partilha dados pessoais com terceiros para fins de marketing.</p>
+      </details>
+
+      <details class="faq-item" data-cat="privacidade">
+        <summary>O BrowseIt guarda o conteúdo das páginas que visito? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Não. A Looply não recolhe o conteúdo das páginas visitadas, apenas o registo local de histórico, guardado no seu próprio dispositivo.</p>
+      </details>
+
+      <details class="faq-item" data-cat="privacidade">
+        <summary>Posso pedir para apagar todos os meus dados? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Sim. Pode eliminar a sua conta e os dados de sincronização associados diretamente nas definições da Aplicação, ou contactando a equipa através do formulário abaixo.</p>
+      </details>
+    </div>
+
+    <!-- ===== PROBLEMAS TÉCNICOS ===== -->
+    <div class="faq-group" data-group="tecnico">
+      <p class="faq-group-title">Problemas técnicos</p>
+
+      <details class="faq-item" data-cat="tecnico">
+        <summary>O BrowseIt está lento ou a travar. O que faço? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Experimente fechar separadores que não esteja a usar, limpar a cache nas definições, ou reiniciar a Aplicação. Se o problema continuar, contacte-nos através do formulário abaixo com o modelo do seu dispositivo.</p>
+      </details>
+
+      <details class="faq-item" data-cat="tecnico">
+        <summary>Uma página não carrega corretamente. É normal? <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Pode acontecer ocasionalmente dependendo do site visitado. Tente recarregar a página ou verificar a sua ligação à internet. Se o problema persistir num site específico, informe-nos.</p>
+      </details>
+
+      <details class="faq-item" data-cat="tecnico">
+        <summary>A sincronização não está a funcionar entre os meus dispositivos. <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Confirme que está autenticado com a mesma conta em ambos os dispositivos e que a sincronização está ativada nas definições de cada um. Se mesmo assim não funcionar, contacte-nos.</p>
+      </details>
+
+      <details class="faq-item" data-cat="tecnico">
+        <summary>Não consigo abrir um ficheiro transferido. <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>O BrowseIt visualiza nativamente imagens, vídeos, áudio, documentos e PDF. Se um formato específico não abrir, verifique se o ficheiro foi transferido por completo e tente novamente.</p>
+      </details>
+
+      <details class="faq-item" data-cat="tecnico">
+        <summary>A Aplicação encerra sozinha (crash). <span class="material-symbols-outlined">expand_more</span></summary>
+        <p>Isto pode indicar um erro específico do seu dispositivo ou versão do sistema. Descreva no formulário abaixo o modelo do dispositivo, a versão do Android e o que estava a fazer quando aconteceu — isso ajuda-nos a identificar o problema rapidamente.</p>
+      </details>
+    </div>
+
+    <h2 id="contactForm">Ainda precisa de ajuda?</h2>
+    <div class="card">
+      <p style="margin:0;">A equipa da Looply, composta por duas pessoas dedicadas ao BrowseIt, responde pessoalmente a cada mensagem recebida através deste formulário. Descreva o seu problema ou dúvida com o máximo de detalhe possível — isso ajuda-nos a responder mais rapidamente.</p>
+    </div>
+
+    <form onsubmit="handleSubmit(event)">
+      <div>
+        <label for="nome">Nome</label>
+        <input type="text" id="nome" required>
+      </div>
+      <div>
+        <label for="email">E-mail para resposta</label>
+        <input type="email" id="email" required>
+      </div>
+      <div>
+        <label for="assunto">Assunto</label>
+        <select id="assunto">
+          <option>Problema técnico</option>
+          <option>Dúvida sobre conta ou sincronização</option>
+          <option>Dúvida sobre privacidade ou dados pessoais</option>
+          <option>Dúvida sobre jogos ou anúncios</option>
+          <option>Sugestão ou feedback</option>
+          <option>Outro</option>
+        </select>
+      </div>
+      <div>
+        <label for="mensagem">Mensagem</label>
+        <textarea id="mensagem" required placeholder="Descreva o que precisa..."></textarea>
+      </div>
+      <button type="submit">Enviar mensagem</button>
+    </form>
+
+    <div class="more-links">
+      <p class="label">Saiba mais</p>
+      <a class="text-link" href="termos.html">Termos de Uso</a>
+      <a class="text-link" href="privacidade.html">Política de Privacidade</a>
+    </div>
+
+    <footer><p>© 2026 Looply. Todos os direitos reservados.</p></footer>
+  </main>
+
+<script>
+  function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    document.getElementById('theme-icon').textContent = next === 'dark' ? 'light_mode' : 'dark_mode';
+    localStorage.setItem('looply-theme', next);
+  }
+  (function() {
+    const saved = localStorage.getItem('looply-theme');
+    if (saved) {
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('theme-icon').textContent = saved === 'dark' ? 'light_mode' : 'dark_mode';
+    }
+  })();
+
+  let currentCategory = 'all';
+
+  function setCategory(cat, btn) {
+    currentCategory = cat;
+    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('faqSearch').value = '';
+    applyFilters();
+  }
+
+  function filterFAQ() {
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const query = document.getElementById('faqSearch').value.trim().toLowerCase();
+    const items = document.querySelectorAll('.faq-item');
+    let visibleCount = 0;
+
+    items.forEach(item => {
+      const itemCat = item.getAttribute('data-cat');
+      const text = item.textContent.toLowerCase();
+      const matchesCategory = currentCategory === 'all' || itemCat === currentCategory;
+      const matchesQuery = query === '' || text.includes(query);
+
+      if (matchesCategory && matchesQuery) {
+        item.classList.remove('hidden');
+        visibleCount++;
+      } else {
+        item.classList.add('hidden');
+      }
+    });
+
+    document.querySelectorAll('.faq-group').forEach(group => {
+      const visibleInGroup = group.querySelectorAll('.faq-item:not(.hidden)').length;
+      group.style.display = visibleInGroup > 0 ? '' : 'none';
+    });
+
+    document.getElementById('searchEmpty').style.display = visibleCount === 0 ? 'block' : 'none';
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    alert('Esta mensagem é um exemplo. Para que o formulário envie mensagens de verdade, é preciso ligá-lo a um serviço de e-mail ou de chat (ex: Formspree, Tawk.to, Crisp). Diga-me qual serviço vai usar e eu adapto o código.');
+  }
+</script>
+
+</body>
+</html>

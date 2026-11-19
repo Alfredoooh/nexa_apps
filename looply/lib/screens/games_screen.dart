@@ -250,8 +250,21 @@ class _GamesScreenState extends State<GamesScreen> {
     final featured = _visibleGames.where((game) => game.featured).toList(growable: false);
     final allFeatured = featured.isEmpty ? _visibleGames : featured;
 
+    final bg = pageBg(context);
     return Scaffold(
-      backgroundColor: pageBg(context),
+      backgroundColor: bg,
+      appBar: AppBar(
+        toolbarHeight: 64,
+        automaticallyImplyLeading: false,
+        backgroundColor: bg,
+        foregroundColor: text,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleSpacing: 18,
+        title: Text(appText('games'), style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
+      ),
       body: SafeArea(
         child: _loading
             ? Center(child: CircularProgressIndicator(color: accent, strokeWidth: 2.2))
@@ -259,31 +272,18 @@ class _GamesScreenState extends State<GamesScreen> {
                 physics: const BouncingScrollPhysics(),
                 slivers: <Widget>[
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                     sliver: SliverToBoxAdapter(
                       child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              appText('games'),
-                              style: TextStyle(color: text, fontSize: 27, fontWeight: FontWeight.w800, letterSpacing: -.4),
-                            ),
-                          ),
+                        children: [
+                          Expanded(child: Text('Jogos rápidos para jogar diretamente no BrowseIt.',
+                            style: TextStyle(color: muted, fontSize: 13.5, height: 1.35))),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                             decoration: BoxDecoration(color: pillColor(context), borderRadius: BorderRadius.circular(999)),
                             child: Text('${_visibleGames.length}', style: TextStyle(color: muted, fontSize: 13, fontWeight: FontWeight.w700)),
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                    sliver: SliverToBoxAdapter(
-                      child: Text(
-                        'Jogos rápidos para jogar diretamente no BrowseIt.',
-                        style: TextStyle(color: muted, fontSize: 13.5, height: 1.35),
                       ),
                     ),
                   ),
@@ -422,10 +422,10 @@ class _CategoryChip extends StatelessWidget {
           selected: selected,
           onSelected: (_) => onTap(),
           showCheckmark: false,
-          labelStyle: TextStyle(color: selected ? Colors.white : mainText(context), fontWeight: FontWeight.w600, fontSize: 12.5),
-          selectedColor: looplyPrimary,
+          labelStyle: TextStyle(color: selected ? Theme.of(context).colorScheme.onPrimary : mainText(context), fontWeight: FontWeight.w600, fontSize: 12.5),
+          selectedColor: accentColor(context),
           backgroundColor: pillColor(context),
-          side: BorderSide(color: selected ? looplyPrimary : lineColor(context)),
+          side: BorderSide(color: selected ? accentColor(context) : lineColor(context)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
           visualDensity: VisualDensity.compact,
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -556,7 +556,7 @@ class _PlayPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: looplyPrimary,
+        color: accentColor(context),
         borderRadius: BorderRadius.circular(999),
         child: InkWell(
           onTap: opening ? null : onTap,

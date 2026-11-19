@@ -690,6 +690,8 @@ class BrowserTab {
 class TabsController extends ChangeNotifier {
   static const String _storageKey = 'looply_open_tabs_v1';
   static const String _activeStorageKey = 'looply_active_tab_v1';
+  static const String _backupStorageKey = 'looply_open_tabs_backup_v1';
+  static const String _activeBackupStorageKey = 'looply_active_tab_backup_v1';
   final List<BrowserTab> _tabs = [];
   String? _activeTabId;
   final List<Future<void>> _pendingSnapshotWrites = [];
@@ -719,57 +721,104 @@ class TabsController extends ChangeNotifier {
   Future<void> restore() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_storageKey);
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          final directory = await _tabSnapshotDirectory();
-          for (final item in decoded) {
-            if (item is! Map) continue;
-            final id = item['id'];
-            final kindName = item['kind'];
-            final url = item['url'];
-            if (id is! String || kindName is! String || url is! String) continue;
-            TabKind? kind;
-            for (final candidate in TabKind.values) {
-              if (candidate.name == kindName) { kind = candidate; break; }
+      final candidates = <String>[
+        prefs.getString(_storageKey) ?? '',
+        prefs.getString(_backupStorageKey) ?? '',
+      ].where((value) => value.isNotEmpty).toList(growable: false);
+
+      // Pick the newest complete snapshot by valid tab count. This also
+      // recovers when a process is killed between the primary and backup write.
+      List<dynamic> decodedTabs = const <dynamic>[];
+      var bestCount = -1;
+      for (final raw in candidates) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is List) {
+            final validCount = decoded.where((item) =>
+              item is Map && item['id'] is String && item['kind'] is String && item['url'] is String
+            ).length;
+            if (validCount > bestCount) {
+              bestCount = validCount;
+              decodedTabs = decoded;
             }
-            if (kind == null || kind == TabKind.appScreen) continue;
-            Uint8List? thumbnail;
-            final thumbnailFile = item['thumbnailFile'];
-            if (thumbnailFile is String) {
-              try {
-                final file = File('${directory.path}${Platform.pathSeparator}$thumbnailFile');
-                if (await file.exists()) thumbnail = await file.readAsBytes();
-              } catch (_) {}
-            }
-            if (thumbnail == null) {
-              final thumbnailBase64 = item['thumbnailBase64'];
-              if (thumbnailBase64 is String) {
-                try { thumbnail = base64Decode(thumbnailBase64); } catch (_) {}
-              }
-            }
-            final lastActivity = item['lastActivity'];
-            _tabs.add(BrowserTab(
-              id: id,
-              kind: kind,
-              url: url,
-              title: item['title'] is String ? item['title'] as String : null,
-              thumbnail: thumbnail,
-              lastActivity: lastActivity is String ? DateTime.tryParse(lastActivity) : null,
-            ));
           }
+        } catch (_) {}
+      }
+
+      if (decodedTabs.isNotEmpty) {
+        final directory = await _tabSnapshotDirectory();
+        for (final item in decodedTabs) {
+          if (item is! Map) continue;
+          final id = item['id'];
+          final kindName = item['kind'];
+          final url = item['url'];
+          if (id is! String || kindName is! String || url is! String) continue;
+          TabKind? kind;
+          for (final candidate in TabKind.values) {
+            if (candidate.name == kindName) { kind = candidate; break; }
+          }
+          if (kind == null) continue;
+          Uint8List? thumbnail;
+          final thumbnailFile = item['thumbnailFile'];
+          if (thumbnailFile is String) {
+            try {
+              final file = File('${directory.path}${Platform.pathSeparator}$thumbnailFile');
+              if (await file.exists()) thumbnail = await file.readAsBytes();
+            } catch (_) {}
+          }
+          if (thumbnail == null) {
+            final thumbnailBase64 = item['thumbnailBase64'];
+            if (thumbnailBase64 is String) {
+              try { thumbnail = base64Decode(thumbnailBase64); } catch (_) {}
+            }
+          }
+          final lastActivity = item['lastActivity'];
+          _tabs.add(BrowserTab(
+            id: id,
+            kind: kind,
+            url: url,
+            title: item['title'] is String ? item['title'] as String : null,
+            thumbnail: thumbnail,
+            appScreenLabel: item['appScreenLabel'] is String ? item['appScreenLabel'] as String : null,
+            appScreenIcon: kind == TabKind.appScreen ? _iconForRestoredScreen(url) : null,
+            lastActivity: lastActivity is String ? DateTime.tryParse(lastActivity) : null,
+          ));
         }
       }
-      final activeId = prefs.getString(_activeStorageKey);
-      if (activeId != null && _tabs.any((tab) => tab.id == activeId)) {
+
+      // Home, Activity and Games are three screens of the same application
+      // shell, not three independent tabs. Older versions could have saved one
+      // card per screen; keep only the most recently used shell card.
+      final appScreenTabs = _tabs.where((tab) => tab.kind == TabKind.appScreen).toList();
+      if (appScreenTabs.length > 1) {
+        appScreenTabs.sort((a, b) => b.lastActivity.compareTo(a.lastActivity));
+        for (final obsolete in appScreenTabs.skip(1)) {
+          _tabs.remove(obsolete);
+          unawaited(_deleteTabSnapshot(obsolete.id));
+        }
+      }
+
+      final activeId = prefs.getString(_activeStorageKey) ??
+          prefs.getString(_activeBackupStorageKey);
+      if (activeId != null && _tabs.any((tab) =>
+          tab.id == activeId && tab.kind != TabKind.appScreen && !tab.isIncognito)) {
         _activeTabId = activeId;
+      } else {
+        final restorableActive = _tabs.where((tab) => tab.kind != TabKind.appScreen).toList(growable: false);
+        _activeTabId = restorableActive.isEmpty ? null : restorableActive.last.id;
       }
     } catch (_) {
       // Sessões corrompidas não impedem o arranque com abas vazias.
     }
     notifyListeners();
   }
+
+  IconData _iconForRestoredScreen(String key) => switch (key) {
+    'home_screen' => AppIcons.house,
+    'activity_screen' => AppIcons.clockCounterClockwise,
+    'games_screen' || 'discover_screen' => AppIcons.sportsEsports,
+    _ => AppIcons.squaresFour,
+  };
 
   String _generateTabId() =>
       '${DateTime.now().microsecondsSinceEpoch}_${_tabs.length}_${identityHashCode(this)}';
@@ -820,11 +869,15 @@ class TabsController extends ChangeNotifier {
     tab.touch();
     notifyListeners();
 
-    if (tab.kind != TabKind.appScreen && !tab.isIncognito && tab.url.isNotEmpty) {
-      unawaited(SessionStore.instance.saveLastPage(
-        url: tab.url,
-        title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
-      ));
+    if (!tab.isIncognito) {
+      if (tab.kind != TabKind.appScreen && tab.url.isNotEmpty) {
+        unawaited(SessionStore.instance.saveLastPage(
+          url: tab.url,
+          title: (tab.title?.trim().isNotEmpty ?? false) ? tab.title! : tab.url,
+        ));
+      }
+      // Persist all tab kinds, including the shell-screen cards and their
+      // latest thumbnails. The lifecycle flush is only a safety net.
       _schedulePersist();
     }
   }
@@ -839,6 +892,7 @@ class TabsController extends ChangeNotifier {
       }
       existing.touch();
       notifyListeners();
+      _schedulePersist();
       return existing;
     }
     final tab = BrowserTab(
@@ -852,34 +906,29 @@ class TabsController extends ChangeNotifier {
     return tab;
   }
 
-  // Reaproveita a aba fixa de um ecrã da app (identificada por screenKey) se
-  // já existir, atualizando o seu rótulo/ícone/miniatura; caso contrário, cria-a.
+  // Reaproveita a única aba do shell (Home / Activity / Games), atualizando
+  // o destino, rótulo, ícone e miniatura; não cria uma aba separada por tela.
   BrowserTab upsertAppScreenTab(
     String screenKey,
     String label,
     IconData icon,
     Uint8List? thumbnail,
   ) {
-    // O ecrã interno do Looply é uma única aba de aplicação. Ao atualizar a
-    // entrada, limpa cartões antigos criados por versões que separavam Início,
-    // Atividade e Jogos em abas diferentes.
-    final obsoleteAppTabs = _tabs
-        .where((tab) => tab.kind == TabKind.appScreen && tab.url != screenKey)
-        .toList(growable: false);
-    if (obsoleteAppTabs.isNotEmpty) {
-      final obsoleteIds = obsoleteAppTabs.map((tab) => tab.id).toSet();
-      _tabs.removeWhere((tab) => obsoleteIds.contains(tab.id));
-      for (final id in obsoleteIds) {
-        unawaited(_deleteTabSnapshot(id));
-      }
-    }
+    // All shell destinations share one persistent tab card. Its URL records
+    // which shell screen was visible when the card was last captured.
     final existing = getAppScreen(screenKey);
     if (existing != null) {
+      existing.url = screenKey;
+      existing.title = label;
       existing.appScreenLabel = label;
       existing.appScreenIcon = icon;
-      if (thumbnail != null) existing.thumbnail = thumbnail;
+      if (thumbnail != null) {
+        existing.thumbnail = thumbnail;
+        _trackSnapshotWrite(existing.id, thumbnail);
+      }
       existing.touch();
       notifyListeners();
+      _schedulePersist();
       return existing;
     }
     final tab = BrowserTab(
@@ -892,7 +941,9 @@ class TabsController extends ChangeNotifier {
       appScreenIcon: icon,
     );
     _tabs.add(tab);
+    if (thumbnail != null) _trackSnapshotWrite(tab.id, thumbnail);
     notifyListeners();
+    _schedulePersist();
     return tab;
   }
 
@@ -996,19 +1047,10 @@ class TabsController extends ChangeNotifier {
   }
 
   BrowserTab? getAppScreen(String screenKey) {
+    // There is a single card for the whole shell (Home / Activity / Games).
+    if (screenKey.isEmpty) return null;
     for (final tab in _tabs) {
-      if (tab.kind == TabKind.appScreen && tab.url == screenKey) return tab;
-    }
-    return null;
-  }
-
-  BrowserTab? getAiSearchTab({bool isIncognito = false}) {
-    for (final tab in _tabs) {
-      if (tab.isIncognito == isIncognito &&
-          tab.kind != TabKind.appScreen &&
-          tab.url.startsWith('looply://ai-search')) {
-        return tab;
-      }
+      if (tab.kind == TabKind.appScreen) return tab;
     }
     return null;
   }
@@ -1027,7 +1069,7 @@ class TabsController extends ChangeNotifier {
 
   void _schedulePersist() {
     _persistTimer?.cancel();
-    _persistTimer = Timer(const Duration(milliseconds: 280), _persistNow);
+    _persistTimer = Timer(const Duration(milliseconds: 70), _persistNow);
   }
 
   Future<void> _persistNow() async {
@@ -1037,7 +1079,7 @@ class TabsController extends ChangeNotifier {
       }
       final prefs = await SharedPreferences.getInstance();
       final payload = _tabs
-          .where((tab) => tab.kind != TabKind.appScreen && !tab.isIncognito)
+          .where((tab) => !tab.isIncognito)
           .map((tab) {
             final thumbnail = tab.thumbnail;
             return <String, Object?>{
@@ -1045,6 +1087,7 @@ class TabsController extends ChangeNotifier {
               'kind': tab.kind.name,
               'url': tab.url,
               'title': tab.title,
+              'appScreenLabel': tab.appScreenLabel,
               'thumbnailFile': thumbnail != null ? _safeTabSnapshotName(tab.id) : null,
               'thumbnailBase64': thumbnail != null && thumbnail.length <= 70000
                   ? base64Encode(thumbnail)
@@ -1053,11 +1096,18 @@ class TabsController extends ChangeNotifier {
             };
           })
           .toList();
-      await prefs.setString(_storageKey, jsonEncode(payload));
+      final encoded = jsonEncode(payload);
+      // Keep two independent snapshots. The backup is intentionally written
+      // after the main key and is used if a device/process interruption leaves
+      // one preference stale or malformed.
+      await prefs.setString(_storageKey, encoded);
+      await prefs.setString(_backupStorageKey, encoded);
       if (_activeTabId == null || !_tabs.any((tab) => tab.id == _activeTabId && tab.kind != TabKind.appScreen && !tab.isIncognito)) {
         await prefs.remove(_activeStorageKey);
+        await prefs.remove(_activeBackupStorageKey);
       } else {
         await prefs.setString(_activeStorageKey, _activeTabId!);
+        await prefs.setString(_activeBackupStorageKey, _activeTabId!);
       }
     } catch (_) {}
   }
@@ -1613,7 +1663,7 @@ class DownloadsController extends ChangeNotifier {
 
   void _schedulePersist() {
     _persistTimer?.cancel();
-    _persistTimer = Timer(const Duration(milliseconds: 280), _persistNow);
+    _persistTimer = Timer(const Duration(milliseconds: 70), _persistNow);
   }
 
   Future<void> _persistNow() async {

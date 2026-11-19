@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Looply — Termos de Uso</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f4f4f4;
+    --text: #141414;
+    --muted: #666666;
+    --border: #e0e0e0;
+    --link: #6D5BFF;
+  }
+  [data-theme="dark"] {
+    --bg: #111111;
+    --surface: #1a1a1a;
+    --text: #f2f2f2;
+    --muted: #a3a3a3;
+    --border: #2d2d2d;
+    --link: #9B8CFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    line-height: 1.65;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .appbar { padding: 28px 24px 0; max-width: 780px; margin: 0 auto; }
+  .appbar-top { display: flex; align-items: center; justify-content: space-between; }
+  .brand-block { display: flex; align-items: center; gap: 14px; }
+
+  .app-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: linear-gradient(to bottom, #0A84FF, #BEE7FA);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+    flex-shrink: 0;
+  }
+
+  .brand-block h1 { font-size: 1.5rem; font-weight: 900; margin: 0; letter-spacing: -0.02em; }
+  .brand-block p { margin: 2px 0 0; color: var(--muted); font-size: 0.88rem; }
+  .icon-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
+  .icon-btn .material-symbols-outlined { font-size: 22px; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 24px 24px 110px; }
+
+  /* Ilustração no topo */
+  .hero-illustration {
+    width: 100%;
+    max-width: 320px;
+    margin: 8px auto 28px;
+    display: block;
+  }
+
+  .updated { color: var(--muted); font-size: 0.85rem; margin: -8px 0 32px; text-align: center; }
+
+  h2 { font-size: 1.25rem; font-weight: 700; margin-top: 48px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.03rem; font-weight: 700; margin-top: 28px; }
+  p, li { color: var(--text); }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 7px; }
+  a { color: var(--text); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; margin: 28px 0; }
+
+  /* Links no fim, sublinhados, azul-roxo */
+  .more-links { margin-top: 56px; padding-top: 8px; border-top: 1px solid var(--border); }
+  .more-links p.label { font-weight: 700; margin: 24px 0 14px; font-size: 1rem; }
+  .more-links a.text-link {
+    display: block;
+    color: var(--link);
+    text-decoration: underline;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  footer { border-top: 1px solid var(--border); margin-top: 48px; padding-top: 22px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+  <div class="appbar">
+    <div class="appbar-top">
+      <div class="brand-block">
+        <div class="app-icon"></div>
+        <div>
+          <h1>Looply</h1>
+          <p>BrowseIt — Termos de Uso</p>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="toggleTheme()" aria-label="Alternar tema">
+        <span class="material-symbols-outlined" id="theme-icon">dark_mode</span>
+      </button>
+    </div>
+  </div>
+
+  <main>
+    <svg class="hero-illustration" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="40" y="30" width="240" height="160" rx="16" fill="var(--surface)" stroke="var(--border)" stroke-width="2"/>
+      <rect x="64" y="58" width="130" height="10" rx="5" fill="#0A84FF"/>
+      <rect x="64" y="80" width="190" height="8" rx="4" fill="var(--border)"/>
+      <rect x="64" y="96" width="170" height="8" rx="4" fill="var(--border)"/>
+      <rect x="64" y="112" width="190" height="8" rx="4" fill="var(--border)"/>
+      <rect x="64" y="128" width="140" height="8" rx="4" fill="var(--border)"/>
+      <circle cx="245" cy="158" r="22" fill="#6D5BFF" opacity="0.15"/>
+      <path d="M237 158l5 5 10-11" stroke="#6D5BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+
+    <p class="updated">Última atualização: 17 de novembro de 2026</p>
+
+    <h2 id="t1">1. Aceitação dos Termos</h2>
+    <p>Estes Termos de Uso ("Termos") regem o acesso e a utilização da aplicação BrowseIt ("Aplicação", "App"), desenvolvida e operada pela Looply ("nós", "Looply"). Ao transferir, instalar, aceder ou utilizar a Aplicação, está a aceitar ficar vinculado a estes Termos na íntegra. Se não concordar com alguma parte destes Termos, não deve instalar nem utilizar a Aplicação.</p>
+    <p>A utilização continuada da Aplicação após qualquer alteração a estes Termos constitui aceitação dessas alterações.</p>
+
+    <h2 id="t2">2. Quem Somos</h2>
+    <p>A Looply é uma startup digital totalmente virtual, fundada e operada por duas pessoas, sem sede física fixa, com origem em Angola. A Looply desenvolve e mantém a Aplicação BrowseIt como o seu principal produto.</p>
+    <p>Por se tratar de uma operação inteiramente digital e de pequena dimensão, a Looply compromete-se a atuar de boa-fé na gestão da Aplicação, na proteção dos dados dos utilizadores e na resolução de eventuais problemas reportados através dos canais de suporte disponibilizados.</p>
+
+    <h2 id="t3">3. Descrição do Serviço</h2>
+    <p>O BrowseIt é uma aplicação de navegação na internet ("browser") para dispositivos Android, que permite, entre outras funcionalidades:</p>
+    <ul>
+      <li>Navegação em páginas web através de múltiplos motores de pesquisa;</li>
+      <li>Gestão de separadores, favoritos, histórico e transferências (downloads);</li>
+      <li>Visualização nativa de ficheiros transferidos (imagens, vídeos, áudio, documentos, PDF);</li>
+      <li>Sincronização opcional de dados entre dispositivos, mediante criação de conta;</li>
+      <li>Acesso a uma secção de jogos leves integrada na Aplicação.</li>
+    </ul>
+    <p>A Looply reserva-se o direito de adicionar, alterar, limitar ou remover funcionalidades da Aplicação a qualquer momento, sem aviso prévio, desde que tal não afete substancialmente direitos já adquiridos pelo utilizador relativamente aos seus próprios dados.</p>
+
+    <h2 id="t4">4. Requisitos de Idade</h2>
+    <p>A utilização do BrowseIt é destinada a pessoas com <strong>13 (treze) anos de idade ou mais</strong>. Ao utilizar a Aplicação, o utilizador declara ter, no mínimo, 13 anos. Caso a Looply tome conhecimento de que um utilizador com menos de 13 anos criou uma conta ou forneceu dados pessoais, tomará medidas razoáveis para eliminar essa conta e os dados associados.</p>
+
+    <h2 id="t5">5. Conta de Usuário</h2>
+    <h3>5.1 Natureza opcional</h3>
+    <p>A criação de conta no BrowseIt é inteiramente opcional. As funcionalidades essenciais de navegação não exigem autenticação.</p>
+    <h3>5.2 Autenticação via Google</h3>
+    <p>Caso opte por criar uma conta, o processo de autenticação é realizado através do mecanismo nativo de gestão de credenciais do Android, associado à sua Conta Google. A Looply não solicita nem armazena diretamente a sua palavra-passe da Conta Google.</p>
+    <h3>5.3 Sincronização</h3>
+    <p>Ao autenticar-se, poderá ativar a sincronização dos seus dados de navegação (favoritos, histórico, separadores abertos e definições) entre dispositivos onde utilize a mesma conta. Esta sincronização é facultativa e pode ser desativada a qualquer momento nas definições da Aplicação.</p>
+    <h3>5.4 Responsabilidade pela conta</h3>
+    <p>O utilizador é responsável por manter a confidencialidade do acesso à sua Conta Google e por toda a atividade realizada através da sua conta na Aplicação.</p>
+
+    <h2 id="t6">6. Secção de Jogos</h2>
+    <p>O BrowseIt disponibiliza uma secção de jogos leves, acessível diretamente na Aplicação. Os jogos disponibilizados poderão ser:</p>
+    <ul>
+      <li>Jogos desenvolvidos diretamente pela Looply; e/ou</li>
+      <li>Jogos disponibilizados através de catálogos ou plataformas de distribuição de terceiros, integrados na Aplicação mediante acordos de parceria.</li>
+    </ul>
+    <p>O catálogo de jogos disponível poderá ser atualizado, expandido, substituído ou reduzido a qualquer momento, sem aviso prévio, não constituindo tal alteração qualquer incumprimento destes Termos por parte da Looply.</p>
+    <p>Quando os jogos forem disponibilizados através de plataformas de terceiros, a utilização desses jogos específicos poderá estar sujeita também aos termos de uso dessas plataformas, que serão disponibilizados ao utilizador sempre que tecnicamente possível e aplicável.</p>
+
+    <h2 id="t7">7. Publicidade</h2>
+    <p>A Aplicação é financiada, total ou parcialmente, através da exibição de anúncios publicitários, fornecidos através da rede Google AdMob. Os anúncios poderão ser apresentados em diferentes pontos da Aplicação, incluindo, nomeadamente, na secção de jogos.</p>
+    <p>O utilizador reconhece e aceita que:</p>
+    <ul>
+      <li>Os anúncios exibidos dentro das funcionalidades nativas da Aplicação (como a secção de jogos) fazem parte da integração técnica dessas funcionalidades e poderão não ser bloqueáveis através de funcionalidades de bloqueio de anúncios que o próprio BrowseIt disponibilize para a navegação web geral;</li>
+      <li>A experiência publicitária na navegação de sites externos através do browser poderá diferir da experiência publicitária dentro das funcionalidades nativas da Aplicação, consoante as definições de privacidade e bloqueio de conteúdo que o utilizador configure para a navegação geral.</li>
+    </ul>
+
+    <h2 id="t8">8. Conduta do Usuário</h2>
+    <p>Ao utilizar o BrowseIt, o utilizador compromete-se a não:</p>
+    <ul>
+      <li>Utilizar a Aplicação para fins ilegais, fraudulentos ou não autorizados;</li>
+      <li>Tentar realizar engenharia inversa, descompilar, desmontar ou extrair de qualquer outra forma o código-fonte da Aplicação, exceto na medida em que tal seja expressamente permitido por lei aplicável;</li>
+      <li>Interferir, sobrecarregar ou comprometer o funcionamento normal da Aplicação, dos seus servidores ou das redes a ela associadas;</li>
+      <li>Utilizar a Aplicação para distribuir vírus, malware, conteúdo de phishing ou qualquer outro código malicioso;</li>
+      <li>Utilizar a Aplicação para violar direitos de propriedade intelectual, privacidade ou outros direitos legais de terceiros.</li>
+    </ul>
+
+    <h2 id="t9">9. Conteúdo de Terceiros</h2>
+    <p>O BrowseIt é, pela sua própria natureza, um navegador de internet, pelo que dá acesso a um volume indeterminado de conteúdo alojado por terceiros, fora do controlo da Looply. A Looply não analisa, verifica, aprova nem se responsabiliza pelo conteúdo, exatidão, legalidade ou segurança de sites, serviços ou materiais de terceiros acedidos através da Aplicação.</p>
+    <p>O mesmo se aplica a jogos ou outras funcionalidades disponibilizadas através de plataformas parceiras de terceiros, cujo conteúdo e funcionamento não são da responsabilidade direta da Looply.</p>
+
+    <h2 id="t10">10. Propriedade Intelectual</h2>
+    <p>A marca Looply, a marca BrowseIt, o respetivo ícone, elementos de interface, textos originais e demais ativos visuais próprios da Aplicação são propriedade da Looply ou encontram-se devidamente licenciados para seu uso, não sendo conferido ao utilizador qualquer direito de propriedade sobre os mesmos, para além do direito de utilização da Aplicação nos termos aqui previstos.</p>
+    <p>Conteúdos de terceiros acedidos através da Aplicação, incluindo sites visitados e jogos disponibilizados através de plataformas parceiras, permanecem propriedade exclusiva dos respetivos titulares de direitos.</p>
+
+    <h2 id="t11">11. Isenção de Garantias</h2>
+    <p>A Aplicação é disponibilizada "tal como está" ("as is") e "conforme disponível" ("as available"), sem garantias de qualquer tipo, expressas ou implícitas, incluindo, nomeadamente, garantias de adequação a um fim específico, ausência de erros, disponibilidade ininterrupta ou segurança absoluta.</p>
+
+    <h2 id="t12">12. Limitação de Responsabilidade</h2>
+    <p>Na máxima medida permitida pela lei aplicável, a Looply não será responsável por quaisquer danos diretos, indiretos, incidentais, especiais ou consequenciais resultantes do uso ou da incapacidade de uso da Aplicação, incluindo, nomeadamente, danos resultantes de conteúdo de terceiros acedido através do browser, de jogos disponibilizados por plataformas parceiras, ou de anúncios exibidos na Aplicação.</p>
+
+    <h2 id="t13">13. Suspensão e Encerramento</h2>
+    <p>A Looply reserva-se o direito de suspender ou encerrar, total ou parcialmente, o acesso de um utilizador à Aplicação, caso se verifique violação destes Termos, sem prejuízo de outras medidas que a Looply considere adequadas.</p>
+    <p>O utilizador pode, a qualquer momento, deixar de utilizar a Aplicação e eliminar a sua conta, conforme descrito na Política de Privacidade.</p>
+
+    <h2 id="t14">14. Alterações aos Termos</h2>
+    <p>A Looply pode alterar estes Termos periodicamente, para refletir alterações na Aplicação, nos requisitos legais aplicáveis ou nas práticas operacionais da empresa. A versão mais recente estará sempre disponível dentro da Aplicação e nesta página. A data de "última atualização", no topo desta página, indica a versão mais recente.</p>
+
+    <h2 id="t15">15. Disposições Gerais</h2>
+    <p>Caso alguma disposição destes Termos seja considerada inválida ou inexequível, tal não afetará a validade das restantes disposições, que se manterão em pleno vigor. A ausência de ação por parte da Looply relativamente a um incumprimento não constitui renúncia ao direito de agir relativamente a incumprimentos futuros.</p>
+
+    <h2 id="t16">16. Contacto</h2>
+    <div class="card">
+      <p style="margin:0;">Para questões relacionadas com estes Termos de Uso, pode contactar a equipa da Looply através da secção de Suporte, disponível no final desta página.</p>
+    </div>
+
+    <div class="more-links">
+      <p class="label">Saiba mais</p>
+      <a class="text-link" href="privacidade.html">Política de Privacidade</a>
+      <a class="text-link" href="suporte.html">Suporte</a>
+    </div>
+
+    <footer><p>© 2026 Looply. Todos os direitos reservados.</p></footer>
+  </main>
+
+<script>
+  function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    document.getElementById('theme-icon').textContent = next === 'dark' ? 'light_mode' : 'dark_mode';
+    localStorage.setItem('looply-theme', next);
+  }
+  (function() {
+    const saved = localStorage.getItem('looply-theme');
+    if (saved) {
+      document.documentElement.setAttribute('data-theme', saved);
+      document.getElementById('theme-icon').textContent = saved === 'dark' ? 'light_mode' : 'dark_mode';
+    }
+  })();
+</script>
+
+</body>
+</html>

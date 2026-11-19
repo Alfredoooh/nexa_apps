@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_dark</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_circle</item>
@@ -11,7 +11,7 @@
         <item name="android:statusBarColor">@color/looply_splash_dark</item>
         <item name="android:navigationBarColor">@color/looply_splash_dark</item>
     </style>
-    <style name="LaunchTheme.Light" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="LaunchTheme.Light" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_light</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_circle</item>
@@ -22,7 +22,7 @@
         <item name="android:statusBarColor">@color/looply_splash_light</item>
         <item name="android:navigationBarColor">@color/looply_splash_light</item>
     </style>
-    <style name="LaunchTheme.Dark" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="LaunchTheme.Dark" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_dark</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_circle</item>

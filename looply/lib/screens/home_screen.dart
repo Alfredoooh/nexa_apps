@@ -84,6 +84,13 @@ class LooplyHomeAppBar extends StatelessWidget {
               LooplyDrawerMenuButton(
                 onPressed: onOpenDrawer ?? () => drawer_menu.showLooplyDrawer(context),
               ),
+              const SizedBox(width: 12),
+              Text(
+                appText('home'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: mainText(context), fontSize: 20, fontWeight: FontWeight.w700),
+              ),
               const Spacer(),
               ValueListenableBuilder<LooplyUser?>(
                 valueListenable: authController,
@@ -227,18 +234,18 @@ class _SignedInAvatar extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(3),
             child: CircleAvatar(
-              radius: 18,
+              radius: 20,
               backgroundColor: background,
               child: ClipOval(
                 child: user.photoUrl != null && user.photoUrl!.isNotEmpty
                     ? Image.network(
                         user.photoUrl!,
-                        width: 36,
-                        height: 36,
+                        width: 40,
+                        height: 40,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 36, height: 36, fit: BoxFit.cover),
+                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
                       )
-                    : Image.asset('images/avatar.png', width: 36, height: 36, fit: BoxFit.cover),
+                    : Image.asset('images/avatar.png', width: 40, height: 40, fit: BoxFit.cover),
               ),
             ),
           ),
