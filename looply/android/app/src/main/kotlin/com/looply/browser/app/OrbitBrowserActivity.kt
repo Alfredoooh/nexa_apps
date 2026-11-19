@@ -2013,79 +2013,59 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun showInternalErrorPage(url: String, detail: String, errorCode: Int) {
-    if (!isSafeWebUrl(url)) return
-    failedNavigationUrl = url
-    currentUrl = url
-    showingInternalErrorPage = true
-    currentTitle = localizedBrowserText("Sem ligação", "Connection problem")
-    pageToolbarColor = null
-    if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
-    setProgressSmooth(100, immediate = true)
-    progress.visibility = View.GONE
+        if (!isSafeWebUrl(url)) return
+        failedNavigationUrl = url
+        currentUrl = url
+        showingInternalErrorPage = true
+        currentTitle = localizedBrowserText("Sem ligação", "Connection problem")
+        pageToolbarColor = null
+        if (::swipeRefreshLayout.isInitialized) swipeRefreshLayout.isRefreshing = false
+        setProgressSmooth(100, immediate = true)
+        progress.visibility = View.GONE
 
-    val background = cssColor(pageBg)
-    val surface = cssColor(toolbarBg)
-    val foreground = cssColor(primaryText)
-    val muted = cssColor(secondaryText)
-    val button = cssColor(accent)
-    val safeDetail = android.text.TextUtils.htmlEncode(detail.take(180))
-    val safeUrl = android.text.TextUtils.htmlEncode(url.take(160))
-    val heading = android.text.TextUtils.htmlEncode(
-        localizedBrowserText("Não foi possível abrir esta página", "This page could not be opened")
-    )
-    val explanation = android.text.TextUtils.htmlEncode(
-        localizedBrowserText(
-            "Verifica a ligação à Internet e tenta novamente.",
-            "Check your internet connection and try again."
+        val background = cssColor(pageBg)
+        val surface = cssColor(toolbarBg)
+        val foreground = cssColor(primaryText)
+        val muted = cssColor(secondaryText)
+        val button = cssColor(accent)
+        val safeDetail = android.text.TextUtils.htmlEncode(detail.take(180))
+        val safeUrl = android.text.TextUtils.htmlEncode(url.take(160))
+        val heading = android.text.TextUtils.htmlEncode(
+            localizedBrowserText("Não foi possível abrir esta página", "This page could not be opened")
         )
-    )
-    val retryLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Tentar novamente", "Try again"))
-    val homeLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Voltar ao início", "Go to home"))
-    val html = """
-        <!doctype html><html lang="${if (menuLabels.optString("appLocale", "pt").startsWith("pt")) "pt" else "en"}">
-        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-        <meta name="color-scheme" content="${if (dark) "dark" else "light"}">
-        <style>
-          *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:$background;color:$foreground;font-family:Roboto,"Arial",sans-serif}
-          body{display:flex;align-items:center;justify-content:center;padding:28px 22px}
-          main{width:100%;max-width:420px;text-align:center;background:$surface;border-radius:24px;padding:30px 22px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
-          .icon-wrap{width:96px;height:96px;margin:0 auto 22px;display:block}
-          .icon-wrap circle.bg{opacity:0;animation:fade-in .4s ease forwards}
-          .wifi-stroke{stroke-dasharray:60;stroke-dashoffset:60;opacity:0;animation:draw .5s ease forwards,fade-in .01s linear forwards}
-          .wifi-stroke:nth-of-type(1){animation-delay:.15s,.15s}
-          .wifi-stroke:nth-of-type(2){animation-delay:.45s,.45s}
-          .wifi-dot{opacity:0;transform:scale(0);transform-origin:center;animation:dot-pop .35s cubic-bezier(.34,1.56,.64,1) forwards;animation-delay:.75s}
-          .wifi-cross{stroke-dasharray:76;stroke-dashoffset:76;opacity:0;animation:draw-cross .4s ease forwards,fade-in .01s linear forwards;animation-delay:1s,1s}
-          @keyframes fade-in{to{opacity:1}}
-          @keyframes draw{to{stroke-dashoffset:0;opacity:.4}}
-          @keyframes draw-cross{to{stroke-dashoffset:0;opacity:1}}
-          @keyframes dot-pop{to{opacity:.4;transform:scale(1)}}
-          h1,p,a{opacity:0;transform:translateY(8px);animation:content-in .45s ease forwards}
-          h1{animation-delay:1.2s}p.explanation{animation-delay:1.3s}p.detail{animation-delay:1.4s}a.primary{animation-delay:1.5s}a.secondary{animation-delay:1.6s}
-          @keyframes content-in{to{opacity:1;transform:translateY(0)}}
-          h1{font-size:21px;line-height:1.3;margin:0 0 10px;font-weight:700;color:$foreground}
-          p{font-size:15px;line-height:1.55;margin:0 0 18px;color:$muted}
-          .detail{font-size:12px;word-break:break-word;opacity:.8;margin:0 0 22px}
-          a{display:block;text-decoration:none;border-radius:999px;padding:14px 18px;font-size:15px;font-weight:600;margin-top:10px}
-          .primary{background:$button;color:#fff}.secondary{background:transparent;color:$foreground;border:1px solid $muted}
-        </style></head><body><main>
-          <svg class="icon-wrap" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle class="bg" cx="48" cy="48" r="48" fill="$button" fill-opacity="0.1"/>
-            <path class="wifi-stroke" d="M30 44c10-9 26-9 36 0" stroke="$button" stroke-width="4" stroke-linecap="round"/>
-            <path class="wifi-stroke" d="M37 54c6-5 16-5 22 0" stroke="$button" stroke-width="4" stroke-linecap="round"/>
-            <circle class="wifi-dot" cx="48" cy="64" r="3.5" fill="$button"/>
-            <path class="wifi-cross" d="M30 30l36 36" stroke="$button" stroke-width="4.5" stroke-linecap="round"/>
-          </svg>
-          <h1>$heading</h1><p class="explanation">$explanation</p>
-          <p class="detail">$safeUrl<br>$safeDetail · $errorCode</p>
-          <a class="primary" href="browseit://retry">$retryLabel</a>
-          <a class="secondary" href="browseit://home">$homeLabel</a>
-        </main></body></html>
-    """.trimIndent()
-    refreshTitle()
-    webView.stopLoading()
-    webView.loadDataWithBaseURL(INTERNAL_ERROR_BASE, html, "text/html", "UTF-8", null)
-}
+        val explanation = android.text.TextUtils.htmlEncode(
+            localizedBrowserText(
+                "Verifica a ligação à Internet e tenta novamente.",
+                "Check your internet connection and try again."
+            )
+        )
+        val retryLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Tentar novamente", "Try again"))
+        val homeLabel = android.text.TextUtils.htmlEncode(localizedBrowserText("Voltar ao início", "Go to home"))
+        val html = """
+            <!doctype html><html lang="${if (menuLabels.optString("appLocale", "pt").startsWith("pt")) "pt" else "en"}">
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+            <meta name="color-scheme" content="${if (dark) "dark" else "light"}">
+            <style>
+              *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:$background;color:$foreground;font-family:Roboto,"Arial",sans-serif}
+              body{display:flex;align-items:center;justify-content:center;padding:28px 22px}
+              main{width:100%;max-width:420px;text-align:center;background:$surface;border-radius:24px;padding:30px 22px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
+              .icon{width:64px;height:64px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;background:${cssColor(if (dark) Color.rgb(55, 62, 75) else Color.rgb(232, 240, 254))};color:$button;font-size:30px}
+              h1{font-size:21px;line-height:1.3;margin:0 0 10px;font-weight:700;color:$foreground}
+              p{font-size:15px;line-height:1.55;margin:0 0 18px;color:$muted}
+              .detail{font-size:12px;word-break:break-word;opacity:.8;margin:0 0 22px}
+              a{display:block;text-decoration:none;border-radius:999px;padding:14px 18px;font-size:15px;font-weight:600;margin-top:10px}
+              .primary{background:$button;color:#fff}.secondary{background:transparent;color:$foreground;border:1px solid $muted}
+            </style></head><body><main>
+              <div class="icon" aria-hidden="true">⌁</div><h1>$heading</h1><p>$explanation</p>
+              <p class="detail">$safeUrl<br>$safeDetail · $errorCode</p>
+              <a class="primary" href="browseit://retry">$retryLabel</a>
+              <a class="secondary" href="browseit://home">$homeLabel</a>
+            </main></body></html>
+        """.trimIndent()
+        refreshTitle()
+        webView.stopLoading()
+        webView.loadDataWithBaseURL(INTERNAL_ERROR_BASE, html, "text/html", "UTF-8", null)
+    }
 
     private fun cssColor(color: Int): String = String.format(Locale.ROOT, "#%06X", 0xFFFFFF and color)
 
