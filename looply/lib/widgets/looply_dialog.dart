@@ -40,7 +40,7 @@ Future<T?> showLooplyDialog<T>({
           .clamp(240.0, media.size.height)
           .toDouble();
       return AlertDialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         elevation: 6,
@@ -227,7 +227,7 @@ class _LooplyPromptComposerState extends State<LooplyPromptComposer> {
 /// Envolve conteúdo de bottom sheets num painel flutuante, afastado de todas
 /// as margens da janela, com a mesma família de cantos do AssistiveTouch.
 class LooplyFloatingModalFrame extends StatelessWidget {
-  const LooplyFloatingModalFrame({super.key, required this.child, this.margin = const EdgeInsets.all(16)});
+  const LooplyFloatingModalFrame({super.key, required this.child, this.margin = const EdgeInsets.all(12)});
   final Widget child;
   final EdgeInsetsGeometry margin;
 

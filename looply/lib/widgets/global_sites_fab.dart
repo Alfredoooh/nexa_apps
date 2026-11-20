@@ -3,13 +3,15 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Navegador raiz partilhado pelos controlos globais do BrowseIt.
+import '../models.dart' show assistiveTouchEnabled;
+import '../screens/ai_search_screen.dart';
+import '../theme.dart';
+
+/// Navigator raiz utilizado pelo AssistiveTouch para abrir páginas acima das tabs.
 final GlobalKey<NavigatorState> browseItNavigatorKey = GlobalKey<NavigatorState>();
 
-/// AssistiveTouch BrowseIt: controlo circular arrastável, com encaixe lateral,
-/// que abre uma paper sheet vazia. A geometria e as transições seguem o HTML
-/// de referência enviado: 58 px, sombra subtil, backdrop a 18% e sheet afastada
-/// de todas as margens.
+/// AssistiveTouch persistente, arrastável e disponível em todas as telas.
+/// A sheet replica a paper sheet flutuante do HTML de referência.
 class GlobalSitesFloatingButton extends StatefulWidget {
   const GlobalSitesFloatingButton({super.key});
 
@@ -20,23 +22,48 @@ class GlobalSitesFloatingButton extends StatefulWidget {
 class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
   static const double _size = 58;
   static const String _positionKey = 'browseit_assistive_touch_position_v2';
+  static const Duration _idleDelay = Duration(seconds: 7);
 
   Offset? _position;
   Offset? _dragStart;
   bool _dragging = false;
   bool _modalOpen = false;
   bool _modalVisible = false;
+  bool _dimmed = false;
   Timer? _closeTimer;
+  Timer? _idleTimer;
 
   @override
   void initState() {
     super.initState();
+    assistiveTouchEnabled.addListener(_onEnabledChanged);
     _restorePosition();
+    if (assistiveTouchEnabled.value) _armIdleTimer();
+  }
+
+  void _onEnabledChanged() {
+    if (!mounted) return;
+    if (!assistiveTouchEnabled.value) {
+      _idleTimer?.cancel();
+      _closeTimer?.cancel();
+      setState(() {
+        _dimmed = false;
+        _modalOpen = false;
+        _modalVisible = false;
+        _dragging = false;
+        _dragStart = null;
+      });
+      return;
+    }
+    _armIdleTimer();
+    setState(() {});
   }
 
   @override
   void dispose() {
+    assistiveTouchEnabled.removeListener(_onEnabledChanged);
     _closeTimer?.cancel();
+    _idleTimer?.cancel();
     super.dispose();
   }
 
@@ -50,6 +77,17 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
         size.height - safe.bottom - 110 - _size,
       );
 
+  void _armIdleTimer() {
+    _idleTimer?.cancel();
+    if (!assistiveTouchEnabled.value) return;
+    if (_dimmed && mounted) setState(() => _dimmed = false);
+    _idleTimer = Timer(_idleDelay, () {
+      if (mounted && assistiveTouchEnabled.value && !_modalOpen && !_dragging) {
+        setState(() => _dimmed = true);
+      }
+    });
+  }
+
   Future<void> _restorePosition() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -57,23 +95,27 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
       final y = prefs.getDouble('${_positionKey}_y');
       if (!mounted || x == null || y == null) return;
       setState(() => _position = Offset(x, y));
-    } catch (_) {}
+    } catch (_) {
+      // A posição é apenas uma preferência visual; falha de leitura não bloqueia o app.
+    }
   }
 
   Future<void> _persistPosition() async {
-    final value = _position;
-    if (value == null) return;
+    final current = _position;
+    if (current == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setDouble('${_positionKey}_x', value.dx);
-      await prefs.setDouble('${_positionKey}_y', value.dy);
+      await prefs.setDouble('${_positionKey}_x', current.dx);
+      await prefs.setDouble('${_positionKey}_y', current.dy);
     } catch (_) {}
   }
 
   void _openModal() {
-    if (_modalOpen || _dragging) return;
+    if (_modalOpen || _dragging || !assistiveTouchEnabled.value) return;
+    _idleTimer?.cancel();
     _closeTimer?.cancel();
     setState(() {
+      _dimmed = false;
       _modalOpen = true;
       _modalVisible = false;
     });
@@ -87,13 +129,29 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
     setState(() => _modalVisible = false);
     _closeTimer?.cancel();
     _closeTimer = Timer(const Duration(milliseconds: 290), () {
-      if (mounted) setState(() => _modalOpen = false);
+      if (!mounted) return;
+      setState(() => _modalOpen = false);
+      _armIdleTimer();
+    });
+  }
+
+  void _openAiSearch() {
+    if (!_modalOpen) return;
+    _closeModal();
+    // Espera a sheet terminar a animação de saída antes de navegar.
+    Future<void>.delayed(const Duration(milliseconds: 305), () {
+      if (!mounted || !assistiveTouchEnabled.value) return;
+      browseItNavigatorKey.currentState?.push<void>(
+        MaterialPageRoute<void>(builder: (_) => const AiSearchScreen()),
+      );
     });
   }
 
   void _onDragStart(DragStartDetails details, Offset current) {
     if (_modalOpen) return;
+    _idleTimer?.cancel();
     setState(() {
+      _dimmed = false;
       _dragging = true;
       _dragStart = current;
     });
@@ -108,20 +166,36 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
   void _onDragEnd(Size size) {
     final current = _position;
     if (current == null) {
-      setState(() { _dragging = false; _dragStart = null; });
+      setState(() {
+        _dragging = false;
+        _dragStart = null;
+      });
+      _armIdleTimer();
       return;
     }
-    final left = current.dx + _size / 2 < size.width / 2 ? 8.0 : size.width - _size - 8.0;
+    final onLeft = current.dx + _size / 2 < size.width / 2;
+    final left = onLeft ? 8.0 : size.width - _size - 8.0;
     setState(() {
       _dragging = false;
       _dragStart = null;
       _position = _clamp(Offset(left, current.dy), size);
     });
     unawaited(_persistPosition());
+    _armIdleTimer();
   }
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: assistiveTouchEnabled,
+      builder: (context, enabled, _) {
+        if (!enabled) return const SizedBox.shrink();
+        return _buildAssistiveStack(context);
+      },
+    );
+  }
+
+  Widget _buildAssistiveStack(BuildContext context) {
     final media = MediaQuery.of(context);
     final size = media.size;
     final position = _clamp(_position ?? _defaultPosition(size, media.viewPadding), size);
@@ -134,18 +208,20 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
     final availableHeight = size.height <= 480
         ? (size.height * .48).clamp(150.0, 260.0).toDouble()
         : (size.height * .44).clamp(230.0, 390.0).toDouble();
+    // Margens compactas, mas sempre positivas mesmo em aparelhos com recortes.
+    double edge(double safe) => safe > 0 ? safe + 7 : 12;
     final modalPadding = EdgeInsets.fromLTRB(
-      media.viewPadding.left > 16 ? media.viewPadding.left : 16,
-      media.viewPadding.top > 16 ? media.viewPadding.top : 16,
-      media.viewPadding.right > 16 ? media.viewPadding.right : 16,
-      (media.viewPadding.bottom + 16) > 16 ? media.viewPadding.bottom + 16 : 16,
+      edge(media.viewPadding.left),
+      edge(media.viewPadding.top),
+      edge(media.viewPadding.right),
+      edge(media.viewPadding.bottom),
     );
+    final modalSurface = popupSurfaceColor(context);
+    final modalText = mainText(context);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // O botão mantém-se na árvore durante a abertura/fecho, tal como no
-        // HTML: desaparece com scale + opacity e fica atrás do backdrop.
         AnimatedPositioned(
           duration: _dragging ? Duration.zero : const Duration(milliseconds: 220),
           curve: const Cubic(.2, .8, .2, 1),
@@ -156,15 +232,19 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
           child: IgnorePointer(
             ignoring: _modalOpen,
             child: AnimatedOpacity(
-              opacity: _modalVisible ? 0 : 1,
-              duration: const Duration(milliseconds: 160),
+              opacity: _modalVisible ? 0 : (_dimmed ? .56 : 1),
+              duration: const Duration(milliseconds: 680),
+              curve: Curves.easeInOut,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onPanStart: (details) => _onDragStart(details, position),
                 onPanUpdate: (details) => _onDragUpdate(details, size),
                 onPanEnd: (_) => _onDragEnd(size),
                 onPanCancel: () => _onDragEnd(size),
-                onTap: _openModal,
+                onTap: () {
+                  _armIdleTimer();
+                  _openModal();
+                },
                 child: AnimatedScale(
                   duration: const Duration(milliseconds: 180),
                   scale: _modalVisible ? .88 : (_dragging ? 1.04 : 1),
@@ -214,19 +294,25 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
                           child: Container(
                             width: double.infinity,
                             height: availableHeight,
-                            constraints: BoxConstraints(
-                              maxWidth: 560,
-                              maxHeight: availableHeight,
-                              minHeight: size.height <= 480 ? 150 : 230,
-                            ),
+                            constraints: BoxConstraints(maxWidth: 560, maxHeight: availableHeight),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: modalSurface,
                               borderRadius: BorderRadius.circular(28),
-                              border: Border.all(color: const Color(0x0B000000)),
+                              border: Border.all(color: lineColor(context).withOpacity(.16)),
                               boxShadow: const [
                                 BoxShadow(color: Color(0x29000000), blurRadius: 38, offset: Offset(0, 12)),
                                 BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2)),
                               ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                              child: Align(
+                                alignment: Alignment.topLeft,
+                                child: _AssistiveAppTile(
+                                  iconColor: modalText,
+                                  onTap: _openAiSearch,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -239,6 +325,56 @@ class _GlobalSitesFloatingButtonState extends State<GlobalSitesFloatingButton> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _AssistiveAppTile extends StatelessWidget {
+  const _AssistiveAppTile({required this.iconColor, required this.onTap});
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'AI Search',
+      child: SizedBox(
+        width: 76,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(19),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(19),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: pillColor(context),
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    'assets/ai_search/ai.png',
+                    width: 37,
+                    height: 37,
+                    fit: BoxFit.contain,
+                    color: iconColor,
+                    colorBlendMode: BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text('AI', style: TextStyle(color: iconColor, fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

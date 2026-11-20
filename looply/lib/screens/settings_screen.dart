@@ -174,6 +174,26 @@ class SettingsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _SettingsSection(
+              title: 'Acessibilidade',
+              children: [
+                ValueListenableBuilder<bool>(
+                  valueListenable: assistiveTouchEnabled,
+                  builder: (context, enabled, _) => _SettingsTile(
+                    icon: AppIcons.menu,
+                    label: 'Assistive Touch',
+                    subtitle: enabled ? 'Ativo em todas as telas' : 'Desativado',
+                    trailing: M3ExpressiveSwitch(
+                      value: enabled,
+                      onChanged: (value) => assistiveTouchEnabled.value = value,
+                    ),
+                    showChevron: false,
+                    onTap: () => assistiveTouchEnabled.value = !assistiveTouchEnabled.value,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _SettingsSection(
               title: 'Segurança',
               children: [
                 _SettingsTile(

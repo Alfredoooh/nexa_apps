@@ -7,6 +7,8 @@ import 'package:lottie/lottie.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'search_screen.dart';
+
 import '../localization.dart';
 import '../models.dart';
 import '../theme.dart';
@@ -186,10 +188,10 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: EdgeInsets.fromLTRB(
-                safe.left > 16 ? safe.left : 16,
-                16,
-                safe.right > 16 ? safe.right : 16,
-                safe.bottom + 16,
+                safe.left > 0 ? safe.left + 7 : 12,
+                12,
+                safe.right > 0 ? safe.right + 7 : 12,
+                safe.bottom + 12,
               ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
@@ -369,9 +371,9 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     return Center(
       key: const ValueKey<String>('ai-search-empty'),
       child: Lottie.asset(
-        'assets/animations/browseit_ai_idle.json',
-        width: 148,
-        height: 148,
+        'assets/animations/cobalt_sprite_ai.json',
+        width: 172,
+        height: 172,
         fit: BoxFit.contain,
         animate: true,
         repeat: true,
@@ -435,7 +437,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                     width: 22,
                     height: 22,
                     child: Lottie.asset(
-                      'assets/animations/browseit_ai_idle.json',
+                      'assets/animations/cobalt_sprite_ai.json',
                       fit: BoxFit.contain,
                       repeat: true,
                     ),
@@ -468,30 +470,65 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
               LooplyDrawerMenuButton(
                 onPressed: () => drawer_menu.showLooplyDrawer(context),
               ),
-              Semantics(
-                button: true,
-                label: 'Nova conversa',
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: _startNewConversation,
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Center(
-                        child: SvgPicture.asset(
-                          'assets/icons/svg/regular/new-message.svg',
-                          width: 23,
-                          height: 23,
-                          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Semantics(
+                    button: true,
+                    label: 'Pesquisar',
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          Navigator.of(context).push<void>(
+                            MaterialPageRoute<void>(builder: (_) => const SearchScreen()),
+                          );
+                        },
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Center(
+                            child: AppMaterialIcon(
+                              AppIcons.magnifyingGlass,
+                              size: 23,
+                              color: iconColor,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  Semantics(
+                    button: true,
+                    label: 'Nova conversa',
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _startNewConversation,
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Center(
+                            child: SvgPicture.asset(
+                              'assets/icons/svg/regular/new-message.svg',
+                              width: 23,
+                              height: 23,
+                              colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -547,7 +584,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     return Padding(
       // Mantém a barra ligeiramente acima da navegação Android, com margem
       // consistente em dispositivos com e sem gesture navigation.
-      padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + (bottomInset > 0 ? 2 : 0)),
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 21 + (bottomInset > 0 ? 2 : 0)),
       child: Container(
         constraints: const BoxConstraints(minHeight: 64),
         padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),

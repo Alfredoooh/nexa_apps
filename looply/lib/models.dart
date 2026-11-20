@@ -56,6 +56,8 @@ final ValueNotifier<bool> forceDarkWebsitesEnabled = ValueNotifier<bool>(false);
 final ValueNotifier<bool> siteThemeFollowsAppEnabled = ValueNotifier<bool>(true);
 final ValueNotifier<bool> adaptiveToolbarColorEnabled = ValueNotifier<bool>(false);
 final ValueNotifier<bool> aiSearchModeEnabled = ValueNotifier<bool>(false);
+// AssistiveTouch fica ativo por padrão e pode ser desligado nas Definições.
+final ValueNotifier<bool> assistiveTouchEnabled = ValueNotifier<bool>(true);
 
 bool _runtimePreferenceListenersAttached = false;
 
@@ -68,6 +70,7 @@ Future<void> restoreRuntimeSettings() async {
     siteThemeFollowsAppEnabled.value = prefs.getBool('looply_site_theme_follows_app') ?? true;
     adaptiveToolbarColorEnabled.value = prefs.getBool('looply_adaptive_toolbar_color') ?? false;
     aiSearchModeEnabled.value = prefs.getBool('looply_ai_search_mode') ?? false;
+    assistiveTouchEnabled.value = prefs.getBool('browseit_assistive_touch_enabled') ?? true;
     if (_runtimePreferenceListenersAttached) return;
     _runtimePreferenceListenersAttached = true;
     void persist(String key, ValueNotifier<bool> notifier) {
@@ -79,6 +82,7 @@ Future<void> restoreRuntimeSettings() async {
     persist('looply_site_theme_follows_app', siteThemeFollowsAppEnabled);
     persist('looply_adaptive_toolbar_color', adaptiveToolbarColorEnabled);
     persist('looply_ai_search_mode', aiSearchModeEnabled);
+    persist('browseit_assistive_touch_enabled', assistiveTouchEnabled);
   } catch (_) {}
 }
 

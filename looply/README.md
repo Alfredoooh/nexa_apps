@@ -1,2692 +1,431 @@
-Processou durante 31m 53s
+/* eslint-disable */
+// Constellation Shell — Originkit
 
-A partir desta atualização, o Orbit Browser deixa de utilizar InAppWebView. O motor de navegação e a interface principal passam para uma Activity Android escrita em Kotlin.
+"use client"
 
-A arquitetura fica assim:
+import * as React from "react"
+import { useEffect, useRef } from "react"
 
-Componente	Implementação
+const MAX_DPR = 2
+const R_SPHERE = 2.5
+const BASE_N = 200
+const BASE_LINK = 1.0954 // sqrt(1.2), the source's link distance at 200 points
+const FOCAL = 1.303 // 1 / tan(75deg / 2)
 
-WebView e carregamento das páginas	Android WebView
-Barra de endereço	Kotlin
-Navegação e histórico da página	Kotlin
-Menus e menus de contexto	AndroidX Material
-Diálogos e folhas modais	AndroidX Material
-Transferências do browser	Android DownloadManager
-Animação de abertura	Slide up nativo
-Gestão global dos separadores	Flutter, através de uma ponte
-Histórico, favoritos e definições do app	Continuam nas telas Flutter existentes
+const VERT_SRC = `
+precision highp float;
 
+attribute vec3 a_p0;
+attribute vec3 a_p1;
+attribute vec2 a_corner;   // x: which end (0|1), y: which side (-1|1)
 
-O Google deixa de ter um browser especial. Google, Wikipedia, YouTube e os restantes sites passam a abrir o mesmo browser Kotlin.
+uniform mat3  uRot;
+uniform vec2  uRes;
+uniform float uDist, uWidth;
 
-1. OrbitBrowserActivity.kt
+varying float v_depth;
 
-Criar o ficheiro:
+void main(){
+  float ar = uRes.x / max(uRes.y, 1.0);
 
-android/app/src/main/kotlin/com/looply/browser/app/OrbitBrowserActivity.kt
+  vec3 r0 = uRot * a_p0;
+  vec3 r1 = uRot * a_p1;
 
-Esta é a implementação nativa principal. Inclui WebView, barra de endereço, menus Material, pesquisa na página, modo computador, zoom, tradução, partilha, impressão, transferências e armazenamento do histórico de navegação por separador.
+  float w0 = max(uDist - r0.z, 0.05);
+  float w1 = max(uDist - r1.z, 0.05);
+  vec4 c0 = vec4((FOCAL_/ar) * r0.x, FOCAL_ * r0.y, 0.0, w0);
+  vec4 c1 = vec4((FOCAL_/ar) * r1.x, FOCAL_ * r1.y, 0.0, w1);
 
-package com.looply.browser.app
+  vec2 n0 = c0.xy / c0.w;
+  vec2 n1 = c1.xy / c1.w;
+  vec2 dir = (n1 - n0) * vec2(ar, 1.0);
+  dir = normalize(dir + vec2(1e-6));
+  vec2 perp = vec2(-dir.y, dir.x) / vec2(ar, 1.0);
 
-import android.app.Activity
-import android.app.DownloadManager
-import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.GradientDrawable
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Environment
-import android.os.Parcel
-import android.util.Base64
-import android.print.PrintAttributes
-import android.print.PrintManager
-import android.text.InputType
-import android.view.Gravity
-import android.view.KeyEvent
-import android.view.View
-import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.webkit.CookieManager
-import android.webkit.DownloadListener
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
-import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.net.URLConnection
-import java.util.Locale
+  vec4 sel = mix(c0, c1, a_corner.x);
+  // multiplying by w keeps the stroke a constant SCREEN width after the divide
+  sel.xy += perp * a_corner.y * uWidth * sel.w;
 
-class OrbitBrowserActivity : AppCompatActivity() {
+  v_depth = mix(r0.z, r1.z, a_corner.x) / ${R_SPHERE.toFixed(2)};
+  gl_Position = sel;
+}
+`.replace(/FOCAL_/g, FOCAL.toFixed(4))
 
-    companion object {
-        const val EXTRA_URL = "com.looply.browser.app.orbit.URL"
-        const val EXTRA_TAB_ID = "com.looply.browser.app.orbit.TAB_ID"
-        const val EXTRA_INCOGNITO = "com.looply.browser.app.orbit.INCOGNITO"
-        const val EXTRA_TAB_COUNT = "com.looply.browser.app.orbit.TAB_COUNT"
-        const val EXTRA_PREVIEW_ONLY = "com.looply.browser.app.orbit.PREVIEW_ONLY"
+const FRAG_SRC = `
+precision mediump float;
 
-        const val RESULT_URL = "com.looply.browser.app.orbit.RESULT_URL"
-        const val RESULT_TITLE = "com.looply.browser.app.orbit.RESULT_TITLE"
-        const val RESULT_TAB_ID = "com.looply.browser.app.orbit.RESULT_TAB_ID"
-        const val RESULT_ACTION = "com.looply.browser.app.orbit.RESULT_ACTION"
-        const val RESULT_THUMBNAIL = "com.looply.browser.app.orbit.RESULT_THUMBNAIL"
-        const val RESULT_NEW_URL = "com.looply.browser.app.orbit.RESULT_NEW_URL"
+uniform vec3  uBase, uAccent;
+uniform float uFade;
 
-        private const val PREFS = "FlutterSharedPreferences"
-        private const val PREF_THEME_MODE = "flutter.looply_theme_mode"
-        private const val PREF_PURE_BLACK = "flutter.looply_theme_pure_dark"
-        private const val PREF_AD_BLOCK = "flutter.looply_ad_block_enabled"
-        private const val PREF_FORCE_DARK = "flutter.looply_force_dark_websites"
-        private const val PREF_ADAPTIVE_TOOLBAR = "flutter.looply_adaptive_toolbar_color"
-        private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
+varying float v_depth;
 
-        private const val STATE_WEBVIEW = "orbit.webview.state"
-        private const val STATE_URL = "orbit.url"
-        private const val STATE_TITLE = "orbit.title"
+void main(){
+  float t = clamp(v_depth * 0.5 + 0.5, 0.0, 1.0);   // -1 far .. +1 near
+  vec3 col = mix(uBase, uAccent, t);
+  float a = mix(1.0 - uFade, 1.0, t);
+  gl_FragColor = vec4(col * a, a);   // premultiplied
+}
+`
 
-        private const val TAB_STATE_PREFS = "looply_orbit_native_tab_state_v1"
-        private const val MAX_TAB_STATE_CHARS = 1_400_000
-
-        private const val DESKTOP_UA =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
-        private val blockedDomains = setOf(
-            "doubleclick.net", "googlesyndication.com",
-            "googleadservices.com", "google-analytics.com",
-            "googletagmanager.com", "googletagservices.com",
-            "adservice.google.com", "adsystem.com",
-            "amazon-adsystem.com", "facebook.net",
-            "connect.facebook.net", "fbcdn.net",
-            "ads.facebook.com", "taboola.com",
-            "outbrain.com", "criteo.com",
-            "criteo.net", "adroll.com",
-            "adnxs.com", "rubiconproject.com",
-            "pubmatic.com", "openx.net",
-            "casalemedia.com", "smartadserver.com",
-            "advertising.com", "adform.net",
-            "adtech.com", "media.net",
-            "yieldmo.com", "bidswitch.net",
-            "contextweb.com", "exoclick.com",
-            "popads.net", "propellerads.com",
-            "revcontent.com", "mgid.com",
-            "zedo.com", "adblade.com",
-            "adcolony.com", "applovin.com",
-            "chartboost.com", "unityads.unity3d.com",
-            "vungle.com", "inmobi.com",
-            "mopub.com", "scorecardresearch.com",
-            "quantserve.com", "hotjar.com",
-            "mixpanel.com", "segment.io",
-            "segment.com", "amplitude.com",
-            "crazyegg.com", "optimizely.com",
-            "newrelic.com", "nr-data.net",
-            "bugsnag.com", "sentry.io",
-            "intercom.io", "drift.com",
-            "onesignal.com", "pushwoosh.com",
-            "branch.io", "adjust.com",
-            "appsflyer.com", "kochava.com",
-            "tapjoy.com", "ironsrc.com",
-            "smaato.net", "sharethrough.com",
-            "teads.tv", "triplelift.com",
-            "spotxchange.com", "adsrvr.org",
-            "turn.com", "mathtag.com",
-            "bluekai.com", "krxd.net",
-            "demdex.net", "everesttech.net",
-            "serving-sys.com", "atdmt.com",
-            "adbrite.com", "adtechus.com",
-            "burstnet.com", "chitika.com",
-            "clicksor.com", "infolinks.com",
-            "kontera.com", "lijit.com",
-            "media6degrees.com", "pointroll.com",
-            "quantcast.com", "rlcdn.com",
-            "simpli.fi", "tribalfusion.com",
-            "tremorhub.com", "undertone.com",
-            "yieldlab.net", "zergnet.com",
-            "popcash.net", "adsterra.com",
-            "propellerclick.com", "clickadu.com",
-            "galaksion.com", "adspyglass.com",
-            "hilltopads.net", "juicyads.com",
-            "trafficjunky.com", "exosrv.com",
-            "moatads.com", "adsafeprotected.com",
-            "doubleverify.com", "ensighten.com",
-            "tynt.com", "addthis.com",
-            "sharethis.com", "disqus.com",
-            "gemius.pl", "histats.com",
-            "statcounter.com", "clicky.com",
-            "getclicky.com", "woopra.com",
-            "kissmetrics.com", "heap.io",
-            "fullstory.com", "luckyorange.com",
-            "trafficstars.com", "plugrush.com",
-            "tsyndicate.com", "adcash.com",
-            "adnium.com", "ero-advertising.com",
-            "adxpansion.com", "onclickads.net",
-            "onclickalgo.com", "onclckmn.com",
-            "adk2x.com", "adtrafico.com",
-            "bebi.com", "a-ads.com",
-            "trafficfactory.biz", "mouseflow.com",
-            "smartlook.com", "clarity.ms"
-        )
+function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
+    const sh = gl.createShader(type)
+    if (!sh) return null
+    gl.shaderSource(sh, src)
+    gl.compileShader(sh)
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        console.error("ConstellationShell shader:", gl.getShaderInfoLog(sh))
+        gl.deleteShader(sh)
+        return null
     }
+    return sh
+}
 
-    private lateinit var root: LinearLayout
-    private lateinit var toolbar: LinearLayout
-    private lateinit var titlePill: LinearLayout
-    private lateinit var faviconView: ImageView
-    private lateinit var titleView: TextView
-    private lateinit var progress: ProgressBar
-    private lateinit var webView: WebView
-    private lateinit var findBar: LinearLayout
-    private lateinit var findField: EditText
-    private lateinit var tabsButton: TextView
-
-    private var currentUrl = "https://www.google.com"
-    private var currentTitle = "Google"
-    private var tabId = ""
-    private var tabCount = 1
-    private var incognito = false
-    private var previewOnly = false
-    private var desktopMode = false
-    private var toolbarHidden = false
-    private var pageToolbarColor: Int? = null
-    private var originalUserAgent: String? = null
-    private var pageZoom = 100
-    private var isFinishingWithResult = false
-
-    private var customView: View? = null
-    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-
-    private val prefs by lazy {
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+function parseColor(input: string | undefined, fb: [number, number, number]): [number, number, number] {
+    if (!input) return fb
+    const str = String(input).trim()
+    if (str.charAt(0) === "#") {
+        let hex = str.slice(1)
+        if (hex.length === 3 || hex.length === 4) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2]
+        }
+        if (hex.length >= 6) {
+            const r = parseInt(hex.slice(0, 2), 16)
+            const g = parseInt(hex.slice(2, 4), 16)
+            const b = parseInt(hex.slice(4, 6), 16)
+            if (!isNaN(r) && !isNaN(g) && !isNaN(b)) return [r / 255, g / 255, b / 255]
+        }
+        return fb
     }
-
-    private val tabStatePrefs by lazy {
-        getSharedPreferences(TAB_STATE_PREFS, Context.MODE_PRIVATE)
+    const m = str.match(/[\d.]+/g)
+    if (m && m.length >= 3) {
+        return [
+            Math.min(255, parseFloat(m[0])) / 255,
+            Math.min(255, parseFloat(m[1])) / 255,
+            Math.min(255, parseFloat(m[2])) / 255,
+        ]
     }
+    return fb
+}
 
-    private val dark: Boolean
-        get() {
-            if (incognito) return true
+function num(v: unknown, fb: number): number {
+    return typeof v === "number" && isFinite(v) ? v : fb
+}
 
-            return when (prefs.getString(PREF_THEME_MODE, "system")) {
-                "dark" -> true
-                "light" -> false
-                else -> {
-                    (resources.configuration.uiMode and
-                        android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                        android.content.res.Configuration.UI_MODE_NIGHT_YES
-                }
-            }
-        }
+function clampN(v: number, lo: number, hi: number): number {
+    return v < lo ? lo : v > hi ? hi : v
+}
 
-    private val pureBlack: Boolean
-        get() = incognito || prefs.getBoolean(PREF_PURE_BLACK, false)
-
-    private val pageBg: Int
-        get() = when {
-            !dark -> Color.WHITE
-            pureBlack -> Color.BLACK
-            else -> Color.rgb(25, 26, 28)
-        }
-
-    private val toolbarBg: Int
-        get() = pageToolbarColor ?: when {
-            !dark -> Color.WHITE
-            pureBlack -> Color.rgb(16, 16, 16)
-            else -> Color.rgb(31, 33, 36)
-        }
-
-    private val primaryText: Int
-        get() = if (dark) {
-            Color.rgb(232, 234, 237)
-        } else {
-            Color.rgb(32, 33, 36)
-        }
-
-    private val secondaryText: Int
-        get() = if (dark) {
-            Color.rgb(174, 178, 184)
-        } else {
-            Color.rgb(95, 99, 104)
-        }
-
-    private val accent: Int
-        get() = if (dark) {
-            Color.rgb(138, 180, 248)
-        } else {
-            Color.rgb(26, 115, 232)
-        }
-
-    private val adBlockEnabled: Boolean
-        get() = prefs.getBoolean(PREF_AD_BLOCK, true)
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.setSoftInputMode(
-            android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        )
-
-        currentUrl = savedInstanceState?.getString(STATE_URL)
-            ?: intent.getStringExtra(EXTRA_URL)?.takeIf { it.isNotBlank() }
-            ?: "https://www.google.com"
-
-        currentTitle = savedInstanceState?.getString(STATE_TITLE).orEmpty()
-        tabId = intent.getStringExtra(EXTRA_TAB_ID).orEmpty()
-        tabCount = intent.getIntExtra(EXTRA_TAB_COUNT, 1).coerceAtLeast(1)
-        incognito = intent.getBooleanExtra(EXTRA_INCOGNITO, false)
-        previewOnly = intent.getBooleanExtra(EXTRA_PREVIEW_ONLY, false)
-
-        createInterface()
-        configureWebView()
-
-        onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (customView != null) {
-                        hideCustomView()
-                    } else if (findBar.visibility == View.VISIBLE) {
-                        closeFindBar()
-                    } else if (webView.canGoBack()) {
-                        webView.goBack()
-                    } else {
-                        finishToFlutter(
-                            if (previewOnly) "previewClosed" else "home"
-                        )
-                    }
-                }
-            }
-        )
-
-        val restored = if (savedInstanceState != null) {
-            val state = savedInstanceState.getBundle(STATE_WEBVIEW)
-            state != null && webView.restoreState(state) != null
-        } else {
-            restoreTabState()
-        }
-
-        if (restored) {
-            currentUrl = webView.url?.takeIf { it.isNotBlank() } ?: currentUrl
-            currentTitle = webView.title?.takeIf { it.isNotBlank() } ?: currentTitle
-            refreshTitle()
-        } else {
-            webView.loadUrl(currentUrl)
-        }
+function rng(seed: number): () => number {
+    let a = seed >>> 0
+    return function () {
+        a += 0x6d2b79f5
+        let t = a
+        t = Math.imul(t ^ (t >>> 15), t | 1)
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
     }
+}
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putString(STATE_URL, currentUrl)
-        outState.putString(STATE_TITLE, currentTitle)
-        outState.putBundle(
-            STATE_WEBVIEW,
-            Bundle().also { webView.saveState(it) }
-        )
+const CORNERS = [
+    [0, -1], [1, -1], [1, 1],
+    [0, -1], [1, 1], [0, 1],
+]
+
+/**
+ * Uniform sphere scatter + neighbour sweep. O(n^2), so it runs only when Density
+ * changes. The link radius scales as 1/sqrt(n) to hold average degree constant.
+ */
+function net(n: number, linkScale: number): { p0: Float32Array; p1: Float32Array; corner: Float32Array; edges: number } {
+    const R = rng(1337)
+    const px = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+        const theta = R() * Math.PI * 2
+        const phi = Math.acos(R() * 2 - 1) // uniform on the sphere, not on phi
+        const s = Math.sin(phi)
+        px[i * 3] = R_SPHERE * s * Math.cos(theta)
+        px[i * 3 + 1] = R_SPHERE * s * Math.sin(theta)
+        px[i * 3 + 2] = R_SPHERE * Math.cos(phi)
     }
-
-    private fun createInterface() {
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(pageBg)
-            layoutParams = ViewGroup.LayoutParams(-1, -1)
-        }
-
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            view.setPadding(0, bars.top, 0, maxOf(bars.bottom, ime.bottom))
-            insets
-        }
-
-        toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(5), dp(6), dp(5))
-            setBackgroundColor(toolbarBg)
-        }
-
-        val home = actionButton("⌂", "Início") {
-            finishToFlutter("home")
-        }
-
-        toolbar.addView(home, LinearLayout.LayoutParams(dp(42), dp(46)))
-
-        titlePill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(12), 0)
-            background = rounded(toolbarPillColor(), 24)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { showAddressDialog() }
-        }
-
-        faviconView = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(android.R.drawable.ic_menu_search)
-        }
-
-        titlePill.addView(
-            faviconView,
-            LinearLayout.LayoutParams(dp(18), dp(18))
-        )
-
-        titleView = TextView(this).apply {
-            text = currentTitle.ifBlank { hostOf(currentUrl) }
-            setTextColor(toolbarText())
-            textSize = 14f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(dp(9), 0, 0, 0)
-            typeface = android.graphics.Typeface.create(
-                "sans-serif-medium",
-                android.graphics.Typeface.NORMAL
-            )
-        }
-
-        titlePill.addView(
-            titleView,
-            LinearLayout.LayoutParams(0, -2, 1f)
-        )
-
-        toolbar.addView(
-            titlePill,
-            LinearLayout.LayoutParams(0, dp(42), 1f).apply {
-                marginStart = dp(3)
-                marginEnd = dp(3)
-            }
-        )
-
-        tabsButton = actionButton(tabCount.toString(), "Separadores") {
-            finishToFlutter("tabs")
-        }
-
-        toolbar.addView(
-            tabsButton,
-            LinearLayout.LayoutParams(dp(42), dp(46))
-        )
-
-        toolbar.addView(
-            actionButton("⋮", "Mais opções") { showBrowserSheet() },
-            LinearLayout.LayoutParams(dp(42), dp(46))
-        )
-
-        root.addView(toolbar, LinearLayout.LayoutParams(-1, dp(56)))
-
-        progress = ProgressBar(
-            this,
-            null,
-            android.R.attr.progressBarStyleHorizontal
-        ).apply {
-            max = 100
-            progress = 0
-            progressTintList =
-                android.content.res.ColorStateList.valueOf(accent)
-            progressBackgroundTintList =
-                android.content.res.ColorStateList.valueOf(toolbarBg)
-            visibility = View.GONE
-        }
-
-        root.addView(progress, LinearLayout.LayoutParams(-1, dp(2)))
-
-        findBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(4), dp(6), dp(4))
-            setBackgroundColor(toolbarBg)
-            visibility = View.GONE
-        }
-
-        findField = EditText(this).apply {
-            setSingleLine(true)
-            textSize = 14f
-            setTextColor(primaryText)
-            setHintTextColor(secondaryText)
-            hint = "Localizar na página"
-            background = null
-            imeOptions = EditorInfo.IME_ACTION_SEARCH
-            inputType = InputType.TYPE_CLASS_TEXT
-
-            setOnEditorActionListener { _, _, _ ->
-                webView.findNext(true)
-                true
-            }
-
-            addTextChangedListener(object : android.text.TextWatcher {
-                override fun beforeTextChanged(
-                    s: CharSequence?,
-                    start: Int,
-                    count: Int,
-                    after: Int
-                ) = Unit
-
-                override fun onTextChanged(
-                    s: CharSequence?,
-                    start: Int,
-                    before: Int,
-                    count: Int
-                ) {
-                    val query = s?.toString().orEmpty()
-                    if (query.isBlank()) {
-                        webView.clearMatches()
-                    } else {
-                        webView.findAllAsync(query)
-                    }
-                }
-
-                override fun afterTextChanged(s: android.text.Editable?) = Unit
-            })
-        }
-
-        findBar.addView(
-            findField,
-            LinearLayout.LayoutParams(0, dp(42), 1f)
-        )
-
-        findBar.addView(
-            actionButton("↑", "Resultado anterior") {
-                webView.findNext(false)
-            },
-            LinearLayout.LayoutParams(dp(38), dp(42))
-        )
-
-        findBar.addView(
-            actionButton("↓", "Resultado seguinte") {
-                webView.findNext(true)
-            },
-            LinearLayout.LayoutParams(dp(38), dp(42))
-        )
-
-        findBar.addView(
-            actionButton("×", "Fechar pesquisa") {
-                closeFindBar()
-            },
-            LinearLayout.LayoutParams(dp(38), dp(42))
-        )
-
-        root.addView(findBar, LinearLayout.LayoutParams(-1, dp(50)))
-
-        webView = WebView(this).apply {
-            setBackgroundColor(pageBg)
-            overScrollMode = View.OVER_SCROLL_NEVER
-        }
-
-        root.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
-        applySystemBars()
-
-        if (Build.VERSION.SDK_INT >= 23) {
-            webView.setOnScrollChangeListener {
-                    _, _, scrollY, _, oldScrollY ->
-                val delta = scrollY - oldScrollY
-
-                if (scrollY > dp(90) && delta > dp(7)) {
-                    hideToolbar(true)
-                } else if (delta < -dp(5)) {
-                    hideToolbar(false)
-                }
+    const link = BASE_LINK * Math.sqrt(BASE_N / n) * linkScale
+    const l2 = link * link
+    const ea: number[] = []
+    const eb: number[] = []
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            const dx = px[i * 3] - px[j * 3]
+            const dy = px[i * 3 + 1] - px[j * 3 + 1]
+            const dz = px[i * 3 + 2] - px[j * 3 + 2]
+            if (dx * dx + dy * dy + dz * dz < l2) {
+                ea.push(i)
+                eb.push(j)
             }
         }
     }
-
-    private fun configureWebView() {
-        val settings = webView.settings
-
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = !incognito
-        settings.databaseEnabled = !incognito
-        settings.loadsImagesAutomatically = true
-        settings.loadWithOverviewMode = false
-        settings.useWideViewPort = true
-        settings.setSupportZoom(true)
-        settings.builtInZoomControls = true
-        settings.displayZoomControls = false
-        settings.textZoom = pageZoom
-
-        settings.cacheMode = if (incognito) {
-            WebSettings.LOAD_NO_CACHE
-        } else {
-            WebSettings.LOAD_DEFAULT
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            @Suppress("DEPRECATION")
-            run {
-                settings.forceDark =
-                    if (!incognito && prefs.getBoolean(PREF_FORCE_DARK, false)) {
-                        WebSettings.FORCE_DARK_ON
-                    } else {
-                        WebSettings.FORCE_DARK_OFF
-                    }
-            }
-        }
-
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        settings.mediaPlaybackRequiresUserGesture = true
-        settings.javaScriptCanOpenWindowsAutomatically = false
-        settings.setSupportMultipleWindows(false)
-        settings.allowFileAccess = false
-        settings.allowContentAccess = true
-
-        if (Build.VERSION.SDK_INT >= 26) {
-            settings.safeBrowsingEnabled = true
-        }
-
-        originalUserAgent = settings.userAgentString
-
-        CookieManager.getInstance().setAcceptCookie(!incognito)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(
-            webView,
-            !incognito
-        )
-
-        webView.webViewClient = object : WebViewClient() {
-
-            override fun shouldOverrideUrlLoading(
-                view: WebView,
-                request: WebResourceRequest
-            ): Boolean {
-                val uri = request.url
-                val scheme = uri.scheme?.lowercase(Locale.ROOT).orEmpty()
-
-                if (scheme == "http" || scheme == "https") return false
-
-                return openExternalUri(uri)
-            }
-
-            @Suppress("DEPRECATION")
-            override fun shouldOverrideUrlLoading(
-                view: WebView,
-                url: String
-            ): Boolean {
-                val uri = Uri.parse(url)
-
-                if (uri.scheme == "http" || uri.scheme == "https") {
-                    return false
-                }
-
-                return openExternalUri(uri)
-            }
-
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: WebResourceRequest
-            ): WebResourceResponse? {
-                if (!incognito && adBlockEnabled && isBlocked(request.url)) {
-                    recordBlockedRequest()
-                    return WebResourceResponse(
-                        "text/plain",
-                        "utf-8",
-                        ByteArrayInputStream(ByteArray(0))
-                    )
-                }
-
-                return super.shouldInterceptRequest(view, request)
-            }
-
-            override fun onPageStarted(
-                view: WebView,
-                url: String,
-                favicon: Bitmap?
-            ) {
-                currentUrl = url
-                pageToolbarColor = null
-                progress.progress = 0
-                progress.visibility = View.VISIBLE
-                refreshTitle()
-                updateToolbarColors()
-            }
-
-            override fun onPageFinished(view: WebView, url: String) {
-                currentUrl = url
-                currentTitle = view.title?.takeIf { it.isNotBlank() } ?: hostOf(url)
-
-                progress.progress = 100
-                progress.postDelayed({
-                    if (!isFinishing && progress.progress == 100) {
-                        progress.visibility = View.GONE
-                    }
-                }, 260)
-
-                refreshTitle()
-                updateToolbarColors()
-            }
-
-            override fun onReceivedError(
-                view: WebView,
-                request: WebResourceRequest,
-                error: WebResourceError
-            ) {
-                if (request.isForMainFrame) {
-                    Toast.makeText(
-                        this@OrbitBrowserActivity,
-                        error.description?.toString()
-                            ?: "Não foi possível abrir a página.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
-
-        webView.webChromeClient = object : WebChromeClient() {
-
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                progress.progress = newProgress
-                progress.visibility = if (newProgress >= 100) {
-                    View.GONE
-                } else {
-                    View.VISIBLE
-                }
-            }
-
-            override fun onReceivedTitle(view: WebView, title: String?) {
-                if (!title.isNullOrBlank()) currentTitle = title
-                refreshTitle()
-            }
-
-            override fun onReceivedIcon(view: WebView, icon: Bitmap?) {
-                if (icon != null) {
-                    faviconView.setImageDrawable(BitmapDrawable(resources, icon))
-                }
-            }
-
-            override fun onShowCustomView(
-                view: View,
-                callback: CustomViewCallback
-            ) {
-                if (customView != null) {
-                    callback.onCustomViewHidden()
-                    return
-                }
-
-                customView = view
-                customViewCallback = callback
-
-                root.removeView(webView)
-                root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
-
-                toolbar.visibility = View.GONE
-                progress.visibility = View.GONE
-
-                window.decorView.systemUiVisibility =
-                    View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            }
-
-            override fun onHideCustomView() {
-                hideCustomView()
-            }
-        }
-
-        webView.setDownloadListener(
-            DownloadListener { url, userAgent, disposition, mimeType, _ ->
-                if (incognito) {
-                    Toast.makeText(
-                        this,
-                        "Transferências desativadas no modo privado.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    startDownload(url, userAgent, disposition, mimeType)
-                }
-            }
-        )
-
-        webView.setOnLongClickListener {
-            val hit = webView.hitTestResult
-            val target = hit.extra?.takeIf { it.isNotBlank() }
-
-            if (target.isNullOrBlank()) {
-                return@setOnLongClickListener false
-            }
-
-            showElementSheet(target, hit.type)
-            true
+    const edges = ea.length
+    const p0 = new Float32Array(edges * 6 * 3)
+    const p1 = new Float32Array(edges * 6 * 3)
+    const corner = new Float32Array(edges * 6 * 2)
+    for (let e = 0; e < edges; e++) {
+        const i = ea[e], j = eb[e]
+        for (let c = 0; c < 6; c++) {
+            const k = e * 6 + c
+            p0[k * 3] = px[i * 3]; p0[k * 3 + 1] = px[i * 3 + 1]; p0[k * 3 + 2] = px[i * 3 + 2]
+            p1[k * 3] = px[j * 3]; p1[k * 3 + 1] = px[j * 3 + 1]; p1[k * 3 + 2] = px[j * 3 + 2]
+            corner[k * 2] = CORNERS[c][0]
+            corner[k * 2 + 1] = CORNERS[c][1]
         }
     }
+    return { p0, p1, corner, edges }
+}
 
-    private fun actionButton(
-        symbol: String,
-        description: String,
-        onClick: () -> Unit
-    ): TextView {
-        return TextView(this).apply {
-            text = symbol
-            contentDescription = description
-            gravity = Gravity.CENTER
-            textSize = if (symbol.length > 1) 17f else 23f
-            setTextColor(toolbarText())
-            isClickable = true
-            isFocusable = true
-            background = selectableBackground()
-            setOnClickListener { onClick() }
-        }
+type ShellGroup = { link?: number; lineWidth?: number; fade?: number }
+const SHELL_DEFAULTS: Required<ShellGroup> = { link: 100, lineWidth: 100, fade: 55 }
+
+interface ConstellationShellProps {
+    style?: React.CSSProperties
+    width?: number
+    height?: number
+    background?: string
+    baseColor?: string
+    accentColor?: string
+    density?: number
+    speed?: number
+    hover?: number
+    distance?: number
+    shell?: ShellGroup
+}
+
+function __OriginkitBase_ConstellationShell(props: ConstellationShellProps) {
+    const {
+        style,
+        background = "#000000",
+        baseColor = "#00F5FF",
+        accentColor = "#71FFF7",
+        density = 700,
+        speed = 50,
+        hover = 200,
+        distance = 55,
+        shell,
+        width,
+        height,
+    } = props
+
+    // A group the designer never opened arrives undefined; spread-merging over a
+    // typed literal beats a hand-written ?? chain, where one missed key silently
+    // pins a control forever.
+    const shell_ = { ...SHELL_DEFAULTS, ...(shell || {}) }
+
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const ptrRef = useRef({ tx: 0, ty: 0, x: 0, y: 0 })
+    const sizeRef = useRef({ w: 0, h: 0 })
+    sizeRef.current = { w: num(width, 0), h: num(height, 0) }
+
+    // Every live input is read from a ref inside the loop. Putting any of them in
+    // the effect deps would rebuild the GL context on every colour tweak.
+    const vRef = useRef<Record<string, number | string>>({})
+    vRef.current = {
+        base: baseColor,
+        accent: accentColor,
+        density: Math.round(clampN(num(density, 220), 60, 700)),
+        speed: clampN(num(speed, 50), 0, 100) / 50,
+        hover: clampN(num(hover, 100), 0, 200) / 100,
+        distance: clampN(num(distance, 45), 20, 120) / 10,
+        link: clampN(num(shell_.link, 100), 40, 200) / 100,
+        lineWidth: (clampN(num(shell_.lineWidth, 100), 20, 400) / 100) * 0.0016,
+        fade: clampN(num(shell_.fade, 55), 0, 100) / 100,
     }
 
-    private fun showAddressDialog() {
-        val input = EditText(this).apply {
-            setSingleLine(true)
-            textSize = 15f
-            setTextColor(primaryText)
-            setHintTextColor(secondaryText)
-            hint = "Pesquisar ou introduzir endereço"
-            setText(currentUrl)
-            setSelection(text.length)
-            inputType = InputType.TYPE_CLASS_TEXT or
-                InputType.TYPE_TEXT_VARIATION_URI
-            imeOptions = EditorInfo.IME_ACTION_GO
-        }
-
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(8), dp(22), 0)
-            addView(input, LinearLayout.LayoutParams(-1, dp(52)))
-        }
-
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Pesquisar ou abrir endereço")
-            .setView(container)
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Abrir", null)
-            .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener {
-                    val value = input.text?.toString().orEmpty()
-                    dialog.dismiss()
-                    loadAddress(value)
-                }
-
-            input.requestFocus()
-            input.post {
-                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-                    .showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
-            }
-
-            input.setOnEditorActionListener { _, actionId, event ->
-                val enter = event?.keyCode == KeyEvent.KEYCODE_ENTER &&
-                    event.action == KeyEvent.ACTION_UP
-
-                if (actionId == EditorInfo.IME_ACTION_GO || enter) {
-                    dialog.dismiss()
-                    loadAddress(input.text?.toString().orEmpty())
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-
-        dialog.show()
-    }
-
-    private fun loadAddress(raw: String) {
-        val value = raw.trim()
-        if (value.isEmpty()) return
-
-        val target = when {
-            value.startsWith("https://", true) ||
-                value.startsWith("http://", true) -> value
-
-            value.contains(" ") || !value.contains(".") ->
-                "https://www.google.com/search?q=" + Uri.encode(value)
-
-            else -> "https://$value"
-        }
-
-        val uri = Uri.parse(target)
-
-        if (uri.scheme !in listOf("http", "https") || uri.host.isNullOrBlank()) {
-            Toast.makeText(this, "Endereço inválido.", Toast.LENGTH_SHORT).show()
+    useEffect(() => {
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const gl = canvas.getContext("webgl", {
+            alpha: true,
+            antialias: true,
+            depth: false,
+            premultipliedAlpha: true,
+        })
+        if (!gl) {
+            console.error("ConstellationShell: WebGL unavailable")
             return
         }
 
-        webView.loadUrl(uri.toString())
-    }
-
-    private fun showBrowserSheet() {
-        val dialog = BottomSheetDialog(this)
-        val scroll = android.widget.ScrollView(this)
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(10), dp(18), dp(18))
-            background = rounded(pageBg, 22)
-        }
-
-        val handle = View(this).apply {
-            background = rounded(
-                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
-                99
-            )
-        }
-
-        content.addView(
-            handle,
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(16)
-            }
-        )
-
-        content.addView(
-            TextView(this).apply {
-                text = "Browser"
-                textSize = 17f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.create(
-                    "sans-serif-medium",
-                    android.graphics.Typeface.NORMAL
-                )
-            },
-            LinearLayout.LayoutParams(-1, dp(38))
-        )
-
-        val quick = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        addQuickAction(quick, "‹", "Voltar", webView.canGoBack()) {
-            webView.goBack()
-        }
-
-        addQuickAction(quick, "›", "Avançar", webView.canGoForward()) {
-            webView.goForward()
-        }
-
-        addQuickAction(quick, "+", "Novo separador", true) {
-            finishToFlutter("newTab")
-        }
-
-        addQuickAction(quick, "▣", "Separadores", true) {
-            finishToFlutter("tabs")
-        }
-
-        content.addView(quick, LinearLayout.LayoutParams(-1, dp(78)))
-        content.addView(sheetDivider())
-
-        addSheetItem(content, "☆", "Adicionar aos favoritos") {
-            dialog.dismiss()
-            finishToFlutter("bookmark")
-        }
-
-        if (!incognito) {
-            addSheetItem(content, "★", "Ver favoritos") {
-                dialog.dismiss()
-                finishToFlutter("bookmarks")
-            }
-
-            addSheetItem(content, "◷", "Histórico") {
-                dialog.dismiss()
-                finishToFlutter("history")
-            }
-
-            addSheetItem(content, "⇩", "Transferências") {
-                dialog.dismiss()
-                showDownloadsSheet()
-            }
-        }
-
-        addSheetItem(content, "↻", "Recarregar página") {
-            dialog.dismiss()
-            webView.reload()
-        }
-
-        addSheetItem(content, "⌕", "Localizar na página") {
-            dialog.dismiss()
-            openFindBar()
-        }
-
-        addSheetItem(
-            content,
-            "▤",
-            if (desktopMode) {
-                "Desativar site para computador"
-            } else {
-                "Site para computador"
-            }
-        ) {
-            dialog.dismiss()
-            toggleDesktopMode()
-        }
-
-        addSheetItem(content, "文", "Traduzir página") {
-            dialog.dismiss()
-            translatePage()
-        }
-
-        addSheetItem(content, "−", "Reduzir texto") {
-            dialog.dismiss()
-            setZoom(-10)
-        }
-
-        addSheetItem(content, "+", "Aumentar texto") {
-            dialog.dismiss()
-            setZoom(10)
-        }
-
-        addSheetItem(content, "▣", "Imprimir") {
-            dialog.dismiss()
-            printPage()
-        }
-
-        addSheetItem(content, "⧉", "Copiar endereço") {
-            dialog.dismiss()
-            copyAddress()
-        }
-
-        addSheetItem(content, "↗", "Partilhar página") {
-            dialog.dismiss()
-            shareAddress()
-        }
-
-        addSheetItem(content, "ⓘ", "Informações do site") {
-            dialog.dismiss()
-            showSiteInfo()
-        }
-
-        addSheetItem(content, "⚙", "Definições") {
-            dialog.dismiss()
-            finishToFlutter("settings")
-        }
-
-        addSheetItem(content, "⌂", "Início") {
-            dialog.dismiss()
-            finishToFlutter("home")
-        }
-
-        scroll.addView(content)
-        dialog.setContentView(scroll)
-        dialog.show()
-    }
-
-    private fun addQuickAction(
-        parent: LinearLayout,
-        icon: String,
-        label: String,
-        enabled: Boolean,
-        action: () -> Unit
-    ) {
-        val column = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            alpha = if (enabled) 1f else .38f
-            isClickable = enabled
-            isFocusable = enabled
-            setOnClickListener {
-                if (enabled) action()
-            }
-        }
-
-        val iconView = TextView(this).apply {
-            text = icon
-            gravity = Gravity.CENTER
-            textSize = 22f
-            setTextColor(accent)
-            background = rounded(toolbarPillColor(), 18)
-        }
-
-        column.addView(iconView, LinearLayout.LayoutParams(dp(48), dp(44)))
-
-        column.addView(
-            TextView(this).apply {
-                text = label
-                textSize = 10.5f
-                setTextColor(secondaryText)
-                gravity = Gravity.CENTER
-                maxLines = 1
-            },
-            LinearLayout.LayoutParams(-1, dp(24))
-        )
-
-        parent.addView(column, LinearLayout.LayoutParams(0, -1, 1f))
-    }
-
-    private fun addSheetItem(
-        parent: LinearLayout,
-        icon: String,
-        label: String,
-        action: () -> Unit
-    ) {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(10), 0)
-            background = selectableBackground()
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { action() }
-        }
-
-        row.addView(
-            TextView(this).apply {
-                text = icon
-                textSize = 21f
-                setTextColor(secondaryText)
-                gravity = Gravity.CENTER
-            },
-            LinearLayout.LayoutParams(dp(42), dp(48))
-        )
-
-        row.addView(
-            TextView(this).apply {
-                text = label
-                textSize = 14f
-                setTextColor(primaryText)
-            },
-            LinearLayout.LayoutParams(0, dp(48), 1f)
-        )
-
-        parent.addView(row, LinearLayout.LayoutParams(-1, dp(48)))
-    }
-
-    private fun sheetDivider(): View {
-        return View(this).apply {
-            setBackgroundColor(
-                if (dark) 0x33FFFFFF else 0x1F000000
-            )
-
-            layoutParams = LinearLayout.LayoutParams(-1, dp(1)).apply {
-                topMargin = dp(6)
-                bottomMargin = dp(6)
-            }
-        }
-    }
-
-    private fun showElementSheet(target: String, hitType: Int) {
-        val isImage = hitType == WebView.HitTestResult.IMAGE_TYPE ||
-            hitType == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
-
-        val isLink = hitType == WebView.HitTestResult.ANCHOR_TYPE ||
-            hitType == WebView.HitTestResult.SRC_ANCHOR_TYPE
-
-        val dialog = BottomSheetDialog(this)
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(16), dp(18), dp(20))
-            background = rounded(pageBg, 22)
-        }
-
-        content.addView(
-            TextView(this).apply {
-                text = when {
-                    isImage -> "Imagem"
-                    isLink -> "Ligação"
-                    else -> "Multimédia"
-                }
-                textSize = 16f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                maxLines = 1
-            },
-            LinearLayout.LayoutParams(-1, dp(36))
-        )
-
-        content.addView(
-            TextView(this).apply {
-                text = target
-                textSize = 12f
-                setTextColor(secondaryText)
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            },
-            LinearLayout.LayoutParams(-1, dp(44))
-        )
-
-        addSheetItem(content, "↗", "Abrir num novo separador") {
-            dialog.dismiss()
-            finishToFlutter("newTab", target)
-        }
-
-        addSheetItem(content, "⧉", "Copiar ligação") {
-            dialog.dismiss()
-            copyText(target)
-        }
-
-        addSheetItem(content, "↗", "Partilhar") {
-            dialog.dismiss()
-            shareText(target)
-        }
-
-        if (isLink && !incognito) {
-            addSheetItem(content, "☆", "Adicionar aos favoritos") {
-                dialog.dismiss()
-                finishToFlutter("bookmarkUrl", target)
-            }
-        }
-
-        if (isImage && !incognito) {
-            addSheetItem(content, "⇩", "Transferir imagem") {
-                dialog.dismiss()
-                startDownload(target, null, null, null)
-            }
-        }
-
-        dialog.setContentView(content)
-        dialog.show()
-    }
-
-    private fun showDownloadsSheet() {
-        val manager = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
-        val dialog = BottomSheetDialog(this)
-        val scroll = android.widget.ScrollView(this)
-
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(18))
-            background = rounded(pageBg, 22)
-        }
-
-        val handle = View(this).apply {
-            background = rounded(
-                if (dark) 0xFF5B5F64.toInt() else 0xFFD0D4D8.toInt(),
-                99
-            )
-        }
-
-        content.addView(
-            handle,
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(14)
-            }
-        )
-
-        content.addView(
-            TextView(this).apply {
-                text = "Transferências"
-                textSize = 18f
-                setTextColor(primaryText)
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            },
-            LinearLayout.LayoutParams(-1, dp(42))
-        )
-
-        val query = DownloadManager.Query().setFilterByStatus(
-            DownloadManager.STATUS_PENDING or
-                DownloadManager.STATUS_RUNNING or
-                DownloadManager.STATUS_PAUSED or
-                DownloadManager.STATUS_SUCCESSFUL or
-                DownloadManager.STATUS_FAILED
-        )
-
-        var count = 0
-
-        manager.query(query)?.use { cursor ->
-            val idColumn = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
-            val titleColumn = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
-            val statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-            val downloadedColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-            val totalColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-            val reasonColumn =
-                cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-
-            while (cursor.moveToNext()) {
-                if (idColumn < 0 || titleColumn < 0 || statusColumn < 0) {
-                    continue
-                }
-
-                count++
-
-                val id = cursor.getLong(idColumn)
-                val filename =
-                    cursor.getString(titleColumn)?.ifBlank { "Ficheiro" } ?: "Ficheiro"
-
-                val status = cursor.getInt(statusColumn)
-                val downloaded =
-                    if (downloadedColumn >= 0) cursor.getLong(downloadedColumn) else 0L
-                val total =
-                    if (totalColumn >= 0) cursor.getLong(totalColumn) else -1L
-                val reason =
-                    if (reasonColumn >= 0) cursor.getInt(reasonColumn) else 0
-
-                val statusLabel = when (status) {
-                    DownloadManager.STATUS_SUCCESSFUL -> "Concluído"
-                    DownloadManager.STATUS_FAILED ->
-                        "Falhou${if (reason != 0) " · $reason" else ""}"
-
-                    DownloadManager.STATUS_PAUSED -> "Pausado"
-
-                    DownloadManager.STATUS_RUNNING -> {
-                        if (total > 0) {
-                            "A transferir · ${((downloaded * 100) / total).coerceIn(0, 100)}%"
-                        } else {
-                            "A transferir"
-                        }
-                    }
-
-                    else -> "Na fila"
-                }
-
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(12), dp(9), dp(12), dp(9))
-                    background = selectableBackground()
-                    isClickable = true
-                    isFocusable = true
-
-                    setOnClickListener {
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            openDownloadedFile(manager, id)
-                        } else {
-                            Toast.makeText(
-                                this@OrbitBrowserActivity,
-                                statusLabel,
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-
-                    setOnLongClickListener {
-                        MaterialAlertDialogBuilder(this@OrbitBrowserActivity)
-                            .setTitle("Remover transferência?")
-                            .setMessage(filename)
-                            .setNegativeButton("Cancelar", null)
-                            .setPositiveButton("Remover") { _, _ ->
-                                manager.remove(id)
-                                showDownloadsSheetAfterDismiss(dialog)
-                            }
-                            .show()
-
-                        true
-                    }
-                }
-
-                row.addView(
-                    TextView(this).apply {
-                        text = filename
-                        textSize = 14f
-                        maxLines = 1
-                        ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-                        setTextColor(primaryText)
-                    },
-                    LinearLayout.LayoutParams(-1, -2)
-                )
-
-                row.addView(
-                    TextView(this).apply {
-                        text = statusLabel
-                        textSize = 12f
-                        setTextColor(secondaryText)
-                        setPadding(0, dp(3), 0, 0)
-                    },
-                    LinearLayout.LayoutParams(-1, -2)
-                )
-
-                if (status == DownloadManager.STATUS_RUNNING && total > 0) {
-                    val bar = ProgressBar(
-                        this,
-                        null,
-                        android.R.attr.progressBarStyleHorizontal
-                    ).apply {
-                        max = 100
-                        progress =
-                            ((downloaded * 100) / total).toInt().coerceIn(0, 100)
-                        progressTintList =
-                            android.content.res.ColorStateList.valueOf(accent)
-                    }
-
-                    row.addView(
-                        bar,
-                        LinearLayout.LayoutParams(-1, dp(3)).apply {
-                            topMargin = dp(8)
-                        }
-                    )
-                }
-
-                content.addView(row, LinearLayout.LayoutParams(-1, dp(66)))
-                content.addView(sheetDivider())
-            }
-        }
-
-        if (count == 0) {
-            content.addView(
-                TextView(this).apply {
-                    text = "Ainda não existem transferências."
-                    textSize = 14f
-                    setTextColor(secondaryText)
-                    gravity = Gravity.CENTER
-                    setPadding(0, dp(26), 0, dp(30))
-                },
-                LinearLayout.LayoutParams(-1, -2)
-            )
-        }
-
-        scroll.addView(content)
-        dialog.setContentView(scroll)
-        dialog.show()
-    }
-
-    private fun showDownloadsSheetAfterDismiss(dialog: BottomSheetDialog) {
-        dialog.dismiss()
-
-        android.os.Handler(mainLooper).postDelayed({
-            if (!isFinishing) {
-                showDownloadsSheet()
-            }
-        }, 180)
-    }
-
-    private fun openDownloadedFile(manager: DownloadManager, id: Long) {
-        try {
-            val uri = manager.getUriForDownloadedFile(id)
-
-            if (uri == null) {
-                Toast.makeText(
-                    this,
-                    "O ficheiro ainda não está disponível.",
-                    Toast.LENGTH_SHORT
-                ).show()
-                return
-            }
-
-            val mime = manager.getMimeTypeForDownloadedFile(id) ?: "*/*"
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            startActivity(Intent.createChooser(intent, "Abrir ficheiro"))
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não existe uma aplicação compatível para abrir este ficheiro.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openFindBar() {
-        findBar.visibility = View.VISIBLE
-        findField.requestFocus()
-
-        findField.post {
-            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-                .showSoftInput(findField, InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
-
-    private fun closeFindBar() {
-        webView.clearMatches()
-        findField.setText("")
-        findBar.visibility = View.GONE
-
-        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-            .hideSoftInputFromWindow(findField.windowToken, 0)
-    }
-
-    private fun toggleDesktopMode() {
-        desktopMode = !desktopMode
-
-        webView.settings.userAgentString = if (desktopMode) {
-            DESKTOP_UA
-        } else {
-            originalUserAgent ?: WebSettings.getDefaultUserAgent(this)
-        }
-
-        webView.settings.useWideViewPort = true
-        webView.settings.loadWithOverviewMode = desktopMode
-        webView.reload()
-
-        Toast.makeText(
-            this,
-            if (desktopMode) {
-                "Site para computador ativado"
-            } else {
-                "Site para computador desativado"
-            },
-            Toast.LENGTH_SHORT
-        ).show()
-    }
-
-    private fun translatePage() {
-        val translateUrl =
-            "https://translate.google.com/translate?sl=auto&tl=pt&u=" +
-                Uri.encode(currentUrl)
-
-        webView.loadUrl(translateUrl)
-    }
-
-    private fun setZoom(delta: Int) {
-        pageZoom = (pageZoom + delta).coerceIn(50, 200)
-        webView.settings.textZoom = pageZoom
-    }
-
-    private fun printPage() {
-        try {
-            val manager = getSystemService(Context.PRINT_SERVICE) as PrintManager
-            val adapter = webView.createPrintDocumentAdapter(
-                "BrowseIt - ${hostOf(currentUrl)}"
-            )
-
-            manager.print(
-                "BrowseIt",
-                adapter,
-                PrintAttributes.Builder().build()
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não foi possível imprimir esta página.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun showSiteInfo() {
-        val host = hostOf(currentUrl)
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Informações do site")
-            .setMessage("${currentTitle.ifBlank { host }}\n\n$currentUrl")
-            .setPositiveButton("Fechar", null)
-            .show()
-    }
-
-    private fun copyAddress() {
-        copyText(currentUrl)
-    }
-
-    private fun copyText(value: String) {
-        val clipboard =
-            getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-
-        clipboard.setPrimaryClip(
-            android.content.ClipData.newPlainText("BrowseIt", value)
-        )
-
-        Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun shareAddress() {
-        shareText(currentUrl)
-    }
-
-    private fun shareText(value: String) {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, value)
-        }
-
-        startActivity(Intent.createChooser(send, "Partilhar ligação"))
-    }
-
-    private fun startDownload(
-        url: String,
-        userAgent: String?,
-        contentDisposition: String?,
-        mimeType: String?
-    ) {
-        try {
-            val filename = android.webkit.URLUtil.guessFileName(
-                url,
-                contentDisposition,
-                mimeType
-            )
-
-            val request = DownloadManager.Request(Uri.parse(url)).apply {
-                setTitle(filename)
-                setDescription("A transferir através do BrowseIt")
-                setMimeType(
-                    mimeType ?: URLConnection.guessContentTypeFromName(filename)
-                )
-                setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                )
-                setDestinationInExternalFilesDir(
-                    this@OrbitBrowserActivity,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    filename
-                )
-                addRequestHeader(
-                    "User-Agent",
-                    userAgent ?: webView.settings.userAgentString
-                )
-
-                val cookie = CookieManager.getInstance().getCookie(url)
-                if (!cookie.isNullOrBlank()) {
-                    addRequestHeader("Cookie", cookie)
-                }
-            }
-
-            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
-
-            Toast.makeText(
-                this,
-                "Transferência iniciada",
-                Toast.LENGTH_SHORT
-            ).show()
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não foi possível iniciar a transferência.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openExternalUri(uri: Uri): Boolean {
-        val scheme = uri.scheme?.lowercase(Locale.ROOT) ?: return true
-
-        if (scheme == "http" || scheme == "https") return false
-
-        return try {
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-            true
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Não existe uma aplicação compatível para abrir esta ligação.",
-                Toast.LENGTH_SHORT
-            ).show()
-            true
-        }
-    }
-
-    private fun isBlocked(uri: Uri): Boolean {
-        val host = uri.host?.lowercase(Locale.ROOT)?.trimEnd('.') ?: return false
-
-        if (blockedDomains.any { host == it || host.endsWith(".$it") }) {
-            return true
-        }
-
-        val labels = host.split('.').flatMap { it.split('-') }
-
-        val blockedLabels = setOf(
-            "ad", "ads", "adserver", "adservice",
-            "advertising", "banner", "popunder",
-            "tracking", "tracker", "pixel",
-            "beacon", "affiliate", "prebid"
-        )
-
-        if (labels.any { it in blockedLabels }) return true
-
-        return Regex(
-            "(?:^|/)(?:ads?|adserver|adservice|advertising|banners?|popunder|trackers?|tracking|pixels?|beacons?)(?:[/._-]|$)",
-            RegexOption.IGNORE_CASE
-        ).containsMatchIn(uri.encodedPath.orEmpty())
-    }
-
-    private fun recordBlockedRequest() {
-        if (incognito) return
-
-        try {
-            val raw = prefs.getString(PREF_ADBLOCK_STATS, "{}") ?: "{}"
-            val json = org.json.JSONObject(raw)
-
-            val day = java.text.SimpleDateFormat(
-                "yyyy-MM-dd",
-                Locale.US
-            ).format(java.util.Date())
-
-            json.put(day, json.optInt(day, 0) + 1)
-
-            prefs.edit()
-                .putString(PREF_ADBLOCK_STATS, json.toString())
-                .apply()
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun refreshTitle() {
-        if (!::titleView.isInitialized) return
-
-        val address = runCatching {
-            val uri = Uri.parse(currentUrl)
-            uri.host?.removePrefix("www.")?.ifBlank { currentUrl } ?: currentUrl
-        }.getOrDefault(currentUrl)
-
-        titleView.text = address.ifBlank {
-            currentTitle.ifBlank { "BrowseIt" }
-        }
-    }
-
-    private fun updateToolbarColors() {
-        val adaptive =
-            prefs.getBoolean(PREF_ADAPTIVE_TOOLBAR, false) && !incognito
-
-        if (!adaptive) {
-            pageToolbarColor = null
-            applySystemBars()
+        const vs = compile(gl, gl.VERTEX_SHADER, VERT_SRC)
+        const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC)
+        if (!vs || !fs) return
+        const prog = gl.createProgram()
+        if (!prog) return
+        gl.attachShader(prog, vs)
+        gl.attachShader(prog, fs)
+        gl.linkProgram(prog)
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+            console.error("ConstellationShell link:", gl.getProgramInfoLog(prog))
             return
         }
+        gl.useProgram(prog)
 
-        webView.evaluateJavascript(
-            """
-            (() => {
-                const meta = document.querySelector('meta[name="theme-color"]');
-                if (meta && meta.content) return meta.content;
+        const aP0 = gl.getAttribLocation(prog, "a_p0")
+        const aP1 = gl.getAttribLocation(prog, "a_p1")
+        const aCorner = gl.getAttribLocation(prog, "a_corner")
+        gl.enableVertexAttribArray(aP0)
+        gl.enableVertexAttribArray(aP1)
+        gl.enableVertexAttribArray(aCorner)
 
-                const body = document.body
-                    ? getComputedStyle(document.body).backgroundColor
-                    : '';
+        const locs: Record<string, WebGLUniformLocation | null> = {}
+        const u = (name: string) => {
+            if (!(name in locs)) locs[name] = gl.getUniformLocation(prog, name)
+            return locs[name]
+        }
 
-                if (body && body !== 'transparent' &&
-                    body !== 'rgba(0, 0, 0, 0)') {
-                    return body;
-                }
+        const b0 = gl.createBuffer()
+        const b1 = gl.createBuffer()
+        const bc = gl.createBuffer()
+        let builtN = 0
+        let builtLink = 0
+        let verts = 0
+        const build = (n: number, linkScale: number) => {
+            const g = net(n, linkScale)
+            gl.bindBuffer(gl.ARRAY_BUFFER, b0)
+            gl.bufferData(gl.ARRAY_BUFFER, g.p0, gl.STATIC_DRAW)
+            gl.bindBuffer(gl.ARRAY_BUFFER, b1)
+            gl.bufferData(gl.ARRAY_BUFFER, g.p1, gl.STATIC_DRAW)
+            gl.bindBuffer(gl.ARRAY_BUFFER, bc)
+            gl.bufferData(gl.ARRAY_BUFFER, g.corner, gl.STATIC_DRAW)
+            builtN = n
+            builtLink = linkScale
+            verts = g.edges * 6
+        }
 
-                return '';
-            })();
-            """.trimIndent()
-        ) { value ->
-            val parsed = parseCssColor(value?.trim('"'))
+        let raf = 0
+        let last = performance.now()
+        let clock = 0
 
-            if (parsed != null) {
-                pageToolbarColor = parsed
-                applySystemBars()
-                toolbar.setBackgroundColor(toolbarBg)
-                titlePill.background = rounded(toolbarPillColor(), 24)
+        const render = (now: number) => {
+            const dt = Math.min(0.05, (now - last) / 1000)
+            last = now
+            const v = vRef.current
+            clock = (clock + dt * (v.speed as number)) % 3600
 
-                titleView.setTextColor(toolbarText())
-                tabsButton.setTextColor(toolbarText())
+            const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+            const cw = sizeRef.current.w || canvas.clientWidth || 1200
+            const ch = sizeRef.current.h || canvas.clientHeight || 800
+            const bw = Math.max(1, Math.round(cw * dpr))
+            const bh = Math.max(1, Math.round(ch * dpr))
+            if (canvas.width !== bw || canvas.height !== bh) {
+                canvas.width = bw
+                canvas.height = bh
             }
-        }
-    }
+            gl.viewport(0, 0, bw, bh)
 
-    private fun parseCssColor(value: String?): Int? {
-        if (value.isNullOrBlank() || value == "null") return null
+            const wantN = v.density as number
+            const wantLink = v.link as number
+            if (wantN !== builtN || wantLink !== builtLink) build(wantN, wantLink)
 
-        try {
-            return Color.parseColor(value)
-        } catch (_: Exception) {
-        }
+            const ptr = ptrRef.current
+            const pk = 1 - Math.exp(-dt * 3.5)
+            ptr.x += (ptr.tx - ptr.x) * pk
+            ptr.y += (ptr.ty - ptr.y) * pk
 
-        val match = Regex(
-            "rgba?\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})"
-        ).find(value) ?: return null
+            // Slow tumble, the source's two rates, plus the pointer's ORBIT: the
+            // cursor adds yaw and pitch to the same rotation the tumble drives, so
+            // the shell is turned rather than lit — the one gesture a rigid lattice
+            // with no per-node state can honestly offer.
+            const hv = v.hover as number
+            const ay = clock * 0.12 + ptr.x * 2.2 * hv
+            const ax = clock * 0.06 - ptr.y * 1.2 * hv
+            const cy = Math.cos(ay), sy = Math.sin(ay)
+            const cx = Math.cos(ax), sx = Math.sin(ax)
+            // Ry * Rx, column-major
+            const rot = new Float32Array([
+                cy, 0, -sy,
+                sy * sx, cx, cy * sx,
+                sy * cx, -sx, cy * cx,
+            ])
 
-        val red = match.groupValues[1].toIntOrNull()?.coerceIn(0, 255) ?: return null
-        val green = match.groupValues[2].toIntOrNull()?.coerceIn(0, 255) ?: return null
-        val blue = match.groupValues[3].toIntOrNull()?.coerceIn(0, 255) ?: return null
+            gl.clearColor(0, 0, 0, 0)
+            gl.clear(gl.COLOR_BUFFER_BIT)
+            gl.disable(gl.DEPTH_TEST)
+            gl.enable(gl.BLEND)
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
-        return Color.rgb(red, green, blue)
-    }
+            gl.bindBuffer(gl.ARRAY_BUFFER, b0)
+            gl.vertexAttribPointer(aP0, 3, gl.FLOAT, false, 0, 0)
+            gl.bindBuffer(gl.ARRAY_BUFFER, b1)
+            gl.vertexAttribPointer(aP1, 3, gl.FLOAT, false, 0, 0)
+            gl.bindBuffer(gl.ARRAY_BUFFER, bc)
+            gl.vertexAttribPointer(aCorner, 2, gl.FLOAT, false, 0, 0)
 
-    private fun toolbarText(): Int {
-        val color = toolbarBg
+            gl.uniformMatrix3fv(u("uRot"), false, rot)
+            gl.uniform2f(u("uRes"), bw, bh)
+            gl.uniform1f(u("uDist"), v.distance as number)
+            gl.uniform1f(u("uWidth"), v.lineWidth as number)
+            gl.uniform1f(u("uFade"), v.fade as number)
+            const cb = parseColor(v.base as string, [0.725, 0.741, 0.769])
+            const ca = parseColor(v.accent as string, [0.078, 0.086, 0.102])
+            gl.uniform3f(u("uBase"), cb[0], cb[1], cb[2])
+            gl.uniform3f(u("uAccent"), ca[0], ca[1], ca[2])
 
-        val luminance = (
-            0.2126 * Color.red(color) +
-                0.7152 * Color.green(color) +
-                0.0722 * Color.blue(color)
-            ) / 255.0
-
-        return if (luminance > .55) {
-            Color.rgb(32, 33, 36)
-        } else {
-            Color.rgb(245, 246, 247)
-        }
-    }
-
-    private fun toolbarPillColor(): Int {
-        return if (dark) {
-            Color.rgb(46, 48, 52)
-        } else {
-            Color.rgb(241, 243, 244)
-        }
-    }
-
-    private fun applySystemBars() {
-        val status = toolbarBg
-
-        window.statusBarColor = status
-        window.navigationBarColor = pageBg
-
-        val controller = WindowInsetsControllerCompat(window, root)
-        controller.isAppearanceLightStatusBars = isLight(status)
-        controller.isAppearanceLightNavigationBars = !dark
-
-        if (Build.VERSION.SDK_INT >= 29) {
-            window.isNavigationBarContrastEnforced = false
-        }
-    }
-
-    private fun isLight(color: Int): Boolean {
-        val luminance = (
-            0.2126 * Color.red(color) +
-                0.7152 * Color.green(color) +
-                0.0722 * Color.blue(color)
-            ) / 255.0
-
-        return luminance > .55
-    }
-
-    private fun hideToolbar(hide: Boolean) {
-        if (toolbarHidden == hide || previewOnly) return
-
-        toolbarHidden = hide
-
-        toolbar.animate()
-            .translationY(if (hide) -toolbar.height.toFloat() else 0f)
-            .setDuration(170)
-            .start()
-    }
-
-    private fun hideCustomView() {
-        val view = customView ?: return
-
-        (view.parent as? ViewGroup)?.removeView(view)
-
-        customView = null
-        customViewCallback?.onCustomViewHidden()
-        customViewCallback = null
-
-        toolbar.visibility = View.VISIBLE
-
-        root.addView(
-            webView,
-            LinearLayout.LayoutParams(-1, 0, 1f)
-        )
-
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
-        applySystemBars()
-    }
-
-    private fun finishToFlutter(action: String, newUrl: String? = null) {
-        if (isFinishingWithResult) return
-
-        isFinishingWithResult = true
-        persistTabState()
-
-        val output = Intent().apply {
-            putExtra(RESULT_URL, currentUrl)
-            putExtra(RESULT_TITLE, currentTitle)
-            putExtra(RESULT_TAB_ID, tabId)
-            putExtra(RESULT_ACTION, action)
-
-            if (newUrl != null) {
-                putExtra(RESULT_NEW_URL, newUrl)
-            }
-
-            if (!incognito && !previewOnly) {
-                takeThumbnail()?.let {
-                    putExtra(RESULT_THUMBNAIL, it)
-                }
-            }
+            gl.drawArrays(gl.TRIANGLES, 0, verts)
+            raf = requestAnimationFrame(render)
         }
 
-        setResult(Activity.RESULT_OK, output)
-        finish()
-        overridePendingTransition(0, R.anim.browser_slide_down)
-    }
-
-    private fun tabStateKey(): String? {
-        if (tabId.isBlank() || incognito || previewOnly) return null
-
-        val safeId = tabId
-            .replace(Regex("[^A-Za-z0-9_-]"), "_")
-            .take(100)
-
-        return "tab_$safeId"
-    }
-
-    private fun restoreTabState(): Boolean {
-        val key = tabStateKey() ?: return false
-        val encoded = tabStatePrefs.getString(key, null) ?: return false
-
-        if (encoded.isBlank() || encoded.length > MAX_TAB_STATE_CHARS) {
-            return false
+        build(vRef.current.density as number, vRef.current.link as number)
+        // The rect RATIO is zoom-invariant — offset and size scale together — so
+        // this is safe on a zoomed Framer canvas where absolute px are not.
+        const track = (e: PointerEvent) => {
+            const r = canvas.getBoundingClientRect()
+            if (r.width <= 0 || r.height <= 0) return
+            ptrRef.current.tx = clampN((e.clientX - r.left) / r.width, 0, 1) - 0.5
+            ptrRef.current.ty = clampN((e.clientY - r.top) / r.height, 0, 1) - 0.5
         }
-
-        val bytes = try {
-            Base64.decode(encoded, Base64.NO_WRAP)
-        } catch (_: Exception) {
-            return false
+        const onLeave = () => {
+            ptrRef.current.tx = 0
+            ptrRef.current.ty = 0
         }
+        canvas.addEventListener("pointermove", track)
+        canvas.addEventListener("pointerenter", track)
+        canvas.addEventListener("pointerleave", onLeave)
 
-        val parcel = Parcel.obtain()
+        raf = requestAnimationFrame(render)
 
-        return try {
-            parcel.unmarshall(bytes, 0, bytes.size)
-            parcel.setDataPosition(0)
-
-            val state = parcel.readBundle(javaClass.classLoader) ?: return false
-            state.classLoader = javaClass.classLoader
-
-            if (webView.restoreState(state) == null) return false
-
-            currentUrl = state.getString(STATE_URL) ?: webView.url ?: currentUrl
-            currentTitle = state.getString(STATE_TITLE) ?: webView.title ?: currentTitle
-
-            true
-        } catch (_: Exception) {
-            false
-        } finally {
-            parcel.recycle()
+        // Never loseContext(): getContext returns the same context per canvas, so
+        // StrictMode's mount -> cleanup -> mount would reuse a force-lost one.
+        return () => {
+            cancelAnimationFrame(raf)
+            canvas.removeEventListener("pointermove", track)
+            canvas.removeEventListener("pointerenter", track)
+            canvas.removeEventListener("pointerleave", onLeave)
         }
-    }
+    }, [])
 
-    private fun persistTabState() {
-        val key = tabStateKey() ?: return
-
-        if (!::webView.isInitialized || webView.url.isNullOrBlank()) {
-            return
-        }
-
-        val state = Bundle().apply {
-            putString(STATE_URL, webView.url ?: currentUrl)
-            putString(STATE_TITLE, webView.title ?: currentTitle)
-        }
-
-        try {
-            webView.saveState(state)
-
-            val parcel = Parcel.obtain()
-
-            try {
-                parcel.writeBundle(state)
-
-                val bytes = parcel.marshall()
-                val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
-
-                if (encoded.length <= MAX_TAB_STATE_CHARS) {
-                    tabStatePrefs.edit()
-                        .putString(key, encoded)
-                        .apply()
-                }
-            } finally {
-                parcel.recycle()
-            }
-        } catch (_: Exception) {
-            // A navegação continua mesmo se o WebView não conseguir
-            // serializar a sessão.
-        }
-    }
-
-    override fun onPause() {
-        persistTabState()
-        super.onPause()
-    }
-
-    override fun onDestroy() {
-        if (incognito) {
-            CookieManager.getInstance().setAcceptCookie(true)
-        }
-
-        if (::webView.isInitialized) {
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            webView.stopLoading()
-            webView.webChromeClient = null
-            webView.webViewClient = null
-            webView.destroy()
-        }
-
-        super.onDestroy()
-    }
-
-    private fun takeThumbnail(): ByteArray? {
-        return try {
-            val bitmap = Bitmap.createBitmap(
-                webView.width.coerceAtLeast(1),
-                webView.height.coerceAtLeast(1),
-                Bitmap.Config.ARGB_8888
-            )
-
-            webView.draw(Canvas(bitmap))
-
-            ByteArrayOutputStream().use { stream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 58, stream)
-                bitmap.recycle()
-                stream.toByteArray()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun hostOf(url: String): String {
-        return Uri.parse(url).host ?: url
-    }
-
-    private fun rounded(color: Int, radiusDp: Int): GradientDrawable {
-        return GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(radiusDp).toFloat()
-            setColor(color)
-        }
-    }
-
-    private fun selectableBackground(): android.graphics.drawable.Drawable? {
-        return android.util.TypedValue().let { value ->
-            theme.resolveAttribute(
-                android.R.attr.selectableItemBackground,
-                value,
-                true
-            )
-
-            if (value.resourceId != 0) {
-                getDrawable(value.resourceId)
-            } else {
-                null
-            }
-        }
-    }
-
-    private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
-    }
+    return (
+        <div
+            style={{
+                position: "relative",
+                overflow: "hidden",
+                background,
+                minWidth: 1200,
+                minHeight: 800,
+                width: typeof width === "number" && width > 0 ? width : "100%",
+                height: typeof height === "number" && height > 0 ? height : "100%",
+                ...style,
+            }}
+        >
+            <canvas
+                ref={canvasRef}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
+            />
+        </div>
+    )
 }
 
-2. orbit_browser_screen.dart
+const __originkitPresetProps = {
+  "shell": {
+    "fade": 56,
+    "link": 168,
+    "lineWidth": 20
+  }
+};
 
-Substituir o ficheiro:
-
-lib/screens/orbit_browser_screen.dart
-
-O Flutter deixa de desenhar a página web. Este ficheiro apenas abre a Activity Kotlin e comunica com a gestão de separadores do app.
-
-import 'dart:async';
-import 'dart:typed_data';
-
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
-import '../browser_library.dart';
-import '../models.dart';
-import '../shell/shell_tab_request.dart';
-import 'bookmarks_screen.dart';
-import 'downloads_screen.dart';
-import 'history_screen.dart';
-import 'search_screen.dart';
-import 'settings_screen.dart';
-
-const MethodChannel _nativeBrowserChannel = MethodChannel('looply/native_ui');
-
-class OrbitBrowserScreen extends StatefulWidget {
-  const OrbitBrowserScreen({
-    super.key,
-    required this.tabId,
-    required this.initialUrl,
-    required this.isActive,
-    required this.viewportKey,
-    this.firstLoadCompleter,
-    this.browserReadyCompleter,
-    this.isIncognito = false,
-    this.previewOnly = false,
-  });
-
-  final String tabId;
-  final String initialUrl;
-  final bool isActive;
-  final GlobalKey viewportKey;
-  final Completer<void>? firstLoadCompleter;
-  final Completer<void>? browserReadyCompleter;
-  final bool isIncognito;
-  final bool previewOnly;
-
-  @override
-  State<OrbitBrowserScreen> createState() => _OrbitBrowserScreenState();
+export default function ConstellationShell(props: Record<string, unknown>) {
+  return <__OriginkitBase_ConstellationShell {...(__originkitPresetProps as Record<string, unknown>)} {...props} />;
 }
-
-class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
-  bool _opening = false;
-  bool _disposed = false;
-  String _lastUrl = '';
-
-  @override
-  void initState() {
-    super.initState();
-
-    _complete(widget.browserReadyCompleter);
-
-    if (widget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_openNativeBrowser());
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant OrbitBrowserScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (!oldWidget.isActive && widget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_openNativeBrowser());
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
-
-  void _complete(Completer<void>? completer) {
-    if (completer != null && !completer.isCompleted) {
-      completer.complete();
-    }
-  }
-
-  Future<void> _openNativeBrowser() async {
-    if (_opening || _disposed || !mounted) return;
-
-    _opening = true;
-
-    final currentTab =
-        widget.previewOnly ? null : tabsController.getTab(widget.tabId);
-
-    final startUrl = (currentTab?.url ?? widget.initialUrl).trim();
-
-    var safeStartUrl =
-        startUrl.isEmpty ? 'https://www.google.com' : startUrl;
-
-    // A antiga página interna de pesquisa IA não fazia parte
-    // do motor Kotlin. Mantém-se a pesquisa através do Google.
-    if (safeStartUrl.startsWith('looply://ai-search')) {
-      final query =
-          Uri.tryParse(safeStartUrl)?.queryParameters['q'] ?? '';
-
-      safeStartUrl =
-          'https://www.google.com/search?q=${Uri.encodeQueryComponent(query)}';
-
-      if (!widget.previewOnly) {
-        tabsController.updateTab(widget.tabId, url: safeStartUrl);
-      }
-    }
-
-    _lastUrl = safeStartUrl;
-
-    try {
-      final result =
-          await _nativeBrowserChannel.invokeMapMethod<String, dynamic>(
-        'openNativeBrowser',
-        <String, Object?>{
-          'url': safeStartUrl,
-          'tabId': widget.tabId,
-          'isIncognito': widget.isIncognito,
-          'tabCount': tabsController.count,
-          'previewOnly': widget.previewOnly,
-        },
-      );
-
-      if (!mounted || _disposed) return;
-
-      _complete(widget.firstLoadCompleter);
-
-      if (widget.previewOnly) {
-        Navigator.of(context).maybePop();
-        return;
-      }
-
-      final data = result ?? const <String, dynamic>{};
-
-      final url = (data['url'] as String?)?.trim();
-      final title = (data['title'] as String?)?.trim();
-
-      final thumbnailValue = data['thumbnail'];
-
-      final Uint8List? thumbnail = thumbnailValue is Uint8List
-          ? thumbnailValue
-          : thumbnailValue is List<int>
-              ? Uint8List.fromList(thumbnailValue)
-              : null;
-
-      final currentUrl =
-          (url?.isNotEmpty == true) ? url! : _lastUrl;
-
-      final currentTitle =
-          (title?.isNotEmpty == true) ? title! : currentUrl;
-
-      tabsController.updateTab(
-        widget.tabId,
-        url: currentUrl,
-        title: currentTitle,
-        thumbnail: widget.isIncognito ? null : thumbnail,
-      );
-
-      if (!widget.isIncognito &&
-          currentUrl.startsWith(RegExp(r'https?://'))) {
-        activityController.log(
-          ActivityKind.site,
-          currentTitle,
-          currentUrl,
-        );
-
-        unawaited(browserFaviconCache.fetchForUrl(currentUrl));
-        unawaited(AdBlockStats.instance.restore());
-      }
-
-      final action = (data['action'] as String?) ?? 'home';
-
-      switch (action) {
-        case 'tabs':
-          ShellTabRequest.instance.requestCloseBrowser(
-            tabId: widget.tabId,
-            screenshot: thumbnail,
-            sourceRect: null,
-          );
-          return;
-
-        case 'newTab':
-          final newUrl = (data['newUrl'] as String?)?.trim();
-
-          final nextTab = tabsController.createBrowserTab(
-            newUrl?.isNotEmpty == true
-                ? newUrl!
-                : 'https://www.google.com',
-            isIncognito: widget.isIncognito,
-          );
-
-          tabsController.activate(nextTab.id);
-          ShellTabRequest.instance.requestBrowser(nextTab.id);
-          return;
-
-        case 'bookmark':
-          if (!widget.isIncognito) {
-            bookmarksController.add(currentTitle, currentUrl);
-          }
-
-          await _reopen();
-          return;
-
-        case 'bookmarkUrl':
-          if (!widget.isIncognito) {
-            final link = (data['newUrl'] as String?)?.trim();
-
-            if (link != null && link.isNotEmpty) {
-              bookmarksController.add(link, link);
-            }
-          }
-
-          await _reopen();
-          return;
-
-        case 'history':
-          await _pushFlutterPage(const HistoryScreen());
-          return;
-
-        case 'downloads':
-          await _pushFlutterPage(const DownloadsScreen());
-          return;
-
-        case 'bookmarks':
-          await _pushFlutterPage(const BookmarksScreen());
-          return;
-
-        case 'settings':
-          await _pushFlutterPage(const SettingsScreen());
-          return;
-
-        case 'search':
-          await _pushFlutterPage(
-            SearchScreen(isIncognito: widget.isIncognito),
-          );
-          return;
-
-        case 'previewClosed':
-          Navigator.of(context).maybePop();
-          return;
-
-        case 'home':
-        default:
-          ShellTabRequest.instance.request(0);
-          return;
-      }
-    } on MissingPluginException {
-      _complete(widget.firstLoadCompleter);
-
-      if (!mounted || widget.previewOnly) return;
-
-      _showUnavailable(
-        'O browser Kotlin não está incluído nesta versão Android.',
-      );
-
-      ShellTabRequest.instance.request(0);
-    } on PlatformException catch (error) {
-      _complete(widget.firstLoadCompleter);
-
-      if (!mounted || widget.previewOnly) return;
-
-      _showUnavailable(
-        error.message ?? 'Não foi possível abrir o browser nativo.',
-      );
-
-      ShellTabRequest.instance.request(0);
-    } catch (error) {
-      _complete(widget.firstLoadCompleter);
-
-      if (!mounted || widget.previewOnly) return;
-
-      _showUnavailable('Falha ao abrir o browser nativo: $error');
-
-      ShellTabRequest.instance.request(0);
-    } finally {
-      _opening = false;
-    }
-  }
-
-  Future<void> _pushFlutterPage(Widget page) async {
-    if (!mounted) return;
-
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => page),
-    );
-
-    if (mounted && widget.isActive) {
-      await _reopen();
-    }
-  }
-
-  Future<void> _reopen() async {
-    _opening = false;
-
-    if (!mounted || _disposed) return;
-
-    await Future<void>.delayed(
-      const Duration(milliseconds: 120),
-    );
-
-    if (mounted) {
-      await _openNativeBrowser();
-    }
-  }
-
-  void _showUnavailable(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark =
-        Theme.of(context).brightness == Brightness.dark ||
-            widget.isIncognito;
-
-    return ColoredBox(
-      color: isDark
-          ? const Color(0xFF191A1C)
-          : Colors.white,
-      child: const SizedBox.expand(),
-    );
-  }
-}
-
-3. Alterações em MainActivity.kt
-
-No companion object, adicionar:
-
-private const val ORBIT_BROWSER_REQUEST_CODE = 7418
-
-Adicionar a propriedade à classe:
-
-private var pendingOrbitBrowserResult: MethodChannel.Result? = null
-
-No MethodChannel looply/native_ui, substituir o antigo método do Google por:
-
-"openNativeBrowser" -> openNativeBrowser(call, result)
-
-Adicionar estes dois métodos à classe MainActivity:
-
-@Deprecated("Deprecated in Android API; retained for Flutter compatibility")
-override fun onActivityResult(
-    requestCode: Int,
-    resultCode: Int,
-    data: Intent?
-) {
-    super.onActivityResult(requestCode, resultCode, data)
-
-    if (requestCode != ORBIT_BROWSER_REQUEST_CODE) return
-
-    val callback = pendingOrbitBrowserResult
-    pendingOrbitBrowserResult = null
-
-    if (callback == null) return
-
-    if (resultCode == android.app.Activity.RESULT_OK) {
-        val payload = hashMapOf<String, Any?>(
-            "url" to data?.getStringExtra(OrbitBrowserActivity.RESULT_URL),
-            "title" to data?.getStringExtra(OrbitBrowserActivity.RESULT_TITLE),
-            "tabId" to data?.getStringExtra(OrbitBrowserActivity.RESULT_TAB_ID),
-            "action" to data?.getStringExtra(OrbitBrowserActivity.RESULT_ACTION),
-            "newUrl" to data?.getStringExtra(OrbitBrowserActivity.RESULT_NEW_URL),
-            "thumbnail" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_THUMBNAIL)
-        )
-
-        callback.success(payload)
-    } else {
-        callback.success(hashMapOf("action" to "home"))
-    }
-}
-
-private fun openNativeBrowser(
-    call: MethodCall,
-    result: MethodChannel.Result
-) {
-    if (pendingOrbitBrowserResult != null) {
-        result.error(
-            "browser_already_open",
-            "O browser nativo já está aberto.",
-            null
-        )
-        return
-    }
-
-    val rawUrl = call.argument<String>("url")
-        ?.trim()
-        .takeUnless { it.isNullOrEmpty() }
-        ?: "https://www.google.com"
-
-    val uri = runCatching {
-        Uri.parse(rawUrl)
-    }.getOrNull()
-
-    if (
-        uri == null ||
-        uri.scheme !in listOf("http", "https") ||
-        uri.host.isNullOrBlank()
-    ) {
-        result.error(
-            "invalid_native_browser_url",
-            "O endereço do browser é inválido.",
-            null
-        )
-        return
-    }
-
-    val intent = Intent(
-        this,
-        OrbitBrowserActivity::class.java
-    ).apply {
-        putExtra(OrbitBrowserActivity.EXTRA_URL, uri.toString())
-
-        putExtra(
-            OrbitBrowserActivity.EXTRA_TAB_ID,
-            call.argument<String>("tabId") ?: ""
-        )
-
-        putExtra(
-            OrbitBrowserActivity.EXTRA_INCOGNITO,
-            call.argument<Boolean>("isIncognito") ?: false
-        )
-
-        putExtra(
-            OrbitBrowserActivity.EXTRA_TAB_COUNT,
-            call.argument<Int>("tabCount") ?: 1
-        )
-
-        putExtra(
-            OrbitBrowserActivity.EXTRA_PREVIEW_ONLY,
-            call.argument<Boolean>("previewOnly") ?: false
-        )
-    }
-
-    pendingOrbitBrowserResult = result
-
-    try {
-        startActivityForResult(intent, ORBIT_BROWSER_REQUEST_CODE)
-
-        overridePendingTransition(
-            R.anim.browser_slide_up,
-            R.anim.browser_stay
-        )
-    } catch (error: Exception) {
-        pendingOrbitBrowserResult = null
-
-        result.error(
-            "native_browser_unavailable",
-            error.message,
-            null
-        )
-    }
-}
-
-4. AndroidManifest.xml
-
-Remover a declaração antiga:
-
-<activity
-    android:name=".GoogleNativeBrowserActivity"
-    ... />
-
-Adicionar esta:
-
-<activity
-    android:name=".OrbitBrowserActivity"
-    android:exported="false"
-    android:launchMode="standard"
-    android:theme="@style/OrbitBrowserTheme"
-    android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
-    android:windowSoftInputMode="adjustResize" />
-
-5. Tema Material do browser
-
-A dependência AndroidX Material já existe no android/app/build.gradle:
-
-implementation "androidx.appcompat:appcompat:1.7.0"
-implementation "com.google.android.material:material:1.12.0"
-
-Em res/values/styles.xml, adicionar dentro de <resources>:
-
-<style name="OrbitBrowserTheme" parent="Theme.Material3.DayNight.NoActionBar">
-    <item name="colorPrimary">#1A73E8</item>
-    <item name="colorOnPrimary">#FFFFFFFF</item>
-    <item name="colorSurface">#FFFFFFFF</item>
-    <item name="colorOnSurface">#FF202124</item>
-    <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:windowLightStatusBar">true</item>
-    <item name="android:statusBarColor">#FFFFFFFF</item>
-    <item name="android:navigationBarColor">#FFFFFFFF</item>
-    <item name="android:windowBackground">#FFFFFFFF</item>
-</style>
-
-Em res/values-night/styles.xml, adicionar:
-
-<style name="OrbitBrowserTheme" parent="Theme.Material3.DayNight.NoActionBar">
-    <item name="colorPrimary">#8AB4F8</item>
-    <item name="colorOnPrimary">#FF101114</item>
-    <item name="colorSurface">#FF191A1C</item>
-    <item name="colorOnSurface">#FFE6E6E8</item>
-    <item name="android:windowActionModeOverlay">true</item>
-    <item name="android:windowLightStatusBar">false</item>
-    <item name="android:statusBarColor">#FF191A1C</item>
-    <item name="android:navigationBarColor">#FF191A1C</item>
-    <item name="android:windowBackground">#FF191A1C</item>
-</style>
-
-Os menus utilizam BottomSheetDialog e os diálogos utilizam MaterialAlertDialogBuilder. Assim, não são apenas caixas Flutter simuladas: são componentes Android Material.
-
-6. Animação slide up
-
-Criar a pasta, caso ainda não exista:
-
-android/app/src/main/res/anim/
-
-browser_slide_up.xml
-
-<?xml version="1.0" encoding="utf-8"?>
-<translate xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="320"
-    android:fromYDelta="100%p"
-    android:toYDelta="0%p"
-    android:interpolator="@android:interpolator/decelerate_cubic" />
-
-browser_slide_down.xml
-
-<?xml version="1.0" encoding="utf-8"?>
-<translate xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="240"
-    android:fromYDelta="0%p"
-    android:toYDelta="100%p"
-    android:interpolator="@android:interpolator/accelerate_cubic" />
-
-browser_stay.xml
-
-<?xml version="1.0" encoding="utf-8"?>
-<alpha xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="320"
-    android:fromAlpha="1.0"
-    android:toAlpha="1.0" />
-
-A abertura utiliza:
-
-overridePendingTransition(
-    R.anim.browser_slide_up,
-    R.anim.browser_stay
-)
-
-O fecho utiliza:
-
-overridePendingTransition(
-    0,
-    R.anim.browser_slide_down
-)
-
-7. Remover o Google como browser especial
-
-Em home_screen.dart, a classe QuickSiteTile deve encaminhar todos os sites para o fluxo normal de criação de separadores.
-
-class QuickSiteTile extends StatelessWidget {
-  const QuickSiteTile({
-    super.key,
-    required this.site,
-  });
-
-  final QuickSite site;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final text = mainText(context);
-    final circleBg = isDark ? pillColor(context) : Colors.white;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        openNewTab(
-          context,
-          site.url,
-          title: site.name,
-        );
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: circleBg,
-              shape: BoxShape.circle,
-            ),
-            child: ClipOval(
-              child: Transform.scale(
-                scale: 1.232,
-                child: _siteIcon(site, text),
-              ),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            site.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              color: text,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Remover também:
-
-_nativeBrowserChannel
-
-e a função antiga:
-
-_openGoogleNativeBrowser()
-
-Não deve continuar a existir uma ramificação especial para Google ou Wikipedia.
-
-8. Remover o antigo motor InAppWebView
-
-Remover os ficheiros antigos que deixaram de ter utilização:
-
-android/app/src/main/kotlin/com/looply/browser/app/GoogleNativeBrowserActivity.kt
-
-android/app/src/main/kotlin/com/looply/browser/app/LooplyNativeAdBlocker.kt
-
-lib/browser_security.dart
-
-lib/translate_service.dart
-
-O bloqueio de publicidade agora está implementado na própria OrbitBrowserActivity, através de shouldInterceptRequest.
-
-Remover também as regras antigas do proguard-rules.pro:
-
--keep class com.pichillilorenzo.flutter_inappwebview.** { *; }
--dontwarn com.pichillilorenzo.flutter_inappwebview.**
-
-No pubspec.yaml original, remover a dependência:
-
-flutter_inappwebview: ...
-
-O arquivo pubspec.yaml não veio no ZIP que recebi, por isso não vou inventar a versão da dependência nem apresentar um ficheiro incompleto como se fosse o teu original. Depois de remover a linha, executar flutter pub get.
-
-
----
-
-O que esta versão passa a fazer
-
-O browser principal é Kotlin, incluindo o WebView, barra de navegação, carregamento, menus, diálogos, menu de contexto, modo computador, pesquisa na página, zoom, tradução, partilha, impressão e transferências.
-
-Também inclui armazenamento do estado do WebView por separador normal, para tentar preservar a navegação e o histórico quando o utilizador muda de separador e regressa.
-
-Há três limitações importantes nesta primeira migração:
-
-1. O modo incógnito desativa cookies, cache e armazenamento DOM, mas o CookieManager do Android é partilhado pelo processo. Portanto, não é isolamento privado completo.
-
-
-2. A página interna antiga de pesquisa IA passa a abrir uma pesquisa Google normal. A implementação da página interna de IA não estava incluída no projeto recebido.
-
-
-3. Permissões avançadas de páginas, como acesso à câmara, microfone e seleção de ficheiros, ainda precisam de ser integradas no WebChromeClient.
-
-
-
-Não consegui executar a compilação completa do APK: o ambiente não tem Android SDK configurado e o ZIP recebido não contém o pubspec.yaml. Portanto, não vou afirmar que esta migração já foi validada por Gradle.
-
-O resultado arquitetónico é: Flutter mantém a gestão global do app e dos separadores; o browser que apresenta e executa as páginas passa a ser uma Activity Kotlin nativa.

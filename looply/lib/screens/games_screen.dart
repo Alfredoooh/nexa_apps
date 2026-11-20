@@ -94,9 +94,9 @@ class _GamesScreenState extends State<GamesScreen> {
       body: SafeArea(
         top: false,
         child: _loading && _catalog == null
-            ? Center(child: Lottie.asset(_brokenConsoleAnimation, width: 206, height: 206, repeat: true, fit: BoxFit.contain))
+            ? const Center(child: _InteractiveConsoleLottie(width: 224, height: 315))
             : _error != null && _catalog == null
-                ? _GamesEmptyState(apiMissing: false, errorMessage: _error!)
+                ? const _GamesEmptyState()
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
@@ -112,9 +112,7 @@ class _GamesScreenState extends State<GamesScreen> {
                       if (games.isEmpty && catalogIsEmpty)
                         SliverFillRemaining(
                           hasScrollBody: false,
-                          child: _GamesEmptyState(
-                            apiMissing: !BrowseItCatalogApi.instance.isConfigured,
-                          ),
+                          child: const _GamesEmptyState(),
                         )
                       else if (games.isEmpty)
                         SliverFillRemaining(
@@ -418,32 +416,84 @@ class _GameEventCard extends StatelessWidget {
 }
 
 class _GamesEmptyState extends StatelessWidget {
-  const _GamesEmptyState({required this.apiMissing, this.errorMessage});
-  final bool apiMissing;
-  final String? errorMessage;
+  const _GamesEmptyState();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+        child: _InteractiveConsoleLottie(width: 224, height: 315),
+      );
+}
+
+/// Reproduz o write-on inicial e depois mantém somente o flutuar subtil do HTML.
+/// Tocar na consola reinicia o desenho desde o primeiro traço.
+class _InteractiveConsoleLottie extends StatefulWidget {
+  const _InteractiveConsoleLottie({required this.width, required this.height});
+  final double width;
+  final double height;
+
+  @override
+  State<_InteractiveConsoleLottie> createState() => _InteractiveConsoleLottieState();
+}
+
+class _InteractiveConsoleLottieState extends State<_InteractiveConsoleLottie>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this);
+  static const double _idleStart = 270 / 558;
+  bool _compositionLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener(_onStatus);
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      _controller.repeat(
+        min: _idleStart,
+        max: 1,
+        period: const Duration(milliseconds: 4800),
+      );
+    }
+  }
+
+  void _replay() {
+    if (!_compositionLoaded) return;
+    _controller.stop();
+    _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_onStatus);
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final text = mainText(context);
-    final muted = mutedText(context);
-    final hasError = errorMessage != null;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        SizedBox(height: 206, child: Lottie.asset(_brokenConsoleAnimation, repeat: true, fit: BoxFit.contain)),
-        const SizedBox(height: 5),
-        Text(hasError ? 'Não foi possível carregar os jogos' : 'Ainda não há jogos', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Text(
-          hasError
-              ? 'Não foi possível obter o catálogo remoto. Verifica a ligação e o ficheiro catalog.json publicado no Render.\n$errorMessage'
-              : apiMissing
-                  ? 'O catálogo remoto ainda não está configurado neste build. Quando o URL do catalog.json estiver definido, os jogos publicados aparecerão aqui.'
-                  : 'O catálogo remoto está vazio. Quando adicionares jogos ao ficheiro catalog.json do repositório, eles aparecerão aqui automaticamente.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: muted, fontSize: 13.5, height: 1.45),
+    return Semantics(
+      button: true,
+      label: 'Reproduzir animação da consola',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _replay,
+        child: SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Lottie.asset(
+            _brokenConsoleAnimation,
+            controller: _controller,
+            fit: BoxFit.contain,
+            onLoaded: (composition) {
+              if (_compositionLoaded) return;
+              _compositionLoaded = true;
+              _controller.duration = composition.duration;
+              _controller.forward(from: 0);
+            },
+          ),
         ),
-      ]),
+      ),
     );
   }
 }
