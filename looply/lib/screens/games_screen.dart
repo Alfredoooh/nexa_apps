@@ -70,8 +70,8 @@ class _GamesScreenState extends State<GamesScreen> {
     final muted = mutedText(context);
     final bg = pageBg(context);
     final games = _visibleGames;
-    final offlineGames = games.where((game) => game.downloadUrl.isNotEmpty).toList(growable: false);
-    final onlineGames = games.where((game) => game.downloadUrl.isEmpty).toList(growable: false);
+    final offlineGames = games.where((game) => game.offlineFiles.isNotEmpty).toList(growable: false);
+    final onlineGames = games.where((game) => game.offlineFiles.isEmpty).toList(growable: false);
     final catalogIsEmpty = (_catalog?.games.isEmpty ?? true);
     final categories = _catalog?.categories ?? const <CatalogCategory>[];
     final events = _catalog?.events ?? const <CatalogEvent>[];
@@ -89,21 +89,14 @@ class _GamesScreenState extends State<GamesScreen> {
         scrolledUnderElevation: 0,
         titleSpacing: 18,
         title: Text(appText('games'), style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
-        actions: [
-          IconButton(
-            tooltip: 'Atualizar catálogo',
-            onPressed: _loading ? null : () => _loadCatalog(force: true),
-            icon: AppMaterialIcon(AppIcons.arrowClockwise, color: muted),
-          ),
-          const SizedBox(width: 8),
-        ],
+        actions: const [],
       ),
       body: SafeArea(
         top: false,
         child: _loading && _catalog == null
-            ? Center(child: CircularProgressIndicator(color: accentColor(context), strokeWidth: 2.2))
+            ? Center(child: Lottie.asset(_brokenConsoleAnimation, width: 206, height: 206, repeat: true, fit: BoxFit.contain))
             : _error != null && _catalog == null
-                ? _CatalogErrorState(message: _error!, onRetry: () => _loadCatalog(force: true))
+                ? _GamesEmptyState(apiMissing: false, errorMessage: _error!)
                 : CustomScrollView(
                     physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
                     slivers: [
@@ -120,7 +113,6 @@ class _GamesScreenState extends State<GamesScreen> {
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: _GamesEmptyState(
-                            onRetry: () => _loadCatalog(force: true),
                             apiMissing: !BrowseItCatalogApi.instance.isConfigured,
                           ),
                         )
@@ -146,7 +138,6 @@ class _GamesScreenState extends State<GamesScreen> {
                               child: Row(
                                 children: [
                                   Expanded(child: Text('Jogos offline', style: TextStyle(color: text, fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -.35))),
-                                  _SectionArrowButton(onTap: () => _loadCatalog(force: true)),
                                 ],
                               ),
                             ),
@@ -306,21 +297,6 @@ class _GameFilterChip extends StatelessWidget {
   }
 }
 
-class _SectionArrowButton extends StatelessWidget {
-  const _SectionArrowButton({required this.onTap});
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Material(
-        color: pillColor(context),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(width: 48, height: 48, child: Center(child: AppMaterialIcon(AppIcons.arrowRight, size: 22, color: mainText(context)))),
-        ),
-      );
-}
-
 class _OfflineGameRow extends StatelessWidget {
   const _OfflineGameRow({required this.game, required this.onTap});
   final CatalogGame game;
@@ -442,53 +418,34 @@ class _GameEventCard extends StatelessWidget {
 }
 
 class _GamesEmptyState extends StatelessWidget {
-  const _GamesEmptyState({required this.onRetry, required this.apiMissing});
-  final VoidCallback onRetry;
+  const _GamesEmptyState({required this.apiMissing, this.errorMessage});
   final bool apiMissing;
+  final String? errorMessage;
+
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
     final muted = mutedText(context);
+    final hasError = errorMessage != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         SizedBox(height: 206, child: Lottie.asset(_brokenConsoleAnimation, repeat: true, fit: BoxFit.contain)),
         const SizedBox(height: 5),
-        Text('Ainda não há jogos', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
+        Text(hasError ? 'Não foi possível carregar os jogos' : 'Ainda não há jogos', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
         Text(
-          apiMissing
-              ? 'Liga o catálogo Render no build Android. Quando adicionares jogos ao repositório, eles aparecerão automaticamente aqui.'
-              : 'O catálogo está vazio neste momento. Os jogos publicados no repositório aparecerão aqui automaticamente.',
+          hasError
+              ? 'Não foi possível obter o catálogo remoto. Verifica a ligação e o ficheiro catalog.json publicado no Render.\n$errorMessage'
+              : apiMissing
+                  ? 'O catálogo remoto ainda não está configurado neste build. Quando o URL do catalog.json estiver definido, os jogos publicados aparecerão aqui.'
+                  : 'O catálogo remoto está vazio. Quando adicionares jogos ao ficheiro catalog.json do repositório, eles aparecerão aqui automaticamente.',
           textAlign: TextAlign.center,
           style: TextStyle(color: muted, fontSize: 13.5, height: 1.45),
         ),
-        const SizedBox(height: 15),
-        TextButton.icon(onPressed: onRetry, icon: const AppMaterialIcon(AppIcons.arrowClockwise, size: 19), label: const Text('Atualizar')),
       ]),
     );
   }
-}
-
-class _CatalogErrorState extends StatelessWidget {
-  const _CatalogErrorState({required this.message, required this.onRetry});
-  final String message;
-  final VoidCallback onRetry;
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            AppMaterialIcon(AppIcons.wifiSlash, size: 42, color: mutedText(context)),
-            const SizedBox(height: 12),
-            Text('Não foi possível ligar ao catálogo', textAlign: TextAlign.center, style: TextStyle(color: mainText(context), fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: mutedText(context), fontSize: 12.5, height: 1.4)),
-            const SizedBox(height: 14),
-            FilledButton(onPressed: onRetry, child: const Text('Tentar novamente')),
-          ]),
-        ),
-      );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

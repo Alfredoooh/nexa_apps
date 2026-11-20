@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: browseit-static-catalog
+    runtime: static
+    buildCommand: echo "Publishing BrowseIt static catalogue"
+    staticPublishPath: .
+    autoDeploy: true

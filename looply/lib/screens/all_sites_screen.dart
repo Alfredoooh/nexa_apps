@@ -103,13 +103,15 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
       useSafeArea: true,
       showDragHandle: false,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: Colors.black.withOpacity(.18),
       builder: (sheetContext) => LooplyModalSystemBar(
-        child: AnimatedPadding(
+        child: LooplyFloatingModalFrame(
+          child: AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
           padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
           child: const _AddCustomSiteSheet(),
+          ),
         ),
       ),
     );

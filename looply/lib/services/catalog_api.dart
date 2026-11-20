@@ -3,13 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:archive/archive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 /// Único endereço de catálogo utilizado pelo cliente Flutter.
 /// Configure-o no build com:
-/// --dart-define=BROWSEIT_CATALOG_URL=https://seu-servico.onrender.com/api/v1/catalog
+/// --dart-define=BROWSEIT_CATALOG_URL=https://seu-servico.onrender.com/catalog.json
 class BrowseItCatalogApi {
   BrowseItCatalogApi._();
   static final BrowseItCatalogApi instance = BrowseItCatalogApi._();
@@ -19,7 +18,6 @@ class BrowseItCatalogApi {
     defaultValue: '',
   );
   static const int _maxDownloadBytes = 512 * 1024 * 1024;
-  static const int _maxExpandedBytes = 768 * 1024 * 1024;
 
   CatalogSnapshot? _memoryCache;
   DateTime? _cacheTime;
@@ -118,83 +116,66 @@ class BrowseItCatalogApi {
     CatalogGame game, {
     void Function(double)? onProgress,
   }) async {
-    final downloadUri = resolveRemote(game.downloadUrl);
-    if (downloadUri == null) {
-      throw const CatalogApiException('O servidor não forneceu um link HTTPS válido para descarregar este jogo.');
+    if (game.offlineFiles.isEmpty) {
+      throw const CatalogApiException('Este jogo ainda não publicou offline_files no catalog.json.');
     }
+    final base = game.basePath.trim();
+    if (!base.startsWith('games/') || base.startsWith('/') || base.contains('..')) {
+      throw const CatalogApiException('O jogo não tem um base_path estático válido.');
+    }
+
+    final documents = await getApplicationDocumentsDirectory();
+    final gamesRoot = Directory('${documents.path}${Platform.pathSeparator}browseit_games');
+    await gamesRoot.create(recursive: true);
+    final safeId = _safeId(game.id);
+    final root = Directory('${gamesRoot.path}${Platform.pathSeparator}$safeId');
+    final staging = Directory('${gamesRoot.path}${Platform.pathSeparator}.$safeId.installing');
+    if (await staging.exists()) await staging.delete(recursive: true);
+    await staging.create(recursive: true);
 
     final client = http.Client();
     try {
-      final request = http.Request('GET', downloadUri)
-        ..headers['Accept'] = 'application/zip';
-      final response = await client.send(request).timeout(const Duration(seconds: 45));
-      if (response.statusCode != 200) {
-        throw CatalogApiException('Não foi possível descarregar o jogo (HTTP ${response.statusCode}).');
-      }
-      final expected = response.contentLength ?? 0;
-      if (expected > _maxDownloadBytes) {
-        throw const CatalogApiException('O pacote excede o limite de 512 MB.');
-      }
-      final bytes = BytesBuilder(copy: false);
-      var received = 0;
-      await for (final chunk in response.stream) {
-        received += chunk.length;
-        if (received > _maxDownloadBytes) {
-          throw const CatalogApiException('O pacote excede o limite de 512 MB.');
+      var completed = 0;
+      var totalBytes = 0;
+      for (final listedPath in game.offlineFiles) {
+        final relativePath = _safeGamePath(listedPath);
+        if (relativePath == null || relativePath.isEmpty) {
+          throw CatalogApiException('Caminho offline inválido: $listedPath');
         }
-        bytes.add(chunk);
-        if (expected > 0) onProgress?.call((received / expected).clamp(0.0, 1.0).toDouble());
-      }
-      onProgress?.call(1);
-      final archiveBytes = bytes.takeBytes();
-      final archive = ZipDecoder().decodeBytes(archiveBytes, verify: true);
-
-      final documents = await getApplicationDocumentsDirectory();
-      final gamesRoot = Directory('${documents.path}${Platform.pathSeparator}browseit_games');
-      await gamesRoot.create(recursive: true);
-      final safeId = _safeId(game.id);
-      final root = Directory('${gamesRoot.path}${Platform.pathSeparator}$safeId');
-      final staging = Directory('${gamesRoot.path}${Platform.pathSeparator}.$safeId.installing');
-      if (await staging.exists()) await staging.delete(recursive: true);
-      await staging.create(recursive: true);
-
-      try {
-        var expandedBytes = 0;
-        for (final item in archive.files) {
-          if (!item.isFile) continue;
-          final relativePath = _safeArchivePath(item.name);
-          if (relativePath == null || relativePath.isEmpty) continue;
-          final content = item.content;
-          final data = content is List<int> ? content : List<int>.from(content as Iterable);
-          expandedBytes += data.length;
-          if (expandedBytes > _maxExpandedBytes) {
-            throw const CatalogApiException('O conteúdo extraído excede o limite de segurança de 768 MB.');
-          }
-          final target = File('${staging.path}${Platform.pathSeparator}${relativePath.replaceAll('/', Platform.pathSeparator)}');
-          await target.parent.create(recursive: true);
-          await target.writeAsBytes(data, flush: false);
+        final remote = resolveRemote('$base$relativePath');
+        if (remote == null || !remote.path.contains('/games/')) {
+          throw CatalogApiException('Ficheiro fora da pasta pública do jogo: $listedPath');
         }
-
-        final entry = _safeArchivePath(game.offlineEntry) ?? 'index.html';
-        final stagedEntry = File('${staging.path}${Platform.pathSeparator}${entry.replaceAll('/', Platform.pathSeparator)}');
-        if (!await stagedEntry.exists()) {
-          throw CatalogApiException('O pacote do jogo não contém ${game.offlineEntry}.');
+        final response = await client.get(remote, headers: const <String, String>{'Accept': '*/*'})
+            .timeout(const Duration(seconds: 40));
+        if (response.statusCode != 200) {
+          throw CatalogApiException('Não foi possível descarregar $listedPath (HTTP ${response.statusCode}).');
         }
-        if (await root.exists()) await root.delete(recursive: true);
-        await staging.rename(root.path);
-      } catch (_) {
-        if (await staging.exists()) await staging.delete(recursive: true);
-        rethrow;
+        totalBytes += response.bodyBytes.length;
+        if (totalBytes > _maxDownloadBytes) {
+          throw const CatalogApiException('Os ficheiros do jogo excedem o limite de 512 MB.');
+        }
+        final target = File('${staging.path}${Platform.pathSeparator}${relativePath.replaceAll('/', Platform.pathSeparator)}');
+        await target.parent.create(recursive: true);
+        await target.writeAsBytes(response.bodyBytes, flush: false);
+        completed++;
+        onProgress?.call(completed / game.offlineFiles.length);
       }
 
-      final entry = _safeArchivePath(game.offlineEntry) ?? 'index.html';
+      final entry = _safeGamePath(game.offlineEntry) ?? 'index.html';
+      final stagedEntry = File('${staging.path}${Platform.pathSeparator}${entry.replaceAll('/', Platform.pathSeparator)}');
+      if (!await stagedEntry.exists()) {
+        throw CatalogApiException('O catálogo não incluiu ${game.offlineEntry} em offline_files.');
+      }
+      if (await root.exists()) await root.delete(recursive: true);
+      await staging.rename(root.path);
       final entryFile = File('${root.path}${Platform.pathSeparator}${entry.replaceAll('/', Platform.pathSeparator)}');
       final baseUri = Uri.directory('${root.path}${Platform.pathSeparator}').toString();
-      return InstalledGame(
-        directoryPath: root.path,
-        entryPath: entryFile.path,
-        baseUrl: baseUri,
-      );
+      onProgress?.call(1);
+      return InstalledGame(directoryPath: root.path, entryPath: entryFile.path, baseUrl: baseUri);
+    } catch (_) {
+      if (await staging.exists()) await staging.delete(recursive: true);
+      rethrow;
     } finally {
       client.close();
     }
@@ -205,7 +186,7 @@ class BrowseItCatalogApi {
     final root = Directory(
       '${documents.path}${Platform.pathSeparator}browseit_games${Platform.pathSeparator}${_safeId(game.id)}',
     );
-    final entry = _safeArchivePath(game.offlineEntry) ?? 'index.html';
+    final entry = _safeGamePath(game.offlineEntry) ?? 'index.html';
     final entryFile = File('${root.path}${Platform.pathSeparator}${entry.replaceAll('/', Platform.pathSeparator)}');
     if (!await entryFile.exists()) return null;
     return InstalledGame(
@@ -220,7 +201,7 @@ class BrowseItCatalogApi {
     return safe.isEmpty ? 'game' : safe;
   }
 
-  String? _safeArchivePath(String value) {
+  String? _safeGamePath(String value) {
     final normalized = value.replaceAll('\\', '/').trim();
     if (normalized.isEmpty || normalized.startsWith('/') ||
         RegExp(r'^[a-zA-Z]:').hasMatch(normalized)) return null;
@@ -297,6 +278,8 @@ class CatalogGame {
     required this.premium,
     required this.onlineUrl,
     required this.downloadUrl,
+    required this.basePath,
+    required this.offlineFiles,
     required this.offlineEntry,
     required this.orientation,
     required this.features,
@@ -319,7 +302,9 @@ class CatalogGame {
   final bool featured;
   final bool premium;
   final String onlineUrl;
-  final String downloadUrl;
+  final String downloadUrl; // legado, não usado pelo catálogo estático
+  final String basePath;
+  final List<String> offlineFiles;
   final String offlineEntry;
   final String orientation;
   final List<String> features;
@@ -346,6 +331,9 @@ class CatalogGame {
       premium: json['premium'] == true,
       onlineUrl: _validWebUrl(json['online_url']?.toString() ?? ''),
       downloadUrl: json['download_url']?.toString() ?? '',
+      basePath: json['base_path']?.toString() ?? '',
+      offlineFiles: (json['offline_files'] as List? ?? json['files'] as List? ?? const <dynamic>[])
+          .whereType<String>().toList(growable: false),
       offlineEntry: json['offline_entry']?.toString() ?? 'index.html',
       orientation: json['orientation']?.toString() ?? 'auto',
       features: (json['features'] as List? ?? const <dynamic>[])

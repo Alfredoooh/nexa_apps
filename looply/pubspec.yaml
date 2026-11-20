@@ -40,6 +40,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/icons/svg/regular/new-message.svg
     - assets/animations/browseit_logo.json
     - assets/animations/browseit_ai_idle.json
     - assets/animations/game_console_broken.json

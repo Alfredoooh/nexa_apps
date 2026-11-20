@@ -417,7 +417,8 @@ void showThemeSheet(BuildContext context) {
       reverseCurve: Curves.easeInCubic,
     ),
     builder: (sheetContext) => LooplyModalSystemBar(
-      child: ValueListenableBuilder<ThemeMode>(
+      child: LooplyFloatingModalFrame(
+        child: ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
       builder: (context, mode, _) => ValueListenableBuilder<bool>(
         valueListenable: themeController.pureDark,
@@ -449,7 +450,7 @@ void showThemeSheet(BuildContext context) {
             color: surface,
             surfaceTintColor: Colors.transparent,
             clipBehavior: Clip.antiAlias,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.circular(28),
             child: SafeArea(
               top: false,
               child: Padding(
@@ -472,6 +473,7 @@ void showThemeSheet(BuildContext context) {
         },
       ),
       ),
+    ),
     ),
   );
 }

@@ -7,26 +7,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 // Paleta escura neutra (sem o azulado anterior) — cinzas verdadeiros,
 // não totalmente pretos, mantendo contraste confortável.
 const Color looplyPrimary = Color(0xFF1A73E8);
-const Color looplyBgDark = Color(0xFF0A0A0A);
+const Color looplyBgDark = Color(0xFF000000);
 const Color looplyBgLight = Color(0xFFFFFFFF);
-const Color looplyPanelDark = Color(0xFF1A1A1A);
-const Color looplyPanel2Dark = Color(0xFF202020);
-const Color looplySoftDark = Color(0xFF141414);
+const Color looplyPanelDark = Color(0xFF121212);
+const Color looplyPanel2Dark = Color(0xFF262626);
+const Color looplySoftDark = Color(0xFF0B0B0B);
 const Color looplyPanelLight = Color(0xFFFFFFFF);
 const Color looplyPanel2Light = Color(0xFFF0F1F3);
 const Color looplySoftLight = Color(0xFFF8F9FA);
-const Color looplyTextDark = Color(0xFFE6E6E8);
-const Color looplyMutedDark = Color(0xFFB2B4B8);
+const Color looplyTextDark = Color(0xFFF5F5F5);
+const Color looplyMutedDark = Color(0xFFA8A8A8);
 const Color looplyTextLight = Color(0xFF202124);
 const Color looplyMutedLight = Color(0xFF5F6368);
-const Color looplyLineDark = Color(0xFF34363A);
+const Color looplyLineDark = Color(0xFF363636);
 const Color looplyLineLight = Color(0xFFE8EAED);
-const Color looplyBlueDark = Color(0xFF8AB4F8);
+const Color looplyBlueDark = Color(0xFF0095F6);
 const Color looplyBgAmoled = Color(0xFF000000);
-const Color looplyPanelAmoled = Color(0xFF101010);
-const Color looplyPanel2Amoled = Color(0xFF191919);
-const Color looplySoftAmoled = Color(0xFF050505);
-const Color looplyLineAmoled = Color(0xFF292929);
+const Color looplyPanelAmoled = Color(0xFF121212);
+const Color looplyPanel2Amoled = Color(0xFF262626);
+const Color looplySoftAmoled = Color(0xFF0B0B0B);
+const Color looplyLineAmoled = Color(0xFF363636);
 
 // Cor do input bar (usada também nos cards de Settings e no bottom bar,
 // só no tema escuro) e a cor "cinza-branco" usada nesses mesmos lugares

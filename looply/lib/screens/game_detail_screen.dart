@@ -45,7 +45,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   }
 
   Future<void> _download() async {
-    if (_downloading || game.downloadUrl.isEmpty) return;
+    if (_downloading || game.offlineFiles.isEmpty) return;
     setState(() { _downloading = true; _downloadProgress = 0; _error = null; });
     try {
       final installed = await BrowseItCatalogApi.instance.downloadGame(
@@ -180,7 +180,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                if (game.downloadUrl.isNotEmpty || _installed != null)
+                if (game.offlineFiles.isNotEmpty || _installed != null)
                   SizedBox(
                     height: 56,
                     child: FilledButton(
@@ -217,7 +217,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                   const SizedBox(height: 10),
                   ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: _downloadProgress == 0 ? null : _downloadProgress, minHeight: 4, backgroundColor: pillColor(context), color: accentColor(context))),
                 ],
-                if ((_installed != null || game.downloadUrl.isNotEmpty) && game.onlineUrl.isNotEmpty) ...[
+                if ((_installed != null || game.offlineFiles.isNotEmpty) && game.onlineUrl.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   SizedBox(height: 52, child: OutlinedButton.icon(
                     onPressed: _opening ? null : _playOnline,

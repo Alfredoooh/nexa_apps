@@ -16,7 +16,8 @@ void showSearchEnginePicker(BuildContext context) {
     useSafeArea: true,
     isScrollControlled: true,
     builder: (sheetContext) => LooplyModalSystemBar(
-      child: ValueListenableBuilder<ThemeMode>(
+      child: LooplyFloatingModalFrame(
+        child: ValueListenableBuilder<ThemeMode>(
       valueListenable: themeController,
       builder: (context, mode, _) {
         final surface = panelForMode(context, mode);
@@ -36,7 +37,7 @@ void showSearchEnginePicker(BuildContext context) {
           color: surface,
           surfaceTintColor: Colors.transparent,
           clipBehavior: Clip.antiAlias,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          borderRadius: BorderRadius.circular(28),
           child: SafeArea(
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -148,6 +149,7 @@ void showSearchEnginePicker(BuildContext context) {
         );
       },
       ),
+    ),
     ),
   );
 }

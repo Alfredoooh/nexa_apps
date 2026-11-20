@@ -1,0 +1,23 @@
+{
+  "id": "slug-do-jogo",
+  "name": "Nome do jogo",
+  "developer": "Criador",
+  "description": "Descrição curta do jogo.",
+  "long_description": "Descrição completa apresentada na página de detalhes.",
+  "category": "arcade",
+  "icon": "icon.png",
+  "cover": "cover.jpg",
+  "screenshots": ["screenshots/01.jpg"],
+  "rating": 4.5,
+  "ratings_count": 0,
+  "age_rating": "Livre",
+  "size_bytes": 0,
+  "premium": false,
+  "featured": false,
+  "online_url": "https://example.com/",
+  "base_path": "games/slug-do-jogo/",
+  "offline_entry": "index.html",
+  "offline_files": ["index.html", "assets/css/game.css", "assets/js/game.js"],
+  "orientation": "auto",
+  "features": []
+}

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lottie/lottie.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -168,6 +169,75 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
         await _pickImage(ImageSource.camera);
         break;
     }
+  }
+
+  Future<void> _showAttachmentModal() async {
+    if (!mounted) return;
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Fechar anexos',
+      barrierColor: Colors.black.withOpacity(.18),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        final safe = MediaQuery.viewPaddingOf(dialogContext);
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                safe.left > 16 ? safe.left : 16,
+                16,
+                safe.right > 16 ? safe.right : 16,
+                safe.bottom + 16,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: Material(
+                  color: popupSurfaceColor(dialogContext),
+                  surfaceTintColor: Colors.transparent,
+                  borderRadius: BorderRadius.circular(28),
+                  clipBehavior: Clip.antiAlias,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        leading: AppMaterialIcon(AppIcons.image, size: 23, color: mainText(dialogContext)),
+                        title: Text('Imagem', style: TextStyle(color: mainText(dialogContext), fontSize: 15, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(dialogContext).pop();
+                          unawaited(_handleAttachmentAction(_AiAttachmentAction.image));
+                        },
+                      ),
+                      ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        leading: AppMaterialIcon(Symbols.photo_camera_rounded, size: 23, color: mainText(dialogContext)),
+                        title: Text('Câmara', style: TextStyle(color: mainText(dialogContext), fontSize: 15, fontWeight: FontWeight.w600)),
+                        onTap: () {
+                          Navigator.of(dialogContext).pop();
+                          unawaited(_handleAttachmentAction(_AiAttachmentAction.camera));
+                        },
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0, .075), end: Offset.zero).animate(curved),
+            child: ScaleTransition(scale: Tween<double>(begin: .985, end: 1).animate(curved), child: child),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -384,6 +454,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
 
   Widget _buildTopBar(BuildContext context) {
     final topInset = MediaQuery.of(context).padding.top;
+    final iconColor = mainText(context);
     return Container(
       padding: EdgeInsets.only(top: topInset),
       decoration: BoxDecoration(color: pageBg(context)),
@@ -391,11 +462,38 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
         height: 64,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: LooplyDrawerMenuButton(
-              onPressed: () => drawer_menu.showLooplyDrawer(context),
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              LooplyDrawerMenuButton(
+                onPressed: () => drawer_menu.showLooplyDrawer(context),
+              ),
+              Semantics(
+                button: true,
+                label: 'Nova conversa',
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _startNewConversation,
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Center(
+                        child: SvgPicture.asset(
+                          'assets/icons/svg/regular/new-message.svg',
+                          width: 23,
+                          height: 23,
+                          colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -442,56 +540,35 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   }
 
   Widget _buildComposer(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final canSubmit = _controller.text.trim().isNotEmpty || _pendingImage != null;
+    final enabled = canSubmit && !_isLoading;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
+      // Mantém a barra ligeiramente acima da navegação Android, com margem
+      // consistente em dispositivos com e sem gesture navigation.
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + (bottomInset > 0 ? 2 : 0)),
       child: Container(
-        constraints: const BoxConstraints(minHeight: 62),
-        padding: const EdgeInsets.fromLTRB(7, 6, 6, 6),
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
         decoration: BoxDecoration(
-          color: isDark ? pillColor(context) : const Color(0xFFE9E9E9),
+          color: inputBarTone(context),
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: lineColor(context).withOpacity(.32), width: .7),
         ),
         child: Row(
           children: [
-            PopupMenuButton<_AiAttachmentAction>(
-              tooltip: 'Anexar imagem',
-              padding: EdgeInsets.zero,
-              offset: const Offset(0, -8),
-              color: popupSurfaceColor(context),
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              onSelected: (action) => unawaited(_handleAttachmentAction(action)),
-              itemBuilder: (context) => <PopupMenuEntry<_AiAttachmentAction>>[
-                PopupMenuItem<_AiAttachmentAction>(
-                  value: _AiAttachmentAction.image,
+            Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _showAttachmentModal,
+                child: SizedBox(
+                  width: 44,
                   height: 48,
-                  child: Row(
-                    children: [
-                      AppMaterialIcon(AppIcons.image, size: 21, color: mainText(context)),
-                      const SizedBox(width: 12),
-                      Text('Imagem', style: TextStyle(color: mainText(context), fontSize: 14.5)),
-                    ],
-                  ),
+                  child: Center(child: AppMaterialIcon(AppIcons.plus, size: 28, color: mainText(context))),
                 ),
-                PopupMenuItem<_AiAttachmentAction>(
-                  value: _AiAttachmentAction.camera,
-                  height: 48,
-                  child: Row(
-                    children: [
-                      AppMaterialIcon(Symbols.photo_camera_rounded, size: 21, color: mainText(context)),
-                      const SizedBox(width: 12),
-                      Text('Câmara', style: TextStyle(color: mainText(context), fontSize: 14.5)),
-                    ],
-                  ),
-                ),
-              ],
-              child: SizedBox(
-                width: 43,
-                height: 48,
-                child: Center(child: AppMaterialIcon(AppIcons.plus, size: 28, color: mainText(context))),
               ),
             ),
             _buildAttachmentPreview(context),
@@ -513,26 +590,26 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   isDense: true,
-                  contentPadding: EdgeInsets.zero,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 2),
                 ),
               ),
             ),
             const SizedBox(width: 5),
             Material(
-              color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFD0D0D0),
+              color: enabled ? accentColor(context) : pillColor(context),
               shape: const CircleBorder(),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 customBorder: const CircleBorder(),
-                onTap: canSubmit && !_isLoading ? () => _submit(_controller.text) : null,
+                onTap: enabled ? () => _submit(_controller.text) : null,
                 child: SizedBox(
-                  width: 43,
-                  height: 43,
+                  width: 44,
+                  height: 44,
                   child: Center(
                     child: AppMaterialIcon(
                       AppIcons.arrowUp,
                       size: 25,
-                      color: canSubmit ? const Color(0xFF454545) : const Color(0xFF777777),
+                      color: enabled ? Colors.white : mutedText(context),
                     ),
                   ),
                 ),
