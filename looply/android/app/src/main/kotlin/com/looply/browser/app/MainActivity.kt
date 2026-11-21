@@ -367,48 +367,19 @@ class MainActivity : FlutterFragmentActivity() {
         val background = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.rgb(15, 15, 15)
+            else -> Color.rgb(15, 15, 15) // Flutter looplyBgDark (#0F0F0F)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
         window.statusBarColor = background
         window.navigationBarColor = background
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.navigationBarDividerColor = background
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= 29) {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
+            window.navigationBarDividerColor = background
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            @Suppress("DEPRECATION")
-            var flags = window.decorView.systemUiVisibility
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                flags = if (dark) flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-                    else flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                flags = if (dark) flags and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
-                    else flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            }
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = flags
-        } else {
-            window.insetsController?.let { controller ->
-                if (dark) {
-                    controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
-                    controller.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-                } else {
-                    controller.setSystemBarsAppearance(
-                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                    )
-                    controller.setSystemBarsAppearance(
-                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                        android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                    )
-                }
-            }
-        }
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = !dark
+        if (Build.VERSION.SDK_INT >= 26) controller.isAppearanceLightNavigationBars = !dark
     }
 
     private fun startGoogleSignIn(call: MethodCall, result: MethodChannel.Result) {
@@ -645,6 +616,8 @@ class MainActivity : FlutterFragmentActivity() {
                 "tabId" to data?.getStringExtra(OrbitBrowserActivity.RESULT_TAB_ID),
                 "action" to data?.getStringExtra(OrbitBrowserActivity.RESULT_ACTION),
                 "newUrl" to data?.getStringExtra(OrbitBrowserActivity.RESULT_NEW_URL),
+                "canGoBack" to (data?.getBooleanExtra(OrbitBrowserActivity.RESULT_CAN_GO_BACK, false) ?: false),
+                "canGoForward" to (data?.getBooleanExtra(OrbitBrowserActivity.RESULT_CAN_GO_FORWARD, false) ?: false),
                 "thumbnail" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_THUMBNAIL),
                 "transitionScreenshot" to data?.getByteArrayExtra(OrbitBrowserActivity.RESULT_TRANSITION_SCREENSHOT),
             ))
@@ -679,10 +652,7 @@ class MainActivity : FlutterFragmentActivity() {
             putExtra(OrbitBrowserActivity.EXTRA_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
             putExtra(OrbitBrowserActivity.EXTRA_TAB_COUNT, call.argument<Int>("tabCount") ?: 1)
             putExtra(OrbitBrowserActivity.EXTRA_PREVIEW_ONLY, call.argument<Boolean>("previewOnly") ?: false)
-            putExtra(
-                OrbitBrowserActivity.EXTRA_ASSISTIVE_TOUCH_ENABLED,
-                call.argument<Boolean>("assistiveTouchEnabled") ?: true,
-            )
+            putExtra(OrbitBrowserActivity.EXTRA_INITIAL_ACTION, call.argument<String>("initialAction") ?: "")
             val labels = call.argument<Map<String, String>>("menuLabels") ?: emptyMap()
             putExtra(OrbitBrowserActivity.EXTRA_MENU_LABELS_JSON, JSONObject(labels).toString())
             putExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", call.argument<Boolean>("skipNativeEnterAnimation") ?: false)
@@ -829,8 +799,8 @@ class MainActivity : FlutterFragmentActivity() {
         val dark = isAppDarkTheme()
         val backgroundColor = when {
             !dark -> Color.WHITE
-            isAppPureBlackTheme() -> Color.rgb(18, 18, 18)
-            else -> Color.rgb(18, 18, 18)
+            isAppPureBlackTheme() -> Color.rgb(18, 18, 18) // looplyPanelAmoled
+            else -> Color.rgb(28, 29, 30) // looplyPanelDark
         }
         val textColor = if (dark) Color.rgb(245, 245, 245) else Color.rgb(32, 33, 36)
         val mutedColor = if (dark) Color.rgb(168, 168, 168) else Color.rgb(95, 99, 104)
@@ -890,13 +860,10 @@ class MainActivity : FlutterFragmentActivity() {
                 isAllCaps = false
                 textSize = 14f
                 minWidth = 0
-                minimumWidth = 0
+                minimumWidth = dpToPx(52)
                 minHeight = 0
                 minimumHeight = dpToPx(44)
-                maxLines = 2
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER
-                setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
+                setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
                 when {
                     isPrimary -> {
                         background = GradientDrawable().apply {
@@ -920,12 +887,9 @@ class MainActivity : FlutterFragmentActivity() {
                     dialog.dismiss()
                 }
             }
-            val actionWidth = if (actions.size == 1) LinearLayout.LayoutParams.WRAP_CONTENT else 0
-            val actionWeight = if (actions.size == 1) 0f else 1f
             actionsContainer.addView(button, LinearLayout.LayoutParams(
-                actionWidth,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                actionWeight,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 marginStart = dpToPx(6)
             })
@@ -937,38 +901,35 @@ class MainActivity : FlutterFragmentActivity() {
         }
         dialog.setOnCancelListener { finish(null) }
         try {
-            dialog.setCanceledOnTouchOutside(barrierDismissible)
             dialog.show()
             dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             dialog.window?.let { dialogWindow ->
-                val dimmedBar = if (dark) Color.BLACK else Color.WHITE
-                dialogWindow.statusBarColor = dimmedBar
-                dialogWindow.navigationBarColor = dimmedBar
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) dialogWindow.navigationBarDividerColor = dimmedBar
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val pageBackground = when {
+                    !dark -> Color.WHITE
+                    isAppPureBlackTheme() -> Color.BLACK
+                    else -> Color.rgb(15, 15, 15)
+                }
+                dialogWindow.statusBarColor = pageBackground
+                dialogWindow.navigationBarColor = pageBackground
+                if (Build.VERSION.SDK_INT >= 29) {
                     dialogWindow.isNavigationBarContrastEnforced = false
                     dialogWindow.isStatusBarContrastEnforced = false
+                    dialogWindow.navigationBarDividerColor = pageBackground
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    dialogWindow.insetsController?.setSystemBarsAppearance(
-                        if (dark) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                        android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    dialogWindow.decorView.systemUiVisibility = if (dark) 0 else
-                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                androidx.core.view.WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
                 }
+                dialogWindow.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             }
             dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             dialog.window?.let { dialogWindow ->
                 val attributes = dialogWindow.attributes
                 attributes.dimAmount = .34f
-                attributes.gravity = Gravity.CENTER
                 dialogWindow.attributes = attributes
             }
             val maxWidth = dpToPx(560)
-            val screenWidth = (resources.displayMetrics.widthPixels - dpToPx(36)).coerceAtLeast(dpToPx(240))
+            val screenWidth = resources.displayMetrics.widthPixels - dpToPx(40)
             dialog.window?.setLayout(minOf(maxWidth, screenWidth), ViewGroup.LayoutParams.WRAP_CONTENT)
         } catch (error: RuntimeException) {
             finish(null)

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#FFFFFFFF" /></item>
+    <item android:width="184dp" android:height="184dp" android:gravity="center" android:drawable="@drawable/looply_ring_light" />
+</layer-list>

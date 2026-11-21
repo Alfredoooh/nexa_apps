@@ -64,7 +64,7 @@
             android:exported="false"
             android:launchMode="standard"
             android:theme="@style/OrbitBrowserTheme"
-            android:configChanges="orientation|keyboardHidden|screenSize|uiMode"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:windowSoftInputMode="adjustResize" />
 
         <activity

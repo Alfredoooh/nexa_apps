@@ -3,22 +3,22 @@
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:statusBarColor">@color/looply_splash_background</item>
-        <item name="android:navigationBarColor">@color/looply_splash_background</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
     </style>
     <!-- Launch themes selected from the app's saved theme preference by MainActivity. -->
     <style name="LaunchTheme.Light" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
-        <item name="android:statusBarColor">@color/looply_splash_light</item>
-        <item name="android:navigationBarColor">@color/looply_splash_light</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowNoTitle">true</item>
     </style>
     <style name="LaunchTheme.Dark" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
-        <item name="android:statusBarColor">@color/looply_splash_dark</item>
-        <item name="android:navigationBarColor">@color/looply_splash_dark</item>
+        <item name="android:statusBarColor">#FF0F0F0F</item>
+        <item name="android:navigationBarColor">#FF0F0F0F</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowNoTitle">true</item>
@@ -40,7 +40,14 @@
         <item name="android:popupAnimationStyle">@style/LooplyNativePopupWindowAnimation</item>
         <item name="overlapAnchor">false</item>
     </style>
-<style name="LooplyDialog.Light" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+
+    <style name="LooplyPopupMenuItemText.Light" parent="@android:style/TextAppearance.Widget.PopupMenu.Large">
+        <item name="android:textColor">#FF202124</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="LooplyDialog.Light" parent="@android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorAccent">#1A73E8</item>
     </style>
@@ -84,7 +91,5 @@
         <item name="android:statusBarColor">#FFFFFFFF</item>
         <item name="android:navigationBarColor">#FFFFFFFF</item>
         <item name="android:windowBackground">#FFFFFFFF</item>
-        <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:navigationBarDividerColor">#FFFFFFFF</item>
     </style>
 </resources>

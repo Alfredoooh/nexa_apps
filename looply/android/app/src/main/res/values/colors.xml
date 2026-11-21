@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-<color name="looply_splash_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="looply_splash_background">#FFFFFF</color>
     <color name="looply_splash_light">#FFFFFFFF</color>
     <color name="looply_splash_dark">#FF0F0F0F</color>
 </resources>
