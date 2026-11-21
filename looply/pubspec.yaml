@@ -45,12 +45,17 @@ flutter:
     - assets/animations/cobalt_sprite_ai.json
     - assets/animations/game_console_broken.json
     - assets/animations/activity_chart_empty.json
+    - assets/animations/game-illustration-light-lottie.json
+    - assets/animations/game-illustration-dark-lottie.json
+    - assets/animations/analytics-illustration-light-lottie.json
+    - assets/animations/analytics-illustration-dark-lottie.json
     - assets/ai_search/ai_mark.png
     - assets/ai_search/ai.png
     - assets/search_engines/
     - assets/games/
     - assets/games/covers/
     - assets/icons/svg/regular/menu-options.svg
+    - assets/icons/svg/regular/new-message.svg
     - assets/icons/svg/regular/tabs-counter.svg
     - assets/images/looply_icon.png
     - images/avatar.png

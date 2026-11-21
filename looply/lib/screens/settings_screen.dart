@@ -39,6 +39,10 @@ class SettingsScreen extends StatelessWidget {
         statusBarColor: bg,
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarColor: bg,
+        systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+        systemStatusBarContrastEnforced: false,
       ),
       child: Scaffold(
         backgroundColor: bg,

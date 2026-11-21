@@ -1,9 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item><color android:color="@color/looply_splash_dark" /></item>
-    <item
-        android:width="184dp"
-        android:height="184dp"
-        android:gravity="center"
-        android:drawable="@drawable/splash_circle_static" />
+    <item><color android:color="#FF000000" /></item>
+    <item android:width="184dp" android:height="184dp" android:gravity="center" android:drawable="@drawable/looply_splash_ring_dark" />
 </layer-list>

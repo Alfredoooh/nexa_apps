@@ -8,7 +8,6 @@ import '../theme.dart';
 import '../widgets/material_symbols.dart';
 import 'game_detail_screen.dart';
 
-const String _brokenConsoleAnimation = 'assets/animations/game_console_broken.json';
 
 class GamesScreen extends StatefulWidget {
   const GamesScreen({super.key});
@@ -94,7 +93,7 @@ class _GamesScreenState extends State<GamesScreen> {
       body: SafeArea(
         top: false,
         child: _loading && _catalog == null
-            ? const Center(child: _InteractiveConsoleLottie(width: 224, height: 315))
+            ? const Center(child: _ThemeAwareGameIllustration(width: 224, height: 315))
             : _error != null && _catalog == null
                 ? const _GamesEmptyState()
                 : CustomScrollView(
@@ -420,79 +419,32 @@ class _GamesEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Center(
-        child: _InteractiveConsoleLottie(width: 224, height: 315),
+        child: _ThemeAwareGameIllustration(width: 224, height: 315),
       );
 }
 
-/// Reproduz o write-on inicial e depois mantém somente o flutuar subtil do HTML.
-/// Tocar na consola reinicia o desenho desde o primeiro traço.
-class _InteractiveConsoleLottie extends StatefulWidget {
-  const _InteractiveConsoleLottie({required this.width, required this.height});
+/// Ilustração do separador Jogos, com o JSON correspondente ao tema ativo.
+/// A animação reproduz apenas a entrada Lottie; não cria ciclos nem controlos
+/// de replay que possam interferir com a navegação entre separadores.
+class _ThemeAwareGameIllustration extends StatelessWidget {
+  const _ThemeAwareGameIllustration({required this.width, required this.height});
   final double width;
   final double height;
 
   @override
-  State<_InteractiveConsoleLottie> createState() => _InteractiveConsoleLottieState();
-}
-
-class _InteractiveConsoleLottieState extends State<_InteractiveConsoleLottie>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(vsync: this);
-  static const double _idleStart = 270 / 558;
-  bool _compositionLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addStatusListener(_onStatus);
-  }
-
-  void _onStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && mounted) {
-      _controller.repeat(
-        min: _idleStart,
-        max: 1,
-        period: const Duration(milliseconds: 4800),
-      );
-    }
-  }
-
-  void _replay() {
-    if (!_compositionLoaded) return;
-    _controller.stop();
-    _controller.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _controller.removeStatusListener(_onStatus);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Reproduzir animação da consola',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _replay,
-        child: SizedBox(
-          width: widget.width,
-          height: widget.height,
-          child: Lottie.asset(
-            _brokenConsoleAnimation,
-            controller: _controller,
-            fit: BoxFit.contain,
-            onLoaded: (composition) {
-              if (_compositionLoaded) return;
-              _compositionLoaded = true;
-              _controller.duration = composition.duration;
-              _controller.forward(from: 0);
-            },
-          ),
-        ),
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final asset = dark
+        ? 'assets/animations/game-illustration-dark-lottie.json'
+        : 'assets/animations/game-illustration-light-lottie.json';
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Lottie.asset(
+        asset,
+        key: ValueKey<String>(asset),
+        fit: BoxFit.contain,
+        repeat: false,
       ),
     );
   }

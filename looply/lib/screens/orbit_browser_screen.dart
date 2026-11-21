@@ -143,6 +143,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           'previewOnly': widget.previewOnly,
           'skipNativeEnterAnimation': widget.skipNativeEnterAnimation,
           'fadeNativeEnterTransition': fadeTransition,
+          'assistiveTouchEnabled': assistiveTouchEnabled.value,
           'menuLabels': <String, String>{
             'bookmark': appText('add_bookmark'),
             'bookmarks': appText('bookmarks'),
@@ -189,6 +190,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
             'invalidUnlock': appText('invalid_unlock'),
             'securitySetupRequired': appText('security_setup_required'),
             'language': appLanguageController.value.code,
+            'appLocale': appLanguageController.value.code,
             'targetLanguage': appLanguageController.value.code,
           },
         },
@@ -312,6 +314,10 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           await _pushFlutterPage(
             SearchScreen(isIncognito: widget.isIncognito, showCurrentPageCard: true),
           );
+          return;
+
+        case 'aiSearch':
+          await _pushFlutterPage(const AiSearchScreen());
           return;
 
         case 'previewClosed':

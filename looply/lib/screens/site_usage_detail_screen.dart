@@ -106,9 +106,16 @@ class _SiteUsageDetailScreenState extends State<SiteUsageDetailScreen> {
         _handleBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: dark
-            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light)
-            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark),
+        value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
+          statusBarColor: bg,
+          statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: bg,
+          systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarContrastEnforced: false,
+          systemStatusBarContrastEnforced: false,
+        ),
         child: Scaffold(
           backgroundColor: bg,
           body: CustomScrollView(
