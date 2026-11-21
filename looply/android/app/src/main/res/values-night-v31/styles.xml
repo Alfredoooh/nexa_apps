@@ -3,9 +3,9 @@
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_dark</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/looply_splash_ring_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_looply_ring_dark</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
-        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenAnimationDuration">680</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:statusBarColor">@color/looply_splash_dark</item>
@@ -14,9 +14,9 @@
     <style name="LaunchTheme.Light" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_light</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_light</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/looply_splash_ring_light</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_looply_ring_light</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
-        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenAnimationDuration">680</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:statusBarColor">@color/looply_splash_light</item>
@@ -25,9 +25,9 @@
     <style name="LaunchTheme.Dark" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background_dark</item>
         <item name="android:windowSplashScreenBackground">@color/looply_splash_dark</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/looply_splash_ring_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/avd_looply_ring_dark</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
-        <item name="android:windowSplashScreenAnimationDuration">0</item>
+        <item name="android:windowSplashScreenAnimationDuration">680</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:statusBarColor">@color/looply_splash_dark</item>

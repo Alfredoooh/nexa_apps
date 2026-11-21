@@ -367,7 +367,7 @@ class MainActivity : FlutterFragmentActivity() {
         val background = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.BLACK
+            else -> Color.rgb(15, 15, 15)
         }
         window.setBackgroundDrawable(ColorDrawable(background))
         window.statusBarColor = background

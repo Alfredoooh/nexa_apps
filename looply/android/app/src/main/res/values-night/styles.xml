@@ -17,14 +17,7 @@
         <item name="android:popupAnimationStyle">@style/LooplyNativePopupWindowAnimation</item>
         <item name="overlapAnchor">false</item>
     </style>
-
-    <style name="LooplyPopupMenuItemText.Dark" parent="@android:style/TextAppearance.Widget.PopupMenu.Large">
-        <item name="android:textColor">#FFF5F5F5</item>
-        <item name="android:textSize">14sp</item>
-        <item name="android:fontFamily">sans-serif-medium</item>
-    </style>
-
-    <style name="LooplyDialog.Dark" parent="@android:style/Theme.Material.Dialog.Alert">
+<style name="LooplyDialog.Dark" parent="@android:style/Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorAccent">#0095F6</item>
     </style>

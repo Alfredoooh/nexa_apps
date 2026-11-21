@@ -1,0 +1,17 @@
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:ordering="together">
+    <objectAnimator
+        android:propertyName="scaleX"
+        android:valueFrom="0.72"
+        android:valueTo="1.0"
+        android:valueType="floatType"
+        android:duration="680"
+        android:interpolator="@interpolator/looply_ring_zoom_interpolator" />
+    <objectAnimator
+        android:propertyName="scaleY"
+        android:valueFrom="0.72"
+        android:valueTo="1.0"
+        android:valueType="floatType"
+        android:duration="680"
+        android:interpolator="@interpolator/looply_ring_zoom_interpolator" />
+</set>
