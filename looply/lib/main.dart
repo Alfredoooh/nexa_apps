@@ -178,6 +178,7 @@ class LooplyShell extends StatefulWidget {
 
 class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedTab = 0;
+  late final PageController _shellPageController;
   bool _showingTabsGrid = false;
   bool _morphing = false;
   Completer<void>? _tabsGridPositionCompleter;
@@ -220,6 +221,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    _shellPageController = PageController(initialPage: _selectedTab);
     WidgetsBinding.instance.addObserver(this);
     _cloudSyncSources = <Listenable>[
       themeController,
@@ -309,6 +311,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _morphController.dispose();
     _browserFadeController.dispose();
     _drawerController.dispose();
+    _shellPageController.dispose();
     drawer_menu.LooplyDrawerBridge.open = null;
     drawer_menu.LooplyDrawerBridge.close = null;
     super.dispose();
@@ -412,6 +415,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
         _activeBrowserTabId = restoredBrowserId;
         _showingTabsGrid = false;
       });
+      _jumpToShellPage(_selectedTab);
       if (restoreBrowserTab != null) {
         _ensureBrowserTabMounted(restoreBrowserTab);
         tabsController.activate(restoreBrowserTab.id);
@@ -599,6 +603,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     await _browserFadeController.forward();
   }
 
+  void _jumpToShellPage(int index) {
+    final target = index.clamp(0, _screenKeys.length - 1).toInt();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_shellPageController.hasClients) return;
+      _shellPageController.jumpToPage(target);
+    });
+  }
+
   Future<void> _navigateToShellScreen(int index) async {
     if (_activeBrowserTabId != null && !_showingTabsGrid) {
       _browserFadeController.stop();
@@ -607,11 +619,22 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       } catch (_) {}
       if (!mounted) return;
     }
+    final target = index.clamp(0, _screenKeys.length - 1).toInt();
+    final previous = _selectedTab;
     setState(() {
       _activeBrowserTabId = null;
-      _selectedTab = index.clamp(0, _screenKeys.length - 1).toInt();
+      _selectedTab = target;
     });
     _persistCurrentActivity();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_shellPageController.hasClients || previous == target) return;
+    // PageView empurra a página atual para fora enquanto a seguinte entra,
+    // no mesmo sentido e com a mesma curva em todas as tabs (incluindo Activity).
+    await _shellPageController.animateToPage(
+      target,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   void _handleShellTabRequest() {
@@ -1142,7 +1165,10 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
           (targetTab.url == 'games_screen' || targetTab.url == 'discover_screen')) {
         index = 0;
       }
-      if (index >= 0) _selectedTab = index;
+      if (index >= 0) {
+        _selectedTab = index;
+        _jumpToShellPage(index);
+      }
     }
     unawaited(SessionStore.instance.saveLastActivity({
       'type': 'shell',
@@ -1209,6 +1235,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       _showingTabsGrid = false;
       _selectedTab = 0;
     });
+    _jumpToShellPage(0);
     _persistCurrentActivity();
 
     if (imageProvider != null && sourceRect != null) {
@@ -1347,12 +1374,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     // nem reconstruir a WebView persistente. O Container Transform da grelha
     // continua independente e inalterado.
     final shellPages = <Widget>[
-      HomeScreen(
-        onOpenDrawer: _openShellDrawer,
-        recentTabPreviewKeys: _homePreviewKeys,
+      _KeepAliveShellPage(
+        key: const ValueKey<String>('shell-home'),
+        child: HomeScreen(
+          onOpenDrawer: _openShellDrawer,
+          recentTabPreviewKeys: _homePreviewKeys,
+        ),
       ),
-      const ActivityScreen(),
-      const GamesScreen(),
+      const _KeepAliveShellPage(
+        key: ValueKey<String>('shell-activity'),
+        child: ActivityScreen(),
+      ),
+      const _KeepAliveShellPage(
+        key: ValueKey<String>('shell-games'),
+        child: GamesScreen(),
+      ),
     ];
     final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
         ? null
@@ -1375,8 +1411,8 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light, systemNavigationBarDividerColor: Colors.transparent, systemNavigationBarContrastEnforced: false, systemStatusBarContrastEnforced: false)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark, systemNavigationBarDividerColor: Colors.transparent, systemNavigationBarContrastEnforced: false, systemStatusBarContrastEnforced: false),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
@@ -1389,12 +1425,14 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 child: IgnorePointer(
                   ignoring: _activeBrowserTabId != null,
                   child: SafeArea(
-                    bottom: false,
+                    bottom: true,
                     child: SizedBox.expand(
                       child: RepaintBoundary(
                         key: _repaintKey,
-                        child: IndexedStack(
-                          index: _selectedTab,
+                        child: PageView(
+                          controller: _shellPageController,
+                          physics: const NeverScrollableScrollPhysics(),
+                          allowImplicitScrolling: true,
                           children: shellPages,
                         ),
                       ),
@@ -1841,6 +1879,27 @@ class _LooplyBottomBarState extends State<_LooplyBottomBar>
         ),
       ),
     );
+  }
+}
+
+
+class _KeepAliveShellPage extends StatefulWidget {
+  const _KeepAliveShellPage({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<_KeepAliveShellPage> createState() => _KeepAliveShellPageState();
+}
+
+class _KeepAliveShellPageState extends State<_KeepAliveShellPage>
+    with AutomaticKeepAliveClientMixin<_KeepAliveShellPage> {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

@@ -367,20 +367,28 @@ class MainActivity : FlutterFragmentActivity() {
         val background = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.rgb(23, 24, 26)
+            else -> Color.BLACK
         }
         window.setBackgroundDrawable(ColorDrawable(background))
         window.statusBarColor = background
         window.navigationBarColor = background
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.navigationBarDividerColor = background
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+            window.isStatusBarContrastEnforced = false
+        }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             @Suppress("DEPRECATION")
             var flags = window.decorView.systemUiVisibility
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                flags = if (dark) {
-                    flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-                } else {
-                    flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                }
+                flags = if (dark) flags and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+                    else flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                flags = if (dark) flags and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+                    else flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
             }
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = flags
@@ -671,6 +679,10 @@ class MainActivity : FlutterFragmentActivity() {
             putExtra(OrbitBrowserActivity.EXTRA_INCOGNITO, call.argument<Boolean>("isIncognito") ?: false)
             putExtra(OrbitBrowserActivity.EXTRA_TAB_COUNT, call.argument<Int>("tabCount") ?: 1)
             putExtra(OrbitBrowserActivity.EXTRA_PREVIEW_ONLY, call.argument<Boolean>("previewOnly") ?: false)
+            putExtra(
+                OrbitBrowserActivity.EXTRA_ASSISTIVE_TOUCH_ENABLED,
+                call.argument<Boolean>("assistiveTouchEnabled") ?: true,
+            )
             val labels = call.argument<Map<String, String>>("menuLabels") ?: emptyMap()
             putExtra(OrbitBrowserActivity.EXTRA_MENU_LABELS_JSON, JSONObject(labels).toString())
             putExtra("com.looply.browser.app.orbit.SKIP_ENTER_ANIMATION", call.argument<Boolean>("skipNativeEnterAnimation") ?: false)
@@ -817,12 +829,12 @@ class MainActivity : FlutterFragmentActivity() {
         val dark = isAppDarkTheme()
         val backgroundColor = when {
             !dark -> Color.WHITE
-            isAppPureBlackTheme() -> Color.rgb(25, 25, 25)
-            else -> Color.rgb(43, 45, 48)
+            isAppPureBlackTheme() -> Color.rgb(18, 18, 18)
+            else -> Color.rgb(18, 18, 18)
         }
-        val textColor = if (dark) Color.rgb(230, 230, 232) else Color.rgb(32, 33, 36)
-        val mutedColor = if (dark) Color.rgb(178, 180, 184) else Color.rgb(95, 99, 104)
-        val accentColor = if (dark) Color.rgb(138, 180, 248) else Color.rgb(26, 115, 232)
+        val textColor = if (dark) Color.rgb(245, 245, 245) else Color.rgb(32, 33, 36)
+        val mutedColor = if (dark) Color.rgb(168, 168, 168) else Color.rgb(95, 99, 104)
+        val accentColor = if (dark) Color.rgb(0, 149, 246) else Color.rgb(26, 115, 232)
         val destructiveColor = Color.rgb(255, 69, 58)
         val themedContext = ContextThemeWrapper(
             this,
@@ -878,10 +890,13 @@ class MainActivity : FlutterFragmentActivity() {
                 isAllCaps = false
                 textSize = 14f
                 minWidth = 0
-                minimumWidth = dpToPx(52)
+                minimumWidth = 0
                 minHeight = 0
                 minimumHeight = dpToPx(44)
-                setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER
+                setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8))
                 when {
                     isPrimary -> {
                         background = GradientDrawable().apply {
@@ -905,9 +920,12 @@ class MainActivity : FlutterFragmentActivity() {
                     dialog.dismiss()
                 }
             }
+            val actionWidth = if (actions.size == 1) LinearLayout.LayoutParams.WRAP_CONTENT else 0
+            val actionWeight = if (actions.size == 1) 0f else 1f
             actionsContainer.addView(button, LinearLayout.LayoutParams(
+                actionWidth,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
+                actionWeight,
             ).apply {
                 marginStart = dpToPx(6)
             })
@@ -919,12 +937,18 @@ class MainActivity : FlutterFragmentActivity() {
         }
         dialog.setOnCancelListener { finish(null) }
         try {
+            dialog.setCanceledOnTouchOutside(barrierDismissible)
             dialog.show()
             dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             dialog.window?.let { dialogWindow ->
-                val dimmedBar = if (dark) Color.rgb(18, 19, 21) else Color.rgb(205, 207, 211)
+                val dimmedBar = if (dark) Color.BLACK else Color.WHITE
                 dialogWindow.statusBarColor = dimmedBar
                 dialogWindow.navigationBarColor = dimmedBar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) dialogWindow.navigationBarDividerColor = dimmedBar
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    dialogWindow.isNavigationBarContrastEnforced = false
+                    dialogWindow.isStatusBarContrastEnforced = false
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     dialogWindow.insetsController?.setSystemBarsAppearance(
                         if (dark) 0 else android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
@@ -940,10 +964,11 @@ class MainActivity : FlutterFragmentActivity() {
             dialog.window?.let { dialogWindow ->
                 val attributes = dialogWindow.attributes
                 attributes.dimAmount = .34f
+                attributes.gravity = Gravity.CENTER
                 dialogWindow.attributes = attributes
             }
             val maxWidth = dpToPx(560)
-            val screenWidth = resources.displayMetrics.widthPixels - dpToPx(40)
+            val screenWidth = (resources.displayMetrics.widthPixels - dpToPx(36)).coerceAtLeast(dpToPx(240))
             dialog.window?.setLayout(minOf(maxWidth, screenWidth), ViewGroup.LayoutParams.WRAP_CONTENT)
         } catch (error: RuntimeException) {
             finish(null)
