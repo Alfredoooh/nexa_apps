@@ -43,7 +43,6 @@ flutter:
     - assets/animations/browseit_logo.json
     - assets/animations/browseit_ai_idle.json
     - assets/animations/cobalt_sprite_ai.json
-    - assets/animations/game_console_broken.json
     - assets/animations/activity_chart_empty.json
     - assets/animations/game-illustration-light-lottie.json
     - assets/animations/game-illustration-dark-lottie.json
