@@ -68,6 +68,22 @@ class _GamesScreenState extends State<GamesScreen> {
     final text = mainText(context);
     final muted = mutedText(context);
     final bg = pageBg(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final systemOverlay = dark
+        ? SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: bg,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: bg,
+            systemNavigationBarIconBrightness: Brightness.light,
+            systemNavigationBarDividerColor: bg,
+          )
+        : SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: bg,
+            statusBarIconBrightness: Brightness.dark,
+            systemNavigationBarColor: bg,
+            systemNavigationBarIconBrightness: Brightness.dark,
+            systemNavigationBarDividerColor: bg,
+          );
     final games = _visibleGames;
     final offlineGames = games.where((game) => game.offlineFiles.isNotEmpty).toList(growable: false);
     final onlineGames = games.where((game) => game.offlineFiles.isEmpty).toList(growable: false);
@@ -80,6 +96,12 @@ class _GamesScreenState extends State<GamesScreen> {
       appBar: AppBar(
         toolbarHeight: 64,
         automaticallyImplyLeading: false,
+        systemOverlayStyle: systemOverlay,
+        leading: IconButton(
+          tooltip: appText('back'),
+          onPressed: () => Navigator.of(context).maybePop(),
+          icon: AppMaterialIcon(AppIcons.arrowLeft, color: text, size: 24),
+        ),
         backgroundColor: bg,
         foregroundColor: text,
         surfaceTintColor: Colors.transparent,
@@ -93,7 +115,7 @@ class _GamesScreenState extends State<GamesScreen> {
       body: SafeArea(
         top: false,
         child: _loading && _catalog == null
-            ? const Center(child: _ThemeAwareGameIllustration(width: 224, height: 315))
+            ? const Center(child: _InteractiveConsoleLottie(width: 224, height: 315))
             : _error != null && _catalog == null
                 ? const _GamesEmptyState()
                 : CustomScrollView(
@@ -419,33 +441,26 @@ class _GamesEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Center(
-        child: _ThemeAwareGameIllustration(width: 224, height: 315),
+        child: _InteractiveConsoleLottie(width: 224, height: 315),
       );
 }
 
-/// Ilustração do separador Jogos, com o JSON correspondente ao tema ativo.
-/// A animação reproduz apenas a entrada Lottie; não cria ciclos nem controlos
-/// de replay que possam interferir com a navegação entre separadores.
-class _ThemeAwareGameIllustration extends StatelessWidget {
-  const _ThemeAwareGameIllustration({required this.width, required this.height});
+/// Ilustração de jogos Lottie, selecionada de acordo com o tema ativo.
+/// A animação é reproduzida uma vez e termina no artwork estático.
+class _InteractiveConsoleLottie extends StatelessWidget {
+  const _InteractiveConsoleLottie({required this.width, required this.height});
   final double width;
   final double height;
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final asset = dark
+    final asset = Theme.of(context).brightness == Brightness.dark
         ? 'assets/animations/game-illustration-dark-lottie.json'
         : 'assets/animations/game-illustration-light-lottie.json';
     return SizedBox(
       width: width,
       height: height,
-      child: Lottie.asset(
-        asset,
-        key: ValueKey<String>(asset),
-        fit: BoxFit.contain,
-        repeat: false,
-      ),
+      child: Lottie.asset(asset, repeat: false, fit: BoxFit.contain),
     );
   }
 }
