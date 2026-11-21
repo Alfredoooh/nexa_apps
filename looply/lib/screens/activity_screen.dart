@@ -93,21 +93,31 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final hasActivity = entries.isNotEmpty || AdBlockStats.instance.totalBlocked > 0;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
-        statusBarColor: bg,
-        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
-        systemNavigationBarColor: bg,
-        systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
-        systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarContrastEnforced: false,
-        systemStatusBarContrastEnforced: false,
-      ),
+      value: dark
+          ? SystemUiOverlayStyle.light.copyWith(
+              statusBarColor: bg,
+              statusBarIconBrightness: Brightness.light,
+              systemNavigationBarColor: bg,
+              systemNavigationBarIconBrightness: Brightness.light,
+              systemNavigationBarDividerColor: bg,
+            )
+          : SystemUiOverlayStyle.dark.copyWith(
+              statusBarColor: bg,
+              statusBarIconBrightness: Brightness.dark,
+              systemNavigationBarColor: bg,
+              systemNavigationBarIconBrightness: Brightness.dark,
+              systemNavigationBarDividerColor: bg,
+            ),
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
           toolbarHeight: 64,
           automaticallyImplyLeading: false,
+          leading: IconButton(
+            tooltip: appText('back'),
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: AppMaterialIcon(AppIcons.arrowLeft, color: text, size: 24),
+          ),
           backgroundColor: bg,
           foregroundColor: text,
           surfaceTintColor: Colors.transparent,
@@ -119,7 +129,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
         ),
         body: !hasActivity
-            ? const _ActivityEmptyState()
+            ? _ActivityEmptyState(dark: dark)
             : ListView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
@@ -186,7 +196,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
 
 class _ActivityEmptyState extends StatelessWidget {
-  const _ActivityEmptyState();
+  const _ActivityEmptyState({required this.dark});
+  final bool dark;
   @override
   Widget build(BuildContext context) {
     final text = mainText(context);
@@ -197,17 +208,13 @@ class _ActivityEmptyState extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(30, 20, 30, 40),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(
-              height: 220,
-              child: Lottie.asset(
-                Theme.of(context).brightness == Brightness.dark
-                    ? 'assets/animations/analytics-illustration-dark-lottie.json'
-                    : 'assets/animations/analytics-illustration-light-lottie.json',
-                key: ValueKey<bool>(Theme.of(context).brightness == Brightness.dark),
-                repeat: false,
-                fit: BoxFit.contain,
-              ),
-            ),
+            SizedBox(height: 220, child: Lottie.asset(
+              dark
+                  ? 'assets/animations/analytics-illustration-dark-lottie.json'
+                  : 'assets/animations/analytics-illustration-light-lottie.json',
+              repeat: false,
+              fit: BoxFit.contain,
+            )),
             const SizedBox(height: 8),
             Text('Ainda não há atividade', textAlign: TextAlign.center, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),

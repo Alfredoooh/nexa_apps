@@ -2,6 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../screens/history_screen.dart';
+import '../screens/activity_screen.dart';
+import '../screens/games_screen.dart';
+import '../shell/push_page_route.dart';
 import '../screens/downloads_screen.dart';
 import '../screens/bookmarks_screen.dart';
 import '../screens/settings_screen.dart';
@@ -90,6 +93,20 @@ class LooplyDrawer extends StatelessWidget {
                           },
                         ),
                         const SizedBox(height: 2),
+                        _DrawerOption(
+                          icon: AppIcons.clockCounterClockwise,
+                          label: appText('activity'),
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _openDrawerPage(context, const ActivityScreen()),
+                        ),
+                        const SizedBox(height: 2),
+                        _DrawerOption(
+                          icon: AppIcons.sportsEsports,
+                          label: appText('games'),
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => _openDrawerPage(context, const GamesScreen()),
+                        ),
+                        const SizedBox(height: 2),
                         AnimatedBuilder(
                           animation: activityController,
                           builder: (context, _) => _DrawerOption(
@@ -161,7 +178,7 @@ class LooplyDrawer extends StatelessWidget {
     // Espera o movimento push terminar antes de apresentar a página.
     await Future<void>.delayed(const Duration(milliseconds: 520));
     if (!navigator.mounted) return;
-    await navigator.push<void>(MaterialPageRoute<void>(builder: (_) => page));
+    await navigator.push<void>(LooplyPushPageRoute<void>(builder: (_) => page));
     if (routeKey != null) {
       await SessionStore.instance.saveLastActivity(previous);
     }
@@ -170,6 +187,8 @@ class LooplyDrawer extends StatelessWidget {
 
 
 String? _drawerRouteKey(Widget page) {
+  if (page is ActivityScreen) return 'activity';
+  if (page is GamesScreen) return 'games';
   if (page is HistoryScreen) return 'history';
   if (page is DownloadsScreen) return 'downloads';
   if (page is BookmarksScreen) return 'bookmarks';
@@ -179,6 +198,10 @@ String? _drawerRouteKey(Widget page) {
 
 Widget? _drawerPageForKey(String key) {
   switch (key) {
+    case 'activity':
+      return const ActivityScreen();
+    case 'games':
+      return const GamesScreen();
     case 'history':
       return const HistoryScreen();
     case 'downloads':
@@ -205,7 +228,7 @@ Future<void> restoreDrawerPageActivity(
     return;
   }
   await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => page),
+    LooplyPushPageRoute<void>(builder: (_) => page),
   );
   await SessionStore.instance.saveLastActivity(returnTo);
 }

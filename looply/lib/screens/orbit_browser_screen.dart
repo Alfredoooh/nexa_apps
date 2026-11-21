@@ -35,6 +35,8 @@ class OrbitBrowserScreen extends StatefulWidget {
     this.isIncognito = false,
     this.previewOnly = false,
     this.skipNativeEnterAnimation = false,
+    this.initialAction,
+    this.onInitialActionConsumed,
   });
 
   final String tabId;
@@ -46,6 +48,8 @@ class OrbitBrowserScreen extends StatefulWidget {
   final bool isIncognito;
   final bool previewOnly;
   final bool skipNativeEnterAnimation;
+  final String? initialAction;
+  final ValueChanged<String>? onInitialActionConsumed;
 
   @override
   State<OrbitBrowserScreen> createState() => _OrbitBrowserScreenState();
@@ -143,7 +147,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           'previewOnly': widget.previewOnly,
           'skipNativeEnterAnimation': widget.skipNativeEnterAnimation,
           'fadeNativeEnterTransition': fadeTransition,
-          'assistiveTouchEnabled': assistiveTouchEnabled.value,
+          'initialAction': widget.initialAction ?? '',
           'menuLabels': <String, String>{
             'bookmark': appText('add_bookmark'),
             'bookmarks': appText('bookmarks'),
@@ -197,6 +201,7 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
       );
 
       if (!mounted || _disposed) return;
+      if (widget.initialAction != null) widget.onInitialActionConsumed?.call(widget.tabId);
 
       _complete(widget.firstLoadCompleter);
 
@@ -235,6 +240,8 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
         url: currentUrl,
         title: currentTitle,
         thumbnail: widget.isIncognito ? null : thumbnail,
+        canGoBack: data['canGoBack'] is bool ? data['canGoBack'] as bool : null,
+        canGoForward: data['canGoForward'] is bool ? data['canGoForward'] as bool : null,
       );
 
       if (!widget.isIncognito &&
@@ -310,14 +317,14 @@ class _OrbitBrowserScreenState extends State<OrbitBrowserScreen> {
           await _pushFlutterPage(const SettingsScreen());
           return;
 
+        case 'aiSearch':
+          await _pushFlutterPage(const AiSearchScreen());
+          return;
+
         case 'search':
           await _pushFlutterPage(
             SearchScreen(isIncognito: widget.isIncognito, showCurrentPageCard: true),
           );
-          return;
-
-        case 'aiSearch':
-          await _pushFlutterPage(const AiSearchScreen());
           return;
 
         case 'previewClosed':

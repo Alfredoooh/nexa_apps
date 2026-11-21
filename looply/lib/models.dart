@@ -783,6 +783,8 @@ class TabsController extends ChangeNotifier {
             url: url,
             title: item['title'] is String ? item['title'] as String : null,
             thumbnail: thumbnail,
+            canGoBack: item['canGoBack'] == true,
+            canGoForward: item['canGoForward'] == true,
             appScreenLabel: item['appScreenLabel'] is String ? item['appScreenLabel'] as String : null,
             appScreenIcon: kind == TabKind.appScreen ? _iconForRestoredScreen(url) : null,
             lastActivity: lastActivity is String ? DateTime.tryParse(lastActivity) : null,
@@ -1092,6 +1094,8 @@ class TabsController extends ChangeNotifier {
               'url': tab.url,
               'title': tab.title,
               'appScreenLabel': tab.appScreenLabel,
+              'canGoBack': tab.canGoBack,
+              'canGoForward': tab.canGoForward,
               'thumbnailFile': thumbnail != null ? _safeTabSnapshotName(tab.id) : null,
               'thumbnailBase64': thumbnail != null && thumbnail.length <= 70000
                   ? base64Encode(thumbnail)
