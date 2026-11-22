@@ -262,8 +262,6 @@ class LooplyModalSystemBar extends StatelessWidget {
       systemNavigationBarIconBrightness:
           isDark ? Brightness.light : Brightness.dark,
       systemNavigationBarDividerColor: Colors.transparent,
-      systemNavigationBarContrastEnforced: false,
-      systemStatusBarContrastEnforced: false,
     );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(

@@ -185,9 +185,6 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
               statusBarBrightness: Brightness.dark,
               systemNavigationBarColor: bg,
               systemNavigationBarIconBrightness: Brightness.light,
-              systemNavigationBarDividerColor: Colors.transparent,
-              systemNavigationBarContrastEnforced: false,
-              systemStatusBarContrastEnforced: false,
             )
           : SystemUiOverlayStyle.dark.copyWith(
               statusBarColor: Colors.transparent,
@@ -195,9 +192,6 @@ class _TabsGridScreenState extends State<TabsGridScreen> {
               statusBarBrightness: Brightness.light,
               systemNavigationBarColor: bg,
               systemNavigationBarIconBrightness: Brightness.dark,
-              systemNavigationBarDividerColor: Colors.transparent,
-              systemNavigationBarContrastEnforced: false,
-              systemStatusBarContrastEnforced: false,
             ),
       child: Material(
       color: bg,

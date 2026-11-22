@@ -102,8 +102,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               systemNavigationBarIconBrightness: Brightness.light,
               systemNavigationBarDividerColor: bg,
               systemNavigationBarContrastEnforced: false,
-              statusBarContrastEnforced: false,
-            )
+                          )
           : SystemUiOverlayStyle.dark.copyWith(
               statusBarColor: bg,
               statusBarIconBrightness: Brightness.dark,
@@ -111,8 +110,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               systemNavigationBarIconBrightness: Brightness.dark,
               systemNavigationBarDividerColor: bg,
               systemNavigationBarContrastEnforced: false,
-              statusBarContrastEnforced: false,
-            ),
+                          ),
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
