@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:math' as math;
 
 import '../screens/history_screen.dart';
 import '../screens/activity_screen.dart';
@@ -12,7 +14,6 @@ import '../models.dart';
 import '../browser_library.dart';
 import '../theme.dart';
 import '../session_store.dart';
-import '../auth_service.dart';
 import '../localization.dart';
 import '../shell/shell_tab_request.dart';
 import 'material_symbols.dart';
@@ -30,11 +31,67 @@ void showLooplyDrawer(BuildContext context) {
   LooplyDrawerBridge.open?.call();
 }
 
+/// Abre o mesmo drawer por cima de rotas que foram empilhadas no Navigator
+/// raiz (por exemplo, AI Search). O drawer do Shell fica atrás dessas rotas,
+/// por isso esta variante usa uma rota de overlay real.
+Future<void> showLooplyDrawerFromRoute(BuildContext context) {
+  final rootNavigator = Navigator.of(context, rootNavigator: true);
+  final screenWidth = MediaQuery.sizeOf(context).width;
+  final drawerWidth = math.min(320.0, math.min(screenWidth * .82, screenWidth - 24)).toDouble();
+
+  return showGeneralDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: appText('close'),
+    barrierColor: Colors.black.withOpacity(.22),
+    transitionDuration: const Duration(milliseconds: 280),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return SizedBox.expand(
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: drawerWidth,
+            height: MediaQuery.sizeOf(dialogContext).height,
+            child: LooplyDrawer(
+              width: drawerWidth,
+              onClose: () => Navigator.of(dialogContext).pop(),
+              onHomeTapOverride: () {
+                Navigator.of(dialogContext).pop();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!rootNavigator.mounted) return;
+                  rootNavigator.popUntil((route) => route.isFirst);
+                  ShellTabRequest.instance.request(0);
+                });
+              },
+            ),
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 class LooplyDrawer extends StatelessWidget {
-  const LooplyDrawer({super.key, required this.onClose, this.width = 304});
+  const LooplyDrawer({super.key, required this.onClose, this.width = 304, this.onHomeTapOverride});
 
   final VoidCallback onClose;
   final double width;
+  final VoidCallback? onHomeTapOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -63,13 +120,14 @@ class LooplyDrawer extends StatelessWidget {
                     builder: (context, showHome, _) => _DrawerHeader(
                       showHome: showHome,
                       onHomeTap: showHome
-                          ? () {
+                          ? (onHomeTapOverride ?? () {
                               onClose();
                               Future<void>.delayed(const Duration(milliseconds: 520), () {
                                 ShellTabRequest.instance.request(0);
                               });
-                            }
+                            })
                           : null,
+                      onSettingsTap: () => _openDrawerPage(context, const SettingsScreen()),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -94,7 +152,7 @@ class LooplyDrawer extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         _DrawerOption(
-                          icon: AppIcons.clockCounterClockwise,
+                          icon: AppIcons.statistics,
                           label: appText('activity'),
                           borderRadius: BorderRadius.circular(8),
                           onTap: () => _openDrawerPage(context, const ActivityScreen()),
@@ -143,12 +201,6 @@ class LooplyDrawer extends StatelessWidget {
                           ),
                         ),
                         ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                    child: _SettingsButtonWithAvatar(
-                      onTap: () => _openDrawerPage(context, const SettingsScreen()),
                     ),
                   ),
                 ],
@@ -236,10 +288,11 @@ Future<void> restoreDrawerPageActivity(
 // Cabeçalho do drawer: título "Menu" com M maiúsculo, alinhado à esquerda
 // e verticalmente centrado dentro da área do cabeçalho.
 class _DrawerHeader extends StatelessWidget {
-  const _DrawerHeader({this.showHome = false, this.onHomeTap});
+  const _DrawerHeader({this.showHome = false, this.onHomeTap, required this.onSettingsTap});
 
   final bool showHome;
   final VoidCallback? onHomeTap;
+  final VoidCallback onSettingsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -269,18 +322,49 @@ class _DrawerHeader extends StatelessWidget {
               Semantics(
                 button: true,
                 label: appText('home'),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onHomeTap,
-                  child: SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Center(
-                      child: AppMaterialIcon(AppIcons.house, color: text, size: 23),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onHomeTap,
+                    child: SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Center(
+                        child: AppMaterialIcon(AppIcons.house, color: text, size: 23),
+                      ),
                     ),
                   ),
                 ),
               ),
+            const SizedBox(width: 4),
+            Semantics(
+              button: true,
+              label: appText('settings'),
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onSettingsTap,
+                  child: SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Center(
+                      child: SvgPicture.asset(
+                        'assets/icons/svg/regular/settings.svg',
+                        width: 23,
+                        height: 23,
+                        colorFilter: ColorFilter.mode(text, BlendMode.srcIn),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -357,67 +441,6 @@ class _DrawerOption extends StatelessWidget {
                   ),
                 ),
               ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-// Botão de Configurações com o avatar embutido no canto direito do
-// próprio botão — sem ícone de engrenagem e sem o texto "Utilizador".
-// Mostra a foto da conta logada; sem sessão, cai no asset local
-// images/avatar.png em vez do ícone genérico de pessoa.
-class _SettingsButtonWithAvatar extends StatelessWidget {
-  const _SettingsButtonWithAvatar({required this.onTap});
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final text = mainText(context);
-    return Material(
-      color: pillColor(context),
-      borderRadius: BorderRadius.circular(36),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 7, 8, 7),
-          child: Row(children: [
-            Expanded(child: Text(appText('settings'), style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w700))),
-            ValueListenableBuilder<LooplyUser?>(
-              valueListenable: authController,
-              builder: (context, user, _) => Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark ? pillColor(context) : Colors.white,
-                ),
-                child: ClipOval(
-                  child: user?.photoUrl != null
-                      ? Image.network(
-                          user!.photoUrl!,
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.asset(
-                            'images/avatar.png',
-                            width: 32,
-                            height: 32,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Image.asset(
-                          'images/avatar.png',
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.cover,
-                        ),
-                ),
-              ),
-            ),
           ]),
         ),
       ),

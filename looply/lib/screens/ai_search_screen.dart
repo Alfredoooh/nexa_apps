@@ -370,15 +370,18 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ringColor = isDark ? const Color(0xFFA8A8A8) : const Color(0xFFD4D7DB);
     return Center(
       key: const ValueKey<String>('ai-search-empty'),
-      child: Lottie.asset(
-        'assets/animations/cobalt_sprite_ai.json',
-        width: 172,
-        height: 172,
-        fit: BoxFit.contain,
-        animate: true,
-        repeat: true,
+      child: SizedBox(
+        width: 212,
+        height: 212,
+        child: CustomPaint(
+          painter: _LooplySplashRingPainter(ringColor),
+          isComplex: false,
+          willChange: false,
+        ),
       ),
     );
   }
@@ -470,7 +473,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               LooplyDrawerMenuButton(
-                onPressed: () => drawer_menu.showLooplyDrawer(context),
+                onPressed: () => drawer_menu.showLooplyDrawerFromRoute(context),
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -504,32 +507,34 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Semantics(
-                    button: true,
-                    label: 'Nova conversa',
-                    child: Material(
-                      color: Colors.transparent,
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _startNewConversation,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Center(
-                            child: SvgPicture.asset(
-                              'assets/icons/svg/regular/new-message.svg',
-                              width: 23,
-                              height: 23,
-                              colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                  if (_messages.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Semantics(
+                      button: true,
+                      label: 'Nova conversa',
+                      child: Material(
+                        color: Colors.transparent,
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _startNewConversation,
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Center(
+                              child: SvgPicture.asset(
+                                'assets/icons/svg/regular/new-message.svg',
+                                width: 23,
+                                height: 23,
+                                colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -703,4 +708,32 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
       ),
     );
   }
+}
+
+
+/// The same neutral circular ring used by the native splash in both themes.
+/// Geometry mirrors the Android VectorDrawable viewport (1000 x 1000).
+class _LooplySplashRingPainter extends CustomPainter {
+  const _LooplySplashRingPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final side = size.shortestSide;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = side * .082
+      ..isAntiAlias = true;
+    canvas.drawCircle(
+      Offset(size.width / 2, size.height / 2),
+      side * .25,
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _LooplySplashRingPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

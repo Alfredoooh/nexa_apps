@@ -23,6 +23,7 @@ class AppIcons {
   static const IconData circle = Symbols.circle_rounded;
   static const IconData circleDot = Symbols.radio_button_checked_rounded;
   static const IconData clockCounterClockwise = Symbols.history_rounded;
+  static const IconData statistics = Symbols.bar_chart_rounded;
   static const IconData compass = Symbols.explore_rounded;
   static const IconData copy = Symbols.content_copy_rounded;
   static const IconData dotsThreeVertical = Symbols.more_vert_rounded;
