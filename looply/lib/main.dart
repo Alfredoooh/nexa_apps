@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:material_3_expressive/material_3_expressive.dart';
 import 'package:flutter/rendering.dart';
@@ -14,10 +13,6 @@ import 'cloud_sync.dart';
 import 'browser_library.dart';
 import 'screens/home_screen.dart';
 import 'screens/orbit_browser_screen.dart';
-import 'screens/search_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/bookmarks_screen.dart';
-import 'screens/settings_screen.dart';
 import 'widgets/drawer_menu.dart' as drawer_menu hide TabsGridScreen;
 import 'session_store.dart';
 import 'shell/shell_tab_request.dart';
@@ -94,28 +89,62 @@ class LooplyApp extends StatelessWidget {
                 // importam package:flutter/material.dart.
                 child: Directionality(
                   textDirection: language.code == 'ar' ? TextDirection.rtl : TextDirection.ltr,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      child ?? const SizedBox.shrink(),
-                      const Positioned.fill(child: GlobalSitesFloatingButton()),
-                      // Offstage mantém os glifos Rounded necessários à Activity
-                      // Kotlin dentro da fonte submetida ao icon tree-shaker.
-                      Positioned(
-                        left: -10000,
-                        top: -10000,
-                        child: ExcludeSemantics(
-                          child: Offstage(
-                            child: Row(
-                              children: [
-                                for (final symbol in AppIcons.nativeBrowserGlyphs)
-                                  Icon(symbol, size: 24, weight: 400, opticalSize: 24),
-                              ],
-                            ),
+                  child: Builder(
+                    builder: (overlayContext) {
+                      final activeTheme = Theme.of(overlayContext);
+                      final dark = activeTheme.brightness == Brightness.dark;
+                      final systemBackground = activeTheme.scaffoldBackgroundColor;
+                      final systemOverlay = (dark
+                              ? SystemUiOverlayStyle.light
+                              : SystemUiOverlayStyle.dark)
+                          .copyWith(
+                        statusBarColor: Colors.transparent,
+                        statusBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+                        statusBarBrightness: dark ? Brightness.dark : Brightness.light,
+                        systemNavigationBarColor: systemBackground,
+                        systemNavigationBarDividerColor: systemBackground,
+                        systemNavigationBarIconBrightness: dark ? Brightness.light : Brightness.dark,
+                        systemNavigationBarContrastEnforced: false,
+                        statusBarContrastEnforced: false,
+                      );
+
+                      return AnnotatedRegion<SystemUiOverlayStyle>(
+                        value: systemOverlay,
+                        child: ColoredBox(
+                          color: systemBackground,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // SafeArea envolve o Navigator inteiro, incluindo rotas
+                              // push e modais. Assim, nenhuma página ou sheet pode
+                              // desenhar conteúdo por baixo dos botões do Android.
+                              SafeArea(
+                                top: false,
+                                bottom: true,
+                                child: child ?? const SizedBox.shrink(),
+                              ),
+                              const Positioned.fill(child: GlobalSitesFloatingButton()),
+                              // Offstage mantém os glifos Rounded necessários à Activity
+                              // Kotlin dentro da fonte submetida ao icon tree-shaker.
+                              Positioned(
+                                left: -10000,
+                                top: -10000,
+                                child: ExcludeSemantics(
+                                  child: Offstage(
+                                    child: Row(
+                                      children: [
+                                        for (final symbol in AppIcons.nativeBrowserGlyphs)
+                                          Icon(symbol, size: 24, weight: 400, opticalSize: 24),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -198,7 +227,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
   final List<String> _screenKeys = const ['home_screen'];
   List<String> get _screenLabels => <String>[appText('home')];
   final List<IconData> _screenIcons = const [AppIcons.house];
-  final Map<String, String> _pendingBrowserActions = <String, String>{};
   late final AnimationController _morphController;
   late final AnimationController _browserFadeController;
   late final AnimationController _drawerController;
@@ -576,56 +604,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
     _persistCurrentActivity();
     if (!browserAlreadyVisible) {
       unawaited(_playBrowserEntranceWhenReady(tab.id));
-    }
-  }
-
-  void _activateBrowserHistoryAction(BrowserTab? tab, String action) {
-    if (tab == null || (action == 'back' && !tab.canGoBack) ||
-        (action == 'forward' && !tab.canGoForward)) return;
-    _pendingBrowserActions[tab.id] = action;
-    _activateBrowserTabWithFade(tab);
-  }
-
-  void _openNewBrowserTab() {
-    final tab = tabsController.createBrowserTab('https://www.google.com');
-    _ensureBrowserTabMounted(tab);
-    _activateBrowserTabWithFade(tab);
-  }
-
-  Future<void> _showBrowserMoreMenu() async {
-    if (!mounted) return;
-    final selection = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(.22),
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Material(
-            color: popupSurfaceColor(sheetContext),
-            borderRadius: BorderRadius.circular(26),
-            clipBehavior: Clip.antiAlias,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              ListTile(leading: AppMaterialIcon(AppIcons.clockCounterClockwise, color: mainText(sheetContext)), title: Text(appText('history')), onTap: () => Navigator.pop(sheetContext, 'history')),
-              ListTile(leading: AppMaterialIcon(AppIcons.bookmarkSimple, color: mainText(sheetContext)), title: Text(appText('bookmarks')), onTap: () => Navigator.pop(sheetContext, 'bookmarks')),
-              ListTile(leading: AppMaterialIcon(AppIcons.gear, color: mainText(sheetContext)), title: Text(appText('settings')), onTap: () => Navigator.pop(sheetContext, 'settings')),
-            ]),
-          ),
-        ),
-      ),
-    );
-    if (!mounted || selection == null) return;
-    final page = switch (selection) {
-      'history' => const HistoryScreen(),
-      'bookmarks' => const BookmarksScreen(),
-      _ => null,
-    };
-    if (page != null) {
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => page));
-    } else {
-      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
     }
   }
 
@@ -1402,6 +1380,7 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       HomeScreen(
         onOpenDrawer: _openShellDrawer,
         recentTabPreviewKeys: _homePreviewKeys,
+        onOpenTabs: () => unawaited(_openTabsGrid()),
       ),
     ];
     final Widget? activeBrowserPage = activeBrowserTab == null || _showingTabsGrid
@@ -1420,20 +1399,21 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
               firstLoadCompleter: _browserFirstLoads[activeBrowserTab.id]!,
               browserReadyCompleter: _browserPlatformReady[activeBrowserTab.id]!,
               isIncognito: activeBrowserTab.isIncognito,
-              initialAction: _pendingBrowserActions[activeBrowserTab.id],
-              onInitialActionConsumed: (id) => _pendingBrowserActions.remove(id),
             ),
           );
 
     final shellPage = AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark),
+          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light, systemNavigationBarDividerColor: bg, systemNavigationBarContrastEnforced: false, statusBarContrastEnforced: false)
+          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent, statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark, systemNavigationBarDividerColor: bg, systemNavigationBarContrastEnforced: false, statusBarContrastEnforced: false),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
         backgroundColor: bg,
-        extendBody: true,
-        body: Stack(
+        extendBody: false,
+        body: SafeArea(
+          top: false,
+          bottom: true,
+          child: Stack(
           children: [
             Positioned.fill(
               child: Offstage(
@@ -1532,24 +1512,6 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
                 ),
               ),
           ],
-        ),
-        bottomNavigationBar: Offstage(
-          offstage: _showingTabsGrid || _activeBrowserTabId != null,
-          child: AnimatedBuilder(
-            animation: tabsController,
-            builder: (context, _) {
-              final active = tabsController.activeTab;
-              return _ChromeBottomBar(
-                tabCount: tabsController.count,
-                canGoBack: active?.canGoBack ?? false,
-                canGoForward: active?.canGoForward ?? false,
-                onBack: () => _activateBrowserHistoryAction(active, 'back'),
-                onForward: () => _activateBrowserHistoryAction(active, 'forward'),
-                onNewTab: _openNewBrowserTab,
-                onTabs: _openTabsGrid,
-                onMore: _showBrowserMoreMenu,
-              );
-            },
           ),
         ),
       ),
@@ -1615,123 +1577,4 @@ class _LooplyShellState extends State<LooplyShell> with TickerProviderStateMixin
       },
     );
   }
-}
-
-class _TabsCountIcon extends StatelessWidget {
-  const _TabsCountIcon({required this.count, required this.color});
-  final int count;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 24,
-    height: 24,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        SvgPicture.asset(
-          'assets/icons/svg/regular/tabs-counter.svg',
-          width: 24,
-          height: 24,
-          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 1),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, height: 1),
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-// Barra inferior do Home no padrão de navegação de browser: voltar,
-// avançar, nova aba circular, contador de abas e opções.
-class _ChromeBottomBar extends StatelessWidget {
-  const _ChromeBottomBar({
-    required this.tabCount,
-    required this.canGoBack,
-    required this.canGoForward,
-    required this.onBack,
-    required this.onForward,
-    required this.onNewTab,
-    required this.onTabs,
-    required this.onMore,
-  });
-  final int tabCount;
-  final bool canGoBack;
-  final bool canGoForward;
-  final VoidCallback onBack;
-  final VoidCallback onForward;
-  final VoidCallback onNewTab;
-  final VoidCallback onTabs;
-  final VoidCallback onMore;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final foreground = mainText(context);
-    final muted = mutedText(context);
-    final bg = pageBg(context);
-    return SafeArea(
-      top: false,
-      child: Container(
-        height: 66,
-        padding: const EdgeInsets.fromLTRB(18, 5, 18, 7),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border(top: BorderSide(color: lineColor(context).withOpacity(dark ? .55 : .75), width: .7)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _ChromeBarButton(icon: AppIcons.arrowLeft, color: canGoBack ? foreground : muted.withOpacity(.42), enabled: canGoBack, onTap: onBack),
-            _ChromeBarButton(icon: AppIcons.arrowRight, color: canGoForward ? foreground : muted.withOpacity(.42), enabled: canGoForward, onTap: onForward),
-            Material(
-              color: accentColor(context),
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: onNewTab,
-                child: const SizedBox(width: 48, height: 48, child: Center(child: Icon(Icons.add_rounded, size: 28, color: Colors.white))),
-              ),
-            ),
-            _ChromeBarButton(custom: _TabsCountIcon(count: tabCount, color: foreground), color: foreground, onTap: onTabs),
-            _ChromeBarButton(icon: AppIcons.dotsThreeVertical, color: foreground, onTap: onMore),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChromeBarButton extends StatelessWidget {
-  const _ChromeBarButton({this.icon, this.custom, required this.color, required this.onTap, this.enabled = true});
-  final IconData? icon;
-  final Widget? custom;
-  final Color color;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 48,
-    height: 48,
-    child: IconButton(
-      tooltip: icon == AppIcons.arrowLeft ? appText('go_back') : icon == AppIcons.arrowRight ? appText('go_forward') : '',
-      onPressed: enabled ? onTap : null,
-      icon: custom ?? AppMaterialIcon(icon!, color: color, size: 24),
-      color: color,
-      disabledColor: color,
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-    ),
-  );
 }

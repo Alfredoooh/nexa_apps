@@ -1,10 +1,10 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/services.dart';
 
 import '../screens/history_screen.dart';
 import '../screens/activity_screen.dart';
 import '../screens/games_screen.dart';
-import '../shell/push_page_route.dart';
 import '../screens/downloads_screen.dart';
 import '../screens/bookmarks_screen.dart';
 import '../screens/settings_screen.dart';
@@ -178,7 +178,7 @@ class LooplyDrawer extends StatelessWidget {
     // Espera o movimento push terminar antes de apresentar a página.
     await Future<void>.delayed(const Duration(milliseconds: 520));
     if (!navigator.mounted) return;
-    await navigator.push<void>(LooplyPushPageRoute<void>(builder: (_) => page));
+    await navigator.push<void>(CupertinoPageRoute<void>(builder: (_) => page));
     if (routeKey != null) {
       await SessionStore.instance.saveLastActivity(previous);
     }
@@ -228,7 +228,7 @@ Future<void> restoreDrawerPageActivity(
     return;
   }
   await Navigator.of(context).push<void>(
-    LooplyPushPageRoute<void>(builder: (_) => page),
+    CupertinoPageRoute<void>(builder: (_) => page),
   );
   await SessionStore.instance.saveLastActivity(returnTo);
 }
