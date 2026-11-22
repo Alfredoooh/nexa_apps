@@ -215,19 +215,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         _handleBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
-          statusBarColor: bg,
-          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: bg,
-          systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-          systemNavigationBarDividerColor: Colors.transparent,
-          systemNavigationBarContrastEnforced: false,
-          systemStatusBarContrastEnforced: false,
-        ),
+        value: isDark
+            ? SystemUiOverlayStyle.light.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.light, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.light, systemNavigationBarDividerColor: bg, systemNavigationBarContrastEnforced: false, statusBarContrastEnforced: false)
+            : SystemUiOverlayStyle.dark.copyWith(statusBarColor: bg, statusBarIconBrightness: Brightness.dark, systemNavigationBarColor: bg, systemNavigationBarIconBrightness: Brightness.dark, systemNavigationBarDividerColor: bg, systemNavigationBarContrastEnforced: false, statusBarContrastEnforced: false),
         child: Scaffold(
           backgroundColor: bg,
-          body: CustomScrollView(
+          body: SafeArea(
+          top: false,
+          bottom: true,
+          child: CustomScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               _DownloadsSliverAppBar(
@@ -271,6 +267,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               ],
             ],
           ),
+        ),
         ),
       ),
     );

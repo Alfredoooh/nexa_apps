@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lottie/lottie.dart';
 import 'dart:ui' show Rect;
 
@@ -20,10 +22,12 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     this.onOpenDrawer,
+    this.onOpenTabs,
     required this.recentTabPreviewKeys,
   });
 
   final VoidCallback? onOpenDrawer;
+  final VoidCallback? onOpenTabs;
   final Map<String, GlobalKey> recentTabPreviewKeys;
 
   @override
@@ -52,7 +56,7 @@ class HomeScreen extends StatelessWidget {
             top: 0,
             left: 0,
             right: 0,
-            child: LooplyHomeAppBar(onOpenDrawer: onOpenDrawer),
+            child: LooplyHomeAppBar(onOpenDrawer: onOpenDrawer, onOpenTabs: onOpenTabs),
           ),
         ],
       ),
@@ -60,14 +64,12 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// Barra superior: à esquerda, o botão do drawer (ícone de hambúrguer
-// customizado, duas linhas só — a de cima mais longa que a de baixo).
-// À direita, mostra o acesso à conta: Entrar sem sessão ou o avatar
-// da conta autenticada, que abre diretamente o Perfil.
+// Barra superior com drawer, logótipo, contador de abas e avatar PNG.
 class LooplyHomeAppBar extends StatelessWidget {
-  const LooplyHomeAppBar({super.key, this.onOpenDrawer});
+  const LooplyHomeAppBar({super.key, this.onOpenDrawer, this.onOpenTabs});
 
   final VoidCallback? onOpenDrawer;
+  final VoidCallback? onOpenTabs;
 
   @override
   Widget build(BuildContext context) {
@@ -132,11 +134,13 @@ class LooplyHomeAppBar extends StatelessWidget {
               ),
               Align(
                 alignment: Alignment.centerRight,
-                child: ValueListenableBuilder<LooplyUser?>(
-                  valueListenable: authController,
-                  builder: (context, user, _) => user == null
-                      ? const _CompactSignInButton()
-                      : _SignedInAvatar(user: user),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _HomeTabsButton(onPressed: onOpenTabs),
+                    const SizedBox(width: 5),
+                    const _HomeAvatarButton(),
+                  ],
                 ),
               ),
             ],
@@ -237,7 +241,7 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => Navigator.of(context, rootNavigator: true).push<void>(
-            MaterialPageRoute<void>(
+            CupertinoPageRoute<void>(
               builder: (_) => SearchScreen(
                 controller: _controller,
                 autoFocusDelay: Duration.zero,
@@ -255,38 +259,37 @@ class _HomeSearchInputState extends State<_HomeSearchInput> {
   }
 }
 
-class _SignedInAvatar extends StatelessWidget {
-  const _SignedInAvatar({required this.user});
-
-  final LooplyUser user;
+class _HomeAvatarButton extends StatelessWidget {
+  const _HomeAvatarButton();
 
   @override
   Widget build(BuildContext context) {
-    final background = pillColor(context);
-    return Tooltip(
-      message: appText('profile'),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () => Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: CircleAvatar(
-              radius: 17.5,
-              backgroundColor: background,
-              child: ClipOval(
-                child: user.photoUrl != null && user.photoUrl!.isNotEmpty
-                    ? Image.network(
-                        user.photoUrl!,
-                        width: 35,
-                        height: 35,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Image.asset('images/avatar.png', width: 35, height: 35, fit: BoxFit.cover),
-                      )
-                    : Image.asset('images/avatar.png', width: 35, height: 35, fit: BoxFit.cover),
+    return ValueListenableBuilder<LooplyUser?>(
+      valueListenable: authController,
+      builder: (context, user, _) => Tooltip(
+        message: user == null ? appText('sign_in') : appText('profile'),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () => Navigator.of(context).push<void>(
+              CupertinoPageRoute<void>(
+                builder: (_) => user == null ? const AuthScreen() : const ProfileScreen(),
+              ),
+            ),
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: Center(
+                child: ClipOval(
+                  child: Image.asset(
+                    'images/avatar.png',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
               ),
             ),
           ),
@@ -294,6 +297,66 @@ class _SignedInAvatar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HomeTabsButton extends StatelessWidget {
+  const _HomeTabsButton({this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: tabsController,
+        builder: (context, _) {
+          final color = mainText(context);
+          final count = tabsController.count;
+          return Tooltip(
+            message: appText('tabs'),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onPressed,
+                child: SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Center(
+                    child: SizedBox(
+                      width: 27,
+                      height: 27,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/svg/regular/tabs-counter.svg',
+                            width: 26,
+                            height: 26,
+                            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                count > 99 ? '99+' : '$count',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
 }
 
 // Até dez miniaturas, exclusivamente imagem. O toque envia a captura e a
@@ -391,49 +454,6 @@ class _RecentTabPreviewsCardState extends State<RecentTabPreviewsCard> {
           );
         },
       );
-}
-
-// Botão de Entrar compacto: sem ícone, sem largura cheia — encolhe ao
-// conteúdo do texto. Fica no canto direito do appbar.
-class _CompactSignInButton extends StatelessWidget {
-  const _CompactSignInButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final text = mainText(context);
-    return Material(
-      color: pillColor(context),
-      borderRadius: BorderRadius.circular(999),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.of(context).push<void>(
-          PageRouteBuilder<void>(
-            pageBuilder: (context, animation, secondaryAnimation) => const AuthScreen(),
-            transitionDuration: const Duration(milliseconds: 420),
-            reverseTransitionDuration: const Duration(milliseconds: 390),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              final slide = Tween<Offset>(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ));
-              return SlideTransition(position: slide, child: child);
-            },
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-          child: Text(
-            appText('sign_in'),
-            style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 void openNewTab(BuildContext context, String url, {String? title}) {

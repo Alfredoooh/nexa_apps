@@ -144,7 +144,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
           ),
         ],
       ),
-      body: AnimatedSwitcher(
+      body: SafeArea(top: false, bottom: true, child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
@@ -173,7 +173,7 @@ class _AllSitesScreenState extends State<AllSitesScreen> {
                   );
                 },
               ),
-      ),
+      )),
     );
   }
 }

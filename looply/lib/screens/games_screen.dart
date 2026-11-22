@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 
@@ -59,7 +60,7 @@ class _GamesScreenState extends State<GamesScreen> {
   void _openDetails(CatalogGame game) {
     HapticFeedback.selectionClick();
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
+      CupertinoPageRoute<void>(builder: (_) => GameDetailScreen(game: game)),
     );
   }
 
@@ -91,12 +92,13 @@ class _GamesScreenState extends State<GamesScreen> {
     final categories = _catalog?.categories ?? const <CatalogCategory>[];
     final events = _catalog?.events ?? const <CatalogEvent>[];
 
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: systemOverlay,
+      child: Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
         toolbarHeight: 64,
         automaticallyImplyLeading: false,
-        systemOverlayStyle: systemOverlay,
         leading: IconButton(
           tooltip: appText('back'),
           onPressed: () => Navigator.of(context).maybePop(),
@@ -230,6 +232,7 @@ class _GamesScreenState extends State<GamesScreen> {
                       const SliverToBoxAdapter(child: SizedBox(height: 32)),
                     ],
                   ),
+      ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 
@@ -100,6 +101,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
               systemNavigationBarColor: bg,
               systemNavigationBarIconBrightness: Brightness.light,
               systemNavigationBarDividerColor: bg,
+              systemNavigationBarContrastEnforced: false,
+              statusBarContrastEnforced: false,
             )
           : SystemUiOverlayStyle.dark.copyWith(
               statusBarColor: bg,
@@ -107,6 +110,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
               systemNavigationBarColor: bg,
               systemNavigationBarIconBrightness: Brightness.dark,
               systemNavigationBarDividerColor: bg,
+              systemNavigationBarContrastEnforced: false,
+              statusBarContrastEnforced: false,
             ),
       child: Scaffold(
         backgroundColor: bg,
@@ -128,9 +133,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
           title: Text(appText('activity'),
               style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
         ),
-        body: !hasActivity
-            ? _ActivityEmptyState(dark: dark)
-            : ListView(
+        body: SafeArea(
+          top: false,
+          bottom: true,
+          child: !hasActivity
+              ? _ActivityEmptyState(dark: dark)
+              : ListView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: const EdgeInsets.fromLTRB(14, 10, 14, 24),
           children: [
@@ -147,7 +155,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Expanded(child: Text(appText('recent'), style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w800))),
                 if (entries.isNotEmpty)
                   TextButton(
-                    onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => const HistoryScreen())),
+                    onPressed: () => Navigator.of(context).push<void>(CupertinoPageRoute<void>(builder: (_) => const HistoryScreen())),
                     child: Text(appText('view_all')),
                   ),
               ],
@@ -188,6 +196,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 );
               }),
           ],
+        ),
         ),
       ),
     );
@@ -747,7 +756,7 @@ class _VisitedSitesCard extends StatelessWidget {
         onTap: hosts.isEmpty
             ? null
             : () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
+                  CupertinoPageRoute<void>(builder: (_) => const SiteUsageDetailScreen()),
                 ),
         borderRadius: BorderRadius.circular(22),
         child: Padding(

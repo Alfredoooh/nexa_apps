@@ -103,7 +103,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         const val EXTRA_TAB_COUNT = "com.looply.browser.app.orbit.TAB_COUNT"
         const val EXTRA_PREVIEW_ONLY = "com.looply.browser.app.orbit.PREVIEW_ONLY"
         const val EXTRA_MENU_LABELS_JSON = "com.looply.browser.app.orbit.MENU_LABELS_JSON"
-        const val EXTRA_INITIAL_ACTION = "com.looply.browser.app.orbit.INITIAL_ACTION"
 
         const val RESULT_URL = "com.looply.browser.app.orbit.RESULT_URL"
         const val RESULT_TITLE = "com.looply.browser.app.orbit.RESULT_TITLE"
@@ -112,8 +111,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         const val RESULT_THUMBNAIL = "com.looply.browser.app.orbit.RESULT_THUMBNAIL"
         const val RESULT_TRANSITION_SCREENSHOT = "com.looply.browser.app.orbit.RESULT_TRANSITION_SCREENSHOT"
         const val RESULT_NEW_URL = "com.looply.browser.app.orbit.RESULT_NEW_URL"
-        const val RESULT_CAN_GO_BACK = "com.looply.browser.app.orbit.RESULT_CAN_GO_BACK"
-        const val RESULT_CAN_GO_FORWARD = "com.looply.browser.app.orbit.RESULT_CAN_GO_FORWARD"
 
         private const val INTERNAL_ERROR_BASE = "https://browseit.internal/error/"
         private const val PREFS = "FlutterSharedPreferences"
@@ -124,9 +121,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         private const val PREF_FORCE_DARK = "flutter.looply_force_dark_websites"
         private const val PREF_ADAPTIVE_TOOLBAR = "flutter.looply_adaptive_toolbar_color"
         private const val PREF_ADBLOCK_STATS = "flutter.looply_adblock_daily_history_v2"
-        private const val PREF_ASSISTIVE_ENABLED = "flutter.browseit_assistive_touch_enabled"
-        private const val PREF_ASSISTIVE_X = "flutter.browseit_assistive_touch_position_v2_x"
-        private const val PREF_ASSISTIVE_Y = "flutter.browseit_assistive_touch_position_v2_y"
 
         private const val STATE_WEBVIEW = "orbit.webview.state"
         private const val STATE_URL = "orbit.url"
@@ -331,16 +325,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private lateinit var findBar: LinearLayout
     private lateinit var findField: EditText
     private lateinit var tabsButton: android.widget.FrameLayout
-    private lateinit var bottomBar: LinearLayout
-    private var browserBackButton: View? = null
-    private var browserForwardButton: View? = null
-    // O overlay ocupa a janela inteira para manter as coordenadas partilhadas
-    // com o Flutter, mas só o círculo recebe eventos de toque.
-    private var assistiveTouchOverlay: android.widget.FrameLayout? = null
-    private var assistiveTouchVisual: android.widget.FrameLayout? = null
-    private var assistiveTouchDimRunnable: Runnable? = null
-    private var assistiveTouchDialog: Dialog? = null
-    private var initialAction: String = ""
 
     @Volatile private var currentUrl = "https://www.google.com"
     private var currentTitle = "Google"
@@ -406,20 +390,36 @@ class OrbitBrowserActivity : AppCompatActivity() {
         get() = when {
             !dark -> Color.WHITE
             pureBlack -> Color.BLACK
-            else -> Color.rgb(15, 15, 15) // #0F0F0F
+            else -> Color.rgb(25, 26, 28)
         }
 
     private val toolbarBg: Int
-        get() = pageToolbarColor ?: pageBg
+        get() = pageToolbarColor ?: when {
+            !dark -> Color.WHITE
+            pureBlack -> Color.rgb(16, 16, 16)
+            else -> Color.rgb(31, 33, 36)
+        }
 
     private val primaryText: Int
-        get() = if (dark) Color.rgb(245, 245, 245) else Color.rgb(32, 33, 36)
+        get() = if (dark) {
+            Color.rgb(232, 234, 237)
+        } else {
+            Color.rgb(32, 33, 36)
+        }
 
     private val secondaryText: Int
-        get() = if (dark) Color.rgb(168, 168, 168) else Color.rgb(95, 99, 104)
+        get() = if (dark) {
+            Color.rgb(174, 178, 184)
+        } else {
+            Color.rgb(95, 99, 104)
+        }
 
     private val accent: Int
-        get() = if (dark) Color.rgb(0, 149, 246) else Color.rgb(26, 115, 232)
+        get() = if (dark) {
+            Color.rgb(138, 180, 248)
+        } else {
+            Color.rgb(26, 115, 232)
+        }
 
     private val adBlockEnabled: Boolean
         get() = prefs.getBoolean(PREF_AD_BLOCK, true)
@@ -460,7 +460,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         tabCount = intent.getIntExtra(EXTRA_TAB_COUNT, 1).coerceAtLeast(1)
         incognito = intent.getBooleanExtra(EXTRA_INCOGNITO, false)
         previewOnly = intent.getBooleanExtra(EXTRA_PREVIEW_ONLY, false)
-        initialAction = intent.getStringExtra(EXTRA_INITIAL_ACTION).orEmpty()
         menuLabels = runCatching {
             JSONObject(intent.getStringExtra(EXTRA_MENU_LABELS_JSON) ?: "{}")
         }.getOrDefault(JSONObject())
@@ -500,15 +499,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             refreshTitle()
         } else {
             webView.loadUrl(currentUrl)
-        }
-        if (restored && initialAction.isNotBlank()) {
-            webView.post {
-                when (initialAction) {
-                    "back" -> if (webView.canGoBack()) webView.goBack()
-                    "forward" -> if (webView.canGoForward()) webView.goForward()
-                }
-                initialAction = ""
-            }
         }
     }
 
@@ -615,11 +605,21 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }
         )
 
-        // Os controlos de abas e opções ficam na barra inferior estilo Chrome.
-        tabsButton = tabCountButton(tabCount) { finishToFlutter("tabs") }
-        moreButton = actionButton("more_vert", menuText("options", "More options"), primaryText) {
+        tabsButton = tabCountButton(tabCount) {
+            finishToFlutter("tabs")
+        }
+
+        toolbar.addView(
+            tabsButton,
+            LinearLayout.LayoutParams(dp(42), dp(46))
+        )
+
+        // Mantém os três pontos verticais do Orbit; o menu usa PopupWindow
+        // arredondado, mas o botão original da barra não é substituído.
+        moreButton = actionButton("more_vert", menuText("options", "More options")) {
             showBrowserPopupMenu(moreButton)
         }
+        toolbar.addView(moreButton, LinearLayout.LayoutParams(dp(42), dp(46)))
 
         progress = ProgressBar(
             this,
@@ -667,7 +667,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             background = null
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             inputType = InputType.TYPE_CLASS_TEXT
-            configureLocalizedInput(this)
 
             setOnEditorActionListener { _, _, _ ->
                 webView.findNext(true)
@@ -745,11 +744,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
             addView(webView, ViewGroup.LayoutParams(-1, -1))
         }
         root.addView(swipeRefreshLayout, LinearLayout.LayoutParams(-1, 0, 1f))
-        bottomBar = createBrowserBottomBar()
-        root.addView(bottomBar, LinearLayout.LayoutParams(-1, dp(60)))
         setContentView(root)
         applySystemBars()
-        root.post { installAssistiveTouchOverlay() }
 
         if (Build.VERSION.SDK_INT >= 23) {
             webView.setOnScrollChangeListener {
@@ -1105,7 +1101,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 progress.alpha = 1f
                 refreshTitle()
                 updateToolbarColors()
-                updateNavigationButtonStates()
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -1115,7 +1110,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
                     progress.visibility = View.GONE
                     refreshTitle()
                     updateToolbarColors()
-                    updateNavigationButtonStates()
                     return
                 }
 
@@ -1128,7 +1122,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
                 refreshTitle()
                 updateToolbarColors()
-                updateNavigationButtonStates()
                 view.evaluateJavascript(MEDIA_COMPATIBILITY_SCRIPT, null)
                 if (desktopMode) view.evaluateJavascript(DESKTOP_VIEWPORT_SCRIPT, null)
                 if (adBlockEnabled) {
@@ -1279,7 +1272,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
     private fun actionButton(
         symbol: String,
         description: String,
-        iconColor: Int = toolbarText(),
         onClick: () -> Unit
     ): android.widget.FrameLayout {
         return android.widget.FrameLayout(this).apply {
@@ -1291,7 +1283,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 MaterialSymbolsRounded.textView(
                     this@OrbitBrowserActivity,
                     symbol,
-                    iconColor,
+                    toolbarText(),
                     24f,
                 ),
                 android.widget.FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER),
@@ -1321,58 +1313,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
     }
 
-    private fun createBrowserBottomBar(): LinearLayout {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(4), dp(10), dp(4))
-            // Flutter browserBottomBarColor() is always the page surface,
-            // even when the address toolbar follows the website's adaptive colour.
-            setBackgroundColor(pageBg)
-        }
-        fun addWeighted(view: View) {
-            bar.addView(view, LinearLayout.LayoutParams(0, dp(50), 1f))
-        }
-        val back = actionButton("arrow_back", menuText("back", "Back"), primaryText) {
-            if (webView.canGoBack()) webView.goBack()
-        }.also { browserBackButton = it }
-        val forward = actionButton("arrow_forward", menuText("forward", "Forward"), primaryText) {
-            if (webView.canGoForward()) webView.goForward()
-        }.also { browserForwardButton = it }
-        val add = android.widget.FrameLayout(this).apply {
-            contentDescription = menuText("newTab", "New tab")
-            isClickable = true
-            isFocusable = true
-            background = rounded(accent, 999)
-            addView(
-                MaterialSymbolsRounded.textView(this@OrbitBrowserActivity, "add", Color.WHITE, 27f),
-                android.widget.FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER),
-            )
-            setOnClickListener { finishToFlutter("newTab") }
-        }
-        addWeighted(back)
-        addWeighted(forward)
-        addWeighted(add)
-        addWeighted(tabsButton)
-        addWeighted(moreButton)
-        updateNavigationButtonStates()
-        return bar
-    }
-
-    private fun updateNavigationButtonStates() {
-        if (!::webView.isInitialized) return
-        browserBackButton?.let { button ->
-            val enabled = webView.canGoBack()
-            button.isEnabled = enabled
-            button.alpha = if (enabled) 1f else .38f
-        }
-        browserForwardButton?.let { button ->
-            val enabled = webView.canGoForward()
-            button.isEnabled = enabled
-            button.alpha = if (enabled) 1f else .38f
-        }
-    }
-
     private fun tintTabCountButton(color: Int) {
         if (!::tabsButton.isInitialized) return
         (tabsButton.getChildAt(0) as? ImageView)?.setImageDrawable(
@@ -1391,51 +1331,20 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val overlay = if (dark) R.style.LooplyBrowserDialog_Dark else R.style.LooplyBrowserDialog_Light
         val dialogSurface = when {
             !dark -> Color.WHITE
-            pureBlack -> Color.rgb(18, 18, 18) // looplyPanelAmoled (#121212)
-            else -> Color.rgb(28, 29, 30) // looplyPanelDark (#1C1D1E)
+            pureBlack -> Color.rgb(25, 25, 25)
+            else -> Color.rgb(43, 45, 48)
         }
         return MaterialAlertDialogBuilder(this, overlay)
             .setBackground(rounded(dialogSurface, 24))
     }
 
-    private fun applyDialogSystemBars(dialog: android.app.Dialog) {
-        dialog.window?.let { dialogWindow ->
-            dialogWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-            dialogWindow.statusBarColor = toolbarBg
-            dialogWindow.navigationBarColor = pageBg
-            if (Build.VERSION.SDK_INT >= 29) {
-                dialogWindow.isNavigationBarContrastEnforced = false
-                dialogWindow.isStatusBarContrastEnforced = false
-                dialogWindow.navigationBarDividerColor = pageBg
-            }
-            WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView).apply {
-                isAppearanceLightStatusBars = isLight(toolbarBg)
-                isAppearanceLightNavigationBars = !dark
-            }
-        }
-    }
-
-    /** Dialogs centered and inset from the screen edges, like Looply's Flutter modal cards. */
     private fun applyLooplyDialogDim(dialog: android.app.Dialog) {
         dialog.window?.let { dialogWindow ->
-            applyDialogSystemBars(dialog)
             dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            val maxWidth = minOf(dp(560), resources.displayMetrics.widthPixels - dp(24))
-            dialogWindow.setLayout(maxWidth.coerceAtLeast(dp(260)), WindowManager.LayoutParams.WRAP_CONTENT)
-            dialogWindow.setGravity(Gravity.CENTER)
             val attributes = dialogWindow.attributes
-            attributes.dimAmount = .32f
+            attributes.dimAmount = .34f
             dialogWindow.attributes = attributes
         }
-    }
-
-    private fun configureLocalizedInput(input: EditText) {
-        val language = menuLabels.optString("appLocale", "pt").ifBlank { "pt" }
-        val rtl = language.startsWith("ar", ignoreCase = true)
-        input.textLocale = Locale.forLanguageTag(language)
-        input.textDirection = View.TEXT_DIRECTION_LOCALE
-        input.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
-        input.textAlignment = View.TEXT_ALIGNMENT_VIEW_START
     }
 
     private fun showAddressDialog() {
@@ -1447,11 +1356,9 @@ class OrbitBrowserActivity : AppCompatActivity() {
             hint = menuText("searchHint", "Search or enter a URL")
             setText(currentUrl)
             setSelection(text.length)
-            // Do not force the URI keyboard layout: several non-Latin
-            // IMEs corrupt composing text when TYPE_TEXT_VARIATION_URI is set.
-            inputType = InputType.TYPE_CLASS_TEXT
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
-            configureLocalizedInput(this)
         }
 
         val container = LinearLayout(this).apply {
@@ -1958,12 +1865,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
         if (!isSafeWebUrl(primaryTarget)) return
 
         val dialog = Dialog(this)
-        val surface = when {
-            !dark -> Color.WHITE
-            pureBlack -> Color.rgb(18, 18, 18)
-            else -> Color.rgb(28, 29, 30)
-        }
-        val divider = if (!dark) Color.rgb(232, 234, 237) else Color.rgb(54, 54, 54)
+        val surface = if (!dark) Color.WHITE else if (pureBlack) Color.rgb(28, 28, 30) else Color.rgb(53, 55, 64)
+        val divider = if (!dark) Color.rgb(225, 227, 230) else Color.rgb(77, 79, 88)
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(surface, 25)
@@ -1977,7 +1880,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         }
         val thumb = ImageView(this).apply {
             scaleType = if (isImage || isVideo) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.CENTER_INSIDE
-            background = rounded(if (dark) if (pureBlack) Color.rgb(38, 38, 38) else Color.rgb(38, 39, 40) else Color.rgb(240, 241, 243), if (isImage || isVideo) 3 else 999)
+            background = rounded(if (dark) Color.rgb(44, 46, 54) else Color.rgb(239, 241, 244), if (isImage || isVideo) 3 else 999)
             clipToOutline = true
         }
         val thumbnailUrl = when {
@@ -2130,7 +2033,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         dialog.setContentView(card, ViewGroup.LayoutParams(-1, -2))
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.show()
-        applyLooplyDialogDim(dialog)
         val dialogWidth = minOf(dp(560), (resources.displayMetrics.widthPixels * .80f).toInt())
         val maxDialogHeight = (resources.displayMetrics.heightPixels * .82f).toInt()
         card.measure(
@@ -2294,10 +2196,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
         val dialog = Dialog(this)
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(
-                if (dark) if (pureBlack) Color.rgb(18, 18, 18) else Color.rgb(28, 29, 30) else Color.WHITE,
-                24,
-            )
+            background = rounded(pageBg, 14)
             clipToOutline = true
         }
         val top = LinearLayout(this).apply {
@@ -2401,7 +2300,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(.42f)
         }
-        applyDialogSystemBars(dialog)
 
         val previewBackground = cssColor(pageBg)
         val previewForeground = cssColor(primaryText)
@@ -2632,13 +2530,11 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 setTextIsSelectable(true)
             }
             val scroll = ScrollView(this).apply { addView(body) }
-            val dialog = looplyMaterialDialogBuilder()
+            MaterialAlertDialogBuilder(this)
                 .setTitle(localizedBrowserText("Código-fonte da página", "Page source"))
                 .setView(scroll)
                 .setPositiveButton(menuText("close", "Close"), null)
-                .create()
-            dialog.show()
-            applyLooplyDialogDim(dialog)
+                .show()
         }
     }
 
@@ -3053,7 +2949,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
         dialog.show()
-        applyDialogSystemBars(dialog)
     }
 
     private fun applyPageZoomToCurrentPage() {
@@ -3201,24 +3096,7 @@ class OrbitBrowserActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(-1, dp(500)))
             val dialog = BottomSheetDialog(this)
             dialog.setContentView(content)
-            dialog.setOnShowListener {
-                val sheet = dialog.findViewById<android.widget.FrameLayout>(
-                    com.google.android.material.R.id.design_bottom_sheet
-                ) ?: return@setOnShowListener
-                sheet.setBackgroundColor(Color.TRANSPARENT)
-                val params = sheet.layoutParams as? ViewGroup.MarginLayoutParams
-                params?.let {
-                    it.width = ViewGroup.LayoutParams.MATCH_PARENT
-                    it.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                    it.marginStart = dp(12)
-                    it.marginEnd = dp(12)
-                    it.bottomMargin = dp(12) + navigationBarInsetPx()
-                    sheet.layoutParams = it
-                }
-                dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            }
             dialog.show()
-            applyDialogSystemBars(dialog)
             dialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
         }
     }
@@ -3323,8 +3201,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
             if (::appBarContainer.isInitialized) appBarContainer.setBackgroundColor(toolbarBg)
             if (::titlePill.isInitialized) titlePill.background = rounded(toolbarPillColor(), 24)
             if (::titleView.isInitialized) titleView.setTextColor(toolbarText())
-            tintTabCountButton(primaryText)
-            tintMenuOptionsButton(primaryText)
+            tintTabCountButton(toolbarText())
+            tintMenuOptionsButton(toolbarText())
             tintHomeButton(toolbarText())
             applySystemBars()
             return
@@ -3360,8 +3238,8 @@ class OrbitBrowserActivity : AppCompatActivity() {
                 titlePill.background = rounded(toolbarPillColor(), 24)
 
                 titleView.setTextColor(toolbarText())
-                tintTabCountButton(primaryText)
-                tintMenuOptionsButton(primaryText)
+                tintTabCountButton(toolbarText())
+                tintMenuOptionsButton(toolbarText())
                 tintHomeButton(toolbarText())
             }
         }
@@ -3391,23 +3269,27 @@ class OrbitBrowserActivity : AppCompatActivity() {
     }
 
     private fun toolbarText(): Int {
-        // Use exactly the Flutter foreground token unless the website has
-        // explicitly requested an adaptive toolbar colour.
-        if (pageToolbarColor == null) return primaryText
-        return if (isLight(toolbarBg)) Color.rgb(32, 33, 36) else Color.rgb(245, 245, 245)
+        val color = toolbarBg
+
+        val luminance = (
+            0.2126 * Color.red(color) +
+                0.7152 * Color.green(color) +
+                0.0722 * Color.blue(color)
+            ) / 255.0
+
+        return if (luminance > .55) {
+            Color.rgb(32, 33, 36)
+        } else {
+            Color.rgb(245, 246, 247)
+        }
     }
 
     private fun toolbarPillColor(): Int {
-        if (pageToolbarColor == null) {
-            return when {
-                !dark -> Color.rgb(240, 241, 243) // looplyInputBarLight
-                pureBlack -> Color.rgb(38, 38, 38) // looplyPanel2Amoled
-                else -> Color.rgb(28, 29, 30) // looplyInputBarDark = looplyPanelDark
-            }
-        }
         val base = toolbarBg
+        // Sobre barras claras, escurece ligeiramente o pill (branco -> cinza
+        // muito claro). Sobre barras escuras, clareia-o para criar separação.
         val neutral = if (isLight(base)) Color.BLACK else Color.WHITE
-        val fraction = if (isLight(base)) .045f else .10f
+        val fraction = if (isLight(base)) .055f else .12f
         return blendColor(base, neutral, fraction)
     }
 
@@ -3423,226 +3305,17 @@ class OrbitBrowserActivity : AppCompatActivity() {
 
     private fun applySystemBars() {
         val status = toolbarBg
+
         window.statusBarColor = status
         window.navigationBarColor = pageBg
-        if (Build.VERSION.SDK_INT >= 29) {
-            window.isNavigationBarContrastEnforced = false
-            window.isStatusBarContrastEnforced = false
-            window.navigationBarDividerColor = pageBg
-        }
+
         val controller = WindowInsetsControllerCompat(window, root)
         controller.isAppearanceLightStatusBars = isLight(status)
         controller.isAppearanceLightNavigationBars = !dark
-    }
 
-    private fun installAssistiveTouchOverlay() {
-        val shared = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        if (!shared.getBoolean(PREF_ASSISTIVE_ENABLED, true)) return
-        val decor = window.decorView as? ViewGroup ?: return
-
-        assistiveTouchOverlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        val overlayRoot = android.widget.FrameLayout(this).apply {
-            clipChildren = false
-            clipToPadding = false
-            isClickable = false
-            isFocusable = false
-            setBackgroundColor(Color.TRANSPARENT)
+        if (Build.VERSION.SDK_INT >= 29) {
+            window.isNavigationBarContrastEnforced = false
         }
-        val touch = android.widget.FrameLayout(this).apply {
-            contentDescription = "Assistive Touch"
-            isClickable = true
-            isFocusable = true
-            elevation = dp(24).toFloat()
-        }
-        fun ring(fraction: Float, color: Int) {
-            val diameter = (dp(58) * fraction).roundToInt()
-            val ring = View(this).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(color)
-                }
-            }
-            touch.addView(ring, android.widget.FrameLayout.LayoutParams(diameter, diameter, Gravity.CENTER))
-        }
-        // As mesmas quatro camadas e cores de GlobalSitesFloatingButton no Flutter.
-        ring(1f, Color.rgb(32, 42, 52))
-        ring(.76f, Color.rgb(96, 103, 107))
-        ring(.64f, Color.rgb(150, 155, 159))
-        ring(.46f, Color.WHITE)
-
-        val density = resources.displayMetrics.density.coerceAtLeast(.1f)
-        val screenW = decor.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-        val screenH = decor.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
-        fun readSharedDp(key: String, fallbackPx: Float): Float {
-            val stored = shared.all[key]
-            val dpValue = when (stored) {
-                is String -> stored.toFloatOrNull()
-                is Float -> stored
-                is Double -> stored.toFloat()
-                is Long -> stored.toFloat()
-                is Int -> stored.toFloat()
-                else -> null
-            }
-            return (dpValue?.times(density) ?: fallbackPx)
-        }
-        val defaultX = (screenW - dp(58) - dp(18)).coerceAtLeast(dp(6)).toFloat()
-        val defaultY = (screenH - navigationBarInsetPx() - dp(110) - dp(58)).coerceAtLeast(dp(6)).toFloat()
-        val startX = readSharedDp(PREF_ASSISTIVE_X, defaultX)
-        val startY = readSharedDp(PREF_ASSISTIVE_Y, defaultY)
-        val params = android.widget.FrameLayout.LayoutParams(dp(58), dp(58), Gravity.TOP or Gravity.START).apply {
-            leftMargin = startX.roundToInt().coerceIn(dp(6), (screenW - dp(64)).coerceAtLeast(dp(6)))
-            topMargin = startY.roundToInt().coerceIn(statusBarInsetPx() + dp(6), (screenH - navigationBarInsetPx() - dp(64)).coerceAtLeast(dp(6)))
-        }
-        touch.alpha = 1f
-        var downRawX = 0f
-        var downRawY = 0f
-        var startLeft = params.leftMargin
-        var startTop = params.topMargin
-        var dragging = false
-        touch.setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    downRawX = event.rawX
-                    downRawY = event.rawY
-                    startLeft = (view.layoutParams as android.widget.FrameLayout.LayoutParams).leftMargin
-                    startTop = (view.layoutParams as android.widget.FrameLayout.LayoutParams).topMargin
-                    dragging = false
-                    true
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - downRawX).roundToInt()
-                    val dy = (event.rawY - downRawY).roundToInt()
-                    if (kotlin.math.abs(dx) + kotlin.math.abs(dy) > dp(4)) dragging = true
-                    if (dragging) {
-                        val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
-                        lp.leftMargin = (startLeft + dx).coerceIn(dp(6), (screenW - dp(64)).coerceAtLeast(dp(6)))
-                        lp.topMargin = (startTop + dy).coerceIn(statusBarInsetPx() + dp(6), (screenH - navigationBarInsetPx() - dp(64)).coerceAtLeast(dp(6)))
-                        view.layoutParams = lp
-                        view.alpha = 1f
-                    }
-                    true
-                }
-                android.view.MotionEvent.ACTION_UP -> {
-                    if (dragging) {
-                        val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
-                        val left = if (lp.leftMargin + dp(29) < screenW / 2) dp(8) else screenW - dp(66)
-                        lp.leftMargin = left.coerceAtLeast(dp(6))
-                        view.layoutParams = lp
-                        // Flutter SharedPreferences guarda as coordenadas em logical pixels (dp).
-                        shared.edit()
-                            .putString(PREF_ASSISTIVE_X, (lp.leftMargin / density).toString())
-                            .putString(PREF_ASSISTIVE_Y, (lp.topMargin / density).toString())
-                            .apply()
-                    } else {
-                        showAssistiveTouchDialog()
-                    }
-                    view.performClick()
-                    true
-                }
-                android.view.MotionEvent.ACTION_CANCEL -> true
-                else -> false
-            }
-        }
-        overlayRoot.addView(touch, params)
-        decor.addView(
-            overlayRoot,
-            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-        )
-        assistiveTouchOverlay = overlayRoot
-        assistiveTouchVisual = touch
-        val dim = Runnable {
-            if (assistiveTouchVisual === touch && assistiveTouchDialog == null) {
-                touch.animate().alpha(.56f).setDuration(680L).start()
-            }
-        }
-        assistiveTouchDimRunnable = dim
-        Handler(Looper.getMainLooper()).postDelayed(dim, 7000L)
-    }
-
-    private fun showAssistiveTouchDialog() {
-        assistiveTouchDimRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-        assistiveTouchVisual?.animate()?.alpha(1f)?.setDuration(140L)?.start()
-        if (assistiveTouchDialog?.isShowing == true) return
-        val dialog = Dialog(this)
-        val panelHeight = if (resources.configuration.screenHeightDp < 520) dp(220) else dp(300)
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.TOP or Gravity.START
-            setPadding(dp(18), dp(18), dp(18), dp(16))
-            minimumHeight = panelHeight
-            background = rounded(if (dark) if (pureBlack) Color.rgb(18, 18, 18) else Color.rgb(28, 29, 30) else Color.WHITE, 28)
-        }
-        val aiTile = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(4), dp(8), dp(4), dp(8))
-            isClickable = true
-            isFocusable = true
-            background = selectableBackground()
-            val iconTile = android.widget.FrameLayout(this@OrbitBrowserActivity).apply {
-                background = rounded(
-                    if (dark) if (pureBlack) Color.rgb(38, 38, 38) else Color.rgb(38, 39, 40)
-                    else Color.rgb(240, 241, 243),
-                    17,
-                )
-                val aiImage = runCatching {
-                    assets.open("flutter_assets/assets/ai_search/ai.png").use { stream ->
-                        android.graphics.BitmapFactory.decodeStream(stream)
-                    }
-                }.getOrNull()
-                val iconView = if (aiImage != null) {
-                    ImageView(this@OrbitBrowserActivity).apply {
-                        setImageBitmap(aiImage)
-                        setColorFilter(primaryText, android.graphics.PorterDuff.Mode.SRC_IN)
-                        scaleType = ImageView.ScaleType.FIT_CENTER
-                    }
-                } else {
-                    MaterialSymbolsRounded.textView(this@OrbitBrowserActivity, "auto_awesome", primaryText, 28f)
-                }
-                addView(iconView, android.widget.FrameLayout.LayoutParams(dp(37), dp(37), Gravity.CENTER))
-            }
-            addView(iconTile, LinearLayout.LayoutParams(dp(58), dp(58)))
-            addView(TextView(this@OrbitBrowserActivity).apply {
-                text = "AI"
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(primaryText)
-                setPadding(0, dp(6), 0, 0)
-            }, LinearLayout.LayoutParams(-1, -2))
-            setOnClickListener {
-                dialog.dismiss()
-                finishToFlutter("aiSearch")
-            }
-        }
-        panel.addView(aiTile, LinearLayout.LayoutParams(dp(76), -2))
-        dialog.setContentView(panel, ViewGroup.LayoutParams(-1, panelHeight))
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.setOnDismissListener {
-            assistiveTouchDialog = null
-            assistiveTouchVisual?.animate()?.alpha(1f)?.setDuration(150L)?.start()
-            assistiveTouchDimRunnable?.let { Handler(Looper.getMainLooper()).postDelayed(it, 7000L) }
-        }
-        dialog.show()
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            setLayout((resources.displayMetrics.widthPixels - dp(24)).coerceAtMost(dp(560)), panelHeight)
-            setGravity(Gravity.BOTTOM)
-            attributes = attributes.apply { y = dp(12) + navigationBarInsetPx() }
-            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(.24f)
-            statusBarColor = toolbarBg
-            navigationBarColor = pageBg
-            if (Build.VERSION.SDK_INT >= 29) {
-                isNavigationBarContrastEnforced = false
-                isStatusBarContrastEnforced = false
-                navigationBarDividerColor = pageBg
-            }
-            WindowInsetsControllerCompat(this, decorView).apply {
-                isAppearanceLightStatusBars = isLight(toolbarBg)
-                isAppearanceLightNavigationBars = !dark
-            }
-        }
-        assistiveTouchDialog = dialog
     }
 
     private fun isLight(color: Int): Boolean {
@@ -3778,8 +3451,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
             putExtra(RESULT_TITLE, currentTitle)
             putExtra(RESULT_TAB_ID, tabId)
             putExtra(RESULT_ACTION, action)
-            putExtra(RESULT_CAN_GO_BACK, if (::webView.isInitialized) webView.canGoBack() else false)
-            putExtra(RESULT_CAN_GO_FORWARD, if (::webView.isInitialized) webView.canGoForward() else false)
             if (newUrl != null) putExtra(RESULT_NEW_URL, newUrl)
             pageThumbnail?.let { putExtra(RESULT_THUMBNAIL, it) }
             fullScreenshot?.let { putExtra(RESULT_TRANSITION_SCREENSHOT, it) }
@@ -3970,13 +3641,6 @@ class OrbitBrowserActivity : AppCompatActivity() {
         if (incognito) {
             CookieManager.getInstance().setAcceptCookie(true)
         }
-
-        assistiveTouchDimRunnable?.let { Handler(Looper.getMainLooper()).removeCallbacks(it) }
-        assistiveTouchDialog?.dismiss()
-        assistiveTouchDialog = null
-        assistiveTouchOverlay?.let { (it.parent as? ViewGroup)?.removeView(it) }
-        assistiveTouchOverlay = null
-        assistiveTouchVisual = null
 
         if (::webView.isInitialized) {
             (webView.parent as? ViewGroup)?.removeView(webView)

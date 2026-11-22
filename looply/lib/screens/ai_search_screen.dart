@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
+
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:lottie/lottie.dart';
@@ -485,7 +487,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                         onTap: () {
                           FocusScope.of(context).unfocus();
                           Navigator.of(context).push<void>(
-                            MaterialPageRoute<void>(builder: (_) => const SearchScreen()),
+                            CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
                           );
                         },
                         child: SizedBox(

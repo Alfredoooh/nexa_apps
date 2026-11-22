@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:material_ui/material_ui.dart';
 
 import '../localization.dart';
@@ -51,7 +52,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
     // show a second system prompt for the same visit.
     if (!_authorized || !mounted) return;
     await Navigator.of(context, rootNavigator: true).push<void>(
-      MaterialPageRoute<void>(builder: (_) => const BlockedSitesScreen()),
+      CupertinoPageRoute<void>(builder: (_) => const BlockedSitesScreen()),
     );
   }
 
@@ -82,8 +83,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
         title: Text(appText('security_title'), maxLines: 1, overflow: TextOverflow.ellipsis,
           style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600)),
       ),
-      body: _checking
-          ? Center(child: CircularProgressIndicator(color: accentColor(context), strokeWidth: 2.2))
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: _checking
+            ? Center(child: CircularProgressIndicator(color: accentColor(context), strokeWidth: 2.2))
           : !_authorized
               ? const SizedBox.shrink()
               : ListView(
@@ -129,6 +133,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     ),
                   ],
                 ),
+      ),
     );
   }
 }

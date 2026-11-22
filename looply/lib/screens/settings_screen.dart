@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageRoute;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:m3e_segmented_list/m3e_segmented_list.dart';
@@ -40,9 +41,9 @@ class SettingsScreen extends StatelessWidget {
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         systemNavigationBarColor: bg,
         systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarDividerColor: bg,
         systemNavigationBarContrastEnforced: false,
-        systemStatusBarContrastEnforced: false,
+        statusBarContrastEnforced: false,
       ),
       child: Scaffold(
         backgroundColor: bg,
@@ -68,7 +69,10 @@ class SettingsScreen extends StatelessWidget {
             style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w600),
           ),
         ),
-        body: ListView(
+        body: SafeArea(
+          top: false,
+          bottom: true,
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
             ValueListenableBuilder<LooplyUser?>(
@@ -108,7 +112,7 @@ class SettingsScreen extends StatelessWidget {
                     builder: (_, language, __) => _SettingsValue(language.nativeName),
                   ),
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const LanguageScreen()),
+                    CupertinoPageRoute<void>(builder: (_) => const LanguageScreen()),
                   ),
                 ),
                 const _DefaultBrowserSettingsTile(),
@@ -205,7 +209,7 @@ class SettingsScreen extends StatelessWidget {
                   label: 'Segurança e privacidade',
                   subtitle: 'Sites bloqueados, PIN e palavras-passe',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const SecurityScreen()),
+                    CupertinoPageRoute<void>(builder: (_) => const SecurityScreen()),
                   ),
                 ),
               ],
@@ -270,12 +274,13 @@ class SettingsScreen extends StatelessWidget {
                   label: appText('app_info'),
                   subtitle: 'BrowseIt',
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const AppInfoScreen()),
+                    CupertinoPageRoute<void>(builder: (_) => const AppInfoScreen()),
                   ),
                 ),
               ],
             ),
           ],
+        ),
         ),
       ),
     );
@@ -318,7 +323,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _openLibraryPage(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    Navigator.of(context).push(CupertinoPageRoute<void>(builder: (_) => page));
   }
 
   String _themeLabel(ThemeMode mode, bool pureBlack) => switch (mode) { ThemeMode.light => appText('light'), ThemeMode.dark => pureBlack ? appText('deep_dark') : appText('dark'), _ => appText('automatic') };
@@ -348,7 +353,7 @@ class _AccountSummaryCard extends StatelessWidget {
         onTap: () {
           final page = user == null ? const AuthScreen() : const ProfileScreen();
           Navigator.of(context).push<void>(
-            MaterialPageRoute<void>(builder: (_) => page),
+            CupertinoPageRoute<void>(builder: (_) => page),
           );
         },
         child: Padding(

@@ -152,7 +152,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
           const SizedBox(width: 6),
         ],
       ),
-      body: CustomScrollView(
+      body: SafeArea(top: false, bottom: true, child: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           SliverPadding(
@@ -268,7 +268,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }
